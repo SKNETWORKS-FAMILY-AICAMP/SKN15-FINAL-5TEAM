@@ -1,6 +1,6 @@
 # [모델 배포] 시스템 구성도
 
-**SK Networks Family AI Camp 15기 - 데몬슬레이어팀**
+**SK Networks Family AI Camp 15기 - Andrew**
 
 ---
 
