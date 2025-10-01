@@ -145,16 +145,18 @@ flowchart TB
 
   subgraph SpecialImage
     P -->|특별 이미지 요청| SC
-    SC --> ST: 대화 히스토리 요청
-    ST --> PG: 히스토리 조회
-    PG --> ST: 대화 요약 생성
-    ST --> NB: 요약 기반 이미지 생성
-    NB --> SC: 특별 이미지 전달
+    SC -->|대화 히스토리 요청| ST
+    ST -->|히스토리 조회| PG
+    PG -->|대화 요약 생성| ST
+    ST -->|요약 기반 이미지 생성| NB
+    NB -->|특별 이미지 전달| SC
   end
 
   SC -->|컷신 이미지| P
   SC -->|감정 이미지| C
   SC -->|특별 이미지| P
+
+
 ```  
 
 ---
