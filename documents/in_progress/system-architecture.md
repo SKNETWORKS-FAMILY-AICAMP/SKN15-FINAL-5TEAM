@@ -1,6 +1,6 @@
 # [모델링 및 평가] 시스템 아키텍처
 
-**SK Networks Family AI Camp 15기 - 데몬슬레이어팀**  
+**SK Networks Family AI Camp 15기 - 5.Andrew**  
 **GitHub**: https://github.com/SKNETWORKS-FAMILY-AICAMP/SKN15-FINAL-5TEAM  
 **작성자**: 권도원, 이준원, 조태민  
 **제출 일자**: 2025.10.01  
