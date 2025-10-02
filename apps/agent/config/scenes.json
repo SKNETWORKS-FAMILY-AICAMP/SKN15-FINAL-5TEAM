@@ -1,0 +1,274 @@
+{
+  "scene5_intro_post_enmu": {
+    "summary": "엔무전 직후, 탄지로는 쓰러져 움직일 수 없다",
+    "allowed_speakers": ["narrator", "tanjiro"],
+    "beats": {
+      "intro": "객차 잔해가 식으며 밤공기에 피 냄새가 번진다.",
+      "mid": "탄지로(숨을 고르며): \"미안해… 이제 네 선택에 달렸어.\""
+    },
+    "choices": [
+      { "id": "go_fork", "text": "다음 행동을 결정한다", "value": "to_fork" }
+    ],
+    "split_rules": [
+      { "when": "to_fork", "goto": "scene5_fork_decision" }
+    ]
+  },
+
+  "scene5_fork_decision": {
+    "summary": "갈림길: 동료 규합 vs 렌고쿠 직행",
+    "allowed_speakers": ["tanjiro"],
+    "beats": {
+      "intro": "탄지로: \"시간이 없어… 젠이츠랑 이노스케를 모을까, 아니면 곧장 렌고쿠 씨에게 갈까? 넌 어떻게 할래?\""
+    },
+    "choices": [
+      { "id": "ally_route", "text": "젠이츠와 이노스케를 찾아 합류시킨다(히든 가능)", "value": "gather_allies" },
+      { "id": "rengoku_route", "text": "곧장 렌고쿠에게 달려간다(원작 루트)", "value": "find_rengoku" }
+    ],
+    "split_rules": [
+      { "when": "gather_allies", "goto": "scene5_mission_gather" },
+      { "when": "find_rengoku",  "goto": "r_01_akaza_taunt" }
+    ]
+  },
+
+  "scene5_mission_gather": {
+    "summary": "동료 규합 미션: 이노스케/젠이츠 설득",
+    "allowed_speakers": ["tanjiro"],
+    "beats": {
+      "intro": "탄지로: \"흩어진 동료들을 설득하자. 각자 시간을 많이 쓸 수 없어. 다음은 누구부터?\""
+    },
+    "choices": [
+      { "id": "try_inosuke", "text": "이노스케 설득 시도", "value": "try_inosuke" },
+      { "id": "try_zenitsu", "text": "젠이츠 설득 시도", "value": "try_zenitsu" },
+      { "id": "finish_mission", "text": "판정으로 이동한다", "value": "finish" }
+    ],
+    "split_rules": [
+      { "when": "try_inosuke", "goto": "scene5_mission_gather" },
+      { "when": "try_zenitsu", "goto": "scene5_mission_gather" },
+      { "when": "finish",      "goto": "scene5_mission_judgement" }
+    ],
+    "default_images": [
+      { "resource_id": "gather_allies_map_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "scene5_mission_judgement": {
+    "summary": "미션 결과 판정(히든/원작)",
+    "allowed_speakers": ["tanjiro"],
+    "speaker_rules": [
+      { "require_flags": ["recruited_inosuke","recruited_zenitsu","hidden_ending_eligible"], "override": ["tanjiro","inosuke","zenitsu"] },
+      { "require_flags": ["recruited_inosuke","recruited_zenitsu"], "override": ["tanjiro","inosuke","zenitsu"] },
+      { "require_flags": ["recruited_inosuke"], "override": ["tanjiro","inosuke"] },
+      { "require_flags": ["recruited_zenitsu"], "override": ["tanjiro","zenitsu"] }
+    ],
+    "beats": {
+      "intro": "탄지로: \"지금까지의 선택으로 결과가 정해졌어. 준비됐지? 결과를 확인할까?\""
+    },
+    "choices": [
+      { "id": "confirm", "text": "결과 확인", "value": "finish" }
+    ],
+    "split_rules": [
+      {
+        "when": "finish",
+        "require_flags": ["order_inosuke_then_zenitsu"],
+        "limits": { "total_turns_used_max": 8, "char_turns_max": { "inosuke": 3, "zenitsu": 3 } },
+        "goto": "scene5_end_hidden_rengoku_lives",
+        "set": { "route": "hidden_branch", "ending": "hidden:rengoku_lives", "end_reason": "mission_success" }
+      },
+      {
+        "when": "finish",
+        "goto": "scene5_end_original_rengoku_falls",
+        "set": { "route": "original_branch", "ending": "original:rengoku_falls", "end_reason": "mission_failed_or_timeout" }
+      }
+    ]
+  },
+
+  "scene5_end_hidden_rengoku_lives": {
+    "summary": "히든 엔딩: 렌고쿠 생존",
+    "allowed_speakers": ["tanjiro","inosuke","zenitsu","kyojuro","narrator"],
+    "beats": {
+      "intro": "모두의 호흡이 하나로 이어졌고, 불꽃은 꺼지지 않았다."
+    },
+    "choices": [],
+    "default_images": [
+      { "resource_id": "rengoku_alive_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "scene5_end_original_rengoku_falls": {
+    "summary": "원작 엔딩: 렌고쿠 전사",
+    "allowed_speakers": ["tanjiro","kyojuro","narrator"],
+    "beats": {
+      "intro": "밤은 길었고, 불꽃은 저물었다."
+    },
+    "choices": [],
+    "default_images": [
+      { "resource_id": "rengoku_fall_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "r_01_akaza_taunt": {
+    "summary": "아카자 등장 및 도발",
+    "allowed_speakers": ["akaza"],
+    "beats": {
+      "intro": "상현의 미소가 어둠을 가른다.",
+      "mid": "힘을 갈망하는 목소리가 싸움을 재촉한다."
+    },
+    "choices": [
+      { "id": "a", "text": "아카자에게 한마디 한다(차분)", "value": "user_line_calm" },
+      { "id": "b", "text": "아카자에게 한마디 한다(분노)", "value": "user_line_angry" },
+      { "id": "c", "text": "말없이 응시한다",               "value": "user_line_silent" }
+    ],
+    "split_rules": [
+      { "when": "user_line_calm",  "goto": "r_02_kyojuro_retort" },
+      { "when": "user_line_angry", "goto": "r_02_kyojuro_retort" },
+      { "when": "user_line_silent","goto": "r_02_kyojuro_retort" }
+    ],
+    "default_images": [
+      { "resource_id": "akaza_taunt_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "r_02_kyojuro_retort": {
+    "summary": "쿄쥬로 맞받아침",
+    "allowed_speakers": ["kyojuro"],
+    "beats": {
+      "intro": "불꽃 기둥은 미소로 응수한다.",
+      "climax": "뜨거운 기세가 밤을 밀어낸다."
+    },
+    "choices": [],
+    "split_rules": [
+      { "when": "", "goto": "r_03_user_emotion_1" }
+    ],
+    "default_images": [
+      { "resource_id": "kyojuro_defiant_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "r_03_user_emotion_1": {
+    "summary": "유저 감정 반응 1",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "가슴이 뜨겁게 달아오른다." },
+    "choices": [
+      { "id": "a", "text": "큰 소리로 응원한다", "value": "support_loud" },
+      { "id": "b", "text": "조용히 기도한다",   "value": "support_quiet" },
+      { "id": "c", "text": "두려움을 드러낸다", "value": "fear_show" }
+    ],
+    "split_rules": [
+      { "when": "support_loud",  "goto": "r_04_narr_battle" },
+      { "when": "support_quiet", "goto": "r_04_narr_battle" },
+      { "when": "fear_show",     "goto": "r_04_narr_battle" }
+    ]
+  },
+
+  "r_04_narr_battle": {
+    "summary": "내레이터 전투 묘사",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "칼끝과 권이 번개처럼 스친다." },
+    "choices": [],
+    "split_rules": [
+      { "when": "", "goto": "r_05_akaza_followup" }
+    ]
+  },
+
+  "r_05_akaza_followup": {
+    "summary": "아카자 추가 공격",
+    "allowed_speakers": ["akaza"],
+    "beats": { "intro": "공기가 찢기는 소리와 함께 거친 공세가 이어진다." },
+    "choices": [],
+    "split_rules": [
+      { "when": "", "goto": "r_06_kyojuro_resolve" }
+    ],
+    "default_images": [
+      { "resource_id": "akaza_attack_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "r_06_kyojuro_resolve": {
+    "summary": "쿄쥬로 불굴 발언",
+    "allowed_speakers": ["kyojuro"],
+    "beats": { "intro": "불꽃은 꺼지지 않는다." },
+    "choices": [],
+    "split_rules": [
+      { "when": "", "goto": "r_07_user_encourage_tears" }
+    ]
+  },
+
+  "r_07_user_encourage_tears": {
+    "summary": "유저 격려/눈물",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "목이 메지만, 외쳐야 한다." },
+    "choices": [
+      { "id": "a", "text": "끝까지 버텨요, 쿄쥬로!", "value": "encourage" },
+      { "id": "b", "text": "제발 물러나요…",        "value": "plead_retreat" },
+      { "id": "c", "text": "(눈물만 흐른다)",        "value": "silent_tears" }
+    ],
+    "split_rules": [
+      { "when": "encourage",     "goto": "r_08_narr_fatal_blow" },
+      { "when": "plead_retreat", "goto": "r_08_narr_fatal_blow" },
+      { "when": "silent_tears",  "goto": "r_08_narr_fatal_blow" }
+    ]
+  },
+
+  "r_08_narr_fatal_blow": {
+    "summary": "내레이터 치명상 묘사",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "피가 뜨겁게 솟구치며 시간이 느려진다." },
+    "choices": [],
+    "split_rules": [
+      { "when": "", "goto": "r_09_kyojuro_last_words" }
+    ],
+    "default_images": [
+      { "resource_id": "kyojuro_wounded_01", "type": "cutscene", "placement": "sidebar" }
+    ]
+  },
+
+  "r_09_kyojuro_last_words": {
+    "summary": "쿄쥬로 유언",
+    "allowed_speakers": ["kyojuro"],
+    "beats": { "intro": "그의 미소는 마지막까지 따뜻하다." },
+    "choices": [],
+    "split_rules": [
+      { "when": "", "goto": "r_10_narr_akaza_escape" }
+    ]
+  },
+
+  "r_10_narr_akaza_escape": {
+    "summary": "전투 종료, 아카자 도주",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "어둠 속으로 멀어지는 그림자." },
+    "choices": [
+      { "id": "a", "text": "도망치는 아카자에게 마지막 한마디", "value": "shout_akaza" },
+      { "id": "b", "text": "말없이 바라본다",                     "value": "watch_silent" }
+    ],
+    "split_rules": [
+      { "when": "shout_akaza",  "goto": "r_11_user_emotion_2" },
+      { "when": "watch_silent", "goto": "r_11_user_emotion_2" }
+    ]
+  },
+
+  "r_11_user_emotion_2": {
+    "summary": "유저 감정 반응 2(여운)",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "가슴 한켠이 비어버렸다." },
+    "choices": [
+      { "id": "a", "text": "조용히 다짐한다", "value": "vow_quiet" },
+      { "id": "b", "text": "목놓아 울부짖는다", "value": "cry_out" }
+    ],
+    "split_rules": [
+      { "when": "vow_quiet", "goto": "r_12_narr_epilogue" },
+      { "when": "cry_out",   "goto": "r_12_narr_epilogue" }
+    ]
+  },
+
+  "r_12_narr_epilogue": {
+    "summary": "내레이터 여운 정리 → 원작 엔딩",
+    "allowed_speakers": ["narrator"],
+    "beats": { "intro": "밤은 길었고, 불꽃은 기억으로 남았다." },
+    "choices": [
+      { "id": "to_end", "text": "엔딩으로", "value": "end" }
+    ],
+    "split_rules": [
+      { "when": "end", "goto": "scene5_end_original_rengoku_falls" }
+    ]
+  }
+}
