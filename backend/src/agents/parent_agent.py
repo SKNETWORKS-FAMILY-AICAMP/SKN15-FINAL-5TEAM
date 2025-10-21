@@ -210,12 +210,24 @@ def _apply_rules(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
     return False
 
 def _handle_free_intent_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
-    """free_intent 스테이지 on_action 처리"""
+    """free_intent 스테이지 on_action 처리 + min_turns 폴백"""
     actions = stage.get("on_action")
     if not isinstance(actions, list):
         return False
     stage_tag = stage.get("tag") or (state.get("current_stage") or "")
 
+    # ✅ 1️⃣ AUTO_CONTINUE 입력 시 즉시 반환 (모든 free_intent 공통)
+    user_input = (state.get("user_input") or "").strip().lower()
+    if user_input == "__auto_continue__":
+        logger.info(f"[{stage_tag}] Skipping auto-fallback: auto-continue input")
+        return False
+
+    # ✅ 2️⃣ 스테이지 막 진입했을 때는 폴백 금지
+    scene = state.setdefault("scene", {})
+    if int(scene.get("stage_turn", 0)) <= 1 and not user_input:
+        logger.info(f"[{stage_tag}] Skipping auto-fallback: just entered stage or no input yet")
+        return False
+    
     intent = _get_intent(state)
     intent_lower = intent.lower()
     matched_rule = None
@@ -231,7 +243,57 @@ def _handle_free_intent_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> b
                 matched_rule = rule
                 break
 
-    if not matched_rule:
+    # # Intent 매칭이 안 되었을 때 min_turns 폴백 체크
+    # if not matched_rule:
+    #     # min_turns 체크: constraints.min_turns 도달 시 스마트 폴백
+    #     constraints = stage.get("constraints") or {}
+    #     min_turns = int(constraints.get("min_turns", 0))
+    #     scene = state.setdefault("scene", {})
+    #     stage_turn = int(scene.get("stage_turn", 0))
+
+    #     if min_turns > 0 and stage_turn >= min_turns and actions:
+    #         # 🔥 스마트 폴백: user_input에서 키워드 재검사
+    #         user_input = (state.get("user_input") or "").lower()
+
+    #         # ROUTE_CHOICE 전용 간이 키워드 감지
+    #         if stage_tag.upper() == "ROUTE_CHOICE":
+    #             allies_kw = ["동료", "찾", "모아", "젠이츠", "이노스케", "둘"]
+    #             reckless_kw = ["함께", "렌고쿠", "싸우", "돌진", "돕", "도와", "지키"]
+
+    #             # reckless 키워드 우선 체크 (INTERVENE 우선)
+    #             if any(kw in user_input for kw in reckless_kw):
+    #                 for rule in actions:
+    #                     if (rule.get("action") or "").lower() == "choose_reckless_path":
+    #                         matched_rule = rule
+    #                         logger.info(
+    #                             f"🔍 [{stage_tag}] Smart fallback: keyword matched → choose_reckless_path"
+    #                         )
+    #                         break
+    #             elif any(kw in user_input for kw in allies_kw):
+    #                 for rule in actions:
+    #                     if (rule.get("action") or "").lower() == "choose_allies_path":
+    #                         matched_rule = rule
+    #                         logger.info(
+    #                             f"🔍 [{stage_tag}] Smart fallback: keyword matched → choose_allies_path"
+    #                         )
+    #                         break
+
+        #     # 키워드 매칭도 실패 시 첫 번째 action 사용
+        #     if not matched_rule:
+        #         matched_rule = actions[0]
+        #         logger.info(
+        #             f"⏰ [{stage_tag}] No intent/keyword matched but min_turns({min_turns}) reached "
+        #             f"(stage_turn={stage_turn}), using first action as fallback"
+        #         )
+        # else:
+        #     logger.info(
+        #         f"⏳ [{stage_tag}] No intent matched, stage_turn={stage_turn}/{min_turns} "
+        #         f"(waiting for user intent...)"
+        #     )
+        #     return False
+
+    if not isinstance(matched_rule, dict):
+        logger.info(f"[{stage_tag}] No valid rule matched (intent='{intent_lower}') → waiting for user input")
         return False
 
     _apply_operations(state, matched_rule.get("set"))
@@ -258,11 +320,21 @@ def _handle_mission_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
     stage_state = mission_store.setdefault(stage_tag, {})
     progress: Dict[str, int] = stage_state.setdefault("progress", {})
 
-    # 턴마다 감소/증가 처리
+    # 턴마다 감소/증가 처리 (실제 유저 입력일 때만!)
+    user_input = (state.get("user_input") or "").strip()
+    is_user_turn = user_input and user_input != "__AUTO_CONTINUE__"
+
     ticking = stage.get("ticking") or {}
     each_turn = ticking.get("each_turn")
-    if isinstance(each_turn, dict):
+
+    # 🔥 each_turn은 실제 유저 턴에만 적용 (중복 방지)
+    last_ticking_turn = stage_state.get("_last_ticking_turn", -1)
+    current_turn = state.get("turn_count", 0)
+
+    if isinstance(each_turn, dict) and is_user_turn and last_ticking_turn < current_turn:
         _apply_operations(state, each_turn)
+        stage_state["_last_ticking_turn"] = current_turn
+        logger.info(f"[MISSION:{stage_tag}] Ticking applied (turn {current_turn}): {each_turn}")
 
     intent = _get_intent(state)
     intent_lower = intent.lower()
@@ -817,8 +889,11 @@ class ParentAgent:
         # ---------- 4) children 컨텍스트 구성 ----------
         _apply_ctx(state, scenario, cur)
 
-        # ---------- 4.5) (제거됨) INTRO on-topic 즉시 전환 ----------
-        cur_stage = _find_stage(scenario, cur)
+        # ---------- 4.5) stage_turn 증가 (모든 스테이지 타입 공통) ----------
+        scene = state.setdefault("scene", {})
+        stage_turn = int(scene.get("stage_turn", 0)) + 1
+        scene["stage_turn"] = stage_turn
+        state["stage_turn"] = stage_turn  # 하위 호환성
 
         # ---------- 5) 스테이지별 전이 로직 (scene → min_turns 기반) ----------
         stage = _find_stage(scenario, cur)
@@ -826,18 +901,28 @@ class ParentAgent:
             logger.warning(f"Current stage '{cur}' not found in scenario")
             return _finish(state, "stage_missing")
 
-        if stage.get("type") == "scene":
-            # stage_turn 선증가: 대사 1턴 보장 후 on-topic 전환 가드를 통과하도록
-            # scene을 single source of truth로 사용하여 동기화 문제 방지
-            scene = state.setdefault("scene", {})
-            stage_turn = int(scene.get("stage_turn", 0)) + 1
-            scene["stage_turn"] = stage_turn
-            state["stage_turn"] = stage_turn  # 하위 호환성
-            min_turns = int(stage.get("constraints", {}).get("min_turns", 1))
-            logger.info(
-                f"[PARENT] Scene '{cur}': stage_turn={stage_turn}, "
-                f"min_turns={min_turns}, turn_count={state.get('turn_count', 0)}"
-            )
+        stage_type = (stage.get("type") or "").lower()
+        constraints = stage.get("constraints") or {}
+        min_turns = int(constraints.get("min_turns", 1))
+
+        if stage_type == "ending":
+            ending_tag = stage.get("tag") or cur
+            if not state.get("final_ending"):
+                state["final_ending"] = ending_tag
+            temp = state.setdefault("temp_data", {})
+            temp["session_end"] = True
+            state["temp_data"] = temp
+            state["has_more_dialogues"] = False
+            logger.info(f"[PARENT] Ending stage '{ending_tag}' reached → session_end flag set")
+            return _finish(state, "ending_reached")
+
+        logger.info(
+            f"[PARENT] Stage '{cur}' (type={stage_type}): stage_turn={stage_turn}, "
+            f"min_turns={min_turns}, turn_count={state.get('turn_count', 0)}"
+        )
+
+        if stage_type == "scene":
+            # scene 타입: min_turns 충족 시 자동 전환
 
             # ⬇️ INTRO 같은 하드 전환은 이미 1)에서 처리됨.
             # 여기서는 '컷신 유지' 로직만 담당

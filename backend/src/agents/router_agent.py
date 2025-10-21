@@ -12,12 +12,12 @@ LLM 분류 정확도를 높인 버전입니다.
 
 from typing import List, Dict, Any
 import time
+import re
 
 from src.core.graph_state import AgentState
 from src.utils.llm_client import get_llm_client
 from src.tools.fallback_tools import check_fallback_policy, apply_fallback_result
 from src.tools.loop_tools import check_loop_detection, apply_loop_result
-from src.utils.characters_repo import list_characters
 from src.utils.characters_repo import list_characters
 
 
@@ -37,41 +37,90 @@ def _ensure_speaker_pool(state: AgentState) -> None:
     scene["speaker_pool"] = candidates
 
 
+def _normalize_korean(text: str) -> str:
+    """
+    한글 형태소 정규화 (간이 버전)
+    조사와 어미를 제거하여 어간만 추출
+
+    예시:
+    - "돕죠" → "돕"
+    - "도와줘" → "도와"
+    - "찾자" → "찾"
+    - "함께하자" → "함께하"
+    """
+    # 일반적인 조사/어미 패턴 제거
+    patterns = [
+        r'(을|를|이|가|은|는|와|과|의|에|에서|으로|로|부터|까지|한테|께|님|씨)$',  # 조사
+        r'(죠|요|야|아|어|네|지|ㅂ니다|습니다)$',  # 종결어미
+        r'(자|까|줘|주|게|라)$',  # 명령/제안형 어미
+    ]
+    normalized = text
+    for pattern in patterns:
+        normalized = re.sub(pattern, '', normalized)
+    return normalized
+
+
 def _detect_intent_cutscene5(state: Dict[str, Any], user_input: str) -> str:
-    """cutscene5_llm_driven 시나리오 전용 의도 판별"""
+    """cutscene5_llm_driven 시나리오 전용 의도 판별 (형태소 정규화 적용)"""
     current_stage = (state.get("current_stage") or "").upper()
     user_text = user_input.lower()
 
+    # 형태소 정규화된 텍스트 (조사/어미 제거)
+    normalized_text = _normalize_korean(user_text)
+
     if current_stage == "ROUTE_CHOICE":
-        # 동료 찾기 키워드
-        allies_keywords = ["동료", "찾", "모아", "젠이츠", "이노스케", "데려", "규합", "도움", "부", "모집"]
-        reckless_keywords = ["함께", "같이", "렌고쿠", "싸우", "돌진", "막", "지키", "지원", "붙어"]
-        if any(kw in user_text for kw in allies_keywords):
+        # 동료 찾기 키워드 (어간 중심)
+        allies_keywords = ["동료", "찾", "모아", "모으", "젠이츠", "이노스케", "데려", "규합", "도움", "부르", "모집", "둘"]
+        # 함께 싸우기 키워드 (어간 중심)
+        reckless_keywords = ["함께", "같이", "렌고쿠", "싸우", "돌진", "막", "지키", "지원", "붙", "돕", "도와"]
+
+        # 원문과 정규화된 텍스트 모두에서 검색 : choose_allies_path -> RECRUIT 
+        if any(kw in user_text or kw in normalized_text for kw in allies_keywords):
             state["user_intent"] = "choose_allies_path"
+            print(f"[ROUTER] 🎯 Detected intent: choose_allies_path (input: '{user_input}')")
             return "choose_allies_path"
         # 함께 싸우기 키워드 (reckless)
-        if any(kw in user_text for kw in reckless_keywords):
+        if any(kw in user_text or kw in normalized_text for kw in reckless_keywords):
             state["user_intent"] = "choose_reckless_path"
+            print(f"[ROUTER] 🎯 Detected intent: choose_reckless_path (input: '{user_input}')")
             return "choose_reckless_path"
+
+        print(f"[ROUTER] ⚠️ No intent matched for ROUTE_CHOICE (input: '{user_input}', normalized: '{normalized_text}')")
         state.pop("user_intent", None)
         state.pop("router_label", None)
         return None
 
     if current_stage == "INTERVENE":
-        if any(kw in user_text for kw in ["검기", "궤도", "비틀", "원거리", "견제", "공격"]):
+        # 형태소 정규화 적용
+        attack_keywords = ["검기", "궤도", "비틀", "원거리", "견제", "공격"]
+        noise_keywords = ["돌", "소리", "주의", "시선", "던"]
+        ignore_keywords = ["무시", "개입", "피", "도망"]
+
+        if any(kw in user_text or kw in normalized_text for kw in attack_keywords):
+            print(f"[ROUTER] 🎯 Detected intent: intervene_attack (input: '{user_input}')")
             return "intervene_attack"
-        if any(kw in user_text for kw in ["돌", "소리", "주의", "시선", "던"]):
+        if any(kw in user_text or kw in normalized_text for kw in noise_keywords):
+            print(f"[ROUTER] 🎯 Detected intent: intervene_noise (input: '{user_input}')")
             return "intervene_noise"
-        if any(kw in user_text for kw in ["무시", "개입 안", "피", "도망"]):
+        if any(kw in user_text or kw in normalized_text for kw in ignore_keywords):
+            print(f"[ROUTER] 🎯 Detected intent: intervene_ignore (input: '{user_input}')")
             return "intervene_ignore"
         return "intervene_ignore"
 
     if current_stage == "RECRUIT":
-        if any(kw in user_text for kw in ["젠이츠", "네즈코", "위험", "깨워"]):
+        # 형태소 정규화 적용
+        zenitsu_keywords = ["젠이츠", "네즈코", "위험", "깨우"]
+        inosuke_keywords = ["이노스케", "대장", "앞장", "강한", "강", "왕"]
+
+        if any(kw in user_text or kw in normalized_text for kw in zenitsu_keywords):
+            print(f"[ROUTER] 🎯 Detected intent: wake_zenitsu (input: '{user_input}')")
             return "wake_zenitsu"
-        if any(kw in user_text for kw in ["이노스케", "대장", "앞장", "강한", "왕"]):
+        if any(kw in user_text or kw in normalized_text for kw in inosuke_keywords):
+            print(f"[ROUTER] 🎯 Detected intent: provoke_inosuke (input: '{user_input}')")
             return "provoke_inosuke"
-        return "wake_zenitsu"
+        # 🔥 매칭 실패 시 None 리턴 (기본값 제거)
+        print(f"[ROUTER] ⚠️ No intent matched for RECRUIT (input: '{user_input}')")
+        return None
 
     return None
 
@@ -163,8 +212,12 @@ def run_router_agent(state: AgentState, user_input: str) -> AgentState:
     current_stage = state.get("current_stage", "")
     scenario_id = state.get("scenario_id", "")
 
+    print(f"[ROUTER+] 🔍 scenario_id='{scenario_id}', current_stage='{current_stage}'")
+
     if scenario_id == "cutscene5_llm_driven":
+        print(f"[ROUTER+] 🎯 Calling _detect_intent_cutscene5() for stage '{current_stage}'")
         detected_intent = _detect_intent_cutscene5(state, user_input)
+        print(f"[ROUTER+] 📌 _detect_intent_cutscene5() returned: {detected_intent}")
 
         if detected_intent:
             state["user_intent"] = detected_intent

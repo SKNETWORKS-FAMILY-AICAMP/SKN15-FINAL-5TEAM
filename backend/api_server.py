@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override = True)
 
 # Import existing LangGraph components
 from src.core.workflow import create_workflow
@@ -159,7 +159,8 @@ async def chat(request: ChatRequest):
             # Create new session
             print(f"🆕 Creating new session: {session_id}")
 
-            # Load scenario
+            # Load scenario (with frontend-to-backend mapping)
+            backend_scenario_id = SCENARIO_MAPPING.get(request.scenario_id, request.scenario_id)
             scenario_data = load_scenario(request.scenario_id)
             if not scenario_data:
                 raise HTTPException(
@@ -167,15 +168,15 @@ async def chat(request: ChatRequest):
                     detail=f"Scenario '{request.scenario_id}' not found"
                 )
 
-            # Initialize state
+            # Initialize state with BACKEND scenario_id (not frontend ID!)
             state = create_initial_graph_state(
                 session_id=session_id,
-                scenario_id=request.scenario_id
+                scenario_id=backend_scenario_id  # 🔥 Use backend ID for logic
             )
 
             # Set scenario data
             state["scenario_data"] = scenario_data
-            state["scenario_id"] = request.scenario_id
+            state["scenario_id"] = backend_scenario_id  # 🔥 Use backend ID (e.g., "cutscene5_llm_driven")
             state["user_name"] = request.user_name or "여행자"
 
             # Determine initial stage from scenario

@@ -288,7 +288,7 @@
           "fx": "flame_roar|heavy_breath"
         },
         {
-          "goal": "탄지로가 {user}를 바라보며 말한다. '태민... 렌고쿠 님이 혼자 버티고 계세요. 하지만 제 상태로는...' 무릎을 꿇으며 주먹을 쥔다. '힘이 안 나요'",
+          "goal": "탄지로가 {user}를 바라보며 말한다. '렌고쿠 님이 혼자 버티고 계세요. 하지만 제 상태로는...' 무릎을 꿇으며 주먹을 쥔다. '힘이 안 나요'",
           "speaker_hint": ["tanjiro"]
         },
         {
@@ -301,7 +301,7 @@
           "fx": "tree_crack|rock_shatter|evil_laugh"
         },
         {
-          "goal": "탄지로가 다급하게 말한다. '아니면 지금 바로 가는 거예요! 위험하지만... 렌고쿠 님이 버티지 못할 수도...' 눈빛이 흔들린다. '태민, 결정해주세요! 시간이 없어요!'",
+          "goal": "탄지로가 다급하게 말한다. '아니면 지금 바로 가는 거예요! 위험하지만... 렌고쿠 님이 버티지 못할 수도...' 눈빛이 흔들린다. '{유저} 결정해주세요! 시간이 없어요!'",
           "speaker_hint": ["tanjiro"],
           "fx": "urgent_heartbeat"
         }
@@ -332,7 +332,7 @@
           "fx": "flame_flicker"
         },
         {
-          "goal": "탄지로가 급박하게 {user}에게 외친다. '태민! 지금이에요! 원거리에서 견제하거나, 큰 소리로 아카자의 주의를 끌거나... 아니면 지금 동료를 데려올 수도...!'",
+          "goal": "탄지로가 급박하게 {user}에게 외친다. '{user}! 지금이에요! 원거리에서 견제하거나, 큰 소리로 아카자의 주의를 끌거나... 아니면 지금 동료를 데려올 수도...!'",
           "speaker_hint": ["tanjiro"],
           "fx": "urgent_heartbeat"
         },
@@ -373,7 +373,7 @@
           "fx": "beast_growl"
         },
         {
-          "goal": "탄지로가 긴박한 표정으로 {user}를 향해 돌아선다. '태민, 둘 다 가까이 있어요! 열차 앞칸에 젠이츠, 뒷칸에 이노스케가 있어요. 하지만 시간이 없어요... 누구를 먼저 찾으러 갈까요?'",
+          "goal": "탄지로가 긴박한 표정으로 {user}를 향해 돌아선다. '{user}, 둘 다 가까이 있어요! 열차 앞칸에 젠이츠, 뒷칸에 이노스케가 있어요. 하지만 시간이 없어요... 누구를 먼저 찾으러 갈까요?'",
           "speaker_hint": ["tanjiro"]
         },
         {
@@ -476,7 +476,7 @@
         {"goal": "모두가 승리의 기쁨을 나누며 새벽을 맞이"}
       ],
       "ending_basic_line": [
-        {"goal": "렌고쿠가 치명상으로 쓰러지며 마지막 말을 남김"},
+        {"goal": "렌고쿠가 기진맥진해하며 치명상으로 쓰러지며 마지막 말을 남김"},
         {"goal": "{user}와 탄지로에게 가슴을 펴고 살아가라는 유언"}
       ]
     }
@@ -490,7 +490,7 @@
       "speaker_pool": ["tanjiro","rengoku","akaza","system","narr"],
       "beats_i18n": "beats_intro",
       "constraints": {
-        "min_turns": 3, "max_turns": 15,
+        "min_turns": 1, "max_turns": 15,
         "min_distinct_speakers": 3,
         "no_back_to_back": ["akaza"]
       },
@@ -691,7 +691,7 @@
           "fx": "flame_ignition"
         },
         {
-          "goal": "탄지로가 {user}에게 말한다. '태민, 우리가 함께라면 할 수 있어요! 렌고쿠 님을 도웁시다!'",
+          "goal": "탄지로가 {user}에게 말한다. '{user}, 우리가 함께라면 할 수 있어요! 렌고쿠 님을 도웁시다!'",
           "speaker_hint": ["tanjiro"]
         },
         {
@@ -705,7 +705,7 @@
           "fx": "battle_echo|dawn_light"
         }
       ],
-      "constraints": { "min_turns": 4, "max_turns": 8 },
+      "constraints": { "min_turns": 1, "max_turns": 8 },
       "next": "END_ROUTER"
     },
 
@@ -731,7 +731,7 @@
         "HIDDEN": { "beats_i18n": "akaza_exit_hidden" },
         "BASIC":  { "beats_i18n": "akaza_exit_basic" }
       },
-      "constraints": { "min_turns": 4, "max_turns": 8 },
+      "constraints": { "min_turns": 1, "max_turns": 8 },
       "next_by_outcome": { "HIDDEN": "END_HIDDEN", "BASIC": "END_BASIC", "default": "END_BASIC" }
     },
 
@@ -741,7 +741,7 @@
       "title": "🏆 히든 엔딩: 염불(炎不)의 새벽",
       "speaker_pool": ["rengoku","zenitsu","inosuke","tanjiro"],
       "beats_i18n": "ending_hidden_line",
-      "constraints": { "min_turns": 4 },
+      "constraints": { "min_turns": 1 },
       "final_message": "새벽빛이 밝아오고, 렌고쿠는 승리했다. 동료들과 함께한 당신의 용기가 운명을 바꾸었다.",
       "rewards": [
         { "type": "illustration", "id": "illustration_rengoku_alive" },
@@ -755,7 +755,7 @@
       "title": "😢 기본 엔딩: 꺼지지 않는 불꽃",
       "speaker_pool": ["rengoku","tanjiro"],
       "beats_i18n": "ending_basic_line",
-      "constraints": { "min_turns": 4 },
+      "constraints": { "min_turns": 1 },
       "final_message": "렌고쿠의 마지막 말이 가슴에 새겨진다. 그의 의지는 꺼지지 않는 불꽃처럼 당신 안에 살아있다.",
       "rewards": [
         { "type": "illustration", "id": "illustration_memorial" },

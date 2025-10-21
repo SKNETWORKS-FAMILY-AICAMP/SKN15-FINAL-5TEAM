@@ -357,6 +357,9 @@ def _generate_dialogues(ctx: Dict[str, Any], state: dict, db: dict) -> tuple[Lis
         "RECKLESS_SACRIFICE": 8,
     }.get(stage_upper, 8)  # 기본값도 8로 증가
 
+    if stage_type == "ending":
+        total_dialogues_needed = 4  # 엔딩 장면은 한 번의 배치로 마무리
+
     # 배치 크기: 4개 (일관성 있게)
     batch_size = 4  # 모든 배치에서 4개씩 생성
 
@@ -370,6 +373,10 @@ def _generate_dialogues(ctx: Dict[str, Any], state: dict, db: dict) -> tuple[Lis
         has_more = False  # 사용자 입력을 기다려야 하므로 auto-continue 차단
     else:
         has_more = (dialogues_generated_so_far + current_batch_size) < total_dialogues_needed
+
+    temp_data = state.get("temp_data") if isinstance(state, dict) else _state_get(state, "temp_data", {})
+    if (temp_data or {}).get("session_end") or state.get("final_ending"):
+        has_more = False  # 세션이 종료된 후에는 자동 진행 금지
 
     # 배치별 상황 설명 (beats에서 현재 배치에 해당하는 부분만 선택)
     if beats and batch_index < len(beats):

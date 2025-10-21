@@ -114,6 +114,11 @@ class KimeChatWorkflow:
 
     def _router_node(self, state: GraphState) -> GraphState:
         """Router Agent 노드"""
+        if (state.get("final_ending") or (state.get("temp_data") or {}).get("session_end")) and not state.get("has_more_dialogues", False):
+            print(f"[WORKFLOW] → router (skipped: session already ended)", flush=True)
+            state["next_node"] = END
+            return state
+
         print(f"[WORKFLOW] → router", flush=True)
         user_input = state.get("user_input", "")
         result = run_router_agent(state, user_input)
