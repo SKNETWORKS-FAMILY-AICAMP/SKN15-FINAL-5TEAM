@@ -1,0 +1,15 @@
+# LLM 클라이언트 설정
+llm_client:
+  provider: "openai"
+  default_model: "gpt-4-turbo"
+  temperature: 0.7
+  max_tokens: 4000
+
+# 데이터베이스 경로
+database:
+  path: "data/game_state.db"
+
+# 로깅 설정
+logging:
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  dev_log_file: "logs/dev/development.log"

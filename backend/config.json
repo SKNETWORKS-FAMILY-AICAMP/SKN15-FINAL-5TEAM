@@ -1,0 +1,56 @@
+{
+  "game": {
+    "title": "KIME Chat Agent",
+    "version": "4.0",
+    "default_scenario": "cutscene5_llm_driven"
+  },
+  "scenarios": [
+    {
+      "id": "cutscene5_llm_driven",
+      "name": "🎭 컷신5: LLM 기반 동적 대사",
+      "description": "AI가 상황에 맞춰 대사를 생성하는 신규 시스템 테스트 버전",
+      "difficulty": "보통",
+      "file": "cutscene5_llm_driven.json"
+    },
+    {
+      "id": "cutscene5_simple",
+      "name": "🔥 컷신5: 상현 삼의 등장 (간소화)",
+      "description": "렌고쿠와 아카자의 대결. 동료를 모아 싸우는 멀티엔딩 시나리오",
+      "difficulty": "보통",
+      "file": "cutscene5_simple.json"
+    },
+    {
+      "id": "cutscene5_akaza_encounter",
+      "name": "🔥 컷신5: 상현 삼의 등장 (완전판)",
+      "description": "더 상세한 전투와 설득 시스템이 포함된 확장판",
+      "difficulty": "어려움",
+      "file": "cutscene5_akaza_encounter.json"
+    },
+    {
+      "id": "cutscene5_akaza_multi_conv",
+      "name": "🔥 컷신5: 다중 대화 버전",
+      "description": "다중 캐릭터 대화 시스템 테스트 버전",
+      "difficulty": "보통",
+      "file": "cutscene5_akaza_multi_conv.json"
+    },
+    {
+      "id": "scene5_train_battle",
+      "name": "🚂 무한열차 전투",
+      "description": "엔무와의 전투 시나리오",
+      "difficulty": "쉬움",
+      "file": "scene5_train_battle.json"
+    }
+  ],
+  "display": {
+    "show_scenario_status": true,
+    "show_turn_separator": true,
+    "show_affinity_bar": true,
+    "affinity_bar_length": 10,
+    "separator_length": 62
+  },
+  "gameplay": {
+    "recursion_limit": 100,
+    "auto_save": false,
+    "save_path": "saves/"
+  }
+}

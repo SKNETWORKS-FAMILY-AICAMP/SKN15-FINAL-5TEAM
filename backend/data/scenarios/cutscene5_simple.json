@@ -1,0 +1,860 @@
+{
+  "scenario_id": "cutscene5_simple",
+  "title": "🔥 컷신5: 상현 삼의 등장 (간소화)",
+  "description": "다중 대화 지원 - 간소화된 구조",
+  "initial_affinity": {
+    "tanjiro": 0,
+    "inosuke": 0,
+    "zenitsu": 0,
+    "rengoku": 0
+  },
+  "metadata": {
+    "version": "3.0_simple",
+    "multi_conversation": true
+  },
+  "stages": {
+    "intro": {
+      "type": "cutscene",
+      "title": "💥 찰나의 안도, 그리고 최악의 절망",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speakers": [
+            "system",
+            "tanjiro"
+          ],
+          "contents": [
+            "💨 열차의 충격으로 바깥으로 튕겨 나간 당신이 서서히 눈을 뜬다. 흐릿한 시야 너머로 탄지로가 다급하게 달려오는 것이 보인다.",
+            "{{user}}!! 😰 괜찮아?! 제발 정신 차려!"
+          ],
+          "emotions": [
+            "neutral",
+            "worried"
+          ],
+          "user_prompt": "탄지로에게 대답하세요 (예: 괜찮아, 무슨 일이야?)"
+        },
+        {
+          "turn": 1,
+          "speakers": [
+            "tanjiro",
+            "rengoku",
+            "tanjiro"
+          ],
+          "contents": [
+            "다행이다… 😮‍💨 엔무는 쓰러뜨렸지만, 열차가 완전히 망가져 버렸어. 그런데… 렌고쿠 씨가 보이지 않아! 아까 그 충격으로 어디로…!",
+            "음! 😄 여깄다! 두 사람 다 정말 훌륭했군! 대단하다!",
+            "렌고쿠 씨…! 😣 다행이다… 하지만 전 이제… 복부의 출혈이 심해서… 제대로 호흡을 가다듬지 않으면…"
+          ],
+          "emotions": [
+            "anxious",
+            "proud",
+            "pain"
+          ],
+          "user_prompt": "렌고쿠와 탄지로에게 대답하세요 (예: 다행이에요, 다들 무사하신가요?)"
+        },
+        {
+          "turn": 2,
+          "speakers": [
+            "rengoku",
+            "system",
+            "akaza",
+            "tanjiro"
+          ],
+          "contents": [
+            "그래, 우선은 전집중 호흡으로 출혈을 막는 것에 집중하도록! 💪 좋은 판단이다!",
+            "⚡ 렌고쿠가 탄지로를 격려하며 미소 짓는 바로 그 순간. 지축을 울리는 강력한 충격과 함께, 등골이 서늘해지는 살기가 전장을 뒤덮는다.",
+            "호오… 😏 좋은 투기(闘気)다. 빈틈없이 단련되어 있군. 지주(柱)인가.",
+            "이건… 😱 지금까지와는 차원이 다른 살기다…!"
+          ],
+          "emotions": [
+            "encouraging",
+            "tense",
+            "interested",
+            "shocked"
+          ],
+          "user_prompt": "아카자의 등장에 반응하세요 (예: 저건 뭐야?!, 렌고쿠 씨 조심하세요!)"
+        },
+        {
+          "turn": 3,
+          "speakers": [
+            "akaza",
+            "akaza",
+            "rengoku"
+          ],
+          "contents": [
+            "내 이름은 아카자. 😈 오, 지주(柱)로구나! 좋은 투기다! 너, 강하구나!",
+            "{{user}}? 😏 흥, 약한 기척이군. 너 같은 건 상대할 가치도 없어. 지주, 나와 함께 혈귀가 되지 않겠나? 그 힘, 영원히 보존할 수 있다!",
+            "거절하겠다! 🔥 나는 인간으로서 책무를 다할 뿐이다!"
+          ],
+          "emotions": [
+            "interested",
+            "dismissive",
+            "determined"
+          ],
+          "user_prompt": "아카자가 당신을 무시합니다 (예: ...!, 렌고쿠 씨 조심하세요!)"
+        },
+        {
+          "turn": 4,
+          "speakers": [
+            "akaza",
+            "system",
+            "rengoku",
+            "rengoku"
+          ],
+          "contents": [
+            "크하하! 좋아, 그럼 죽여주지! 💀 재미있겠군!",
+            "⚡ 아카자가 자세를 낮추자, 그의 발밑으로 눈꽃 모양의 진이 펼쳐진다. 「술식 전개… 파괴살・나침!」",
+            "{{user}}! 😤 네가 끼어들 싸움이 아니다! 너는 아직 약해! 미숙한 검사가 함부로 나섰다간 목숨을 잃는다! 명령이다, 뒤로 물러나!",
+            "탄지로! 😤 너도 마찬가지다! 복부 출혈로 제대로 움직이지도 못하지 않나! 무리하지 말고 절대로 가까이 오지 마!"
+          ],
+          "emotions": [
+            "excited",
+            "tense",
+            "commanding",
+            "protective"
+          ],
+          "user_prompt": "렌고쿠의 명령을 듣습니다"
+        },
+        {
+          "turn": 5,
+          "speakers": [
+            "tanjiro",
+            "tanjiro",
+            "tanjiro"
+          ],
+          "contents": [
+            "{{user}}... 😰 렌고쿠 씨가 혼자서는 너무 위험해요!",
+            "저는 지금 복부 출혈이 심해서... 😣 제대로 싸울 수도, 움직일 수도 없습니다.",
+            "👃 {{user}}, 잠깐! 제 코로 냄새를 추적해봤어요... 앞쪽 칸에서는 거칠고 야생적인 멧돼지 같은 냄새가! 뒤쪽 칸에서는 마치 번개가 스쳐간 것 같은 냄새가! 이노스케와 젠이츠가 분명해요!"
+          ],
+          "emotions": [
+            "worried",
+            "frustrated",
+            "hopeful"
+          ],
+          "user_prompt": "계속 진행하려면 아무 키나 입력하세요"
+        }
+      ],
+      "next_stage": "fork"
+    },
+    "fork": {
+      "type": "choice",
+      "title": "⚔️ 운명의 갈림길",
+      "pre_choice_speakers": [
+        "system"
+      ],
+      "pre_choice_contents": [
+        "💭 렌고쿠는 아카자와 홀로 맞서고 있다. 탄지로는 부상으로 전투 불가. 당신의 결정은?"
+      ],
+      "pre_choice_emotions": [
+        "tense"
+      ],
+      "user_prompt": "어떻게 할지 말하세요 (예: 동료들 찾기 / 렌고쿠 바로 돕기)",
+      "choices": [
+        {
+          "id": "recruit_allies",
+          "text": "동료들을 찾아 함께 싸운다",
+          "description": "탄지로의 힌트를 받아들여 이노스케와 젠이츠를 찾아 설득한 뒤, 함께 아카자와 싸운다.",
+          "intent_keywords": [
+            "동료",
+            "이노스케",
+            "젠이츠",
+            "찾",
+            "모집",
+            "설득",
+            "데리고",
+            "모으",
+            "둘",
+            "탄지로",
+            "힌트"
+          ],
+          "next_stage": "recruit_mission"
+        },
+        {
+          "id": "reckless_sacrifice",
+          "text": "혼자서라도 렌고쿠를 지킨다",
+          "description": "렌고쿠의 명령을 무시하고 혼자서라도 뛰어든다. 무모한 선택.",
+          "intent_keywords": [
+            "혼자",
+            "단독",
+            "바로",
+            "즉시",
+            "뛰어들",
+            "돌진",
+            "명령무시",
+            "무시"
+          ],
+          "next_stage": "end_bad"
+        }
+      ]
+    },
+    "recruit_mission": {
+      "type": "mission",
+      "title": "🏃 동료 규합",
+      "max_turns": 10,
+      "objective": "이노스케와 젠이츠를 설득하세요",
+      "intro_speakers": [
+        "system",
+        "tanjiro",
+        "tanjiro"
+      ],
+      "intro_contents": [
+        "🚂 당신은 부서진 열차 칸으로 달려간다. 등 뒤로 들려오는 격렬한 전투 소리가 당신의 심장을 조여온다.",
+        "👃 {{user}}, 제 코로 냄새를 추적해봤어요! 앞쪽 칸에서는… 거칠고 야생적인, 멧돼지 같은 냄새가 나요! 분명 이노스케일 거예요!",
+        "그리고 뒤쪽 칸에서는… 미세하게 공기가 떨리는, 마치 번개가 스쳐간 것 같은 냄새가! 젠이츠가 틀림없어요! 💡 누구를 먼저 찾아가실 건가요?"
+      ],
+      "intro_emotions": [
+        "neutral",
+        "observant",
+        "hopeful"
+      ],
+      "user_prompt": "먼저 찾아갈 동료를 말하세요",
+      "characters": {
+        "inosuke": {
+          "name": "🐗 이노스케",
+          "stages": [
+            {
+              "stage": 0,
+              "speakers": [
+                "system",
+                "inosuke",
+                "tanjiro"
+              ],
+              "contents": [
+                "🚂 열차 앞쪽 칸, 이노스케가 부서진 좌석 더미 위에 군림하듯 앉아 칼을 갈고 있다.",
+                "😠 뭐야! 누구냐! 이 대장님의 영역에 함부로 들어오다니!",
+                "{{user}}, 이노스케를 설득해봐!"
+              ],
+              "emotions": [
+                "neutral",
+                "aggressive",
+                "encouraging"
+              ],
+              "user_prompt": "이노스케를 설득하세요",
+              "success_keywords": [
+                "약", "못", "겁쟁", "도망", "비겁", "지",
+                "보다", "보다 약", "보다 못", "같은데", "것 같은데",
+                "자존심", "대장", "강하", "이길", "질",
+                "생기", "멧돼지", "별로"
+              ]
+            },
+            {
+              "stage": 1,
+              "speakers": [
+                "inosuke",
+                "tanjiro"
+              ],
+              "contents": [
+                "😠 흥! 뭐 하러 왔어? 이 몸은 바빠!",
+                "💡 {{user}}, 이노스케는 강한 녀석을 좋아해! 그걸 기억해봐!"
+              ],
+              "emotions": [
+                "dismissive",
+                "helpful"
+              ],
+              "user_prompt": "이노스케를 설득하세요 (힌트: 강함)",
+              "success_keywords": [
+                "약", "못", "겁쟁", "도망", "비겁", "지",
+                "보다", "보다 약", "보다 못", "같은데", "것 같은데",
+                "자존심", "대장", "강하", "이길", "질",
+                "생기", "멧돼지", "별로"
+              ]
+            },
+            {
+              "stage": 2,
+              "speakers": [
+                "inosuke",
+                "tanjiro"
+              ],
+              "contents": [
+                "😠 크응... 시끄러워! 가라!",
+                "💡 {{user}}, 이노스케는 자신이 약하다는 말을 정말 싫어해!"
+              ],
+              "emotions": [
+                "annoyed",
+                "urgent"
+              ],
+              "user_prompt": "이노스케를 설득하세요 (힌트: 약함)",
+              "success_keywords": [
+                "약", "못", "겁쟁", "도망", "비겁", "지",
+                "보다", "보다 약", "보다 못", "같은데", "것 같은데",
+                "자존심", "대장", "강하", "이길", "질",
+                "생기", "멧돼지", "별로"
+              ]
+            },
+            {
+              "stage": 3,
+              "speakers": [
+                "inosuke",
+                "tanjiro"
+              ],
+              "contents": [
+                "😡 뭐? 아직도 여기 있어?",
+                "💡 {{user}}, 이노스케는 겁쟁이라는 말도 엄청 싫어해! 도발해봐!"
+              ],
+              "emotions": [
+                "angry",
+                "determined"
+              ],
+              "user_prompt": "이노스케를 설득하세요 (힌트: 겁쟁이)",
+              "success_keywords": [
+                "약", "못", "겁쟁", "도망", "비겁", "지",
+                "보다", "보다 약", "보다 못", "같은데", "것 같은데",
+                "자존심", "대장", "강하", "이길", "질",
+                "생기", "멧돼지", "별로"
+              ]
+            },
+            {
+              "stage": 4,
+              "speakers": [
+                "inosuke",
+                "tanjiro",
+                "inosuke"
+              ],
+              "contents": [
+                "😡 뭐라고!? 이 몸이 약하고 겁쟁이라고!? 누가 약한지 증명해주지!",
+                "😊 좋아! 이노스케, 함께 가자!",
+                "💪 크아아악! 좋아! 이 몸의 힘을 보여주지! 나를 따라와라!"
+              ],
+              "emotions": [
+                "furious",
+                "relieved",
+                "determined"
+              ],
+              "success_flag": "inosuke_recruited",
+              "user_prompt": "다음으로 갈 곳을 선택하세요"
+            }
+          ]
+        },
+        "zenitsu": {
+          "name": "⚡ 젠이츠",
+          "stages": [
+            {
+              "stage": 0,
+              "speakers": [
+                "system",
+                "zenitsu",
+                "inosuke",
+                "tanjiro"
+              ],
+              "contents": [
+                "🚂 옆으로 쓰러진 객차 안, 젠이츠가 코까지 골며 깊이 잠들어 있다.",
+                "😴 Zzz... 무서운 꿈... Zzz...",
+                "😠 이 노란 녀석! 자고만 있네!",
+                "{{user}}, 젠이츠를 깨워봐!"
+              ],
+              "emotions": [
+                "neutral",
+                "sleeping",
+                "annoyed",
+                "neutral"
+              ],
+              "user_prompt": "젠이츠를 깨워보세요",
+              "success_keywords": [
+                "네즈코",
+                "네즈코짱",
+                "네즈코쨩",
+                "nezuko"
+              ]
+            },
+            {
+              "stage": 1,
+              "speakers": [
+                "zenitsu",
+                "tanjiro"
+              ],
+              "contents": [
+                "😴 Zzz... 네즈코쨩... Zzz...",
+                "💡 {{user}}, 젠이츠는 네즈코를 정말 좋아해! 그 이름을 부르면 깰지도 몰라!"
+              ],
+              "emotions": [
+                "sleeping",
+                "neutral"
+              ],
+              "user_prompt": "젠이츠를 깨워보세요 (힌트: 네즈코)",
+              "success_keywords": [
+                "네즈코",
+                "네즈코짱",
+                "네즈코쨩",
+                "nezuko"
+              ]
+            },
+            {
+              "stage": 2,
+              "speakers": [
+                "zenitsu",
+                "zenitsu",
+                "tanjiro"
+              ],
+              "contents": [
+                "😪 으응...? 네즈코쨩...?",
+                "😰 앗! 여기... 여기가 어디야?! 무서워! 나 집에 갈래!",
+                "{{user}}, 젠이츠를 설득해봐!"
+              ],
+              "emotions": [
+                "waking",
+                "scared",
+                "neutral"
+              ],
+              "user_prompt": "젠이츠를 설득하세요",
+              "success_keywords": [
+                "네즈코",
+                "위험",
+                "도와",
+                "지키",
+                "구해",
+                "도움",
+                "필요",
+                "죽"
+              ]
+            },
+            {
+              "stage": 3,
+              "speakers": [
+                "zenitsu",
+                "tanjiro"
+              ],
+              "contents": [
+                "😰 으으... 싫어! 무서워! 나는 약해!",
+                "💡 {{user}}, 젠이츠는 네즈코를 위해서라면 뭐든 해! 네즈코가 위험하다는 걸 알려줘봐!"
+              ],
+              "emotions": [
+                "scared",
+                "neutral"
+              ],
+              "user_prompt": "젠이츠를 설득하세요 (힌트: 네즈코 위험)",
+              "success_keywords": [
+                "네즈코",
+                "위험",
+                "도와",
+                "지키",
+                "구해",
+                "도움",
+                "필요",
+                "죽"
+              ]
+            },
+            {
+              "stage": 4,
+              "speakers": [
+                "zenitsu",
+                "tanjiro",
+                "zenitsu",
+                "inosuke"
+              ],
+              "contents": [
+                "😱 뭐어어라고오?! 나의 네즈코쨔아아앙이 위험하다고?!",
+                "😊 젠이츠, 고마워! 함께 가자!",
+                "😤 으으... 무서워... 하지만! 네즈코쨩을 위해서라면! 반드시 지킬 거야!",
+                "💪 크하하! 자, 이제 돌아가자!"
+              ],
+              "emotions": [
+                "shocked",
+                "grateful",
+                "determined",
+                "excited"
+              ],
+              "success_flag": "zenitsu_recruited",
+              "user_prompt": "동료들과 함께 전장으로 돌아갑니다"
+            }
+          ]
+        }
+      },
+      "next_stage": "end_hidden",
+      "timeout_stage": "end_bad"
+    },
+    "end_hidden": {
+      "type": "ending",
+      "title": "🏆 히든 엔딩: 염불(炎不)의 새벽",
+      "ending_type": "hidden",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speakers": [
+            "system",
+            "zenitsu",
+            "inosuke",
+            "tanjiro"
+          ],
+          "contents": [
+            "⚡ 당신은 번개처럼 돌진하는 젠이츠와, 멧돼지처럼 함성을 지르는 이노스케를 이끌고 격전의 현장으로 돌아온다!",
+            "⚡ 네즈코쨩을 위해서라면! 번개의 호흡!",
+            "💪 크하하하! 이 몸의 힘을 보여주지!",
+            "😊 {{user}}, 우리가 함께라면 이길 수 있어!"
+          ],
+          "emotions": [
+            "neutral",
+            "determined",
+            "excited",
+            "hopeful"
+          ],
+          "user_prompt": "전략을 지시하세요 (자유롭게)"
+        },
+        {
+          "turn": 1,
+          "speakers": [
+            "system",
+            "akaza",
+            "rengoku"
+          ],
+          "contents": [
+            "💥 전장에는 이미 격렬한 전투가 벌어지고 있다! 렌고쿠가 피를 흘리며 아카자와 맞서고 있다!",
+            "😏 쿄쥬로, 곧 끝이다. 혈귀가 될 마지막 기회를 주겠다!",
+            "🔥 거절한다! 내 의지는 꺾이지 않는다!"
+          ],
+          "emotions": [
+            "neutral",
+            "confident",
+            "resolute"
+          ],
+          "user_prompt": "동료들과 함께 전투에 참여하세요"
+        },
+        {
+          "turn": 2,
+          "speakers": [
+            "zenitsu",
+            "inosuke",
+            "tanjiro"
+          ],
+          "contents": [
+            "⚡ 뇌의 호흡, 일의 형! 벽력일섬(霹靂一閃)!!",
+            "🐗 짐승의 호흡, 칠의 형! 공간식별각(空間識覺)!!",
+            "🌊 물의 호흡, 십의 형! 생생・유류(生生流転)!!"
+          ],
+          "emotions": [
+            "fierce",
+            "aggressive",
+            "determined"
+          ],
+          "user_prompt": "전투 상황을 지켜봅니다"
+        },
+        {
+          "turn": 3,
+          "speakers": [
+            "system",
+            "akaza",
+            "rengoku"
+          ],
+          "contents": [
+            "💥 네 사람의 공조가 완벽하게 맞아떨어진다! 아카자의 움직임이 조금씩 제한되기 시작한다!",
+            "😤 뭐?! 약자들이 또…! 하지만 이 정도로는…!",
+            "🔥 화염의 호흡, 오의! 제9형, 연옥(煉獄)!!"
+          ],
+          "emotions": [
+            "neutral",
+            "frustrated",
+            "fierce"
+          ],
+          "user_prompt": "계속 지켜봅니다"
+        },
+        {
+          "turn": 4,
+          "speakers": [
+            "system",
+            "akaza"
+          ],
+          "contents": [
+            "🔥 렌고쿠의 오의와 동료들의 협공이 아카자를 압박한다! 하늘이 점점 밝아온다!",
+            "😠 쯧...! 해가 뜨는구나! 쿄쥬로, 다음엔 반드시 끝을 내겠다! 기억해둬라!"
+          ],
+          "emotions": [
+            "neutral",
+            "frustrated"
+          ],
+          "user_prompt": "전투가 끝나갑니다"
+        },
+        {
+          "turn": 5,
+          "speakers": [
+            "system",
+            "tanjiro",
+            "rengoku"
+          ],
+          "contents": [
+            "🌅 새벽의 여명이 밝아오고, 혈귀 아카자는 분한 표정으로 어둠 속으로 사라졌다. 치열한 전투 끝에 렌고쿠는 깊은 상처를 입고 거친 숨을 몰아쉬고 있지만, 분명히 살아있다.",
+            "😭 해냈어요…! 렌고쿠 씨, 살아계시는군요!",
+            "😊 큭…! 훌륭했다, 너희 모두! 너희가 없었다면… 난 이미 졌을 거다."
+          ],
+          "emotions": [
+            "neutral",
+            "relieved",
+            "grateful"
+          ],
+          "user_prompt": "렌고쿠에게 말을 건네세요"
+        },
+        {
+          "turn": 6,
+          "speakers": [
+            "rengoku",
+            "rengoku"
+          ],
+          "contents": [
+            "💪 정신이 있을 때 잘 들어다오. 오늘 전투를 통해 너희에게 꼭 해주고 싶은 말이 생겼다. 카마도 소년. 난 오늘로서 자네의 동생을 완전히 믿게 되었다. 그녀를 귀살대의 일원으로 인정한다.",
+            "😊 그리고 멧돼지 머리 소년, 노란 소년… 그리고 {{user}}. 더욱 더 성장해서, 다음에는 너희가 귀살대를 받쳐주는 주가 되어라. 난 믿는다. 너희를 믿으마."
+          ],
+          "emotions": [
+            "warm",
+            "proud"
+          ],
+          "user_prompt": "엔딩 완료"
+        }
+      ]
+    },
+    "end_medium": {
+      "type": "ending",
+      "title": "⭐ 중간 엔딩: 함께한 용기",
+      "ending_type": "medium",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speakers": [
+            "system",
+            "tanjiro",
+            "rengoku"
+          ],
+          "contents": [
+            "⚔️ 탄지로와 당신은 전력으로 달려 렌고쿠를 돕는다. 아카자의 주의가 잠시 분산된다!",
+            "{{user}}! 😤 같이 가자! 우리 둘이서라도 렌고쿠 씨를 도울 수 있어!",
+            "😊 {{user}}, 탄지로! 고맙다! 함께 싸우자!"
+          ],
+          "emotions": [
+            "neutral",
+            "determined",
+            "grateful"
+          ],
+          "user_prompt": "계속하세요"
+        },
+        {
+          "turn": 1,
+          "speakers": [
+            "system",
+            "rengoku",
+            "tanjiro"
+          ],
+          "contents": [
+            "🌅 동이 트기 시작하자, 아카자는 분한 표정으로 물러난다. 렌고쿠는 부상을 입었지만, 목숨을 건졌다.",
+            "😊 고맙다, 너희들. 함께 싸운 덕분에 살아남았다.",
+            "😄 {{user}}! 우리가 해냈어! 렌고쿠 씨를 지켰어!"
+          ],
+          "emotions": [
+            "neutral",
+            "grateful",
+            "joyful"
+          ],
+          "user_prompt": "엔딩 완료"
+        }
+      ]
+    },
+    "end_bad": {
+      "type": "ending",
+      "title": "😢 기본 엔딩: 꺼지지 않는 불꽃",
+      "ending_type": "normal",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speakers": [
+            "system",
+            "akaza",
+            "rengoku"
+          ],
+          "contents": [
+            "⚔️ 당신은 아무런 계획도 없이 렌고쿠를 돕기 위해 뛰어든다! 달빛 아래, 렌고쿠와 아카자의 싸움이 눈앞에 펼쳐진다.",
+            "💥 파괴살・공식!! (강렬한 주먹이 렌고쿠를 향해 날아간다)",
+            "🔥 화염의 호흡, 참의 형! 상승염천(上昇炎天)!!"
+          ],
+          "emotions": [
+            "neutral",
+            "aggressive",
+            "fierce"
+          ],
+          "user_prompt": "전투를 지켜봅니다"
+        },
+        {
+          "turn": 1,
+          "speakers": [
+            "system",
+            "akaza",
+            "rengoku"
+          ],
+          "contents": [
+            "⚡ 두 사람의 공격이 정면으로 충돌하며 충격파가 사방으로 퍼진다! 렌고쿠가 뒷걸음질 치며 피를 토한다.",
+            "😏 호오? 투기는 나쁘지 않지만… 인간의 한계가 보이는군. 쿄쥬로, 혈귀가 되어라! 그럼 영원히 강해질 수 있다!",
+            "🔥 거절한다! 나는 인간으로서의 의무를 다할 뿐이다!"
+          ],
+          "emotions": [
+            "neutral",
+            "persuasive",
+            "resolute"
+          ],
+          "user_prompt": "렌고쿠를 돕기 위해 뛰어듭니다"
+        },
+        {
+          "turn": 2,
+          "speakers": [
+            "akaza",
+            "system"
+          ],
+          "contents": [
+            "😏 또 다른 약자인가? 쿄쥬로에 비하면 갓난아기 수준. 사라져라, 약자.",
+            "⚡ 아카자의 파괴살이 당신을 향해 날아온다! 순식간에 벌어진 일이라 피할 수조차 없다!"
+          ],
+          "emotions": [
+            "dismissive",
+            "neutral"
+          ],
+          "user_prompt": "죽음이 다가옵니다"
+        },
+        {
+          "turn": 3,
+          "speakers": [
+            "rengoku",
+            "system",
+            "rengoku"
+          ],
+          "contents": [
+            "😱 {{user}}!! 안 돼!!",
+            "💥 죽음을 직감한 그 순간, 불꽃처럼 빠른 그림자가 당신을 밀쳐낸다. 렌고쿠가 그 공격을 온몸으로 받아낸다!",
+            "크헉…! 😣 (아카자의 주먹이 렌고쿠의 복부를 관통한다)"
+          ],
+          "emotions": [
+            "desperate",
+            "neutral",
+            "pain"
+          ],
+          "user_prompt": "렌고쿠가 당신을 구했습니다"
+        },
+        {
+          "turn": 4,
+          "speakers": [
+            "akaza",
+            "system",
+            "tanjiro"
+          ],
+          "contents": [
+            "😈 어리석군, 쿄쥬로. 약자를 감싸다니. 이것이 인간의 한계다.",
+            "🌅 새벽의 여명이 밝아오고, 혈귀 아카자는 햇빛을 피해 어둠 속으로 사라졌다. 하지만 승리의 기쁨은 없다.",
+            "😭 렌고쿠 씨!! 정신 차리세요! 지혈을…! 어떻게든…!"
+          ],
+          "emotions": [
+            "cold",
+            "neutral",
+            "desperate"
+          ],
+          "user_prompt": "렌고쿠가 쓰러져 있습니다"
+        },
+        {
+          "turn": 5,
+          "speakers": [
+            "system",
+            "rengoku",
+            "tanjiro"
+          ],
+          "contents": [
+            "💔 렌고쿠가 무릎을 꿇은 채 쓰러져 있다. 복부에 뚫린 상처에서 피가 멈추지 않고 흘러내린다.",
+            "😌 크흑… 괜찮다. 탄지로, {{user}}… 떠들 수 있는 틈에 말할 테니, 들어다오.",
+            "😢 말씀하지 마세요…! 힘을 아끼세요! 구급대가 곧…!"
+          ],
+          "emotions": [
+            "neutral",
+            "calm",
+            "crying"
+          ],
+          "user_prompt": "렌고쿠의 마지막 말을 듣습니다"
+        },
+        {
+          "turn": 6,
+          "speakers": [
+            "rengoku",
+            "rengoku",
+            "tanjiro"
+          ],
+          "contents": [
+            "😊 음, 탄지로는 착하구나. 하지만 나도 알고 있다. 이제 오래 버티지 못한다는 것을.",
+            "😊 카마도 소년. 난 자네의 동생을 믿는다. 그 아이는 반드시 귀살대의 동료들을 지켜줄 것이다. 귀살대의 일원으로 인정한다.",
+            "😢 네즈코가… 네즈코가 들으면 분명 기뻐할 겁니다…!"
+          ],
+          "emotions": [
+            "gentle",
+            "proud",
+            "grateful"
+          ],
+          "user_prompt": "계속 듣습니다"
+        },
+        {
+          "turn": 7,
+          "speakers": [
+            "rengoku",
+            "rengoku",
+            "system"
+          ],
+          "contents": [
+            "💪 가슴을 펴고 살아가거라! 자신의 나약함이나 무능함에 아무리 좌절하고 쓰러지더라도, 마음을 불태워라!",
+            "😊 카마도 소년, 멧돼지 머리 소년, 노란 소년… 그리고 {{user}}. 더욱 더 성장해라. 난 믿는다. 너희를 믿으마.",
+            "😢 그 말을 마지막으로, 렌고쿠의 손이 힘없이 툭 떨어진다. 그의 얼굴에는 온화한 미소가 남아있다."
+          ],
+          "emotions": [
+            "passionate",
+            "warm",
+            "neutral"
+          ],
+          "user_prompt": "엔딩을 마무리합니다"
+        },
+        {
+          "turn": 8,
+          "speakers": [
+            "system"
+          ],
+          "contents": [
+            "🔥 그의 불꽃은 꺼졌지만, 그 의지는 당신의 가슴속에 영원히 타오를 것이다."
+          ],
+          "emotions": [
+            "neutral"
+          ],
+          "user_prompt": "엔딩 완료"
+        }
+      ]
+    }
+  },
+  "affinity_levels": {
+    "level_1": {
+      "range": [
+        0,
+        200
+      ],
+      "description": "낯선 사람",
+      "calling": "{{user}}씨"
+    },
+    "level_2": {
+      "range": [
+        201,
+        400
+      ],
+      "description": "아는 사이",
+      "calling": "{{user}}님"
+    },
+    "level_3": {
+      "range": [
+        401,
+        600
+      ],
+      "description": "친구",
+      "calling": "{{user}}님"
+    },
+    "level_4": {
+      "range": [
+        601,
+        800
+      ],
+      "description": "절친",
+      "calling": "{{user}}야"
+    },
+    "level_5": {
+      "range": [
+        801,
+        1000
+      ],
+      "description": "영혼의 동반자",
+      "calling": "사용자 지정 애칭"
+    }
+  }
+}
