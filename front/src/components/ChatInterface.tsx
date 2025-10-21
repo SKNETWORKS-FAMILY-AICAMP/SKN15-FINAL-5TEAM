@@ -152,6 +152,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       return;
     }
 
+    // 🔥 플래그 리셋: 이전 요청에서 true로 남아있을 수 있음
+    shouldCancelAutoRequest.current = false;
+
     isAddingMessages.current = true;
     setIsTyping(true);
 
@@ -541,6 +544,12 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+
+    // 🔥 자동 요청 중일 때는 사용자 입력 차단
+    if (isAutoRequesting) {
+      console.log('⚠️ Auto-requesting in progress, user input blocked');
+      return;
+    }
 
     // 사용자가 메시지를 보내면 진행 중인 자동 요청을 중단
     shouldCancelAutoRequest.current = true;
@@ -1079,7 +1088,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
             <button
               key={index}
               onClick={() => sendMessage(response)}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm hover:bg-gray-200 transition-colors whitespace-nowrap border border-gray-200"
+              disabled={isLoading || isTyping || isAutoRequesting}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm hover:bg-gray-200 transition-colors whitespace-nowrap border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {response}
             </button>
@@ -1111,15 +1121,15 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && inputMessage.trim() && !isLoading && !isTyping && sendMessage(inputMessage)}
-              placeholder="메시지를 입력하세요..."
-              disabled={isLoading || isTyping}
+              onKeyDown={(e) => e.key === 'Enter' && inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
+              placeholder={isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요..."}
+              disabled={isLoading || isTyping || isAutoRequesting}
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
-              onClick={() => inputMessage.trim() && !isLoading && !isTyping && sendMessage(inputMessage)}
+              onClick={() => inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
               className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!inputMessage.trim() || isLoading || isTyping}
+              disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting}
             >
               {isLoading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500"></div>

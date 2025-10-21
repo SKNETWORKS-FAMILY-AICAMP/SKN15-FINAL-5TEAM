@@ -893,6 +893,15 @@ def parent_after_dialogue(state: dict) -> dict:
     except Exception:
         pass
 
+    # 🔥 턴 증가: **실제 사용자 입력**일 때만 turn_count 증가
+    # __AUTO_CONTINUE__는 자동 재생이므로 유저 턴으로 카운트하지 않음
+    user_input = (state.get("user_input") or "").strip()
+    if user_input and user_input != "__AUTO_CONTINUE__":
+        scene = state.setdefault("scene", {})
+        old_turn_count = int(scene.get("turn_count", 0))
+        scene["turn_count"] = old_turn_count + 1
+        logger.info(f"[TURN] 🎮 User turn count incremented: {old_turn_count} → {scene['turn_count']}")
+
     # 의도 복구+고정: 중간 단계에서 유실되어도 sticky로 보존
     rr = state.get("routing_result") or {}
     sticky = (state.get("user_intent") or rr.get("intent") or "").strip().lower()
@@ -910,13 +919,13 @@ def parent_after_dialogue(state: dict) -> dict:
         changed = False
 
         if current_stage.upper() == "INTRO":
-            # INTRO도 일반 scene처럼 min_turns 조건 확인
-            scene = state.setdefault("scene", {})
-            turn_count = int(scene.get("turn_count", 0))
-            min_turns = int(stage.get("constraints", {}).get("min_turns", 10))
+            # INTRO는 자동 재생 cutscene이므로 dialogue_batch_index로 진행 추적
+            # (turn_count는 실제 유저 입력만 세므로 INTRO에서는 항상 0)
+            batch_index = int(state.get("dialogue_batch_index", 0))
+            min_batches = int(stage.get("constraints", {}).get("min_turns", 3))  # min_turns를 min_batches로 해석
 
-            # min_turns를 만족해야만 전환
-            if turn_count >= min_turns:
+            # 필요한 배치 수를 만족하면 전환
+            if batch_index >= min_batches:
                 next_stage = stage.get("next") or stage.get("goto") or "ROUTE_CHOICE"
                 temp = state.get("temp_data") or {}
                 temp["intro_done"] = True
@@ -924,11 +933,11 @@ def parent_after_dialogue(state: dict) -> dict:
                 if next_stage:
                     _goto(state, next_stage)
                 _consume_intent(state)
-                logger.info(f"[STAGE] INTRO → {next_stage} (after_dialogue, {turn_count}/{min_turns} turns complete)")
+                logger.info(f"[STAGE] 🎬 INTRO → {next_stage} (after {batch_index} batches, min: {min_batches})")
                 changed = True
             else:
                 # 아직 INTRO 유지
-                logger.info(f"⏳ INTRO: turn {turn_count}/{min_turns} (waiting for more dialogues...)")
+                logger.info(f"⏳ INTRO: batch {batch_index}/{min_batches} (auto-playing...)")
                 changed = False
         elif stage_type == "free_intent":
             changed = _handle_free_intent_stage(state, stage)

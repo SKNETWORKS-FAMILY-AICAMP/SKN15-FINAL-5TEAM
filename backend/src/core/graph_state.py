@@ -100,6 +100,11 @@ class GraphState(TypedDict):
     output: Dict[str, Any]  # 사용자에게 보여줄 출력
 
     # ============================================================
+    # 씬 상태 (scene)
+    # ============================================================
+    scene: Dict[str, Any]  # 씬 상태 (turn_count, current_scene, speaker_pool 등)
+
+    # ============================================================
     # 임시 데이터 (fallback_blocked)
     # ============================================================
     temp_data: Dict[str, Any]  # 임시 데이터 저장소
@@ -216,6 +221,14 @@ def create_initial_graph_state(
             "dialogues": [],
             "images": [],
             "system_messages": []
+        },
+
+        # 씬 상태
+        scene={
+            "turn_count": 0,
+            "current_scene": None,
+            "speaker_pool": [],
+            "stage_turn": 0
         },
 
         # 임시 데이터

@@ -365,7 +365,11 @@ def _generate_dialogues(ctx: Dict[str, Any], state: dict, db: dict) -> tuple[Lis
     current_batch_size = min(batch_size, remaining_dialogues)
 
     # 더 생성할 대화가 있는지 확인
-    has_more = (dialogues_generated_so_far + current_batch_size) < total_dialogues_needed
+    # 🔥 free_intent 스테이지는 항상 첫 배치 후 사용자 입력 대기
+    if stage_type == "free_intent":
+        has_more = False  # 사용자 입력을 기다려야 하므로 auto-continue 차단
+    else:
+        has_more = (dialogues_generated_so_far + current_batch_size) < total_dialogues_needed
 
     # 배치별 상황 설명 (beats에서 현재 배치에 해당하는 부분만 선택)
     if beats and batch_index < len(beats):
