@@ -74,8 +74,31 @@ def _detect_intent_cutscene5(state: Dict[str, Any], user_input: str) -> str:
         # 함께 싸우기 키워드 (어간 중심)
         reckless_keywords = ["함께", "같이", "렌고쿠", "싸우", "돌진", "막", "지키", "지원", "붙", "돕", "도와"]
 
+        # 세부 타깃 감지 (우선순위: 이노스케/젠이츠)
+        ally_targets = {
+            "inosuke": ["이노스케", "멧돼지", "inosuke"],
+            "zenitsu": ["젠이츠", "zenitsu", "츠고쿠", "츠구코"],
+        }
+        target_matches = {
+            target: any(kw in user_text or kw in normalized_text for kw in hints)
+            for target, hints in ally_targets.items()
+        }
+        if sum(1 for matched in target_matches.values() if matched) == 1:
+            chosen_target = next(t for t, matched in target_matches.items() if matched)
+        else:
+            chosen_target = None
+
         # 원문과 정규화된 텍스트 모두에서 검색 : choose_allies_path -> RECRUIT 
-        if any(kw in user_text or kw in normalized_text for kw in allies_keywords):
+        if any(kw in user_text or kw in normalized_text for kw in allies_keywords) or chosen_target:
+            if chosen_target:
+                intent_name = f"choose_allies_{chosen_target}_first"
+                state["user_intent"] = intent_name
+                temp = state.setdefault("temp_data", {})
+                temp["mission_first_target"] = chosen_target
+                state["temp_data"] = temp
+                print(f"[ROUTER] 🎯 Detected intent: {intent_name} (input: '{user_input}')")
+                return intent_name
+
             state["user_intent"] = "choose_allies_path"
             print(f"[ROUTER] 🎯 Detected intent: choose_allies_path (input: '{user_input}')")
             return "choose_allies_path"
@@ -110,12 +133,25 @@ def _detect_intent_cutscene5(state: Dict[str, Any], user_input: str) -> str:
     if current_stage == "RECRUIT":
         # 형태소 정규화 적용
         zenitsu_keywords = ["젠이츠", "네즈코", "위험", "깨우"]
-        inosuke_keywords = ["이노스케", "대장", "앞장", "강한", "강", "왕"]
+        inosuke_wake_keywords = ["이노스케", "대장", "앞장", "강한", "강", "왕", "멧돼지"]
+        inosuke_convince_keywords = ["함께", "같이", "도와", "지원", "합류", "전장", "렌고쿠", "힘", "가자", "따라", "참전", "동료"]
+        inosuke_engaged = bool(state.get("inosuke_engaged"))
+        inosuke_willing = bool(state.get("inosuke_willing"))
 
         if any(kw in user_text or kw in normalized_text for kw in zenitsu_keywords):
             print(f"[ROUTER] 🎯 Detected intent: wake_zenitsu (input: '{user_input}')")
             return "wake_zenitsu"
-        if any(kw in user_text or kw in normalized_text for kw in inosuke_keywords):
+
+        if inosuke_engaged and not inosuke_willing:
+            if any(kw in user_text or kw in normalized_text for kw in inosuke_convince_keywords):
+                print(f"[ROUTER] 🎯 Detected intent: convince_inosuke (input: '{user_input}')")
+                return "convince_inosuke"
+            if any(kw in user_text or kw in normalized_text for kw in inosuke_wake_keywords):
+                print(f"[ROUTER] ⚠️ Inosuke engaged but persuasion keywords missing → treat as provoke fallback (input: '{user_input}')")
+                return "provoke_inosuke"
+            return None
+
+        if (not inosuke_engaged) and any(kw in user_text or kw in normalized_text for kw in inosuke_wake_keywords):
             print(f"[ROUTER] 🎯 Detected intent: provoke_inosuke (input: '{user_input}')")
             return "provoke_inosuke"
         # 🔥 매칭 실패 시 None 리턴 (기본값 제거)

@@ -228,17 +228,38 @@ def _handle_free_intent_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> b
         logger.info(f"[{stage_tag}] Skipping auto-fallback: just entered stage or no input yet")
         return False
     
+    temp = state.get("temp_data") or {}
     intent = _get_intent(state)
     intent_lower = intent.lower()
+    stage_upper = stage_tag.upper()
+    intent_match_key = intent_lower
+    first_target_hint: Optional[str] = None
+
+    if stage_upper == "ROUTE_CHOICE" and intent_lower:
+        prefix = "choose_allies_"
+        suffix = "_first"
+        stored_target = (temp.get("mission_first_target") or state.get("mission_first_target") or "").strip().lower()
+        if intent_lower.startswith(prefix) and intent_lower.endswith(suffix):
+            candidate = intent_lower[len(prefix):-len(suffix)]
+            if candidate:
+                first_target_hint = candidate
+                intent_match_key = "choose_allies_path"
+        elif intent_lower == "choose_allies_path" and stored_target:
+            first_target_hint = stored_target
+
     matched_rule = None
-    if intent_lower:
+    if intent_match_key:
         for rule in actions:
+            if not isinstance(rule, dict):
+                continue
             action_key = (rule.get("action") or "").strip().lower()
-            if action_key and action_key == intent_lower:
+            if action_key and action_key == intent_match_key:
                 matched_rule = rule
                 break
-    if not matched_rule and intent_lower:
+    if not matched_rule and intent_match_key:
         for rule in actions:
+            if not isinstance(rule, dict):
+                continue
             if rule.get("fallback"):
                 matched_rule = rule
                 break
@@ -296,6 +317,33 @@ def _handle_free_intent_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> b
         logger.info(f"[{stage_tag}] No valid rule matched (intent='{intent_lower}') → waiting for user input")
         return False
 
+    normalized_action = (matched_rule.get("action") or intent_match_key or "").strip().lower()
+
+    if stage_upper == "ROUTE_CHOICE" and normalized_action == "choose_allies_path":
+        target_value = first_target_hint
+        if not target_value:
+            target_value = (temp.get("mission_first_target") or state.get("mission_first_target"))
+        if not target_value:
+            hints = {
+                "inosuke": ["이노스케", "멧돼지", "inosuke"],
+                "zenitsu": ["젠이츠", "zenitsu", "츠고쿠", "츠구코"],
+            }
+            for candidate, keys in hints.items():
+                if any(kw in user_input for kw in keys):
+                    target_value = candidate
+                    break
+        if isinstance(target_value, str) and target_value:
+            target_value = target_value.strip().lower()
+            state["mission_first_target"] = target_value
+            temp = state.get("temp_data") or {}
+            temp["mission_first_target"] = target_value
+            state["temp_data"] = temp
+            # Reset previously cached lane preference so new target takes effect
+            state.pop("mission_first_lane_id", None)
+            temp.pop("mission_first_lane_id", None)
+            logger.info(f"[ROUTE_CHOICE] Allies mission selected, first target: {target_value}")
+            logger.info(f"[RECRUIT INIT] mission_first_target = {target_value}")
+
     _apply_operations(state, matched_rule.get("set"))
     _apply_operations(state, matched_rule.get("effects"))
     goto = matched_rule.get("goto")
@@ -315,6 +363,7 @@ def _handle_router_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
 def _handle_mission_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
     """mission 스테이지 lanes/steps 처리 (간소화 버전)"""
     stage_tag = stage.get("tag") or (state.get("current_stage") or "")
+    scene = state.setdefault("scene", {})
     temp = state.setdefault("temp_data", {})
     mission_store = temp.setdefault("_mission", {})
     stage_state = mission_store.setdefault(stage_tag, {})
@@ -338,7 +387,18 @@ def _handle_mission_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
 
     intent = _get_intent(state)
     intent_lower = intent.lower()
-    lanes = stage.get("lanes") or []
+    raw_lanes = stage.get("lanes") or []
+    lanes = _order_lanes_by_preference(state, raw_lanes)
+    max_inosuke_attempts = int(state.get("inosuke_max_attempts") or INOSUKE_MAX_ATTEMPTS)
+    if max_inosuke_attempts < 1:
+        max_inosuke_attempts = INOSUKE_MAX_ATTEMPTS
+    state["inosuke_max_attempts"] = max_inosuke_attempts
+    current_attempts = int(state.get("inosuke_attempts", 0) or 0)
+    if current_attempts < 0:
+        current_attempts = 0
+    if current_attempts > max_inosuke_attempts:
+        current_attempts = max_inosuke_attempts
+    state["inosuke_attempts"] = current_attempts
     matched = False
 
     if intent_lower:
@@ -379,12 +439,31 @@ def _handle_mission_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
                 if action_key and action_key == intent_lower:
                     _apply_operations(state, rule.get("set"))
                     _apply_operations(state, rule.get("effects"))
+                    if "inosuke" in lane_id:
+                        attempts_val = int(state.get("inosuke_attempts", 0) or 0)
+                        if attempts_val < 0:
+                            attempts_val = 0
+                        if attempts_val > max_inosuke_attempts:
+                            attempts_val = max_inosuke_attempts
+                        state["inosuke_attempts"] = attempts_val
                     goto = rule.get("goto")
                     logger.info(
                         f"✅ [MISSION:{stage_tag}] lane '{lane_id}' action '{action_key}' → {goto or 'stay'}"
                     )
                     if goto:
                         _goto(state, goto)
+                    if lane_id:
+                        scene["current_lane"] = lane_id
+                        steps_total = len(steps)
+                        next_index = idx + 1
+                        if next_index < steps_total:
+                            stage_state["_pending_lane_ctx"] = {
+                                "lane_id": lane_id,
+                                "step_index": next_index,
+                                "from_intent": intent_lower,
+                            }
+                        else:
+                            stage_state.pop("_pending_lane_ctx", None)
                     progress[lane_id] = idx + 1
                     matched = True
                     break
@@ -409,14 +488,53 @@ def _handle_mission_stage(state: Dict[str, Any], stage: Dict[str, Any]) -> bool:
             if fallback_rule:
                 _apply_operations(state, fallback_rule.get("set"))
                 _apply_operations(state, fallback_rule.get("effects"))
+                if "inosuke" in lane_id:
+                    attempts_val = int(state.get("inosuke_attempts", 0) or 0)
+                    if attempts_val < 0:
+                        attempts_val = 0
+                    if attempts_val > max_inosuke_attempts:
+                        attempts_val = max_inosuke_attempts
+                    state["inosuke_attempts"] = attempts_val
                 goto = fallback_rule.get("goto")
                 logger.info(
                     f"[MISSION:{stage_tag}] lane '{lane_id}' fallback applied → {goto or 'stay'}"
                 )
                 if goto:
                     _goto(state, goto)
+                if lane_id:
+                    scene["current_lane"] = lane_id
+                    steps_total = len(steps)
+                    next_index = idx + 1
+                    if next_index < steps_total:
+                        stage_state["_pending_lane_ctx"] = {
+                            "lane_id": lane_id,
+                            "step_index": next_index,
+                            "from_intent": intent_lower or "fallback",
+                        }
+                    else:
+                        stage_state.pop("_pending_lane_ctx", None)
                 matched = True
                 break
+
+    # Inosuke 설득 실패 한계 체크
+    attempts_after = int(state.get("inosuke_attempts", 0) or 0)
+    if max_inosuke_attempts > 0 and attempts_after >= max_inosuke_attempts and not state.get("inosuke_willing"):
+        for lane in lanes:
+            lane_id = lane.get("id") or lane.get("tag") or ""
+            if not lane_id or "inosuke" not in lane_id.lower():
+                continue
+            steps = lane.get("steps") or []
+            progress[lane_id] = len(steps)
+            stage_state.pop("_pending_lane_ctx", None)
+            state["inosuke_engaged"] = False
+            failure_msg = "이노스케 설득에 실패했습니다. 다음 단계로 이동합니다."
+            state.setdefault("agent_responses", []).append({
+                "speaker": "system",
+                "text": failure_msg,
+                "emotion": "neutral"
+            })
+            logger.info(f"[MISSION:{stage_tag}] Inosuke persuasion failed after {attempts_after} attempts → skipping lane")
+            break
 
     # 진행 상황 저장
     stage_state["progress"] = progress
@@ -604,6 +722,96 @@ def _find_stage(scenario: Dict[str, Any], stage_tag: str) -> Optional[Dict[str, 
 
     return None
 
+def _lane_identifier(lane: Dict[str, Any]) -> str:
+    if not isinstance(lane, dict):
+        return ""
+    identifier = lane.get("id") or lane.get("tag") or lane.get("name")
+    return (identifier or "").strip()
+
+def _lane_matches_preference(lane: Dict[str, Any], hint: str) -> bool:
+    if not hint or not isinstance(lane, dict):
+        return False
+    pref = hint.strip().lower()
+    if not pref:
+        return False
+
+    lane_id = _lane_identifier(lane).lower()
+    if lane_id == pref or pref in lane_id:
+        return True
+
+    for key in ("title", "label"):
+        value = lane.get(key)
+        if isinstance(value, str) and pref in value.strip().lower():
+            return True
+
+    for speaker in lane.get("speaker_pool") or []:
+        if pref in str(speaker).strip().lower():
+            return True
+
+    steps = lane.get("steps") or []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        for speaker in step.get("speaker_pool") or []:
+            if pref in str(speaker).strip().lower():
+                return True
+        for action in step.get("llm_actions") or []:
+            if pref in (action or "").strip().lower():
+                return True
+        for rule in step.get("on_action") or []:
+            action_key = (rule.get("action") or "").strip().lower()
+            if pref in action_key:
+                return True
+    return False
+
+def _order_lanes_by_preference(state: Dict[str, Any], lanes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not isinstance(lanes, list):
+        return []
+
+    enumerated = [(idx, lane) for idx, lane in enumerate(lanes) if isinstance(lane, dict)]
+    if not enumerated:
+        return []
+
+    temp = state.get("temp_data") or {}
+    lane_priority_hints: List[str] = []
+
+    lane_priority = state.get("mission_lane_priority")
+    if isinstance(lane_priority, list):
+        lane_priority_hints.extend(
+            [str(item).strip().lower() for item in lane_priority if isinstance(item, str) and item.strip()]
+        )
+
+    first_lane_hint = state.get("mission_first_lane_id") or temp.get("mission_first_lane_id")
+    first_target_hint = state.get("mission_first_target") or temp.get("mission_first_target")
+
+    for hint in (first_lane_hint, first_target_hint):
+        if isinstance(hint, str) and hint.strip():
+            normalized = hint.strip().lower()
+            if normalized not in lane_priority_hints:
+                lane_priority_hints.insert(0, normalized)
+
+    def _lane_priority(pair):
+        idx, lane = pair
+        for priority_index, hint in enumerate(lane_priority_hints):
+            if _lane_matches_preference(lane, hint):
+                return (priority_index, idx)
+        return (len(lane_priority_hints), idx)
+
+    ordered_pairs = sorted(enumerated, key=_lane_priority)
+
+    if lane_priority_hints:
+        preferred_hint = lane_priority_hints[0]
+        for _, lane in ordered_pairs:
+            if _lane_matches_preference(lane, preferred_hint):
+                lane_id = _lane_identifier(lane)
+                if lane_id:
+                    temp = state.setdefault("temp_data", {})
+                    temp["mission_first_lane_id"] = lane_id
+                    state["mission_first_lane_id"] = lane_id
+                break
+
+    return [lane for _, lane in ordered_pairs]
+
 def _resolve_beats(stage: Dict[str, Any], scenario: Dict[str, Any], locale: str) -> List[str]:
     """
     스테이지에서 beats 텍스트를 추출합니다.
@@ -669,6 +877,7 @@ def _build_children_ctx(state: Dict[str, Any], scenario: Dict[str, Any], stage_t
 
     locale = state.get("locale", "ko")
     stage_turn = state.get("stage_turn", 0)
+    scene = state.setdefault("scene", {})
 
     speakers = _speaker_pool_for_stage(stage)
     mission_ctx: Dict[str, Any] = {}
@@ -679,21 +888,47 @@ def _build_children_ctx(state: Dict[str, Any], scenario: Dict[str, Any], stage_t
         temp = state.get("temp_data") or {}
         mission_store = (temp.get("_mission") or {}).get(stage.get("tag") or stage_tag, {})
         progress = mission_store.get("progress") or {}
+        pending_ctx = mission_store.get("_pending_lane_ctx") if isinstance(mission_store, dict) else None
         active_lane = None
         active_step = None
         active_idx = 0
-        lanes = stage.get("lanes") or []
+        raw_lanes = stage.get("lanes") or []
+        lanes = _order_lanes_by_preference(state, raw_lanes)
+        mission_intro = False
 
         # progress가 모두 0인지 확인 (첫 진입 여부)
         all_zero = all(progress.get(lane.get("id") or lane.get("tag"), 0) == 0 for lane in lanes if lane.get("id") or lane.get("tag"))
 
-        if all_zero:
+        if isinstance(pending_ctx, dict):
+            pending_id = str(pending_ctx.get("lane_id") or "").strip().lower()
+            pending_idx = int(pending_ctx.get("step_index") or 0)
+            for lane in lanes:
+                lane_id_val = _lane_identifier(lane).lower()
+                if pending_id and (lane_id_val == pending_id or pending_id in lane_id_val):
+                    active_lane = lane
+                    steps = lane.get("steps") or []
+                    if steps:
+                        pending_idx = max(0, min(len(steps) - 1, pending_idx))
+                        active_step = steps[pending_idx] if isinstance(steps[pending_idx], dict) else None
+                        active_idx = pending_idx
+                    break
+            mission_store.pop("_pending_lane_ctx", None)
+            if active_step and isinstance(active_step, dict):
+                scene_key = active_step.get("scene_i18n")
+                if scene_key:
+                    beats_all = _resolve_beats({"beats_i18n": scene_key}, scenario, locale)
+                else:
+                    beats_all = _resolve_beats(active_lane or stage, scenario, locale)
+            else:
+                beats_all = _resolve_beats(active_lane or stage, scenario, locale)
+        elif all_zero:
             # 첫 진입: intro_i18n 사용
             intro_key = stage.get("intro_i18n")
             if intro_key:
                 beats_all = _resolve_beats({"beats_i18n": intro_key}, scenario, locale)
             else:
                 beats_all = _resolve_beats(stage, scenario, locale)
+            mission_intro = True
         else:
             # 진행 중: active_lane의 scene_i18n 사용
             # intent 기반으로 lane 우선순위 결정
@@ -745,10 +980,37 @@ def _build_children_ctx(state: Dict[str, Any], scenario: Dict[str, Any], stage_t
             else:
                 # 모든 lane 완료: stage 기본 beats
                 beats_all = _resolve_beats(stage, scenario, locale)
+            mission_intro = False
+
+        current_lane_id = _lane_identifier(active_lane) if active_lane else ""
+        if current_lane_id:
+            scene["current_lane"] = current_lane_id
 
         if active_lane and active_step:
             step_pool = active_step.get("speaker_pool") or active_lane.get("speaker_pool")
             if isinstance(step_pool, list) and step_pool:
+                lane_id = (_lane_identifier(active_lane) or "").lower()
+                if lane_id and speakers:
+                    # Preserve existing speaker ordering but promote the active lane's key actor(s)
+                    def _promote(pool: List[str], key: str) -> List[str]:
+                        key_norm = key.strip().lower()
+                        prioritized = []
+                        others = []
+                        for sp in pool:
+                            if isinstance(sp, str) and sp.strip().lower() == key_norm:
+                                prioritized.append(sp)
+                            else:
+                                others.append(sp)
+                        return prioritized + others if prioritized else pool
+
+                    primary_hint = ""
+                    if "inosuke" in lane_id:
+                        primary_hint = "inosuke"
+                    elif "zenitsu" in lane_id:
+                        primary_hint = "zenitsu"
+                    if primary_hint:
+                        step_pool = _promote(step_pool, primary_hint)
+                        speakers = _promote(speakers, primary_hint)
                 speakers = step_pool
             elif not speakers:
                 speakers = active_lane.get("speaker_pool") or speakers
@@ -758,9 +1020,17 @@ def _build_children_ctx(state: Dict[str, Any], scenario: Dict[str, Any], stage_t
                 "steps_total": len(active_lane.get("steps") or []),
                 "remaining": max(0, len(active_lane.get("steps") or []) - active_idx),
             }
+            mission_ctx["intro"] = mission_intro
+            if lane_id:
+                if "inosuke" in lane_id:
+                    mission_ctx["attempts"] = state.get("inosuke_attempts", 0)
         elif lanes:
             # 모든 lane 완료한 경우 stage 전체 speaker_pool 사용
             speakers = speakers or stage.get("speaker_pool") or []
+            if mission_intro:
+                mission_ctx = {"intro": True}
+        elif mission_intro:
+            mission_ctx = {"intro": True}
     else:
         # mission이 아닌 타입: 기존 로직
         beats_all = _resolve_beats(stage, scenario, locale)
@@ -1079,3 +1349,4 @@ def parent_after_dialogue(state: dict) -> dict:
     state["_last_affinity_turn"] = turn_id
 
     return state
+INOSUKE_MAX_ATTEMPTS = 3

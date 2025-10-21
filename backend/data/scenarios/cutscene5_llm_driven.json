@@ -73,7 +73,7 @@
     "actions": [
       "choose_allies_path","choose_reckless_path",
       "intervene_attack","intervene_noise","intervene_ignore",
-      "wake_zenitsu","convince_zenitsu","provoke_inosuke"
+      "wake_zenitsu","convince_zenitsu","provoke_inosuke","convince_inosuke"
     ],
     "few_shots": [
       {
@@ -130,6 +130,14 @@
         "context": [{"speaker":"inosuke","text":"여긴 산의 왕 이노스케님의 영역이다!"}],
         "user_utterance": "대장, 네가 앞장서라. 강한 놈이 필요한 때야.",
         "action": "provoke_inosuke"
+      },
+      {
+        "context": [
+          {"speaker":"inosuke","text":"흥! 나는 여기서 더 많은 오니를 잡을 거다!"},
+          {"speaker":"tanjiro","text":"이노스케, 지금 렌고쿠 님이 홀로 싸우고 있어요!"}
+        ],
+        "user_utterance": "같이 가자, 네 힘이 있어야 렌고쿠 님이 살아남아.",
+        "action": "convince_inosuke"
       }
     ],
     "fallback": { "action": "intervene_ignore" }
@@ -373,7 +381,7 @@
           "fx": "beast_growl"
         },
         {
-          "goal": "탄지로가 긴박한 표정으로 {user}를 향해 돌아선다. '{user}, 둘 다 가까이 있어요! 열차 앞칸에 젠이츠, 뒷칸에 이노스케가 있어요. 하지만 시간이 없어요... 누구를 먼저 찾으러 갈까요?'",
+          "goal": "탄지로가 긴박한 표정으로 {user}를 향해 돌아선다. '{user}, 젠이츠와 이노스케가 모두 가까이에 있어요. 우리 둘이 함께 움직이면서 순서를 정하죠. 누구부터 찾을까요?'",
           "speaker_hint": ["tanjiro"]
         },
         {
@@ -452,9 +460,29 @@
           "speaker_hint": ["inosuke"]
         },
         {
-          "goal": "탄지로가 급하게 설명한다. '설명할 시간이 없어! 렌고쿠 님이 위험해! 우리 도움이 필요해!' 멀리서 폭발음이 들린다",
+          "goal": "이노스케가 돌아서며 외친다. '나는 여기서 오니들을 더 쓸어버릴 거다! 굳이 따라갈 필요가 없다!' 그는 전장을 떠날 생각이 없어 보인다",
+          "speaker_hint": ["inosuke"],
+          "fx": "beast_growl"
+        }
+      ],
+      "inosuke_convince_scene": [
+        {
+          "goal": "이노스케가 여전히 현장을 벗어나려 하지 않는다. '난 혼자서도 충분하다!'라며 검을 돌린다. 설득이 더 필요하다",
+          "speaker_hint": ["narr"],
+          "fx": "beast_growl"
+        },
+        {
+          "goal": "탄지로가 한 걸음 물러나 {user}에게 고개를 끄덕인다. '이노스케에게 네가 직접 말해줘. 그 말을 원하고 있어…'",
           "speaker_hint": ["tanjiro"],
           "fx": "distant_explosion"
+        },
+        {
+          "goal": "이노스케가 잠시 멈춰 서서 {user}를 노려본다. '그래? 그럼 네가 인정할 만한 싸움인가? 비겁한 놈들은 없겠지?'",
+          "speaker_hint": ["inosuke"]
+        },
+        {
+          "goal": "{user}가 한마디에 힘을 실을 기회다. 이노스케의 전투 본능을 자극하거나, 동료애를 일깨워야 한다",
+          "speaker_hint": ["narr"]
         }
       ],
       "akaza_exit_hidden": [
@@ -522,7 +550,7 @@
       "tag": "INTERVENE",
       "type": "free_intent",
       "atmosphere": "battle",
-      "speaker_pool": ["rengoku","tanjiro"],
+      "speaker_pool": ["rengoku","tanjiro","narr"],
       "beats_i18n": "beats_intervene_hint",
       "llm_actions": ["intervene_attack","intervene_noise","intervene_ignore"],
       "on_action": [
@@ -590,7 +618,7 @@
       "tag": "RECRUIT",
       "type": "mission",
       "atmosphere": "urgent",
-      "speaker_pool": ["tanjiro","narr"],
+      "speaker_pool": ["tanjiro","narr","system"],
       "objective": "젠이츠와 이노스케를 설득해 합류시킨다.",
       "limits": { "max_turns": { "$param": "mission.max_turns" }, "per_character_turn_cap": { "$param": "mission.per_character_turn_cap" } },
       "intro_i18n": "beats_smell",
@@ -605,33 +633,45 @@
               "speaker_pool": ["zenitsu","tanjiro","narr"],
               "llm_actions": ["wake_zenitsu"],
               "on_action": [
-                { "action": "wake_zenitsu", "set": { "zenitsu_awake": true } },
+                {
+                  "action": "wake_zenitsu",
+                  "effects": { "allies_recruited": { "$push_unique": "zenitsu" } },
+                  "set": { "zenitsu_awake": true }
+                },
                 { "fallback": true, "effects": { "time_left": { "$dec": 1 }, "battle_danger": { "$inc": 1 } } }
-              ]
-            },
-            {
-              "type": "free_intent",
-              "speaker_pool": ["zenitsu","tanjiro","narr"],
-              "scene_i18n": "zenitsu_awake_scene",
-              "llm_actions": ["convince_zenitsu"],
-              "on_action": [
-                { "action": "convince_zenitsu", "effects": { "allies_recruited": { "$push_unique": "zenitsu" } } },
-                { "fallback": true, "effects": { "time_left": { "$dec": 1 } } }
               ]
             }
           ]
         },
         {
           "id": "inosuke_lane",
-          "speaker_pool": ["inosuke","tanjiro","narr"],
+          "speaker_pool": ["inosuke","tanjiro","narr","system"],
           "scene_i18n": "inosuke_scene",
           "steps": [
             {
               "type": "free_intent",
+              "speaker_pool": ["inosuke","tanjiro","narr","system"],
               "llm_actions": ["provoke_inosuke"],
               "on_action": [
-                { "action": "provoke_inosuke", "effects": { "allies_recruited": { "$push_unique": "inosuke" }, "time_left": { "$inc": 1 } } },
+                {
+                  "action": "provoke_inosuke",
+                  "set": { "inosuke_engaged": true, "inosuke_attempts": 0 }
+                },
                 { "fallback": true, "effects": { "time_left": { "$dec": 1 } } }
+              ]
+            },
+            {
+              "type": "free_intent",
+              "speaker_pool": ["inosuke","tanjiro","narr","system"],
+              "scene_i18n": "inosuke_convince_scene",
+              "llm_actions": ["convince_inosuke"],
+              "on_action": [
+                {
+                  "action": "convince_inosuke",
+                  "effects": { "allies_recruited": { "$push_unique": "inosuke" }, "time_left": { "$inc": 1 } },
+                  "set": { "inosuke_willing": true, "inosuke_engaged": false, "inosuke_attempts": 0 }
+                },
+                { "fallback": true, "effects": { "time_left": { "$dec": 1 }, "battle_danger": { "$inc": 1 }, "inosuke_attempts": { "$inc": 1 } } }
               ]
             }
           ]
@@ -639,7 +679,7 @@
       ],
       "ticking": {
         "each_turn": { "time_left": { "$dec": 1 } },
-        "fail_if": { "expr": "time_left < -1" }
+        "fail_if": { "expr": "time_left < -2" }
       },
       "cutaways": {
         "on_pressure": [
