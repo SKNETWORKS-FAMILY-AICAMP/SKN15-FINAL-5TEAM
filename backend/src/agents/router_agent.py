@@ -37,7 +37,7 @@ OFF_TOPIC_REASONS = {
 }
 
 ROUTE_CHOICE_STAGE = "ROUTE_CHOICE"
-
+ROUTE_FALLBACK_THRESHOLD = 0.28
 
 @dataclass
 class TopicClassification:
@@ -60,8 +60,21 @@ class RouterAgent:
         self._embedding_client: EmbeddingClient = get_embedding_client()
         self._route_choice_matcher = EmbeddingMatcher(
             {
-                "choose_reckless_path": ["렌고쿠와 함께 싸운다"],
-                "choose_allies_path": ["젠이츠와 이노스케를 데려온다"],
+                "choose_reckless_path": [
+                    "렌고쿠와 함께 싸운다",
+                    "렌고쿠와 지금 당장 싸울게요",
+                    "제가 혼자 막아낼게요",
+                    "렌고쿠 옆에서 싸울게요",
+                    "제가 바로 싸울게요",
+                ],
+                "choose_allies_path": [
+                    "동료를 데려온다",
+                    "동료들을 데려올게요",
+                    "동료들을 데려오겠습니다",
+                    "동료들을 불러올게요",
+                    "젠이츠와 이노스케를 데려온다",
+                    "동료 모두 데려올게요",
+                ],
             },
             threshold=0.80,
             embedding_client=self._embedding_client,
@@ -95,12 +108,24 @@ class RouterAgent:
 
         # ROUTE_CHOICE 스테이지에서만 선택지 분류
         route_match: Optional[MatchResult] = None
+        route_reason: Optional[str] = None
         if intent == "on_topic_generic" and current_stage == ROUTE_CHOICE_STAGE and normalized:
             route_match = self._classify_route_choice(normalized, embedding=embedding)
             if route_match:
+                route_reason = "embedding"
+            elif self._embedding_client.is_using_fallback():
+                fallback_match = self._route_choice_best_match(normalized, embedding=embedding)
+                if fallback_match and fallback_match.score >= ROUTE_FALLBACK_THRESHOLD:
+                    route_match = fallback_match
+                    route_reason = "embedding_fallback"
+            if route_match:
                 intent = route_match.label
-                confidence = max(confidence, route_match.score)
-                reason_notes.append(f"route={round(route_match.score, 3)}")
+                if route_reason == "embedding_fallback":
+                    confidence = max(confidence, 0.78)
+                else:
+                    confidence = max(confidence, route_match.score)
+                reason_tag = "route" if route_reason == "embedding" else "route_fallback"
+                reason_notes.append(f"{reason_tag}={round(route_match.score, 3)}")
 
         mission_target = detect_mission_target(normalized, embedding=embedding) if normalized else None
         if intent == "on_topic_generic" and mission_target in ("inosuke", "zenitsu", "both"):
@@ -267,12 +292,11 @@ JSON 형태로만 응답하십시오:
         scenario = state.get("scenario") or state.get("scenario_data")
         character_refs = {}
         if isinstance(scenario, dict):
-        character_refs = scenario.get("character_refs", {}) or {}
-        scenario_refs = scenario.get("character_refs") or {}
-        if isinstance(scenario_refs, dict):
-            fallback_ref = scenario_refs.get(fallback_speaker)
-            if fallback_ref:
-                character_refs = {fallback_speaker: fallback_ref}
+            scenario_refs = scenario.get("character_refs") or {}
+            if isinstance(scenario_refs, dict):
+                fallback_ref = scenario_refs.get(fallback_speaker)
+                if fallback_ref:
+                    character_refs = {fallback_speaker: fallback_ref}
 
         children_ctx = {
             "stage_tag": "OFF_TOPIC",
@@ -328,6 +352,17 @@ JSON 형태로만 응답하십시오:
     ) -> Optional[MatchResult]:
         match = self._route_choice_matcher.match(text, embedding=embedding)
         return match if match.label else None
+
+    def _route_choice_best_match(
+        self,
+        text: str,
+        *,
+        embedding: Optional[Sequence[float]] = None,
+    ) -> Optional[MatchResult]:
+        match = self._route_choice_matcher.best_match(text, embedding=embedding)
+        if not match.label:
+            return None
+        return match
 
     def _summarize_recent_history(self, state: Dict[str, Any], limit: int = 4) -> str:
         entries: list[str] = []
