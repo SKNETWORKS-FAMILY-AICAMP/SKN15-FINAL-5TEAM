@@ -6,9 +6,12 @@ SceneDialogueTools - 톤/대사/프롬프트 관리
 
 from pathlib import Path
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
-def load_tone_profiles(character_refs: Dict[str, str]) -> Dict[str, Any]:
+def load_tone_profiles(
+    character_refs: Dict[str, str],
+    scenario_key: Optional[str] = None,
+) -> Dict[str, Any]:
     """캐릭터 tone_profile + 시나리오별 확장 tone 정보 로드"""
     profiles = {}
     base_dir = Path(__file__).resolve().parents[3]
@@ -28,7 +31,19 @@ def load_tone_profiles(character_refs: Dict[str, str]) -> Dict[str, Any]:
             )
 
             # 🔥 추가: 시나리오별 tone/roles/relationships 병합
-            scenario_specific = data.get("scenario_specific", {}).get("mugen_train", {})
+            scenario_specific_map = data.get("scenario_specific", {})
+            scenario_specific = {}
+            if isinstance(scenario_specific_map, dict):
+                if scenario_key and scenario_key in scenario_specific_map:
+                    scenario_specific = scenario_specific_map.get(scenario_key, {})
+                elif "mugen_train" in scenario_specific_map:
+                    scenario_specific = scenario_specific_map.get("mugen_train", {})
+                elif "default" in scenario_specific_map:
+                    scenario_specific = scenario_specific_map.get("default", {})
+                elif scenario_specific_map:
+                    # Fallback to the first available scenario block.
+                    first_key = next(iter(scenario_specific_map))
+                    scenario_specific = scenario_specific_map.get(first_key, {})
             merged_profile = {
                 "tone": tone,
                 "roles": scenario_specific.get("roles", {}),

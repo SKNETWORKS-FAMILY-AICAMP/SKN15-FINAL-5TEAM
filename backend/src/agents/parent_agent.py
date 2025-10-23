@@ -52,21 +52,20 @@ class ParentAgent:
         # --- 0️⃣ 시나리오 자동 로드 처리 (Router에서 안 넘어온 경우) ---
         scenario = state.get("scenario")
         if not scenario:
-            try:
-                # Router가 intent만 넘긴 경우 Parent가 직접 시나리오 로드
-                if state.get("user_intent") == "on_topic_start":
-                    from src.core.scenes_repo import ScenesRepo
-                    repo = ScenesRepo()
-                    scenario_id = "cutscene5_llm_driven_refined"  # 실제 사용 중인 파일명
-                    scenario = repo.load(scenario_id)
+            user_intent = state.get("user_intent") or (state.get("routing_result") or {}).get("intent")
+            if user_intent == "on_topic_start":
+                from src.core.scenes_repo import ScenesRepo
+                repo = ScenesRepo()
+                scenario_id = "cutscene5_llm_driven"
+                scenario = repo.load(scenario_id)
+                if scenario:
                     state["scenario"] = scenario
                     state["current_stage"] = "INTRO"
                     log("parent", f"✅ Auto-loaded scenario: {scenario_id}")
                 else:
-                    log("parent", "❌ No scenario loaded in state (no on_topic_start intent)")
-                    return state
-            except Exception as e:
-                log("parent", f"❌ Failed to auto-load scenario: {e}")
+                    log("parent", f"❌ Failed to load` scenario: {scenario_id}")
+            else:
+                log("parent", f"❌ No scenario loaded in state (intent={user_intent})")
                 return state
 
         # --- 1️⃣ 현재 stage 정보 확보 ---
@@ -97,8 +96,13 @@ class ParentAgent:
         fallback_payload = result.fallback_payload or fallback_payload
 
         # --- 6️⃣ 다음 stage 판정 ---
-        if result.next_stage_tag:
-            state["next_stage_tag"] = result.next_stage_tag
+        next_stage = getattr(result, "next_stage", None)
+        if next_stage:
+            state["next_stage"] = next_stage
+            state["next_stage_tag"] = next_stage  # legacy compatibility
+        else:
+            state.pop("next_stage", None)
+            state.pop("next_stage_tag", None)
 
         # --- 7️⃣ scene/state 갱신 ---
         state = state_tools.update_state(state, result, stage_tag)
@@ -258,6 +262,9 @@ class ParentAgent:
     def _prepare_fallback(self, state: Dict[str, Any], stage: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         atmosphere = (stage.get("atmosphere") or "").lower()
         if atmosphere != "urgent":
+            return None
+        if state.get("stage_turn", 0) == 0:
+            log("codex_fix", "Skip fallback on first turn", stage=stage.get("tag"))
             return None
         if not state.get("user_input"):
             log("codex_fix", "Skip fallback: no user input yet", stage=stage.get("tag"))
