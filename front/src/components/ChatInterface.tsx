@@ -13,6 +13,7 @@ interface Message {
   timestamp: Date;
   characterId?: string; // 메시지를 보낸 캐릭터 ID
   isSystemMessage?: boolean; // 시스템/에이전트 메시지 여부
+  imageIndex?: string; // 이 메시지가 표시될 때 변경할 배경 이미지 인덱스
 }
 
 interface ChatInterfaceProps {
@@ -244,6 +245,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   // 타이핑 효과와 함께 메시지를 표시하는 함수 (50ms per character)
   const addMessageWithTypingEffect = async (message: Message): Promise<void> => {
     return new Promise((resolve) => {
+      // 이 메시지에 배경 이미지 변경 요청이 있으면 먼저 처리
+      if (message.imageIndex) {
+        const imageIndex = parseInt(message.imageIndex);
+        console.log(`🖼️ [Frontend] Changing background to image ${imageIndex} for message: ${message.text.substring(0, 30)}...`);
+        setBackgroundByIndex(imageIndex);
+      }
+
       // 빈 메시지로 시작 (타이핑 시작)
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
@@ -356,7 +364,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         isUser: false,
         timestamp: new Date(),
         characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr'
+        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
       }));
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -1065,7 +1074,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
             isTransitioning ? 'opacity-0' : 'opacity-100'
           }`}
           style={{
-            backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none'
+            backgroundImage: backgroundImageUrl
+              ? `url(${backgroundImageUrl})`
+              : 'url(/images/무한열차.jpeg)'  // 초기 로딩: 무한열차 카드 이미지
           }}
         />
 

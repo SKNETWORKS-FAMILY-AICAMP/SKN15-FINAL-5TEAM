@@ -293,8 +293,8 @@ async def chat(request: Request):
 
         print(f"✅ Response sent: {len(agent_responses)} dialogues, has_more: {has_more_flag}")
 
-        # ImageManager를 사용하여 현재 이미지 결정
-        current_image = None
+        # ImageManager를 사용하여 각 대화별로 이미지 결정
+        current_image = result_state.get("current_image")  # 이전 이미지
         scenario_id_for_image = result_state.get("scenario_id", scenario_id)
         print(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
 
@@ -327,19 +327,40 @@ async def chat(request: Request):
                 else:
                     print(f"⚠️ Image config not found at: {abs_path}")
 
-            # ImageManager가 있으면 현재 이미지 계산
+            # ImageManager가 있으면 각 대화별로 이미지 분석
             image_manager = globals().get('image_managers', {}).get(scenario_id_for_image)
             if image_manager:
-                new_image = image_manager.get_current_image(result_state)
-                if new_image is not None:
-                    # 새 이미지가 매칭되면 업데이트
-                    current_image = new_image
-                    result_state["current_image"] = new_image  # 세션에 저장
-                    print(f"🖼️ Image changed to: {current_image}")
-                else:
-                    # 매칭 실패 시 이전 이미지 유지
-                    current_image = result_state.get("current_image")
-                    print(f"🖼️ No matching image, keeping current: {current_image}")
+                # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
+                all_dialogues = result_state.get("output", {}).get("dialogues", [])
+
+                # 각 대화마다 이미지를 분석하여 image_index 할당
+                previous_image = current_image
+
+                # 첫 대화이고 이전 이미지가 없으면 인트로 이미지(1번)로 시작
+                if len(all_dialogues) > 0 and current_image is None:
+                    all_dialogues[0]["image_index"] = "1"
+                    previous_image = "1"
+                    current_image = "1"
+                    print(f"🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
+
+                for i, dialogue in enumerate(all_dialogues):
+                    # 첫 대화는 이미 처리했으므로 스킵
+                    if i == 0 and dialogue.get("image_index"):
+                        continue
+
+                    # 해당 대화 인덱스까지의 컨텍스트로 이미지 선택
+                    new_image = image_manager.get_image_for_dialogue_at_index(result_state, i)
+
+                    if new_image is not None and new_image != previous_image:
+                        # 이미지가 변경되면 해당 대화에 image_index 추가
+                        dialogue["image_index"] = new_image
+                        previous_image = new_image
+                        current_image = new_image
+                        print(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
+
+                # 최종 current_image를 세션에 저장
+                result_state["current_image"] = current_image
+                print(f"✅ Final image state: {current_image}")
             else:
                 print(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
 

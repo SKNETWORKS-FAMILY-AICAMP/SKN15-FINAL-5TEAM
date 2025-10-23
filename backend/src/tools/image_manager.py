@@ -264,16 +264,18 @@ class ImageManager:
             print(f"⚠️ Failed to initialize LLM client: {e}")
             self.use_llm = False
 
-    def _get_recent_dialogues(self, state: Dict[str, Any], limit: int = 15) -> List[Dict]:
+    def _get_recent_dialogues(self, state: Dict[str, Any], limit: int = 15,
+                              max_index: Optional[int] = None) -> List[Dict]:
         """
         최근 N개 대화 추출 (LLM 분석용)
 
         Args:
             state: GraphState
             limit: 추출할 대화 수 (기본: 15)
+            max_index: 최대 인덱스 (0-based). 지정하면 0부터 max_index까지만 반환
 
         Returns:
-            최근 대화 리스트
+            대화 리스트
         """
         # output.dialogues에서 대화 추출
         dialogues = state.get('output', {}).get('dialogues', [])
@@ -282,17 +284,22 @@ class ImageManager:
         if not isinstance(dialogues, list):
             return []
 
+        # max_index가 지정되면 해당 인덱스까지만 자르기
+        if max_index is not None:
+            dialogues = dialogues[:max_index + 1]
+
         # 최근 N개만 반환
         if len(dialogues) > limit:
             return dialogues[-limit:]
         return dialogues
 
-    def select_with_llm(self, state: Dict[str, Any]) -> Optional[str]:
+    def select_with_llm(self, state: Dict[str, Any], max_dialogue_index: Optional[int] = None) -> Optional[str]:
         """
         LLM을 사용하여 대화 내용 기반으로 이미지 선택
 
         Args:
             state: GraphState
+            max_dialogue_index: 고려할 최대 대화 인덱스 (0-based). None이면 모든 대화 고려
 
         Returns:
             선택된 이미지 인덱스 (e.g., "3") 또는 None (실패 시)
@@ -302,7 +309,7 @@ class ImageManager:
 
         try:
             # 최근 대화 추출
-            recent_dialogues = self._get_recent_dialogues(state, limit=15)
+            recent_dialogues = self._get_recent_dialogues(state, limit=15, max_index=max_dialogue_index)
 
             # 대화가 없으면 LLM 분석 스킵
             if not recent_dialogues:
@@ -435,3 +442,16 @@ JSON 형식으로 응답하세요:
             if self.debug:
                 print(f"⚠️ [LLM] Image selection failed: {e}")
             return None
+
+    def get_image_for_dialogue_at_index(self, state: Dict[str, Any], up_to_index: int) -> Optional[str]:
+        """
+        특정 대화 인덱스까지만 고려하여 이미지 선택
+
+        Args:
+            state: GraphState
+            up_to_index: 고려할 대화의 마지막 인덱스 (0-based)
+
+        Returns:
+            선택된 이미지 인덱스 (e.g., "3") 또는 None
+        """
+        return self.select_with_llm(state, max_dialogue_index=up_to_index)
