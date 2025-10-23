@@ -39,9 +39,9 @@
 
 | 이름 | 역할 | GitHub | 담당 업무 |
 |------|------|--------|-----------|
-| **권도원** |  AI Engineer | [@권도원](https://github.com/username) | LangGraph 아키텍처 설계, Parent Agent 개발 |
-| **이준원** | Backend Engineer | [@이준원](https://github.com/username) | Router/Guardrail Agent, FastAPI 서버 개발 |
-| **조태민** | Backend-Frontend Engineer | [@조태민](https://github.com/username) | React SPA, UI/UX 설계 및 구현 |
+| **권도원** | AI, Backend Engineer | [@권도원](https://github.com/username) | LangGraph 아키텍처 설계, Parent Agent 개발 |
+| **이준원** | AI, Backend Engineer | [@이준원](https://github.com/username) | Router/Guardrail Agent, FastAPI 서버 개발 |
+| **조태민** | Backend-Frontend, Cloud Engineer | [@조태민](https://github.com/username) | Tools, React SPA, UI/UX 설계 및 구현, 서버 구축 |
 
 **팀 문화**
 - 매일 오전 10시 데일리 스크럼
@@ -1056,7 +1056,7 @@ npm run dev
 
 ### 팀원 회고
 
-> **권도원 (팀장)**: "LangGraph의 상태 기반 워크플로우를 실제 프로덕션에 적용하며 멀티 에이전트 시스템의 무한한 가능성을 체감했습니다. 특히 각 Agent의 역할 분리가 확장성과 유지보수성을 얼마나 향상시키는지 경험할 수 있었습니다."
+> **권도원**: "LangGraph의 상태 기반 워크플로우를 실제 프로덕션에 적용하며 멀티 에이전트 시스템의 무한한 가능성을 체감했습니다. 특히 각 Agent의 역할 분리가 확장성과 유지보수성을 얼마나 향상시키는지 경험할 수 있었습니다."
 
 > **이준원**: "Router와 Guardrail Agent를 통해 AI의 안전성과 신뢰성을 확보하는 과정이 매우 도전적이었습니다. 규칙 기반과 LLM 기반을 혼합한 하이브리드 방식이 실전에서 얼마나 효과적인지 알게 되었습니다."
 
