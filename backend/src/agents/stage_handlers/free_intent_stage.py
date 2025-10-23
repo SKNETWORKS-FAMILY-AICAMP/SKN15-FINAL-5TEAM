@@ -58,7 +58,7 @@ class FreeIntentHandler:
             next_stage = get_next_stage_tag(stage)
 
         if stage_complete:
-            log("free_intent", "Intent resolved", stage=stage_tag, intent=intent, next_stage=next_stage)
+            log("free_intent", "Intent resolved", stage_tag=stage_tag, intent=intent, next_stage=next_stage)
         return StageResult(children_ctx=ctx, stage_complete=stage_complete, next_stage=next_stage)
 
     def _extract_intent(self, state: Dict[str, Any]) -> Optional[str]:
