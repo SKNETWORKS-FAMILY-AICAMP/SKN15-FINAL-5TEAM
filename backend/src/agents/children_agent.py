@@ -73,11 +73,18 @@ class ChildrenAgent:
     def _extract_context(self, state: Dict[str, Any]) -> Dict[str, Any] | None:
         """
         children_ctx를 추출하는 함수.
-        - state.agent_inputs.children → 우선
-        - state.children_ctx → fallback
+        - state.children_ctx를 직접 사용 (parent_agent가 업데이트하는 값)
+        - state.agent_inputs.children은 stale할 수 있으므로 사용하지 않음
         """
-        agent_inputs = state.get("agent_inputs") or {}
-        ctx = agent_inputs.get("children") or state.get("children_ctx")
+        # 🔧 수정: agent_inputs.children은 오래된 값일 수 있으므로 무시
+        # parent_agent가 업데이트한 state.children_ctx만 사용
+        ctx = state.get("children_ctx")
+
+        if ctx:
+            log("children", "✅ Using ctx from state.children_ctx")
+        else:
+            log("children", "⚠️ No children_ctx found in state")
+
         return ctx if isinstance(ctx, dict) else None
 
     def _render_text(self, state: Dict[str, Any], text: str) -> str:
@@ -130,6 +137,13 @@ class ChildrenAgent:
                 "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
             }]
 
+        # 🔍 디버깅: 받은 beats 확인
+        log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
+        for i, beat in enumerate(beats[:3]):  # 첫 3개만
+            if isinstance(beat, dict):
+                goal = beat.get("goal", "")[:60]
+                log("children", f"  Beat[{i}]: {goal}...")
+
         # ✅ (추가) 시나리오 키 감지
         scenario_id = state.get("scenario_id") or ctx.get("scenario_id")
         scenario_key = None
@@ -167,14 +181,14 @@ class ChildrenAgent:
                 temperature=0.65,
                 max_tokens=2000,  # 확장된 대사를 위해 증가
             )
+            log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:200]}")
 
             # 응답이 정상적일 경우
             if isinstance(response, dict) and "dialogues" in response:
                 dialogues = response["dialogues"]
                 if isinstance(dialogues, list):
                     dialogues = self._normalize_dialogues(dialogues)
-                    narration = self._extract_intro_narration(beats)
-                    dialogues = self._ensure_intro_narration(dialogues, narration)
+                    # INTRO 스테이지일 때만 intro narration 보장
                     log("children", f"✅ Generated {len(dialogues)} tone-aware dialogues.")
                     return self._render_dialogues(state, dialogues)
 
@@ -229,36 +243,6 @@ class ChildrenAgent:
                     dialogue["fx"] = fx
                 return [dialogue]
         return []
-
-    def _ensure_intro_narration(
-        self,
-        dialogues: List[Dict[str, Any]],
-        intro: Optional[List[Dict[str, Any]]],
-    ) -> List[Dict[str, Any]]:
-        if not intro:
-            return dialogues
-
-        intro_entry = intro[0]
-        intro_text_norm = self._normalize_text(intro_entry.get("text"))
-        if not intro_text_norm:
-            return dialogues
-
-        updated: List[Dict[str, Any]] = []
-        intro_found = False
-        for entry in dialogues:
-            if not isinstance(entry, dict):
-                continue
-            text_norm = self._normalize_text(entry.get("text"))
-            if text_norm == intro_text_norm:
-                entry["speaker"] = entry.get("speaker") or "narr"
-                intro_found = True
-            updated.append(entry)
-
-        if intro_found:
-            return updated
-
-        log("codex_fix", "Injecting canonical intro narration")
-        return intro + updated
 
     def _normalize_text(self, text: Optional[str]) -> str:
         return (text or "").strip().lower()

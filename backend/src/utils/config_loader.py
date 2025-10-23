@@ -67,7 +67,7 @@ class ConfigLoader:
         """모든 설정 파일 로드"""
         self._configs['settings'] = self._load_yaml('settings.yaml')
         self._configs['prompts'] = self._load_yaml('prompts.yaml')
-        self._configs['characters'] = self._load_yaml('characters.yaml')
+        # self._configs['characters'] = self._load_yaml('characters.yaml')
 
     def get_settings(self) -> Dict[str, Any]:
         """시스템 설정 가져오기"""

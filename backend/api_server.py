@@ -8,10 +8,11 @@ FastAPI Server for KIME Chat Agent
 import os
 import uuid
 import json
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -55,7 +56,31 @@ app.add_middleware(
 # ✅ 세션 저장소 (임시: 메모리 기반)
 #    - 실제 서비스 환경에서는 Redis 등 외부 세션 스토어로 교체해야 함
 # ------------------------------------------------------------
-sessions: Dict[str, GraphState] = {}
+class SessionManager:
+    def __init__(self) -> None:
+        self._sessions: Dict[str, Dict[str, Any]] = {}
+
+    def load_or_create(self, session_id: str) -> Dict[str, Any]:
+        state = self._sessions.get(session_id)
+        if state is None:
+            state = {}
+            self._sessions[session_id] = state
+        return state
+
+    def save(self, session_id: str, state: Dict[str, Any]) -> None:
+        self._sessions[session_id] = state
+
+    def get(self, session_id: str) -> Optional[Dict[str, Any]]:
+        return self._sessions.get(session_id)
+
+    def delete(self, session_id: str) -> None:
+        self._sessions.pop(session_id, None)
+
+    def exists(self, session_id: str) -> bool:
+        return session_id in self._sessions
+
+
+SESSION_MANAGER = SessionManager()
 
 # ------------------------------------------------------------
 # ✅ Workflow 싱글톤 (LangGraph 파이프라인)
@@ -165,125 +190,110 @@ async def root():
     }
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@app.post("/api/chat")
+async def chat(request: Request):
     """
     메인 채팅 엔드포인트
     1. 세션 생성 or 복원
     2. 시나리오 로드
     3. LangGraph 실행
-    4. 결과를 대화 형식으로 반환
+    4. 결과를 반환
     """
     try:
-        # ------------------------------------------------------------
-        # (1) 세션 생성 or 복원
-        # ------------------------------------------------------------
-        session_id = request.session_id or str(uuid.uuid4())
+        data = await request.json()
 
-        if session_id not in sessions:
+        session_id = data.get("session_id")
+        user_input = data.get("user_input", "")
+        scenario_id = data.get("scenario_id")
+        user_name = data.get("user_name") or "여행자"
+
+        print(f"📥 Request received: session_id={session_id}, input='{user_input}'")
+
+        if not session_id:
+            session_id = str(uuid.uuid4())
             print(f"🆕 Creating new session: {session_id}")
+        else:
+            print(f"🔁 Reusing session: {session_id}")
 
-            backend_scenario_id = SCENARIO_MAPPING.get(request.scenario_id, request.scenario_id)
-            scenario_data = load_scenario(request.scenario_id)
+        state = SESSION_MANAGER.load_or_create(session_id)
+        is_new_session = "messages" not in state
+
+        if is_new_session:
+            if not scenario_id:
+                raise HTTPException(status_code=400, detail="scenario_id is required to start a session")
+
+            backend_scenario_id = SCENARIO_MAPPING.get(scenario_id, scenario_id)
+            scenario_data = load_scenario(scenario_id)
             if not scenario_data:
-                raise HTTPException(status_code=404, detail=f"Scenario '{request.scenario_id}' not found")
+                raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
 
-            # 초기 GraphState 생성
             state = create_initial_graph_state(
                 session_id=session_id,
                 scenario_id=backend_scenario_id
             )
-
-            # 시나리오 데이터 세팅
             state["scenario_data"] = scenario_data
-            state["scenario"] = scenario_data  # parent_agent에서 사용
+            state["scenario"] = scenario_data
             state["scenario_id"] = backend_scenario_id
-            state["user_name"] = request.user_name or "여행자"
+            state["user_name"] = user_name
 
-            # 첫 스테이지 결정
             stages = scenario_data.get("stages", [])
             if isinstance(stages, dict):
-                initial_stage = list(stages.keys())[0] if stages else "intro"
-            elif isinstance(stages, list) and len(stages) > 0:
+                initial_stage = next(iter(stages.keys()), "intro")
+            elif isinstance(stages, list) and stages:
                 initial_stage = stages[0].get("tag") or stages[0].get("id") or "intro"
             else:
                 initial_stage = "intro"
             state["current_stage"] = initial_stage
-
-            # 세션 저장
-            sessions[session_id] = state
-
         else:
-            # 기존 세션 로드
-            state = sessions[session_id]
+            print(f"🔄 Loading existing session: {session_id}")
+            print(f"📊 Session state: stage={state.get('current_stage')}, stage_turn={state.get('stage_turn')}")
+            if user_name:
+                state["user_name"] = user_name
 
-        # ------------------------------------------------------------
-        # (2) 유저 입력 저장
-        # ------------------------------------------------------------
-        state["user_input"] = request.user_input
-        state["user_inputs"] = state.get("user_inputs", []) + [request.user_input]
+        if not state.get("scenario_data") and scenario_id:
+            scenario_data = load_scenario(scenario_id)
+            if scenario_data:
+                state["scenario_data"] = scenario_data
+                state["scenario"] = scenario_data
+                state.setdefault("scenario_id", SCENARIO_MAPPING.get(scenario_id, scenario_id))
 
-        # 자동 입력이 아닌 경우에만 배치 카운터 리셋
-        if not request.user_input.startswith("__AUTO_CONTINUE__"):
+        state["session_id"] = session_id
+        state["user_input"] = user_input
+        state["user_inputs"] = state.get("user_inputs", []) + [user_input]
+
+        if not user_input.startswith("__AUTO_CONTINUE__"):
             state["dialogue_batch_index"] = 0
             state["dialogues_generated_count"] = 0
 
-        # ------------------------------------------------------------
-        # (3) LangGraph 실행
-        # ------------------------------------------------------------
-        print(f"🤖 Processing: session={session_id}, input='{request.user_input}'")
+        print(f"🤖 Processing: session={session_id}, input='{user_input}'")
         workflow_instance = get_workflow()
         result_state = workflow_instance.invoke(state)
 
-        # ------------------------------------------------------------
-        # (4) 세션 상태 업데이트
-        # ------------------------------------------------------------
-        sessions[session_id] = result_state
-
-        # ------------------------------------------------------------
-        # (5) 대화 응답 구성
-        # ------------------------------------------------------------
-        agent_responses = result_state.get("output", {}).get("dialogues", [])
-        dialogues = []
-        for response in agent_responses:
-            if isinstance(response, dict):
-                dialogues.append(DialogueResponse(
-                    speaker=response.get("speaker", "system"),
-                    content=response.get("text") or response.get("content", ""),
-                    emotion=response.get("emotion", "neutral")
-                ))
-
-        # ------------------------------------------------------------
-        # (6) 시나리오 종료 판정
-        # ------------------------------------------------------------
-        is_ended = (
-            result_state.get("final_ending") is not None
-            or result_state.get("next_node") == "END"
-            or result_state.get("current_stage", "").lower() in ["end", "ending", "end_hidden", "end_bad"]
-        )
-
-        # ------------------------------------------------------------
-        # (7) 응답 객체 생성
-        # ------------------------------------------------------------
         turn_count = result_state.get("turn_count", 0) + 1
         result_state["turn_count"] = turn_count
+        SESSION_MANAGER.save(session_id, result_state)
 
-        has_more = result_state.get("has_more_dialogues", False)
-        print(f"🔍 DEBUG: has_more={has_more}, batch_index={result_state.get('dialogue_batch_index')}")
+        print(f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}")
 
-        response = ChatResponse(
-            session_id=session_id,
-            turn_count=turn_count,
-            dialogues=dialogues,
-            current_stage=result_state.get("current_stage"),
-            affinity_scores=result_state.get("affinity_scores"),
-            is_ended=is_ended,
-            has_more=has_more,
-            system_message=result_state.get("error_message")
-        )
+        agent_responses = result_state.get("output", {}).get("dialogues", [])
+        has_more_flag = result_state.get("has_more")
+        if has_more_flag is None:
+            has_more_flag = result_state.get("has_more_dialogues", False)
+        result_state["has_more"] = has_more_flag
 
-        print(f"✅ Response sent: {len(dialogues)} dialogues, has_more: {has_more}")
-        return response
+        print(f"✅ Response sent: {len(agent_responses)} dialogues, has_more: {has_more_flag}")
+
+        # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
+        return JSONResponse({
+            "session_id": session_id,
+            "dialogues": agent_responses,  # 루트 레벨에 dialogues
+            "turn_count": result_state.get("turn_count", 0),
+            "current_stage": result_state.get("current_stage"),
+            "affinity_scores": result_state.get("affinity_scores", {}),
+            "is_ended": result_state.get("is_ended", False),
+            "has_more": has_more_flag,
+            "output": result_state.get("output", {})  # 하위 호환성을 위해 유지
+        })
 
     # ------------------------------------------------------------
     # (8) 예외 처리
@@ -303,10 +313,10 @@ async def chat(request: ChatRequest):
 @app.get("/api/session/{session_id}", response_model=SessionInfoResponse)
 async def get_session(session_id: str):
     """특정 세션의 현재 상태(스테이지, 친밀도 등) 반환"""
-    if session_id not in sessions:
+    state = SESSION_MANAGER.get(session_id)
+    if not state or "messages" not in state:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    state = sessions[session_id]
     return SessionInfoResponse(
         session_id=session_id,
         scenario_id=state.get("scenario_id", "unknown"),
@@ -322,8 +332,8 @@ async def get_session(session_id: str):
 @app.delete("/api/session/{session_id}")
 async def delete_session(session_id: str):
     """세션 강제 삭제"""
-    if session_id in sessions:
-        del sessions[session_id]
+    if SESSION_MANAGER.exists(session_id):
+        SESSION_MANAGER.delete(session_id)
         return {"status": "deleted", "session_id": session_id}
     raise HTTPException(status_code=404, detail="Session not found")
 

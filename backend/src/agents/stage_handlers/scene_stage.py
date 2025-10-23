@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .. import state_tools
+from src.tools import state_tools 
 from ..scene_tools import (
     get_next_stage_tag,
     get_stage_atmosphere,
@@ -42,6 +42,8 @@ class SceneHandler:
         min_turns = int(constraints.get("min_turns", 1) or 1)
         max_turns = int(constraints.get("max_turns", min_turns) or min_turns)
 
+        log("scene", f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")
+
         temp = state_tools.get_temp_data(state)
         forced = temp.pop(f"{stage_tag}_complete", False)
 
@@ -52,14 +54,15 @@ class SceneHandler:
         # INTRO stage는 첫 턴 이후 user 입력이 있으면 자동으로 다음 스테이지로 진행
         if not complete and stage_tag == "INTRO" and stage_turn >= 1:
             user_input = state.get("user_input", "")
+            log("scene", f"🔍 INTRO check: turn={stage_turn}, user_input='{user_input}'")
             # auto_continue가 아니고 실제 user 입력이 있는 경우
             if user_input and user_input != "__AUTO_CONTINUE__":
                 complete = True
-                log("scene", "INTRO stage auto-advancing after user input", turn=stage_turn)
+                log("scene", "✅ INTRO stage auto-advancing after user input", turn=stage_turn)
 
         next_stage = get_next_stage_tag(stage) if complete else None
         if complete:
-            log("scene", "Scene constraints satisfied", stage=stage_tag, next_stage=next_stage)
+            log("scene", "Scene constraints satisfied", current=stage_tag, next=next_stage)
         return StageResult(
             children_ctx=ctx,
             stage_complete=complete,
