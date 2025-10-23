@@ -38,17 +38,12 @@ export function useBackgroundImage(
       return;
     }
 
-    let initialBg: BackgroundImage | undefined;
-
+    // initialBackgroundId가 명시적으로 제공된 경우에만 설정
+    // 제공되지 않으면 undefined로 두어 CSS fallback이 작동하도록 함
     if (initialBackgroundId) {
-      initialBg = getBackgroundById(scenarioId, initialBackgroundId);
+      const initialBg = getBackgroundById(scenarioId, initialBackgroundId);
+      setCurrentBackground(initialBg);
     }
-
-    if (!initialBg) {
-      initialBg = getDefaultBackground(scenarioId);
-    }
-
-    setCurrentBackground(initialBg);
   }, [scenarioId, initialBackgroundId]);
 
   // 현재 배경 이미지 URL

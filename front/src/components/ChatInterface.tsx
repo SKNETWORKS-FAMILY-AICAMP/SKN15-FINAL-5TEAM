@@ -5,6 +5,7 @@ import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
 import { sendChatMessage, ChatResponse } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 interface Message {
   id: number;
@@ -64,6 +65,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     setBackgroundByIndex,
     preloadImages
   } = useBackgroundImage('mugen_train');
+
+  // 소리 효과 관리 (몰입감 향상)
+  const {
+    playMessageSound,
+    playSystemSound,
+    playTypingStartSound,
+    unlockAudio
+  } = useSoundEffects();
 
   // 배경 이미지 프리로드 (성능 최적화)
   useEffect(() => {
@@ -252,6 +261,15 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         setBackgroundByIndex(imageIndex);
       }
 
+      // 소리 효과 재생 (몰입감 향상)
+      if (!message.isUser) {
+        if (message.isSystemMessage) {
+          playSystemSound(); // 시스템 메시지: 낮은 톤
+        } else {
+          playMessageSound(); // 일반 AI 메시지: 부드러운 핑
+        }
+      }
+
       // 빈 메시지로 시작 (타이핑 시작)
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
@@ -353,8 +371,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}`);
 
-      // Update background image and affinity_scores from response
-      handleBackgroundChange(response.current_image || null);
+      // Update affinity_scores from response
+      // Note: background changes are now handled per-dialogue via imageIndex
+      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
       setAffinityScores(response.affinity_scores || {});
 
       // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
@@ -412,8 +431,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
         console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}`);
 
-        // Update background image and affinity_scores from response
-        handleBackgroundChange(response.current_image || null);
+        // Update affinity_scores from response
+        // Note: background changes are now handled per-dialogue via imageIndex
+        // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
         setAffinityScores(response.affinity_scores || {});
 
         // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
@@ -423,7 +443,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           isUser: false,
           timestamp: new Date(),
           characterId: dialogue.speaker,
-          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr'
+          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
         }));
 
         // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -691,6 +712,10 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
+    // 🔊 오디오 활성화 (브라우저 자동재생 정책 우회)
+    // unlock이 완전히 완료될 때까지 기다림
+    await unlockAudio();
+
     // 🔥 자동 요청 중일 때는 사용자 입력 차단
     if (isAutoRequesting) {
       console.log('⚠️ Auto-requesting in progress, user input blocked');
@@ -736,8 +761,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         setSessionId(response.session_id);
       }
 
-      // Update background image and affinity_scores from response
-      handleBackgroundChange(response.current_image || null);
+      // Update affinity_scores from response
+      // Note: background changes are now handled per-dialogue via imageIndex
+      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
       setAffinityScores(response.affinity_scores || {});
 
       // Add backend responses to messages sequentially (고유 ID 사용)
@@ -747,7 +773,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         isUser: false,
         timestamp: new Date(),
         characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr'
+        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
       }));
 
       // 시스템 메시지와 종료 메시지를 백엔드 메시지에 추가

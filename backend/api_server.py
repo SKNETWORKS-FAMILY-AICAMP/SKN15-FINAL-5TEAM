@@ -329,6 +329,9 @@ async def chat(request: Request):
 
             # ImageManager가 있으면 각 대화별로 이미지 분석
             image_manager = globals().get('image_managers', {}).get(scenario_id_for_image)
+            print(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
+            print(f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}")
+            print(f"🔍 DEBUG: image_manager={image_manager}")
             if image_manager:
                 # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
                 all_dialogues = result_state.get("output", {}).get("dialogues", [])
