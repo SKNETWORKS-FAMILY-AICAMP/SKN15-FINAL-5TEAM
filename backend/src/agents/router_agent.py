@@ -267,7 +267,12 @@ JSON 형태로만 응답하십시오:
         scenario = state.get("scenario") or state.get("scenario_data")
         character_refs = {}
         if isinstance(scenario, dict):
-            character_refs = scenario.get("character_refs", {}) or {}
+        character_refs = scenario.get("character_refs", {}) or {}
+        scenario_refs = scenario.get("character_refs") or {}
+        if isinstance(scenario_refs, dict):
+            fallback_ref = scenario_refs.get(fallback_speaker)
+            if fallback_ref:
+                character_refs = {fallback_speaker: fallback_ref}
 
         children_ctx = {
             "stage_tag": "OFF_TOPIC",
