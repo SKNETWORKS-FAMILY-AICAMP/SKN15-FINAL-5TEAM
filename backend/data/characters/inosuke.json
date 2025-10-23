@@ -18,9 +18,25 @@
           "contempt_blame": 1.2
         },
         "patterns": {
-          "combat_coop": ["싸우", "붙자", "같이", "함께", "저돌", "협력"],
-          "praise_encourage": ["강하", "대장", "최고", "인정"],
-          "general_interaction": ["응", "그래", "좋아"]
+          "combat_coop": [
+            "싸우",
+            "붙자",
+            "같이",
+            "함께",
+            "저돌",
+            "협력"
+          ],
+          "praise_encourage": [
+            "강하",
+            "대장",
+            "최고",
+            "인정"
+          ],
+          "general_interaction": [
+            "응",
+            "그래",
+            "좋아"
+          ]
         }
       },
       "appearance": {
@@ -60,7 +76,10 @@
         "내가 대장이다!",
         "나와 싸워라!"
       ],
-      "aliases": ["이노스케", "하시비라 이노스케"],
+      "aliases": [
+        "이노스케",
+        "하시비라 이노스케"
+      ],
       "tone": {
         "low": {
           "level_range": [
@@ -103,6 +122,23 @@
             "크하하! 좋아! 네 실력을 인정해주마!",
             "이런... 네가 이렇게 강했다니! 내 친구가 되어라!"
           ]
+        }
+      }
+    }
+  },
+  "scenario_specific": {
+    "mugen_train": {
+      "roles": {
+        "mugen_train": "reckless_ally"
+      },
+      "relationships": {
+        "user": {
+          "type": "comrade",
+          "description": "전투에 함께 뛰어드는 동료지만, 경쟁심을 느낀다."
+        },
+        "rengoku": {
+          "type": "admiration",
+          "description": "렌고쿠의 강함을 존경하며 언젠가 넘어서고 싶어 한다."
         }
       }
     }

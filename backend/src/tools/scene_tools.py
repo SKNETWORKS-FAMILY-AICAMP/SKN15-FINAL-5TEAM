@@ -5,6 +5,14 @@ Scene Tools - 게임 씬 관련 이미지 및 에셋 관리
 - 컷신 이미지: 턴에 따라 변화하는 배경/장면 이미지
 - 감정 이미지: 캐릭터별 감정 상태에 따른 표정 이미지
 - 특별 이미지: 히든엔딩 등 특별 상황용 생성 이미지
+
+Router → ParentAgent
+              ↓
+        ChildrenAgent
+              ↓
+     ├─ SceneDialogueTools (LLM prompt / tone loader)
+     └─ SceneTools (이미지 / 에셋)
+     
 """
 
 from typing import Dict, List, Optional

@@ -19,10 +19,35 @@
           "trust_destruction": 1.3
         },
         "patterns": {
-          "combat_coop": ["함께", "협력", "같이", "싸우", "도와", "합심"],
-          "praise_encourage": ["칭찬", "위대", "존경", "대단", "멋지"],
-          "positive_core": ["정의", "지키", "사람들", "구하", "사명"],
-          "general_interaction": ["응", "그래", "좋아", "고마워", "알겠어"]
+          "combat_coop": [
+            "함께",
+            "협력",
+            "같이",
+            "싸우",
+            "도와",
+            "합심"
+          ],
+          "praise_encourage": [
+            "칭찬",
+            "위대",
+            "존경",
+            "대단",
+            "멋지"
+          ],
+          "positive_core": [
+            "정의",
+            "지키",
+            "사람들",
+            "구하",
+            "사명"
+          ],
+          "general_interaction": [
+            "응",
+            "그래",
+            "좋아",
+            "고마워",
+            "알겠어"
+          ]
         }
       },
       "appearance": {
@@ -63,7 +88,11 @@
         "좋아!",
         "계속 정진하라!"
       ],
-      "aliases": ["렌고쿠", "렌고쿠 쿄쥬로", "쿄쥬로"],
+      "aliases": [
+        "렌고쿠",
+        "렌고쿠 쿄쥬로",
+        "쿄쥬로"
+      ],
       "tone": {
         "low": {
           "level_range": [
@@ -106,6 +135,35 @@
             "훌륭한 동료가 되었구나! 자랑스럽다!",
             "이제는 나와 어깨를 나란히 할 수 있을 정도로 강해졌다!"
           ]
+        }
+      }
+    }
+  },
+  "scenario_specific": {
+    "mugen_train": {
+      "roles": {
+        "mugen_train": "mentor"
+      },
+      "relationships": {
+        "user": {
+          "type": "mentor",
+          "description": "{user}는 렌고쿠의 츠구코로, 불의 호흡과 강인한 마음을 배우고 있다."
+        },
+        "akaza": {
+          "type": "enemy",
+          "description": "상현 삼 아카자와의 첫 조우. 인간의 불굴과 악마의 집착이 충돌한다."
+        },
+        "tanjiro": {
+          "type": "respectful_junior",
+          "description": "탄지로의 성장 가능성을 높이 평가하고, 인간미를 사랑한다."
+        },
+        "inosuke": {
+          "type": "challenger",
+          "description": "무모하지만 강한 투지를 보이는 이노스케에게 호감을 느낀다."
+        },
+        "zenitsu": {
+          "type": "protector",
+          "description": "겁이 많지만 마음이 착한 젠이츠를 따뜻하게 대한다."
         }
       }
     }

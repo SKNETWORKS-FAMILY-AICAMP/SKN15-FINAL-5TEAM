@@ -18,10 +18,31 @@
           "contempt_blame": 1.3
         },
         "patterns": {
-          "praise_encourage": ["잘했", "용감", "믿어", "괜찮", "대단"],
-          "positive_core": ["지키", "도와", "함께", "희망"],
-          "combat_coop": ["같이", "함께", "싸우", "협력"],
-          "general_interaction": ["응", "그래", "알겠어", "괜찮아"]
+          "praise_encourage": [
+            "잘했",
+            "용감",
+            "믿어",
+            "괜찮",
+            "대단"
+          ],
+          "positive_core": [
+            "지키",
+            "도와",
+            "함께",
+            "희망"
+          ],
+          "combat_coop": [
+            "같이",
+            "함께",
+            "싸우",
+            "협력"
+          ],
+          "general_interaction": [
+            "응",
+            "그래",
+            "알겠어",
+            "괜찮아"
+          ]
         }
       },
       "appearance": {
@@ -63,7 +84,11 @@
         "벽력일섬 (각성 시)",
         "왜 나만 이런 일을..."
       ],
-      "aliases": ["젠이츠", "아가츠마 젠이츠", "젠이쯔"],
+      "aliases": [
+        "젠이츠",
+        "아가츠마 젠이츠",
+        "젠이쯔"
+      ],
       "tone": {
         "low": {
           "level_range": [
@@ -106,6 +131,23 @@
             "무서워도... 친구들을 위해서라면 해낼 수 있어!",
             "이제야 알겠어요. 진정한 용기가 뭔지!"
           ]
+        }
+      }
+    }
+  },
+  "scenario_specific": {
+    "mugen_train": {
+      "roles": {
+        "mugen_train": "ally"
+      },
+      "relationships": {
+        "user": {
+          "type": "teammate",
+          "description": "{user}를 믿고 싶지만 전투가 두려워 주저한다."
+        },
+        "rengoku": {
+          "type": "awe",
+          "description": "렌고쿠의 존재에 압도되며 진정한 용기를 배우게 된다."
         }
       }
     }

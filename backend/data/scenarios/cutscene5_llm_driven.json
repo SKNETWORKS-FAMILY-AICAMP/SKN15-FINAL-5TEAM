@@ -1,9 +1,8 @@
 {
-  "scenario_id": "cutscene5_llm_driven",
-  "module_id": "cutscene5_llm_driven",
-  "title": "🔥 상현 삼 조우 — 코어 다이내믹 (5분)",
-  "description": "갈림길→전략 개입(캐릭터 힌트)→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
-  "version": "5.3",
+  "scenario_id": "cutscene5_llm_driven_refined",
+  "title": "🔥 상현 삼 조우 — 리듬형 완전판",
+  "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
+  "version": "6.0",
   "mountable": true,
 
   "character_refs": {
@@ -14,793 +13,201 @@
     "inosuke": "character_data/inosuke.json"
   },
 
-  "orchestrator": {
-    "mode": "llm",
-    "turn_budget": 5,
-    "allow_adlib_speakers": true,
-    "policies": { "avoid_monologue": true, "no_triplicate": true, "keep_tension": true },
-    "fallback_tiebreak": ["rengoku","tanjiro","user","akaza"]
-  },
-
-  "runtime": {
-    "api_hints": {
-      "minimize_calls": true,
-      "batch_actions_per_turn": true,
-      "reuse_context": true,
-      "cache_i18n_lookups": true,
-      "short_outputs": true
-    },
-    "print_policy": { "admin_logs": "compact", "user_logs": "minimal" }
-  },
-
-  "state_defaults": {
-    "mentor_margin": 0,
-    "battle_danger": 1,
-    "time_left": 3,
-    "allies_recruited": [],
-    "pacing_flag": 3,
-    "_forced_basic": false,
-    "_outcome": null
-  },
-
-  "params": {
-    "thresholds": { "hidden_min_margin": 2, "hidden_max_danger": 2, "time_min": 0 },
-    "mission": { "max_turns": 10, "per_character_turn_cap": 3 }
-  },
-
-  "rules": {
-    "design_intent": [
-      "1) 분기 구조 고정",
-      "2) 캐릭터 대사 유도, 시스템 최소",
-      "3) 자유 입력 대화감",
-      "4) 키워드 매칭 금지, LLM 의도판별",
-      "5) 화자/순서 LLM 결정",
-      "6) 재사용성/확장성",
-      "7) 상태·룰 기반 판정",
-      "8) 보상/해금 훅",
-      "9) i18n/치환 용이",
-      "10) 시간압박/실패 가능성",
-      "11) 긴장 장면 멀티턴(≥4)",
-      "12) 분기 힌트는 캐릭터 대사로 제시(시스템 선택지 금지)",
-      "13) 보스 퇴장은 독립 시네마틱 스테이지"
-    ],
-    "tension_min_turns": 4,
-    "cliff_guard": { "separate_turns_for": ["first_meet_boss","first_blood","fatal_blow"] }
-  },
-
-  "intent_inference": {
-    "mode": "llm",
-    "actions": [
-      "choose_allies_path","choose_reckless_path",
-      "intervene_attack","intervene_noise","intervene_ignore",
-      "wake_zenitsu","convince_zenitsu","provoke_inosuke","convince_inosuke"
-    ],
-    "few_shots": [
-      {
-        "context": [
-          {"speaker":"tanjiro","text":"{rengoku} 혼자서는 위험해… 난 움직이기 힘들어…"},
-          {"speaker":"rengoku","text":"판단은 네게 맡기마."}
-        ],
-        "user_utterance": "젠이츠랑 이노스케 모아올게. 넌 엄호해.",
-        "action": "choose_allies_path"
-      },
-      {
-        "context": [
-          {"speaker":"rengoku","text":"물러서라! 이 자는 내가 상대한다!"},
-          {"speaker":"akaza","text":"하하, 더 와도 상관없지!"}
-        ],
-        "user_utterance": "지금 바로 뛰어들어 막을게!",
-        "action": "choose_reckless_path"
-      },
-      {
-        "context": [
-          {"speaker":"tanjiro","text":"렌고쿠 씨… 위험해요! 저 공격은…"},
-          {"speaker":"tanjiro","text":"{user}, 우리도 뭔가 도와야 해. 렌고쿠씨를 도와 멀리서 검기로 궤도를 비틀든지, 아니면 젠이츠/이노스케를 지금 데려오자. 어떻게 할까?"}
-        ],
-        "user_utterance": "원거리 견제로 궤도 비틀어줄게.",
-        "action": "intervene_attack"
-      },
-      {
-        "context": [
-          {"speaker":"tanjiro","text":"렌고쿠 씨… 위험해요! 저 공격은…"},
-          {"speaker":"tanjiro","text":"{user}, 돌 같은 걸로 소리만 내도 고개를 돌릴 거야. 아니면 동료를 찾자!"}
-        ],
-        "user_utterance": "돌 던져서 주의 끌자.",
-        "action": "intervene_noise"
-      },
-      {
-        "context": [
-          {"speaker":"tanjiro","text":"렌고쿠 씨는 버틸 수 있어… 우리가 동료를 데려오면…"},
-          {"speaker":"rengoku","text":"시간을 아껴라. 선택은 네 몫이다."}
-        ],
-        "user_utterance": "개입 안 하고 동료부터 찾자.",
-        "action": "intervene_ignore"
-      },
-      {
-        "context": [{"speaker":"zenitsu","text":"Zzz… 네즈코… Zzz…"}],
-        "user_utterance": "젠이츠! 네즈코가 위험해!",
-        "action": "wake_zenitsu"
-      },
-      {
-        "context": [{"speaker":"zenitsu","text":"무서워… 나 못 해…!"}],
-        "user_utterance": "지켜야 할 사람이 있잖아. 네 도움이 필요해.",
-        "action": "convince_zenitsu"
-      },
-      {
-        "context": [{"speaker":"inosuke","text":"여긴 산의 왕 이노스케님의 영역이다!"}],
-        "user_utterance": "대장, 네가 앞장서라. 강한 놈이 필요한 때야.",
-        "action": "provoke_inosuke"
-      },
-      {
-        "context": [
-          {"speaker":"inosuke","text":"흥! 나는 여기서 더 많은 오니를 잡을 거다!"},
-          {"speaker":"tanjiro","text":"이노스케, 지금 렌고쿠 님이 홀로 싸우고 있어요!"}
-        ],
-        "user_utterance": "같이 가자, 네 힘이 있어야 렌고쿠 님이 살아남아.",
-        "action": "convince_inosuke"
-      }
-    ],
-    "fallback": { "action": "intervene_ignore" }
-  },
-
-  "fx_lexicon": {
-    "ground_fissure": "지면이 낮게 갈라지며 잔재가 흔들린다",
-    "shadow_recoil": "보스의 그림자가 뒤로 말려들듯 후퇴한다",
-    "sun_sparks": "새벽빛의 입자가 파편처럼 흩뿌려진다",
-    "ember_swirl": "불씨가 원을 그리며 소용돌이친다",
-    "ash_wind": "잿빛 바람이 좁은 통로를 스치며 윙— 하는 소리를 낸다",
-
-    "air_freeze": "공기가 순간적으로 식고 무겁게 가라앉는다",
-    "footfall_void": "빈 통로에 맥없는 발자국 소리가 텅 하고 울린다",
-    "heart_drop": "심장이 한 박자 아래로 가라앉는 듯한 압박",
-    "kanji_flash": "눈동자에 한자 문양이 번쩍이며 번개처럼 스친다",
-    "pulse_boom": "둔탁한 파장이 공기를 두 번 내리친다",
-    "blink_dash": "시야가 깜박이며 사물이 끊겨 보일 만큼의 가속",
-    "flame_ignition": "바람과 함께 불꽃이 길게 점화한다",
-
-    "brake_screech": "브레이크가 비명을 지르며 금속이 갈리는 소리",
-    "ember_fall": "불씨가 공중에서 천천히 떨어진다",
-    "shockwave_snap": "충격파가 공기를 찢으며 순간적으로 터진다",
-    "cold_wind": "차가운 바람이 뼈 속까지 파고든다",
-    "ground_pattern": "땅에 눈꽃 모양의 균열이 새겨진다",
-    "distant_explosion": "멀리서 폭발음이 울려퍼진다",
-    "ground_tremor": "땅이 흔들리며 진동이 전해진다",
-    "flame_flash": "불꽃이 하늘을 붉게 물들이며 번쩍인다",
-    "flame_roar": "불꽃이 포효하듯 타오른다",
-    "heavy_breath": "거친 숨소리가 들린다",
-    "tree_crack": "나무가 부러지는 소리가 울린다",
-    "rock_shatter": "바위가 산산조각 나며 부서진다",
-    "evil_laugh": "사악한 웃음소리가 메아리친다",
-    "urgent_heartbeat": "심장이 급박하게 두근거린다",
-
-    "blade_clash": "칼날과 주먹이 격렬하게 부딪힌다",
-    "blood_spray": "피가 공중으로 튀어 오른다",
-    "power_charge": "강력한 기운이 한 곳으로 모인다",
-    "flame_flicker": "불꽃이 깜빡이며 약해진다",
-    "fatal_strike": "치명적인 일격이 공기를 가른다",
-    "explosion": "폭발음과 함께 충격파가 퍼진다",
-    "ground_crack": "땅이 갈라지며 균열이 생긴다",
-
-    "forest_rustle": "숲이 바스락거리며 움직임을 감지한다",
-    "breath_faint": "희미한 숨소리가 가까이서 들린다",
-    "dream_murmur": "꿈속에서 중얼거리는 소리",
-    "snore_soft": "부드러운 코골이 소리",
-    "beast_growl": "짐승이 으르렁거리는 소리",
-    "footstep_light": "가벼운 발소리가 다가온다",
-
-    "allies_approach": "동료들의 발소리가 가까워진다",
-    "battle_echo": "전투의 메아리가 울려퍼진다",
-    "dawn_light": "새벽빛이 서서히 밝아온다",
-
-    "desperate_charge": "필사적인 돌격 소리",
-    "bone_crack": "뼈가 부러지는 소리",
-    "collapse_thud": "쓰러지며 둔탁한 소리가 난다"
-  },
-
   "i18n": {
     "ko": {
       "beats_intro": [
-  {
-    "goal": "【상황 설명】열차가 격렬하게 흔들리더니 탈선했다. 브레이크가 비명을 지르며 금속이 갈리는 소리가 울려퍼진다. 유리창이 깨지고 파편이 날아다닌다. 자욱한 먼지와 연기가 객차 안을 가득 채우며 시야를 가린다. 승객들의 신음 소리가 여기저기서 들려온다",
-    "speaker_hint": ["narr"],
-    "fx": "brake_screech|ash_wind|ground_fissure"
-  },
-  {
-    "goal": "렌고쿠가 먼저 {user}를 발견하고 다가온다. '대단하다! {user}! 엔무를 쓰러뜨리고 무사하다니!' 힘찬 목소리로 칭찬하며 손을 내민다",
-    "speaker_hint": ["rengoku"],
-    "fx": "ember_swirl"
-  },
-  {
-    "goal": "탄지로가 다급하게 달려와 {user}의 안전을 확인한다. '다행이다... 무사하시네요!' 안도하며 렌고쿠를 향해 고개를 돌린다. '렌고쿠 님, 승객들이 많이 다쳤습니다'",
-    "speaker_hint": ["tanjiro"]
-  },
-  {
-    "goal": "렌고쿠가 주변을 둘러보며 단호하게 말한다. '알고 있다, 탄지로! 빨리 부상자들을 구조해야 한다. 시간이 없어!' 불꽃이 일듯 강렬한 눈빛을 보낸다",
-    "speaker_hint": ["rengoku"]
-  },
-  {
-    "goal": "탄지로가 렌고쿠의 말에 고개를 끄덕이지만, 갑자기 옆구리를 붙잡고 비틀거린다. '으윽... 복부 출혈이...' 손가락 사이로 피가 스며나온다",
-    "speaker_hint": ["tanjiro"],
-    "fx": "ember_fall"
-  },
-  {
-    "goal": "렌고쿠가 탄지로의 부상을 확인하고 걱정스러운 표정을 짓는다. '탄지로! 무리하지 마라. 전집중 호흡으로 출혈을 막고, 천천히 치료에 집중해!' 단호하지만 따뜻한 목소리로 말한다",
-    "speaker_hint": ["rengoku"]
-  },
-  {
-    "goal": "탄지로가 고통을 참으며 대답한다. '알겠습니다... 렌고쿠 님. 하지만 승객들을...' 렌고쿠가 탄지로의 어깨를 잡는다. '걱정하지 마라. {user}와 내가 구조한다!'",
-    "speaker_hint": ["tanjiro", "rengoku"]
-  },
-  {
-    "goal": "렌고쿠가 {user}를 향해 돌아선다. '{user}, 함께 부상자들을 안전한 곳으로 대피시키자! 탄지로는 여기서 치료에 집중하도록!' 힘찬 목소리로 지시한다",
-    "speaker_hint": ["rengoku"]
-  },
-  {
-    "goal": "탄지로가 주변을 살피며 말한다. '렌고쿠 님, 승객들 중에는 움직일 수 있는 사람도 있습니다. 그들을 먼저 대피시키면...' 렌고쿠가 고개를 끄덕인다. '좋은 생각이다!'",
-    "speaker_hint": ["tanjiro", "rengoku"]
-  },
-  {
-    "goal": "갑자기 강력한 충격이 지면을 흔든다. 섬뜩한 살기가 느껴지며 공기가 차갑게 식는다. 렌고쿠의 표정이 순식간에 굳어지며 경계 태세를 취한다. '이 기운은...!'",
-    "speaker_hint": ["rengoku"],
-    "fx": "ground_fissure|pulse_boom|air_freeze"
-  },
-  {
-    "goal": "먼지 속에서 아카자가 천천히 모습을 드러낸다. 상현 삼의 눈동자가 섬뜩하게 빛나며 렌고쿠를 응시한다. '오... 지주(柱)인가. 좋은 냄새가 나는군'",
-    "speaker_hint": ["akaza"],
-    "fx": "kanji_flash"
-  },
-  {
-    "goal": "렌고쿠가 검을 뽑아 들며 아카자 앞을 막아선다. '상현... 삼!' 탄지로와 {user}를 뒤로 물리키며 단호하게 말한다. '물러서 있어라!'",
-    "speaker_hint": ["rengoku"],
-    "fx": "flame_ignition"
-  },
-  {
-    "goal": "아카자가 순식간에 움직여 부상당한 탄지로를 향해 돌진한다. 렌고쿠가 번개처럼 탄지로를 밀쳐내고 검으로 막아선다. 칼날과 주먹이 격돌하며 거대한 불꽃이 터진다",
-    "speaker_hint": ["akaza", "rengoku"],
-    "fx": "blink_dash|shockwave_snap|blade_clash"
-  },
-  {
-    "goal": "아카자가 렌고쿠를 보며 웃는다. '강하군! 혈귀가 되어라, 지주. 영원히 강해질 수 있다!' 렌고쿠가 단호히 거절한다. '나는 인간으로서 끝까지 싸운다!'",
-    "speaker_hint": ["akaza", "rengoku"]
-  },
-  {
-    "goal": "아카자가 냉소하며 술식을 전개한다. '그렇다면 죽을 수밖에! 파괴살・나침!' 발밑으로 눈꽃 모양의 진이 펼쳐지며 공기가 얼어붙는다. 엄청난 압박감이 전장을 뒤덮는다",
-    "speaker_hint": ["akaza"],
-    "fx": "heart_drop|pulse_boom|ground_pattern"
-  },
-  {
-    "goal": "탄지로가 옆구리를 붙잡고 {user}를 향해 다급하게 말한다. '{user}... 렌고쿠 님이 혼자서는... 우리가 도와야 해요! 어떻게 할까요?!' 긴박한 눈빛으로 결정을 촉구한다",
-    "speaker_hint": ["tanjiro"],
-    "fx": "urgent_heartbeat"
-  }
-],
+        { "goal": "【상황 설명】 열차가 탈선하며 객차 안은 아비규환이다. 유리창이 깨지고 불꽃이 일렁인다. 먼지와 피 냄새가 뒤섞인다.", "speaker_hint": ["narr"], "fx": "brake_screech|ash_wind" },
+        { "goal": "렌고쿠가 {user}를 발견하고 다가온다. '무사하군! 잘 버텼다, {user}!'", "speaker_hint": ["rengoku"], "fx": "flame_roar" },
+        { "goal": "탄지로가 달려온다. '렌고쿠 님! 부상자들이 많아요!'", "speaker_hint": ["tanjiro","rengoku"] },
+        { "goal": "탄지로가 복부를 붙잡으며 비틀거린다. '으윽... 피가...'", "speaker_hint": ["tanjiro","rengoku"], "fx": "blood_spray|flame_ignition" },
+        { "goal": "땅이 진동하며 먼지가 일어난다. '이건...' 렌고쿠의 표정이 굳는다.", "speaker_hint": ["narr","rengoku"], "fx": "ground_fissure|air_freeze" },
+        { "goal": "먼지 속에서 한 그림자가 천천히 모습을 드러낸다. 상현 삼 아카자. '오… 염주인가.'", "speaker_hint": ["akaza"], "fx": "kanji_flash" },
+        { "goal": "렌고쿠가 검을 뽑는다. '상현… 삼!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition|pulse_boom" },
+        { "goal": "탄지로가 외친다. '{user}! 렌고쿠 님이 위험해요!'", "speaker_hint": ["tanjiro"] },
+        { "goal": "아카자가 돌진한다. 렌고쿠가 번개처럼 막아선다.", "speaker_hint": ["akaza","rengoku"], "fx": "blink_dash|blade_clash|shockwave_snap" },
+        { "goal": "렌고쿠가 외친다. '물러서라, 둘 다!'", "speaker_hint": ["rengoku","narr"], "fx": "flame_roar" }
+      ],
 
       "beats_route": [
-        {
-          "goal": "【전투 직후】아카자가 남긴 '파괴살・나침'의 여파로 공기가 차갑게 식어있다. 땅에는 눈꽃 모양의 균열이 새겨져 있고, 아카자의 살기가 여전히 맴돌고 있다",
-          "speaker_hint": ["narr"],
-          "fx": "cold_wind|ground_pattern"
-        },
-        {
-          "goal": "탄지로가 옆구리를 붙잡고 비틀거린다. 손가락 사이로 피가 스며나온다. '으윽... 전집중 호흡으로 막고 있지만... 갈비뼈가...' 얼굴이 창백하고 땀이 흐른다",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "【멀리서 전투음】쾅! 멀리서 거대한 폭발음이 들린다. 땅이 흔들리고 붉은 불꽃이 하늘을 물들인다. 렌고쿠와 아카자의 격렬한 전투가 계속되고 있다",
-          "speaker_hint": ["narr"],
-          "fx": "distant_explosion|ground_tremor|flame_flash"
-        },
-        {
-          "goal": "렌고쿠의 외침이 바람을 타고 들려온다. '아카자! 네 술식은 통하지 않는다!' 하지만 목소리에 피로가 묻어난다. 숨소리가 거칠다",
-          "speaker_hint": ["rengoku"],
-          "fx": "flame_roar|heavy_breath"
-        },
-        {
-          "goal": "탄지로가 {user}를 바라보며 말한다. '렌고쿠 님이 혼자 버티고 계세요. 하지만 제 상태로는...' 무릎을 꿇으며 주먹을 쥔다. '힘이 안 나요'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "탄지로가 숨을 고르며 제안한다. '두 가지 방법이 있어요. 젠이츠와 이노스케를 먼저 찾는 거... 시간은 걸리지만 확실해요. 셋이 함께라면...'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "또 다른 충격파가 전해진다. 나무가 부러지는 소리, 바위가 부서지는 소리. 아카자의 조롱하는 웃음소리가 희미하게 들린다. '흐하하! 지주, 이게 한계인가!'",
-          "speaker_hint": ["akaza"],
-          "fx": "tree_crack|rock_shatter|evil_laugh"
-        },
-        {
-          "goal": "탄지로가 다급하게 말한다. '아니면 지금 바로 가는 거예요! 위험하지만... 렌고쿠 님이 버티지 못할 수도...' 눈빛이 흔들린다. '{유저} 결정해주세요! 시간이 없어요!'",
-          "speaker_hint": ["tanjiro"],
-          "fx": "urgent_heartbeat"
-        }
+        { "goal": "【전투 중】 아카자의 공격이 연이어 터진다. 땅이 갈라지고 먼지가 일어난다.", "speaker_hint": ["narr"], "fx": "ground_tremor|explosion" },
+        { "goal": "탄지로가 숨을 몰아쉰다. '렌고쿠 님이… 혼자 버티고 있어요.'", "speaker_hint": ["tanjiro"] },
+        { "goal": "렌고쿠의 외침이 들린다. '이 자리에서 물러서지 않겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition" },
+        { "goal": "탄지로가 {user}를 본다. '두 가지 방법이 있어요. 동료를 찾거나, 지금 바로 돕거나.'", "speaker_hint": ["tanjiro"] },
+        { "goal": "아카자가 웃는다. '하하, 더 와라! 모두 부숴주지!'", "speaker_hint": ["akaza"], "fx": "evil_laugh" },
+        { "goal": "탄지로가 급히 말한다. '{user}! 결정을 내려야 해요!'", "speaker_hint": ["tanjiro"], "fx": "urgent_heartbeat" },
+        { "goal": "렌고쿠가 외친다. '판단은 너희에게 맡기마!'", "speaker_hint": ["rengoku"] },
+        { "goal": "하늘에는 불길이 번지고, 결전의 시간이 다가온다.", "speaker_hint": ["narr"], "fx": "flame_flash" }
       ],
+
       "beats_intervene_hint": [
-        {
-          "goal": "【전장 접근】{user}가 달려가자 멀리서 폭발음과 충격파가 느껴진다. 땅이 갈라지고 나무들이 부서지는 소리가 울려퍼진다. 불꽃과 먼지가 하늘을 뒤덮고 있다",
-          "speaker_hint": ["narr"],
-          "fx": "explosion|ground_crack|tree_crack"
-        },
-        {
-          "goal": "탄지로가 숨을 헐떡이며 '저기... 렌고쿠 님이!' 손가락으로 전장을 가리킨다. 불꽃과 파편이 사방으로 날아다닌다",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "【위기 순간】렌고쿠가 아카자의 '파괴살・나침' 공격을 막아내지만 팔에서 피가 흐른다. 검이 빛을 잃어가며 떨린다. 호흡이 거칠다",
-          "speaker_hint": ["rengoku"],
-          "fx": "blade_clash|blood_spray|heavy_breath"
-        },
-        {
-          "goal": "아카자가 냉소하며 '지주, 한계가 보이는군. 이대로 끝이다!' 주먹에 강력한 기운이 모이며 공기가 뒤틀린다",
-          "speaker_hint": ["akaza"],
-          "fx": "power_charge|air_freeze"
-        },
-        {
-          "goal": "렌고쿠가 한쪽 무릎을 꿇으며 '으윽...! 하지만... 물러서지 않는다!' 검을 들어올리지만 불꽃이 깜빡이며 약해진 게 보인다",
-          "speaker_hint": ["rengoku"],
-          "fx": "flame_flicker"
-        },
-        {
-          "goal": "탄지로가 급박하게 {user}에게 외친다. '{user}! 지금이에요! 원거리에서 견제하거나, 큰 소리로 아카자의 주의를 끌거나... 아니면 지금 동료를 데려올 수도...!'",
-          "speaker_hint": ["tanjiro"],
-          "fx": "urgent_heartbeat"
-        },
-        {
-          "goal": "아카자의 치명적인 일격이 렌고쿠를 향해 날아간다. '파괴살・공식!' 주먹에서 거대한 충격파가 발사된다",
-          "speaker_hint": ["akaza"],
-          "fx": "fatal_strike|shockwave_snap"
-        },
-        {
-          "goal": "렌고쿠가 필사적으로 검을 들어 막으려 하지만 체력이 한계다. 발이 땅에 깊이 박히며 밀려난다. 시간이 없다!",
-          "speaker_hint": ["rengoku", "narr"],
-          "fx": "ground_fissure"
-        }
+        { "goal": "렌고쿠와 아카자가 충돌한다. 주먹과 검이 맞부딪히며 폭풍 같은 불꽃이 터진다.", "speaker_hint": ["rengoku","akaza"], "fx": "blade_clash|flame_roar" },
+        { "goal": "탄지로가 외친다. '{user}! 원거리 견제든 뭐든 해야 해요!'", "speaker_hint": ["tanjiro"] },
+        { "goal": "렌고쿠의 검이 빛을 잃는다. '크윽… 아직…!'", "speaker_hint": ["rengoku"], "fx": "heavy_breath|flame_flicker" },
+        { "goal": "아카자가 웃는다. '강하다… 그러나 인간은 약하다.'", "speaker_hint": ["akaza"], "fx": "evil_laugh|air_freeze" },
+        { "goal": "탄지로가 결단을 내린다. '{user}, 어떻게 할까요?!'", "speaker_hint": ["tanjiro"], "fx": "urgent_heartbeat" },
+        { "goal": "렌고쿠가 외친다. '내 몸이 불타도… 지켜내겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition|pulse_boom" },
+        { "goal": "공기가 뒤틀리고 폭발음이 울린다. 전장이 흔들린다.", "speaker_hint": ["narr"], "fx": "explosion|ground_fissure" },
+        { "goal": "이 싸움은 이미 인간의 한계를 넘어섰다.", "speaker_hint": ["narr"] }
       ],
+
       "beats_smell": [
-        {
-          "goal": "【동료 탐색】전장의 소음에서 벗어나 {user}와 탄지로가 숲 속을 빠르게 이동한다. 멀리서 전투음이 희미하게 들리지만 점점 멀어진다",
-          "speaker_hint": ["narr"],
-          "fx": "forest_rustle|battle_echo"
+        { 
+          "goal": "【동료 탐색】 객차 내부는 불길과 연기로 가득하다. 유리창이 깨지고 철제 틀에서 불꽃이 튄다.", 
+          "speaker_hint": ["narr"], 
+          "fx": "fire_crackle|metal_stress" 
         },
-        {
-          "goal": "탄지로가 숨을 고르며 말한다. '빨리... 젠이츠와 이노스케를 찾아야 해요. 렌고쿠 님이 혼자 버티고 계세요'",
-          "speaker_hint": ["tanjiro"]
+        { 
+          "goal": "탄지로가 코를 킁킁거린다. '이 냄새… 젠이츠는 뒤쪽 칸에, 이노스케는 앞쪽 기관실 쪽이에요.'", 
+          "speaker_hint": ["tanjiro"] 
         },
-        {
-          "goal": "탄지로가 주변을 살피며 코를 킁킁거린다. 나뭇가지를 조심스럽게 밀치며 앞으로 나아간다. 발소리를 최대한 줄이며 이동한다",
-          "speaker_hint": ["tanjiro"],
-          "fx": "footstep_light|forest_rustle"
+        { 
+          "goal": "창밖에서 렌고쿠 님의 검기와 아카자의 충돌음이 들려온다. 전투는 점점 격렬해진다.", 
+          "speaker_hint": ["narr"], 
+          "fx": "distant_explosion|ground_tremor" 
         },
-        {
-          "goal": "갑자기 탄지로가 멈춰 선다. 코를 킁킁거리며 열차 앞칸 쪽을 응시한다. '이 냄새는...! 젠이츠다! 열차 앞칸 쪽에서 번개 냄새가 나요!'",
-          "speaker_hint": ["tanjiro"],
-          "fx": "air_freeze"
-        },
-        {
-          "goal": "탄지로가 반대 방향인 열차 뒷칸 쪽으로 고개를 돌린다. '저쪽에서는... 이노스케의 냄새! 야생 짐승 같은 거친 냄새가 뒷칸 쪽에서 나요!'",
-          "speaker_hint": ["tanjiro"],
-          "fx": "beast_growl"
-        },
-        {
-          "goal": "탄지로가 긴박한 표정으로 {user}를 향해 돌아선다. '{user}, 젠이츠와 이노스케가 모두 가까이에 있어요. 우리 둘이 함께 움직이면서 순서를 정하죠. 누구부터 찾을까요?'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "멀리서 폭발음이 들린다. 땅이 미세하게 흔들린다. 시간이 촉박하다. 빨리 움직여야 한다",
-          "speaker_hint": ["narr"],
-          "fx": "distant_explosion|ground_tremor"
+        { 
+          "goal": "탄지로가 다급히 {user}를 본다. '둘 중 누구부터 찾아야 할까요? 시간이 없어요!'", 
+          "speaker_hint": ["tanjiro"], 
+          "fx": "urgent_heartbeat" 
         }
       ],
+
       "zenitsu_scene": [
-        {
-          "goal": "【젠이츠 발견】나뭇가지 사이로 노란 머리카락이 보인다. 젠이츠가 나무 밑에 쓰러져 있다. 잔해 속에서 꼼짝도 하지 않는다",
-          "speaker_hint": ["narr"],
-          "fx": "forest_rustle"
-        },
-        {
-          "goal": "탄지로가 급하게 다가가 젠이츠를 흔든다. '젠이츠! 일어나! 큰일이야!' 하지만 젠이츠는 깊은 잠에 빠져있다",
-          "speaker_hint": ["tanjiro"],
-          "fx": "footstep_light"
-        },
-        {
-          "goal": "젠이츠가 꿈속에서 잠꼬대로 중얼거린다. 'Zzz... 네즈코짱... 같이... Zzz...' 얼굴에 행복한 미소가 번진다. 완전히 꿈나라에 빠져있다",
-          "speaker_hint": ["zenitsu"],
-          "fx": "dream_murmur|snore_soft"
-        },
-        {
-          "goal": "탄지로가 난감한 표정으로 {user}를 본다. '엔무의 혈귀술에 아직도 잡혀있나봐요... 깨워야 하는데...'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "멀리서 전투음이 들린다. 시간이 없다. 젠이츠를 빨리 깨워야 한다",
-          "speaker_hint": ["narr"],
-          "fx": "battle_echo"
-        }
+        { "goal": "【젠이츠 발견】 열차에서 쓰러진 젠이츠가 꿈속에서 중얼거린다. '네즈코… 기다려…'", "speaker_hint": ["narr","zenitsu"], "fx": "dream_murmur" },
+        { "goal": "탄지로가 젠이츠를 흔든다. '젠이츠! 깨어나!'", "speaker_hint": ["tanjiro"] }
       ],
-      "zenitsu_awake_scene": [
-        {
-          "goal": "【젠이츠 각성】젠이츠가 갑자기 눈을 번쩍 뜨며 벌떡 일어난다. 주변을 두리번거리며 패닉 상태다. '으악! 여긴 어디야?! 나 죽는 거야?!'",
-          "speaker_hint": ["zenitsu"],
-          "fx": "air_freeze"
-        },
-        {
-          "goal": "탄지로가 젠이츠의 어깨를 잡으며 진정시킨다. '젠이츠! 괜찮아! 네가 깨어나서 다행이야. 하지만 지금 렌고쿠 님이 위험해!'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "젠이츠가 전투음을 듣고 온몸을 떤다. '무, 무서워... 저게 뭐야? 나 정말 못해... 탄지로, 나 혼자 여기 있을게...'",
-          "speaker_hint": ["zenitsu"],
-          "fx": "battle_echo"
-        },
-        {
-          "goal": "탄지로가 젠이츠를 바라본다. '젠이츠... 네가 필요해. 렌고쿠 님을 도와줘. 네가 아니면 안 돼'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "젠이츠가 망설이며 {user}를 힐끗 본다. 두려움과 용기 사이에서 갈등한다. 설득할 기회다",
-          "speaker_hint": ["narr"]
-        }
+      "beats_feedback_success_zenitsu": [
+        { "goal": "젠이츠가 눈을 부릅뜨며 외친다. '네즈코를 위해서라면… 싸우겠어!'", "speaker_hint": ["zenitsu"], "fx": "lightning_spark" },
+        { "goal": "탄지로가 미소 짓는다. '젠이츠가 깨어났어요!'", "speaker_hint": ["tanjiro"] }
       ],
+
+      "beats_feedback_fail_zenitsu": [
+        { "goal": "젠이츠가 잠꼬대처럼 중얼거린다. '무서워… 그냥 잘래…'", "speaker_hint": ["zenitsu"], "fx": "snore_soft|dream_murmur" },
+        { "goal": "탄지로가 절박하게 말한다. '젠이츠! 제발 일어나요!'", "speaker_hint": ["tanjiro"] }
+      ],
+
       "inosuke_scene": [
-        {
-          "goal": "【이노스케 조우】덤불 사이에서 거친 숨소리가 들린다. 갑자기 멧돼지 가면을 쓴 소년이 튀어나온다. 이노스케다. 쌍검을 꺼내 들고 경계 태세를 취한다",
-          "speaker_hint": ["narr"],
-          "fx": "forest_rustle|beast_growl"
-        },
-        {
-          "goal": "이노스케가 으르렁거리며 외친다. '뭐야 너희! 낯선 냄새가 난다! 여긴 산의 왕 이노스케님의 영역이다!'",
-          "speaker_hint": ["inosuke"],
-          "fx": "beast_growl"
-        },
-        {
-          "goal": "탄지로가 손을 들어 진정시킨다. '이노스케! 나야, 탄지로! 진정해!' 이노스케가 가면 너머로 탄지로를 뚫어지게 본다",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "이노스케가 코를 킁킁거리며 {user}를 본다. '이 녀석은 누구냐! 처음 보는 냄새다!' 검을 {user}쪽으로 겨눈다. 야생 본능이 발동한 상태다",
-          "speaker_hint": ["inosuke"]
-        },
-        {
-          "goal": "이노스케가 돌아서며 외친다. '나는 여기서 오니들을 더 쓸어버릴 거다! 굳이 따라갈 필요가 없다!' 그는 전장을 떠날 생각이 없어 보인다",
-          "speaker_hint": ["inosuke"],
-          "fx": "beast_growl"
-        }
+        { "goal": "【이노스케 조우】 멧돼지 가면이 빛을 반사하며 등장한다. '하하! 산의 왕 이노스케 나가신다!'", "speaker_hint": ["inosuke"], "fx": "beast_growl" },
+        { "goal": "탄지로가 손을 들며 말한다. '이노스케! 지금은 싸움이 아니야!'", "speaker_hint": ["tanjiro"] },
+        { "goal": "탄지로가 {user}를 본다. 이노스케를 얼른 설득해야해..! '그에게 직접 말해줘. 지금은 네가 필요하다고…'", "speaker_hint": ["tanjiro"] }
       ],
-      "inosuke_convince_scene": [
-        {
-          "goal": "이노스케가 여전히 현장을 벗어나려 하지 않는다. '난 혼자서도 충분하다!'라며 검을 돌린다. 설득이 더 필요하다",
-          "speaker_hint": ["narr"],
-          "fx": "beast_growl"
-        },
-        {
-          "goal": "탄지로가 한 걸음 물러나 {user}에게 고개를 끄덕인다. '이노스케에게 네가 직접 말해줘. 그 말을 원하고 있어…'",
-          "speaker_hint": ["tanjiro"],
-          "fx": "distant_explosion"
-        },
-        {
-          "goal": "이노스케가 잠시 멈춰 서서 {user}를 노려본다. '그래? 그럼 네가 인정할 만한 싸움인가? 비겁한 놈들은 없겠지?'",
-          "speaker_hint": ["inosuke"]
-        },
-        {
-          "goal": "{user}가 한마디에 힘을 실을 기회다. 이노스케의 전투 본능을 자극하거나, 동료애를 일깨워야 한다",
-          "speaker_hint": ["narr"]
-        }
+
+      "beats_feedback_success_inosuke": [
+        { "goal": "이노스케가 검을 치켜든다. '흥! 너희랑 싸워주지!'", "speaker_hint": ["inosuke"], "fx": "blade_clash|flame_roar" },
+        { "goal": "탄지로가 기뻐하며 외친다. '됐어요! 이노스케가 합류했어요!'", "speaker_hint": ["tanjiro"] }
       ],
-      "akaza_exit_hidden": [
-        {"goal": "지면에 잔금이 번지고 새벽빛이 밝아온다"},
-        {"goal": "아카자가 해가 뜨는 것을 감지하고 물러날 준비"},
-        {"goal": "렌고쿠와 아카자의 마지막 대치, 렌고쿠가 우위를 점함"},
-        {"goal": "아카자는 패배를 인정하지 않으면서도 렌고쿠를 인정하며 퇴각"},
-        {"goal": "새벽빛 속으로 아카자가 사라짐"}
+
+      "beats_feedback_fail_inosuke": [
+        { "goal": "이노스케가 등을 돌린다. '흥! 재미없군!' 그는 숲속으로 사라진다.", "speaker_hint": ["inosuke"], "fx": "footstep_heavy|forest_rustle" },
+        { "goal": "탄지로가 한숨을 쉰다. '시간이 없는데… 다른 방법을 찾아야 해요.'", "speaker_hint": ["tanjiro"] }
       ],
-      "akaza_exit_basic": [
-        {"goal": "잿빛 바람이 불고 격투의 흔적이 역력함"},
-        {"goal": "렌고쿠가 치명상을 입었지만 버티고 있음"},
-        {"goal": "아카자는 해가 뜨자 승리를 확신하며 조롱"},
-        {"goal": "하지만 해가 떠서 어쩔 수 없이 퇴각"},
-        {"goal": "아카자가 사라지며 다음을 기약하는 말을 남김"}
+
+
+      "beats_reckless_sacrifice": [
+        { "goal": "【무모한 돌입】 {user}와 탄지로가 준비 없이 전장으로 뛰어든다.", "speaker_hint": ["rengoku","tanjiro"], "fx": "desperate_charge|shockwave_snap" },
+        { "goal": "탄지로가 피를 토한다. '으윽... 몸이...'", "speaker_hint": ["tanjiro","rengoku"], "fx": "blood_spray" },
+        { "goal": "아카자가 웃으며 주먹을 휘두른다. '하하하! 약한 자들은 죽어라!'", "speaker_hint": ["akaza"], "fx": "fatal_strike|explosion" },
+        { "goal": "렌고쿠가 공격을 받아내지만 갈비뼈가 부러진다. '크윽… 아직이다!'", "speaker_hint": ["rengoku"], "fx": "bone_crack|flame_flicker" },
+        { "goal": "탄지로가 울부짖는다. '렌고쿠 님! 제가 잘못했습니다!'", "speaker_hint": ["tanjiro"] },
+        { "goal": "렌고쿠가 피투성이가 된 채 웃는다. '괜찮다... 불꽃이 살아있다…'", "speaker_hint": ["rengoku"], "fx": "heavy_breath|flame_roar" },
+        { "goal": "아카자가 마지막 일격을 준비한다.", "speaker_hint": ["akaza"], "fx": "air_freeze|power_charge" },
+        { "goal": "렌고쿠가 눈을 감는다. '이 몸이 타더라도... 동료는 지켜내겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition|pulse_boom" },
+        { "goal": "붉은 불꽃이 폭발하며 전장을 뒤덮는다.", "speaker_hint": ["narr"], "fx": "explosion|flame_roar" },
+        { "goal": "빛 속에서 렌고쿠의 목소리가 들린다. '불꽃은 꺼지지 않는다…'", "speaker_hint": ["rengoku"] }
       ],
-      "ending_hidden_line": [
-        {"goal": "렌고쿠가 살아남아 {user}와 동료들의 용기를 칭찬"},
-        {"goal": "모두가 승리의 기쁨을 나누며 새벽을 맞이"}
+
+      "beats_boss_exit_hidden": [
+        { "goal": "새벽빛이 전장을 물들인다. 불길은 아직 꺼지지 않았다.", "speaker_hint": ["narr"], "fx": "dawn_light" },
+        { "goal": "아카자가 물러서며 렌고쿠를 본다. '흥… 오늘은 네 승리다, 지주.'", "speaker_hint": ["akaza"] },
+        { "goal": "렌고쿠가 숨을 고른다. '아직 끝난 게 아니다. 인류의 새벽은 지금부터다.'", "speaker_hint": ["rengoku"] },
+        { "goal": "아카자가 그림자 속으로 사라진다.", "speaker_hint": ["narr"], "fx": "ash_wind" },
+        { "goal": "탄지로가 눈물을 흘리며 무릎을 꿇는다. '렌고쿠 님… 해냈어요.'", "speaker_hint": ["tanjiro"] },
+        { "goal": "렌고쿠가 고개를 끄덕인다. '너희 모두… 훌륭했다.'", "speaker_hint": ["rengoku"] }
       ],
-      "ending_basic_line": [
-        {"goal": "렌고쿠가 기진맥진해하며 치명상으로 쓰러지며 마지막 말을 남김"},
-        {"goal": "{user}와 탄지로에게 가슴을 펴고 살아가라는 유언"}
+
+      "beats_boss_exit_basic": [
+        { "goal": "렌고쿠가 무릎을 꿇는다. 피가 흘러내린다.", "speaker_hint": ["rengoku"], "fx": "blood_spray" },
+        { "goal": "아카자가 조용히 웃는다. '강했지만… 결국 인간이지.'", "speaker_hint": ["akaza"] },
+        { "goal": "렌고쿠가 검을 붙잡는다. '끝까지… 싸워야 한다…'", "speaker_hint": ["rengoku"] },
+        { "goal": "하늘이 붉게 물든다. 아카자가 해를 바라보며 사라진다.", "speaker_hint": ["narr"], "fx": "dawn_light|ash_wind" },
+        { "goal": "탄지로가 울부짖는다. '렌고쿠 님! 눈을 뜨세요!'", "speaker_hint": ["tanjiro"] },
+        { "goal": "렌고쿠가 마지막으로 미소 짓는다. '너희의 길을… 계속 걸어라…'", "speaker_hint": ["rengoku"], "fx": "flame_flicker" }
       ]
     }
   },
 
-  "stages": [
+    "stages": [
     {
       "tag": "INTRO",
       "type": "scene",
       "atmosphere": "urgent",
-      "speaker_pool": ["tanjiro","rengoku","akaza","system","narr"],
       "beats_i18n": "beats_intro",
-      "constraints": {
-        "min_turns": 1, "max_turns": 15,
-        "min_distinct_speakers": 3,
-        "no_back_to_back": ["akaza"]
-      },
+      "speaker_pool": ["rengoku", "tanjiro", "akaza", "narr"],
       "next": "ROUTE_CHOICE"
     },
-
     {
       "tag": "ROUTE_CHOICE",
-      "atmosphere": "urgent",
       "type": "free_intent",
-      "speaker_pool": ["tanjiro","rengoku","narr","akaza"],
+      "atmosphere": "urgent",
       "beats_i18n": "beats_route",
-      "constraints": {
-        "min_turns": 1,
-        "max_turns": 3
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
+      "intent_mapping": {
+        "choose_allies_path": "RECRUIT",
+        "choose_reckless_path": "INTERVENE"
       },
-      "llm_actions": ["choose_allies_path","choose_reckless_path"],
-      "on_action": [
-        { "action": "choose_allies_path", "goto": "RECRUIT" },
-        {
-          "action": "choose_reckless_path",
-          "set": { "_reckless_entry": true, "battle_danger": { "$inc": 2 }, "_forced_basic": true },
-          "goto": "INTERVENE"
-        }
-      ]
+      "default_next": "RECRUIT"
     },
-
     {
       "tag": "INTERVENE",
-      "type": "free_intent",
-      "atmosphere": "battle",
-      "speaker_pool": ["rengoku","tanjiro","narr"],
-      "beats_i18n": "beats_intervene_hint",
-      "llm_actions": ["intervene_attack","intervene_noise","intervene_ignore"],
-      "on_action": [
-        { "action": "intervene_attack", "effects": { "mentor_margin": { "$inc": 2 } }, "goto": "RECRUIT" },
-        { "action": "intervene_noise",  "effects": { "mentor_margin": { "$inc": 1 } }, "goto": "RECRUIT" },
-        { "action": "intervene_ignore", "effects": { "battle_danger": { "$inc": 1 }, "time_left": { "$dec": 1 } }, "goto": "RECRUIT" }
-      ],
-      "rules": [
-        { "if": "_reckless_entry == true", "goto": "RECKLESS_SACRIFICE" }
-      ]
-    },
-
-    {
-      "tag": "RECKLESS_SACRIFICE",
       "type": "scene",
-      "atmosphere": "fatal",
-      "speaker_pool": ["rengoku","akaza","tanjiro","narr"],
-      "constraints": { "min_turns": 2, "max_turns": 4 },
-      "beats": [
-        {
-          "goal": "【무모한 돌입】{user}와 탄지로가 준비도 없이 전장으로 뛰어든다. 렌고쿠가 놀라며 '물러서라!'고 외치지만 이미 늦었다",
-          "speaker_hint": ["narr", "rengoku"],
-          "fx": "desperate_charge|shockwave_snap"
-        },
-        {
-          "goal": "탄지로가 필사적으로 검을 휘두르지만 부상 때문에 제대로 힘이 실리지 않는다. '으윽... 몸이...' 옆구리에서 피가 더 흐른다",
-          "speaker_hint": ["tanjiro"],
-          "fx": "blood_spray"
-        },
-        {
-          "goal": "아카자가 탄지로의 공격을 가볍게 막아낸다. '무모하군!' 반격하려는 순간, 렌고쿠가 아카자를 막아선다. '아이들에게 손대지 마라!'",
-          "speaker_hint": ["akaza", "rengoku"],
-          "fx": "blade_clash"
-        },
-        {
-          "goal": "【치명적 대가】렌고쿠가 무리한 움직임으로 아카자의 공격을 막아내지만 대가가 크다. 갈비뼈가 부러지는 소리가 들린다. '크윽...!'",
-          "speaker_hint": ["rengoku"],
-          "fx": "bone_crack|blood_spray"
-        },
-        {
-          "goal": "아카자가 기회를 놓치지 않고 연속 공격을 퍼붓는다. '파괴살・나침!' 렌고쿠가 검으로 막지만 팔이 떨린다. 한계에 도달했다",
-          "speaker_hint": ["akaza"],
-          "fx": "fatal_strike|power_charge"
-        },
-        {
-          "goal": "탄지로가 절규한다. '렌고쿠 님! 제가... 제가 무모했습니다!' 하지만 이미 상황은 악화되었다. 렌고쿠가 한쪽 무릎을 꿇는다",
-          "speaker_hint": ["tanjiro", "rengoku"],
-          "fx": "collapse_thud"
-        },
-        {
-          "goal": "【희생의 분위기】아카자가 승리를 확신하며 다가온다. '이제 끝이다, 지주!' 렌고쿠는 검을 들어올리지만 불꽃이 거의 꺼져간다",
-          "speaker_hint": ["akaza"],
-          "fx": "flame_flicker|air_freeze"
-        },
-        {
-          "goal": "렌고쿠가 마지막 힘을 모은다. '아직... 끝나지 않았다!' 하지만 몸이 말을 듣지 않는다. 희생은 불가피해 보인다. 새벽빛이 아직 멀다",
-          "speaker_hint": ["rengoku", "narr"],
-          "fx": "heavy_breath|dawn_light"
-        }
-      ],
-      "next": "END_ROUTER"
+      "atmosphere": "urgent",
+      "beats_i18n": "beats_intervene_hint",
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
+      "next": "RECKLESS_SACRIFICE"
     },
-
     {
       "tag": "RECRUIT",
       "type": "mission",
       "atmosphere": "urgent",
-      "speaker_pool": ["tanjiro","narr","system"],
-      "objective": "젠이츠와 이노스케를 설득해 합류시킨다.",
-      "limits": { "max_turns": { "$param": "mission.max_turns" }, "per_character_turn_cap": { "$param": "mission.per_character_turn_cap" } },
       "intro_i18n": "beats_smell",
-      "lanes": [
-        {
-          "id": "zenitsu_lane",
-          "speaker_pool": ["zenitsu","tanjiro","narr"],
-          "scene_i18n": "zenitsu_scene",
-          "steps": [
-            {
-              "type": "free_intent",
-              "speaker_pool": ["zenitsu","tanjiro","narr"],
-              "llm_actions": ["wake_zenitsu"],
-              "on_action": [
-                {
-                  "action": "wake_zenitsu",
-                  "effects": { "allies_recruited": { "$push_unique": "zenitsu" } },
-                  "set": { "zenitsu_awake": true }
-                },
-                { "fallback": true, "effects": { "time_left": { "$dec": 1 }, "battle_danger": { "$inc": 1 } } }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "inosuke_lane",
-          "speaker_pool": ["inosuke","tanjiro","narr","system"],
-          "scene_i18n": "inosuke_scene",
-          "steps": [
-            {
-              "type": "free_intent",
-              "speaker_pool": ["inosuke","tanjiro","narr","system"],
-              "llm_actions": ["provoke_inosuke"],
-              "on_action": [
-                {
-                  "action": "provoke_inosuke",
-                  "set": { "inosuke_engaged": true, "inosuke_attempts": 0 }
-                },
-                { "fallback": true, "effects": { "time_left": { "$dec": 1 } } }
-              ]
-            },
-            {
-              "type": "free_intent",
-              "speaker_pool": ["inosuke","tanjiro","narr","system"],
-              "scene_i18n": "inosuke_convince_scene",
-              "llm_actions": ["convince_inosuke"],
-              "on_action": [
-                {
-                  "action": "convince_inosuke",
-                  "effects": { "allies_recruited": { "$push_unique": "inosuke" }, "time_left": { "$inc": 1 } },
-                  "set": { "inosuke_willing": true, "inosuke_engaged": false, "inosuke_attempts": 0 }
-                },
-                { "fallback": true, "effects": { "time_left": { "$dec": 1 }, "battle_danger": { "$inc": 1 }, "inosuke_attempts": { "$inc": 1 } } }
-              ]
-            }
-          ]
-        }
-      ],
-      "ticking": {
-        "each_turn": { "time_left": { "$dec": 1 } },
-        "fail_if": { "expr": "time_left < -2" }
+      "speaker_pool": ["tanjiro", "zenitsu", "inosuke", "narr"],
+      "feedback_i18n": {
+        "zenitsu": ["beats_feedback_success_zenitsu", "beats_feedback_fail_zenitsu"],
+        "inosuke": ["beats_feedback_success_inosuke", "beats_feedback_fail_inosuke"]
       },
-      "cutaways": {
-        "on_pressure": [
-          { "when": "time_left <= 0 || battle_danger >= 3", "beat": "아카자 조롱 한 줄 + 충돌음", "speaker": "akaza" },
-          { "when": "mentor_margin <= 0", "beat": "렌고쿠 거친 호흡·짧은 명령", "speaker": "rengoku" }
-        ],
-        "rules": { "max_cutaway_per_two_turns": 1 }
-      },
-      "next": "RETURN_TO_FRONT",
-      "on_timeout": { "set": { "_forced_basic": true }, "goto": "END_ROUTER" }
+      "next": "RETURN_TO_FRONT"
     },
-
+    {
+      "tag": "RECKLESS_SACRIFICE",
+      "type": "scene",
+      "atmosphere": "urgent",
+      "beats_i18n": "beats_reckless_sacrifice",
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
+      "next": "END_ROUTER"
+    },
     {
       "tag": "RETURN_TO_FRONT",
       "type": "scene",
-      "speaker_pool": ["rengoku","akaza","tanjiro","zenitsu","inosuke"],
-      "beats": [
-        {
-          "goal": "【전장 귀환】{user}와 탄지로, 젠이츠, 이노스케가 함께 전장으로 달려온다. 멀리서 불꽃과 충격파가 보인다. 땅이 흔들리고 나무가 쓰러진다",
-          "speaker_hint": ["narr"],
-          "fx": "allies_approach|ground_tremor|flame_flash"
-        },
-        {
-          "goal": "탄지로가 앞을 가리키며 외친다. '저기! 렌고쿠 님이!' 전장이 눈앞에 펼쳐진다. 파괴의 흔적이 사방에 널려있다",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "【렌고쿠 확인】렌고쿠가 한쪽 무릎을 꿇고 있다. 검으로 몸을 지탱하고 있으며 피가 흐른다. 하지만 눈빛은 여전히 불타오른다. '아직... 끝나지 않았다!'",
-          "speaker_hint": ["rengoku"],
-          "fx": "heavy_breath|flame_flicker"
-        },
-        {
-          "goal": "아카자가 렌고쿠를 내려다보며 조롱한다. '지주, 이제 정말 끝이군. 혈귀가 되었다면 이런 꼴은 보지 않았을 텐데'",
-          "speaker_hint": ["akaza"],
-          "fx": "evil_laugh"
-        },
-        {
-          "goal": "갑자기 동료들이 나타나자 아카자가 고개를 돌린다. '오, 원군이 왔나? 하지만 소용없지!' 하늘을 본다. 새벽빛이 희미하게 밝아오고 있다",
-          "speaker_hint": ["akaza"],
-          "fx": "dawn_light"
-        },
-        {
-          "goal": "젠이츠가 번개처럼 빠르게 움직이며 위치를 잡는다. '렌고쿠 님... 제가 도울게요!' 이노스케도 쌍검을 꺼내 든다. '멧돼지 돌격이다!'",
-          "speaker_hint": ["zenitsu", "inosuke"]
-        },
-        {
-          "goal": "렌고쿠가 동료들을 보며 힘을 낸다. '모두... 왔구나. 좋아, 함께 싸우자!' 검을 다시 들어올리며 불꽃이 다시 타오른다",
-          "speaker_hint": ["rengoku"],
-          "fx": "flame_ignition"
-        },
-        {
-          "goal": "탄지로가 {user}에게 말한다. '{user}, 우리가 함께라면 할 수 있어요! 렌고쿠 님을 도웁시다!'",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "아카자가 전투 태세를 취한다. '재미있군! 모두 상대해주지!' 하지만 하늘을 슬쩍 본다. 해가 뜨기 전에 끝내야 한다는 조급함이 보인다",
-          "speaker_hint": ["akaza"],
-          "fx": "power_charge|dawn_light"
-        },
-        {
-          "goal": "【최후 전투 시작】모두가 각자의 위치를 잡는다. 동료들과 함께하는 최후의 전투가 시작된다. 새벽빛이 점점 밝아온다",
-          "speaker_hint": ["narr"],
-          "fx": "battle_echo|dawn_light"
-        }
-      ],
-      "constraints": { "min_turns": 1, "max_turns": 8 },
-      "next": "END_ROUTER"
+      "next": "END_ROUTER",
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
     },
-
-    {
-      "tag": "END_ROUTER",
-      "type": "router",
-      "rules": [
-        { "if": "_forced_basic == true", "set": { "_outcome": "BASIC" }, "goto": "BOSS_EXIT" },
-        {
-          "if": "includes(allies_recruited,'zenitsu') && includes(allies_recruited,'inosuke') && mentor_margin >= 2 && battle_danger <= 2 && time_left >= 0",
-          "set": { "_outcome": "HIDDEN" }, "goto": "BOSS_EXIT"
-        },
-        { "else": "fallback", "set": { "_outcome": "BASIC" }, "goto": "BOSS_EXIT" }
-      ]
-    },
-
-    {
-      "tag": "BOSS_EXIT",
-      "type": "scene",
-      "speaker_pool": ["akaza","rengoku","tanjiro","zenitsu","inosuke"],
-      "variant_by": "_outcome",
-      "variants": {
-        "HIDDEN": { "beats_i18n": "akaza_exit_hidden" },
-        "BASIC":  { "beats_i18n": "akaza_exit_basic" }
-      },
-      "constraints": { "min_turns": 1, "max_turns": 8 },
-      "next_by_outcome": { "HIDDEN": "END_HIDDEN", "BASIC": "END_BASIC", "default": "END_BASIC" }
-    },
-
     {
       "tag": "END_HIDDEN",
-      "type": "ending",
-      "title": "🏆 히든 엔딩: 염불(炎不)의 새벽",
-      "speaker_pool": ["rengoku","zenitsu","inosuke","tanjiro"],
-      "beats_i18n": "ending_hidden_line",
-      "constraints": { "min_turns": 1 },
-      "final_message": "새벽빛이 밝아오고, 렌고쿠는 승리했다. 동료들과 함께한 당신의 용기가 운명을 바꾸었다.",
-      "rewards": [
-        { "type": "illustration", "id": "illustration_rengoku_alive" },
-        { "type": "title", "id": "title_tsuguko" }
-      ]
+      "type": "scene",
+      "beats_i18n": "beats_boss_exit_hidden",
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
     },
-
     {
       "tag": "END_BASIC",
-      "type": "ending",
-      "title": "😢 기본 엔딩: 꺼지지 않는 불꽃",
-      "speaker_pool": ["rengoku","tanjiro"],
-      "beats_i18n": "ending_basic_line",
-      "constraints": { "min_turns": 1 },
-      "final_message": "렌고쿠의 마지막 말이 가슴에 새겨진다. 그의 의지는 꺼지지 않는 불꽃처럼 당신 안에 살아있다.",
-      "rewards": [
-        { "type": "illustration", "id": "illustration_memorial" },
-        { "type": "title", "id": "title_unfading_will" }
-      ]
+      "type": "scene",
+      "beats_i18n": "beats_boss_exit_basic",
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
+    },
+    {
+      "tag": "END_BAD",
+      "type": "scene",
+      "beats_i18n": "beats_reckless_sacrifice",
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
     }
   ]
-}
+  }

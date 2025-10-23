@@ -135,7 +135,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           clearInterval(typingInterval);
           resolve();
         }
-      }, 50); // 50ms per character
+      }, 10); // 50ms per character
     });
   };
 
