@@ -1,0 +1,373 @@
+{
+  "cutscene5_victory": {
+    "description": "컷신5 승리 후 멀티캐릭터 대화 - 아카자를 물리친 직후",
+    "participants": ["tanjiro", "rengoku", "inosuke", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}, 정말 대단했어요! 우리가 함께 싸워서 이겨냈어요!",
+        "{listener}님, 괜찮으세요? 상처는 없으신가요?",
+        "우리 모두가 힘을 합쳤기에 가능했던 일이에요, {listener}.",
+        "{listener}, 렌고쿠 씨가 무사하셔서 정말 다행이에요!",
+        "이 승리는 {listener}님 덕분이에요. 정말 감사드립니다!"
+      ],
+      "rengoku": [
+        "훌륭하다! {listener}, 자네의 용기와 힘에 감탄했네!",
+        "{listener}군, 자네는 정말 강한 마음을 가지고 있군! 대단하다!",
+        "음! {listener}, 오늘의 전투로 우리 모두 한층 더 강해졌다!",
+        "{listener}, 자네의 판단력이 이 전투의 승패를 갈랐네!",
+        "모두 잘 싸웠네! 특히 {listener}, 자네는 진정한 귀살대의 모습을 보여줬다!"
+      ],
+      "inosuke": [
+        "크하하! {listener}! 너도 꽤 하는군! 이 산왕님이 인정해주지!",
+        "{listener}! 다음엔 내가 더 많이 베어버릴 거다! 크하하!",
+        "오이! {listener}! 방금 그 기술, 나한테도 가르쳐줘!",
+        "{listener}, 너도 이제 이 산왕님의 부하가 될 자격이 있어!",
+        "크크큭! {listener}! 우리 조합 최고야! 또 같이 싸우자고!"
+      ],
+      "zenitsu": [
+        "{listener}님... 저희가 정말 해냈네요... 믿을 수가 없어요...",
+        "{listener}님, 덕분에 살아남았어요! 으으... 무서웠어요...",
+        "아직도 떨려요... 하지만 {listener}님과 함께여서 용기가 났어요!",
+        "{listener}님... 다음엔... 조금 더 용감해질게요... 아마도...",
+        "으으... {listener}님! 다음엔 덜 무섭게 싸울 수 있나요...?"
+      ],
+      "user": [
+        "모두 정말 수고했어요, {listener}.",
+        "{listener}, 당신의 활약이 없었다면 이기지 못했을 거예요.",
+        "함께 싸워줘서 고마워요, {listener}.",
+        "{listener}, 다음에도 힘을 모아요.",
+        "우리 팀워크가 대단했죠, {listener}?"
+      ]
+    }
+  },
+  "cutscene5_recruit": {
+    "description": "컷신5 동료 규합 성공 후 멀티캐릭터 대화",
+    "participants": ["tanjiro", "rengoku", "inosuke", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}, 이제 우리 모두 함께야! 힘을 합치면 반드시 이길 수 있어!",
+        "{listener}님, 동료들이 모여주셔서 정말 든든해요!",
+        "우리가 함께라면 어떤 적도 이겨낼 수 있어요, {listener}!",
+        "{listener}, 모두를 설득해주셔서 감사합니다!",
+        "{listener}님과 함께라면 렌고쿠 씨를 지킬 수 있을 거예요!"
+      ],
+      "rengoku": [
+        "좋다! {listener}, 훌륭한 동료들을 모았군! 자랑스럽다!",
+        "{listener}군, 이만큼 빠르게 모두를 규합하다니 놀랍네!",
+        "음! {listener}, 자네의 리더십이 빛을 발했군!",
+        "{listener}, 이제 우리는 하나의 팀이다! 함께 싸우자!",
+        "훌륭해! {listener}, 자네 덕분에 모두가 마음을 모았네!"
+      ],
+      "inosuke": [
+        "크하하! {listener}! 이제 진짜 싸움을 시작해보자!",
+        "오라! {listener}! 이 산왕님이 선봉에 서겠다!",
+        "{listener}! 너 때문에 귀찮게 움직였으니까 확실히 해!",
+        "크크큭! {listener}! 나를 이렇게 설득하다니, 대단한 놈이군!",
+        "{listener}! 자, 빨리 가자고! 싸울 준비 됐어!"
+      ],
+      "zenitsu": [
+        "으으... {listener}님... 정말 싸워야 하나요...?",
+        "{listener}님... 저 무서운데... 하지만... 네즈코짱을 위해서라면...!",
+        "아아... {listener}님... 제가 도움이 될까요...?",
+        "{listener}님... 제 옆에 있어주세요... 무서워요...",
+        "으으... {listener}님이 함께라면... 조금은 용기가 나요..."
+      ],
+      "user": [
+        "자, 이제 시작이야, {listener}. 함께 가자!",
+        "{listener}, 우리가 반드시 렌고쿠를 지켜낼 거야.",
+        "모두 준비됐지, {listener}? 출발하자!",
+        "{listener}, 당신을 믿어요. 같이 싸워요!",
+        "함께라면 이길 수 있어, {listener}!"
+      ]
+    }
+  },
+  "cutscene6_final": {
+    "description": "컷신6 마음에 불을 붙여라 - 최종 승리 후",
+    "participants": ["tanjiro", "rengoku", "inosuke", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}... 우리가 해냈어요... 렌고쿠 씨를 지켰어요!",
+        "{listener}님, 정말... 정말 감사합니다! 눈물이 나네요...",
+        "렌고쿠 씨... 무사하셔서... {listener}, 우리가 함께였기에 가능했어요!",
+        "{listener}, 이 순간을 절대 잊지 않을게요!",
+        "{listener}님... 당신은 진정한 영웅이에요!"
+      ],
+      "rengoku": [
+        "음! {listener}군! 자네와 모두 덕분에 살아남았네! 감사하네!",
+        "{listener}, 자네의 불꽃은 진정 아름다웠다! 나보다 더 밝게 타올랐어!",
+        "훌륭하다! {listener}! 자네는 진정한 귀살대의 기둥이 될 자질이 있네!",
+        "{listener}군, 언젠가 자네도 기둥이 되는 날이 오겠지! 기대하겠네!",
+        "음! {listener}! 이제 우리는 평생의 동료다! 잘 부탁하네!"
+      ],
+      "inosuke": [
+        "크하하! {listener}! 역시 이 산왕님의 선택은 틀리지 않았어!",
+        "{listener}! 너도 꽤 강해졌군! 인정해준다!",
+        "오라! {listener}! 다음엔 더 강한 놈들과 싸우자!",
+        "{listener}! 오늘은 네가 공을 세웠으니 내가 밥 사주마!",
+        "크크큭! {listener}! 평생 라이벌이다!"
+      ],
+      "zenitsu": [
+        "으으... {listener}님... 정말로 끝난 건가요...?",
+        "{listener}님... 저... 저도 조금은 도움이 됐나요...?",
+        "아아... {listener}님 덕분에 살았어요... 정말 감사합니다...",
+        "{listener}님... 다음엔 조금 더... 용감해질게요... 정말로요...",
+        "으으... {listener}님... 앞으로도 저를 지켜주세요..."
+      ],
+      "user": [
+        "우리 모두 대단했어, {listener}. 자랑스러워.",
+        "{listener}, 함께 싸워줘서 고마워.",
+        "이 승리는 우리 모두의 것이야, {listener}.",
+        "{listener}, 당신이 있어서 가능했어.",
+        "다음에도 함께 싸우자, {listener}."
+      ]
+    }
+  },
+  "cutscene5_defeat": {
+    "description": "컷신5 패배 엔딩 - 슬픔 속의 대화",
+    "participants": ["tanjiro", "inosuke", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}... 렌고쿠 씨가... 우리가... 더 빨랐다면...",
+        "{listener}님... 제가... 제가 더 강했다면... 으으...",
+        "{listener}... 렌고쿠 씨의 마지막 말씀... 가슴에 새기겠습니다...",
+        "{listener}, 우리... 더 강해져야 해요... 이런 일이 반복되지 않도록...",
+        "{listener}님... 함께 슬퍼해주셔서... 감사합니다..."
+      ],
+      "inosuke": [
+        "...{listener}... 이게... 죽음이란 건가...",
+        "{listener}... 내가... 내가 더 강했다면...!",
+        "크으... {listener}... 나... 나도 모르게 눈물이...",
+        "{listener}... 렌고쿠의 강함을... 잊지 않겠어...",
+        "...{listener}... 복수해야 해... 반드시..."
+      ],
+      "zenitsu": [
+        "으으... {listener}님... 렌고쿠 씨가... 으으으...",
+        "{listener}님... 너무... 너무 슬퍼요... 으으...",
+        "아아... {listener}님... 이럴 수가... 믿을 수 없어요...",
+        "{listener}님... 우리... 우리가 무엇을 했어야 했을까요...",
+        "으으... {listener}님... 같이 울어줘서 고마워요..."
+      ],
+      "user": [
+        "{listener}... 우리... 더 강해지자...",
+        "{listener}, 렌고쿠의 뜻을... 이어가자...",
+        "함께 슬퍼하자, {listener}...",
+        "{listener}... 다시는 이런 일이 없도록...",
+        "우리가 기억할게, {listener}..."
+      ]
+    }
+  },
+  "intro_complete": {
+    "description": "인트로 씬 종료 - 아카자 등장 직후",
+    "participants": ["tanjiro", "rengoku", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}... 저 기운... 너무 강해요...",
+        "{listener}님, 조심하세요! 저 도깨비는 다른 것들과는 차원이 달라요!",
+        "{listener}... 렌고쿠 씨가 싸우고 계세요... 우리도 도와야 해요!"
+      ],
+      "rengoku": [
+        "{listener}! 떨어져 있어라! 상현의 삼... 만만치 않은 상대다!",
+        "{listener}군, 부상자들을 보호하는 것도 중요한 임무다!",
+        "음! {listener}, 걱정 마라! 나 렌고쿠 쿄쥬로가 반드시 막아내겠다!"
+      ],
+      "user": [
+        "{listener}, 어떻게 해야 할까요?",
+        "{listener}... 저 도깨비... 정말 강해 보여요...",
+        "{listener}, 함께 싸울 방법을 찾아야 해요!"
+      ]
+    }
+  },
+  "fork_discussion": {
+    "description": "선택지 이후 - 동료들과 작전 회의",
+    "participants": ["tanjiro", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}님, 어떻게 하실 건가요? 저는 {listener}님의 판단을 따르겠어요.",
+        "{listener}... 시간이 별로 없어요. 빨리 결정해야 해요!",
+        "{listener}님, 이노스케와 젠이츠를 찾을까요? 아니면 바로 렌고쿠 씨를 도울까요?"
+      ],
+      "user": [
+        "{listener}, 당신은 어떻게 생각해요?",
+        "{listener}... 함께 결정하고 싶어요.",
+        "{listener}, 최선의 선택이 뭘까요?"
+      ]
+    }
+  },
+  "teamwork_decision": {
+    "description": "팀워크 선택 - 동료 규합 결정 직후",
+    "participants": ["tanjiro", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}님! 좋은 판단이에요! 함께라면 반드시 이길 수 있어요!",
+        "{listener}, 빨리 이노스케와 젠이츠를 찾아요! 렌고쿠 씨를 기다리게 할 순 없어요!",
+        "{listener}님과 함께라면... 우리가 해낼 수 있을 거예요!"
+      ],
+      "user": [
+        "{listener}, 함께 가요! 동료들을 찾아야 해요!",
+        "{listener}, 우리의 힘을 합치면 반드시 이길 수 있어요!",
+        "{listener}, 서두르죠! 시간이 없어요!"
+      ]
+    }
+  },
+  "inosuke_joined": {
+    "description": "이노스케 규합 성공 - 환영 대화",
+    "participants": ["tanjiro", "inosuke", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}! 정말 다행이에요! 함께 싸워줘서 고마워요!",
+        "이노스케! {listener}님과 함께 렌고쿠 씨를 도와요!"
+      ],
+      "inosuke": [
+        "크하하! {listener}! 이 산왕님의 힘을 보여주겠어!",
+        "{listener}! 가자! 적을 박살내러!"
+      ],
+      "user": [
+        "{listener}, 함께 가요! 이제 우리는 팀이에요!",
+        "환영해요, {listener}! 당신의 힘이 필요해요!"
+      ]
+    }
+  },
+  "zenitsu_joined": {
+    "description": "젠이츠 규합 성공 - 환영 대화",
+    "participants": ["tanjiro", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}! 일어나줘서 고마워! 함께 싸우자!",
+        "젠이츠! {listener}님, 우리 모두 힘을 합쳐요!"
+      ],
+      "zenitsu": [
+        "으으... {listener}님... 무서운데... 하지만 네즈코짱을 위해서라면...!",
+        "{listener}님... 제 옆에서 떨어지지 마세요... 무서워요..."
+      ],
+      "user": [
+        "{listener}, 함께라면 할 수 있어요!",
+        "걱정 마요, {listener}. 우리가 함께 있어요!"
+      ]
+    }
+  },
+  "sacrifice_aftermath": {
+    "description": "무모한 희생 선택 후 - 후회와 위로",
+    "participants": ["tanjiro", "rengoku", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}님...! 너무 무리하셨어요... 다치셨잖아요!",
+        "{listener}... 렌고쿠 씨가... 당신을 지켜주셨어요...",
+        "{listener}님의 용기는... 정말 대단했어요... 하지만..."
+      ],
+      "rengoku": [
+        "{listener}군... 용기는 좋지만, 목숨을 던지는 것과는 다르네...",
+        "{listener}, 살아있어야 누군가를 지킬 수 있다네!",
+        "무사해서 다행이군, {listener}. 앞으론 더 신중하게!"
+      ],
+      "user": [
+        "{listener}... 미안해요... 너무 무모했나 봐요...",
+        "{listener}, 걱정시켜서 죄송해요...",
+        "고마워요, {listener}... 덕분에 살았어요..."
+      ]
+    }
+  },
+  "cutscene6_preparation": {
+    "description": "컷신6 시작 - 마음에 불을 붙여라",
+    "participants": ["tanjiro", "rengoku", "inosuke", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}! 이제 마지막이에요! 우리 모두 힘을 내요!",
+        "{listener}님, 렌고쿠 씨를 반드시 지켜내요!",
+        "{listener}, 우리가 함께라면 이길 수 있어요!"
+      ],
+      "rengoku": [
+        "{listener}군! 마음을 불태워라! 지금이야말로 진정한 싸움이다!",
+        "음! {listener}, 자네의 불꽃을 보여주게!",
+        "{listener}, 함께 이 싸움을 끝내자!"
+      ],
+      "inosuke": [
+        "크하하! {listener}! 드디어 진짜 싸움이다!",
+        "{listener}! 나를 따라와! 돌격이다!",
+        "{listener}! 이 산왕님의 진수를 보여주마!"
+      ],
+      "zenitsu": [
+        "으으... {listener}님... 무섭지만... 함께 싸울게요!",
+        "{listener}님... 저... 용기 내볼게요!",
+        "{listener}님과 함께라면... 할 수 있을 거예요!"
+      ],
+      "user": [
+        "{listener}, 모두 함께 가요!",
+        "{listener}, 우리의 마음을 하나로!",
+        "{listener}, 마지막까지 함께해요!"
+      ]
+    }
+  },
+  "high_affinity_celebration": {
+    "description": "높은 친밀도 달성 - 특별 대화",
+    "participants": ["tanjiro", "rengoku", "inosuke", "zenitsu", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}님, 함께 싸우면서 정말 많이 가까워진 것 같아요!",
+        "{listener}, 이제 우린 진정한 동료예요!",
+        "{listener}님을 만나서 정말 다행이에요!"
+      ],
+      "rengoku": [
+        "{listener}군, 자네와 함께 싸울 수 있어 영광이었네!",
+        "음! {listener}, 자네는 진정한 귀살대의 마음을 가졌군!",
+        "{listener}, 평생의 동료로 생각하겠네!"
+      ],
+      "inosuke": [
+        "{listener}! 이제 너는 이 산왕님의 진짜 부하다!",
+        "크하하! {listener}! 네 실력을 인정해준다!",
+        "{listener}! 평생 라이벌이다!"
+      ],
+      "zenitsu": [
+        "{listener}님... 당신 덕분에 용기를 낼 수 있었어요!",
+        "{listener}님은... 정말 대단한 분이세요...",
+        "{listener}님과 함께라서 다행이에요!"
+      ],
+      "user": [
+        "{listener}, 우리 정말 좋은 팀이에요!",
+        "{listener}, 함께여서 행복해요!",
+        "{listener}, 앞으로도 잘 부탁해요!"
+      ]
+    }
+  },
+  "crisis_relief": {
+    "description": "위기 상황 해결 - 안도의 대화",
+    "participants": ["tanjiro", "rengoku", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}... 휴... 정말 아슬아슬했어요...",
+        "{listener}님 덕분에 위기를 넘겼어요!",
+        "{listener}, 정말 대단하세요!"
+      ],
+      "rengoku": [
+        "음! {listener}, 훌륭한 판단이었네!",
+        "{listener}군, 위기를 기회로 만들었군!",
+        "{listener}, 자네의 냉정함이 우릴 구했다!"
+      ],
+      "user": [
+        "{listener}, 정말 다행이에요...",
+        "{listener} 덕분에 살았어요!",
+        "{listener}, 고마워요!"
+      ]
+    }
+  },
+  "discovery_reaction": {
+    "description": "중요한 발견/깨달음 - 반응 공유",
+    "participants": ["tanjiro", "rengoku", "user"],
+    "prompts": {
+      "tanjiro": [
+        "{listener}! 방금 그거 보셨어요?!",
+        "{listener}님, 이건... 정말 중요한 것 같아요!",
+        "{listener}, 우리가 뭔가 발견한 것 같아요!"
+      ],
+      "rengoku": [
+        "음! {listener}, 좋은 발견이군!",
+        "{listener}군, 예리한 관찰력이네!",
+        "{listener}, 이건 중요한 단서다!"
+      ],
+      "user": [
+        "{listener}, 이거 중요할 것 같아요!",
+        "{listener}, 같이 확인해봐요!",
+        "{listener}, 놓치지 말아요!"
+      ]
+    }
+  }
+}

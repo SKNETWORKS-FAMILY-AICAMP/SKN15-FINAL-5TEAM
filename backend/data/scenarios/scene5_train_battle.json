@@ -1,0 +1,202 @@
+{
+  "scenario_id": "scene5_train_battle",
+  "title": "무한열차 전투 - 렌고쿠를 구하라",
+  "description": "탈선한 무한열차에서 렌고쿠가 상현삼 아카자와 전투 중. 동료들을 설득하여 구출 작전을 펼쳐야 한다.",
+  "total_max_turns": 15,
+  "stages": {
+    "intro": {
+      "type": "cutscene",
+      "description": "무한열차 탈선 후 상황 파악",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speaker": "tanjiro",
+          "content": "열차가 탈선했어! 모두 괜찮아?",
+          "emotion": "worried"
+        },
+        {
+          "turn": 0,
+          "speaker": "inosuke",
+          "content": "크하하! 이 정도는 아무것도 아니다!",
+          "emotion": "excited"
+        },
+        {
+          "turn": 0,
+          "speaker": "zenitsu",
+          "content": "으아악! 무서워... 혈귀 냄새가 나...",
+          "emotion": "scared"
+        },
+        {
+          "turn": 0,
+          "speaker": "tanjiro",
+          "content": "렌고쿠 씨가 보이지 않아! 찾아야 해!",
+          "emotion": "determined"
+        }
+      ],
+      "next_stage": "fork"
+    },
+
+    "fork": {
+      "type": "choice",
+      "context": "렌고쿠가 홀로 상현삼 아카자와 싸우고 있다. 위험하다!",
+      "tanjiro_hint": "동료들을 설득해서 함께 가거나, 혼자서라도 바로 도와야 할 것 같아...",
+      "choices": [
+        {
+          "id": "recruit_allies",
+          "text": "동료들을 설득하여 함께 간다",
+          "intent_keywords": ["동료", "함께", "설득", "모집", "같이", "다 같이"],
+          "affinity_changes": {
+            "inosuke": 10,
+            "zenitsu": 10
+          },
+          "next_stage": "recruit_mission"
+        },
+        {
+          "id": "reckless_sacrifice",
+          "text": "혼자서라도 바로 달려간다",
+          "intent_keywords": ["혼자", "바로", "즉시", "먼저", "나 혼자"],
+          "affinity_changes": {
+            "inosuke": -5,
+            "zenitsu": -5
+          },
+          "next_stage": "bad_end"
+        }
+      ]
+    },
+
+    "recruit_mission": {
+      "type": "mission",
+      "max_turns": 6,
+      "objective": "이노스케와 젠이츠를 설득하여 함께 렌고쿠를 구하러 가기",
+      "characters": {
+        "inosuke": {
+          "location": "열차 잔해 옆",
+          "keywords": ["강하다", "싸우다", "대장", "최고", "함께", "힘"],
+          "success_response": "크하하! 좋아! 네가 그렇게 말하니 같이 가주지! 하지만 내가 대장이다!",
+          "failure_responses": [
+            "뭐? 잘 모르겠는데?",
+            "무슨 소리야! 더 강한 말로 설득해봐!"
+          ],
+          "max_attempts": 2
+        },
+        "zenitsu": {
+          "location": "열차 객실 안",
+          "keywords": ["네즈코", "지키다", "용기", "함께", "도와", "같이"],
+          "success_response": "...네즈코를 지키기 위해서라면! 나도 용기를 내볼게!",
+          "failure_responses": [
+            "으아악! 너무 무서워...",
+            "네즈코는? 네즈코 이름을 불러줘!"
+          ],
+          "max_attempts": 2
+        }
+      },
+      "next_stage": "evaluate_end"
+    },
+
+    "evaluate_end": {
+      "type": "branch",
+      "description": "결과 평가 및 엔딩 분기",
+      "branches": [
+        {
+          "id": "hidden_ending",
+          "conditions": [
+            {"type": "flag", "flag": "inosuke_first"},
+            {"type": "flag", "flag": "inosuke_recruited"},
+            {"type": "flag", "flag": "zenitsu_recruited"},
+            {"type": "min_turns_remaining", "value": 1},
+            {"type": "min_affinity", "character": "inosuke", "value": 350},
+            {"type": "min_affinity", "character": "zenitsu", "value": 350}
+          ],
+          "next_stage": "end_hidden"
+        },
+        {
+          "id": "good_ending",
+          "conditions": [
+            {"type": "flag", "flag": "inosuke_recruited"},
+            {"type": "flag", "flag": "zenitsu_recruited"}
+          ],
+          "next_stage": "end_good"
+        },
+        {
+          "id": "bad_ending",
+          "conditions": ["default"],
+          "next_stage": "end_bad"
+        }
+      ]
+    },
+
+    "end_hidden": {
+      "type": "ending",
+      "ending_type": "hidden",
+      "title": "진정한 동료애 - 히든 엔딩",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speaker": "tanjiro",
+          "content": "모두 함께라면 이길 수 있어!",
+          "emotion": "determined"
+        },
+        {
+          "turn": 0,
+          "speaker": "rengoku",
+          "content": "훌륭하다! 너희들의 마음이 하나가 되었구나!",
+          "emotion": "proud"
+        },
+        {
+          "turn": 0,
+          "speaker": "system",
+          "content": "🎉 히든 엔딩 달성! 완벽한 팀워크로 렌고쿠와 함께 아카자를 물리쳤다!",
+          "emotion": "neutral"
+        }
+      ],
+      "special_image": true,
+      "summary_context": "히든엔딩: 탄지로가 이노스케를 먼저 설득하고, 모두의 친밀도를 높여 완벽한 팀워크로 렌고쿠와 함께 아카자를 격퇴"
+    },
+
+    "end_good": {
+      "type": "ending",
+      "ending_type": "good",
+      "title": "동료와 함께 - 굿 엔딩",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speaker": "tanjiro",
+          "content": "함께 싸워서 고마워!",
+          "emotion": "happy"
+        },
+        {
+          "turn": 0,
+          "speaker": "rengoku",
+          "content": "잘 싸웠다! 너희의 성장이 자랑스럽다!",
+          "emotion": "encouraging"
+        },
+        {
+          "turn": 0,
+          "speaker": "system",
+          "content": "✅ 굿 엔딩! 동료들과 함께 렌고쿠를 구했다!",
+          "emotion": "neutral"
+        }
+      ]
+    },
+
+    "bad_end": {
+      "type": "ending",
+      "ending_type": "bad",
+      "title": "무모한 희생 - 배드 엔딩",
+      "dialogues": [
+        {
+          "turn": 0,
+          "speaker": "tanjiro",
+          "content": "미안해... 내가 너무 서둘렀어...",
+          "emotion": "sad"
+        },
+        {
+          "turn": 0,
+          "speaker": "system",
+          "content": "❌ 배드 엔딩... 혼자서는 역부족이었다.",
+          "emotion": "neutral"
+        }
+      ]
+    }
+  }
+}

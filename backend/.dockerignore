@@ -1,0 +1,145 @@
+# ==============================================================================
+# KIME Chat Agent - Docker Ignore
+# Docker 이미지 빌드 시 제외할 파일들
+# ==============================================================================
+
+# ============================
+# 🔒 민감한 정보 (절대 이미지에 포함 금지)
+# ============================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+credentials.json
+
+# .env.example은 포함 (예시 파일)
+!.env.example
+
+# Claude Code 설정 (개인 설정)
+.claude/
+
+# ============================
+# 🐍 Python 캐시 및 빌드
+# ============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================
+# 🧪 테스트 관련
+# ============================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+
+# ============================
+# 📁 로그 (볼륨 마운트로 관리)
+# ============================
+logs/
+*.log
+
+# ============================
+# 💾 데이터 (볼륨 마운트로 관리)
+# ============================
+data/
+*.db
+*.sqlite
+*.db-journal
+
+# ============================
+# 🗂️ 임시 파일
+# ============================
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+*.pid
+*.seed
+*.pid.lock
+
+# ============================
+# 🖥️ IDE 및 에디터 설정
+# ============================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# ============================
+# 📚 Git 관련
+# ============================
+.git/
+.gitignore
+.gitattributes
+
+# ============================
+# 🐳 Docker 관련
+# ============================
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+.dockerignore
+
+# ============================
+# 📖 문서 (이미지 크기 절약)
+# ============================
+*.md
+!README.md
+docs/
+CHANGELOG.md
+LICENSE
+
+# ============================
+# 🧪 개발 전용
+# ============================
+tests/
+test_*.py
+*_test.py
+experiments/
+notebooks/
+.env.test
+.env.development
+
+# ============================
+# ✅ 포함할 필수 파일들
+# ============================
+# 다음 파일들은 반드시 포함됩니다:
+# - requirements.txt (Python 의존성)
+# - play.py (메인 실행 파일)
+# - src/ (소스 코드)
+# - configs/ (설정 파일)
+# - data/scenarios/ (시나리오 JSON)
+# - .env.example (환경 변수 예시)

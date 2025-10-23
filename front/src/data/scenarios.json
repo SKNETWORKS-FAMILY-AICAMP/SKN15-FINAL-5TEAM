@@ -1,0 +1,215 @@
+{
+  "train": {
+    "id": "train",
+    "title": "무한열차",
+    "emoji": "🚂",
+    "description": "무한열차에서 펼쳐지는 치열한 전투와 동료애",
+    "detailDescription": "열차 안에서 벌어지는 악몽과 현실의 경계. 엔무와의 대결, 그리고 상현의 참과의 조우까지. 탄지로와 동료들이 승객들을 지키기 위해 싸우는 이야기",
+    "image": "/images/무한열차.jpeg",
+    "implemented": true,
+    "type": "character",
+    "tags": ["#무한열차", "#꿈속전투", "#엔무"],
+    "category": "일상 · 힐링 · 로맨스",
+    "mood": ["평화로운", "따뜻함", "감성적"],
+    "likes": 98,
+    "comments": 32,
+    "views": 890,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "안녕하세요! 함께 평화로운 시간을 보내세요.",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      },
+      {
+        "name": "렌고쿠",
+        "image": "/images/프로필_렌고쿠.png",
+        "greeting": "불같은 열정으로 함께하겠습니다!",
+        "status": "대화 가능",
+        "color": "bg-red-100"
+      },
+      {
+        "name": "젠이츠",
+        "image": "/images/프로필_젠이츠.png",
+        "greeting": "우와! 정말 즐거운 시간이 될 것 같아요!",
+        "status": "대화 가능",
+        "color": "bg-yellow-100"
+      },
+      {
+        "name": "이노스케",
+        "image": "/images/프로필_이노스케.png",
+        "greeting": "이야! 재미있는 모험을 시작해보자구!",
+        "status": "대화 가능",
+        "color": "bg-green-100"
+      }
+    ]
+  },
+  "ending": {
+    "id": "ending",
+    "title": "엔딩 이후",
+    "emoji": "🌸",
+    "description": "최종 결전 후 동료들과 함께하는 평범하지만 소중한 일상",
+    "detailDescription": "탄지로, 젠이츠, 이노스케와 함께 마을 순찰과 훈련을 하며 서로를 돌보는 따뜻한 이야기",
+    "image": "/images/엔딩이후.png",
+    "implemented": true,
+    "type": "character",
+    "tags": ["#엔딩이후", "#일상", "#평화", "#동료애"],
+    "category": "일상 · 힐링 · 로맨스",
+    "mood": ["평화로운", "따뜻함", "감성적"],
+    "likes": 87,
+    "comments": 28,
+    "views": 720,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "안녕하세요! 함께 평화로운 시간을 보내세요.",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      },
+      {
+        "name": "네즈코",
+        "image": "/images/프로필_네즈코.png",
+        "greeting": "흠흠~ 오늘도 좋은 하루 보내세요!",
+        "status": "여동생",
+        "color": "bg-pink-100"
+      },
+      {
+        "name": "젠이츠",
+        "image": "/images/프로필_젠이츠.png",
+        "greeting": "우와! 정말 즐거운 시간이 될 것 같아요!",
+        "status": "동기",
+        "color": "bg-yellow-100"
+      },
+      {
+        "name": "이노스케",
+        "image": "/images/프로필_이노스케.png",
+        "greeting": "이야! 재미있는 모험을 시작해보자구!",
+        "status": "동기",
+        "color": "bg-green-100"
+      }
+    ]
+  },
+  "infinity-castle": {
+    "id": "infinity-castle",
+    "title": "무한성",
+    "emoji": "🏯",
+    "description": "무한성에서 펼쳐지는 최종 결전",
+    "detailDescription": "무잔과의 최종 대결을 앞두고 무한성에 갇힌 귀살대원들. 상현들과의 치열한 전투, 그리고 모두의 운명이 결정되는 순간",
+    "image": "/images/무한성.webp",
+    "implemented": false,
+    "type": "character",
+    "tags": ["#최종결전", "#귀살대", "#무잔전"],
+    "category": "액션 · 전투 · 긴장감",
+    "mood": ["긴박함", "스릴", "진지함"],
+    "likes": 156,
+    "comments": 67,
+    "views": 1850,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "모두를 지키기 위해 최선을 다하겠습니다!",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      },
+      {
+        "name": "기유",
+        "image": "/images/프로필_기유.png",
+        "greeting": "함께 싸우자.",
+        "status": "대화 가능",
+        "color": "bg-blue-100"
+      },
+      {
+        "name": "시노부",
+        "image": "/images/프로필_시노부.png",
+        "greeting": "부디 조심하세요.",
+        "status": "대화 가능",
+        "color": "bg-purple-100"
+      },
+      {
+        "name": "렌고쿠",
+        "image": "/images/프로필_렌고쿠.png",
+        "greeting": "마음을 불태워라!",
+        "status": "대화 가능",
+        "color": "bg-red-100"
+      }
+    ]
+  },
+  "tanjiro": {
+    "id": "tanjiro",
+    "title": "편의점 탄지로",
+    "emoji": "🏪",
+    "description": "편의점에서 일하는 탄지로와의 일상 대화",
+    "detailDescription": "현대 배경 AU. 편의점 알바생 탄지로와 함께하는 따뜻하고 편안한 일상",
+    "image": "/images/편의점탄지로.png",
+    "implemented": false,
+    "type": "character",
+    "tags": ["#편의점", "#일상", "#탄지로"],
+    "category": "일상 · 힐링 · 현대AU",
+    "mood": ["편안함", "따뜻함", "친근함"],
+    "likes": 121,
+    "comments": 45,
+    "views": 1200,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "어서오세요! 무엇을 도와드릴까요?",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      }
+    ]
+  },
+  "counseling": {
+    "id": "counseling",
+    "title": "귀칼 상담소 AU",
+    "emoji": "💬",
+    "description": "귀살대원들이 운영하는 고민상담소",
+    "detailDescription": "AU 세계관. 탄지로와 동료들이 여러분의 고민을 들어드립니다. 따뜻한 위로와 진심 어린 조언을 나눠보세요",
+    "image": "/images/귀칼상담소.png",
+    "implemented": false,
+    "type": "character",
+    "tags": ["#상담소", "#힐링AU", "#감정공감"],
+    "category": "힐링 · 상담 · 감성",
+    "mood": ["위로", "공감", "따뜻함"],
+    "likes": 134,
+    "comments": 52,
+    "views": 1150,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "편하게 말씀해주세요. 함께 고민을 나눠봐요.",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      }
+    ]
+  },
+  "idol": {
+    "id": "idol",
+    "title": "아이돌/밴드 AU",
+    "emoji": "🎸",
+    "description": "아이돌 또는 밴드로 활동하는 캐릭터들",
+    "detailDescription": "AU 세계관. 귀살대원들이 아이돌 그룹 또는 밴드로 데뷔! 화려한 무대 위에서 펼쳐지는 그들의 이야기",
+    "image": "/images/아이돌밴드.png",
+    "implemented": false,
+    "type": "character",
+    "tags": ["#아이돌AU", "#밴드AU", "#팬심폭발"],
+    "category": "엔터테인먼트 · 음악 · 팬심",
+    "mood": ["흥겨움", "열정", "설렘"],
+    "likes": 203,
+    "comments": 89,
+    "views": 2100,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "여러분의 응원이 제게 큰 힘이 됩니다!",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      }
+    ]
+  }
+}

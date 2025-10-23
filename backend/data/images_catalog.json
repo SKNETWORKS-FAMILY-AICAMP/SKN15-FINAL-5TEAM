@@ -1,0 +1,342 @@
+{
+  "image_catalog": {
+    "version": "1.0",
+    "last_updated": "2025-09-29",
+    "total_images": 45
+  },
+
+  "cutscene_images": {
+    "scene5_cutscene_intro": {
+      "turn_1": {
+        "image_id": "scene5_train_crash_01",
+        "description": "탈선한 무한열차와 흩어진 잔해들",
+        "mood": "aftermath"
+      },
+      "turn_2": {
+        "image_id": "scene5_akaza_appears_01", 
+        "description": "아카자가 등장하는 순간의 압도적 살기",
+        "mood": "menacing"
+      },
+      "turn_3": {
+        "image_id": "scene5_rengoku_ready_01",
+        "description": "렌고쿠가 전투 태세를 취하는 모습",
+        "mood": "battle_ready"
+      },
+      "turn_4": {
+        "image_id": "scene5_standoff_01",
+        "description": "아카자와 렌고쿠의 긴장감 넘치는 대치",
+        "mood": "tense"
+      },
+      "turn_5": {
+        "image_id": "scene5_decision_moment_01",
+        "description": "중요한 결정을 내려야 하는 순간",
+        "mood": "critical"
+      }
+    },
+    "scene5_fork1": {
+      "turn_1": {
+        "image_id": "scene5_critical_choice_01",
+        "description": "운명을 가르는 선택의 순간",
+        "mood": "critical"
+      },
+      "turn_2": {
+        "image_id": "scene5_tension_builds_01",
+        "description": "긴장감이 고조되는 전장",
+        "mood": "tense"
+      },
+      "turn_3": {
+        "image_id": "scene5_final_decision_01",
+        "description": "최종 결정을 내리는 순간",
+        "mood": "decisive"
+      }
+    },
+    "scene5_recruit_mission": {
+      "turn_1": {
+        "image_id": "scene5_inosuke_suspicious_01",
+        "description": "경계심을 보이는 이노스케",
+        "mood": "suspicious"
+      },
+      "turn_2": {
+        "image_id": "scene5_zenitsu_scared_01",
+        "description": "두려움에 떨고 있는 젠이츠", 
+        "mood": "fearful"
+      },
+      "turn_3": {
+        "image_id": "scene5_persuasion_01",
+        "description": "설득을 시도하는 장면",
+        "mood": "persuasive"
+      },
+      "turn_4": {
+        "image_id": "scene5_team_forming_01",
+        "description": "팀이 결성되어가는 모습",
+        "mood": "hopeful"
+      },
+      "turn_5": {
+        "image_id": "scene5_unity_building_01",
+        "description": "단합된 팀의 모습",
+        "mood": "unified"
+      }
+    }
+  },
+
+  "emotion_images": {
+    "tanjiro": {
+      "worried": {
+        "image_id": "tanjiro_worried_01",
+        "description": "걱정스러운 표정의 탄지로",
+        "intensity": "normal"
+      },
+      "determined": {
+        "image_id": "tanjiro_determined_01", 
+        "description": "결연한 의지를 보이는 탄지로",
+        "intensity": "strong"
+      },
+      "happy": {
+        "image_id": "tanjiro_happy_01",
+        "description": "밝게 웃고 있는 탄지로",
+        "intensity": "normal"
+      },
+      "sad": {
+        "image_id": "tanjiro_sad_01",
+        "description": "슬퍼하는 탄지로",
+        "intensity": "normal"
+      },
+      "crying": {
+        "image_id": "tanjiro_crying_01",
+        "description": "눈물을 흘리는 탄지로",
+        "intensity": "strong"
+      },
+      "triumphant": {
+        "image_id": "tanjiro_triumphant_01",
+        "description": "승리의 기쁨을 표현하는 탄지로",
+        "intensity": "strong"
+      }
+    },
+    "inosuke": {
+      "excited": {
+        "image_id": "inosuke_excited_01",
+        "description": "신나게 웃고 있는 이노스케",
+        "intensity": "strong"
+      },
+      "competitive": {
+        "image_id": "inosuke_competitive_01",
+        "description": "승부욕을 드러내는 이노스케", 
+        "intensity": "normal"
+      },
+      "confused": {
+        "image_id": "inosuke_confused_01",
+        "description": "당황하고 있는 이노스케",
+        "intensity": "normal"
+      },
+      "angry": {
+        "image_id": "inosuke_angry_01",
+        "description": "화를 내는 이노스케",
+        "intensity": "strong"
+      },
+      "proud": {
+        "image_id": "inosuke_proud_01",
+        "description": "자랑스러워하는 이노스케",
+        "intensity": "normal"
+      }
+    },
+    "zenitsu": {
+      "scared": {
+        "image_id": "zenitsu_scared_01",
+        "description": "무서워 떨고 있는 젠이츠",
+        "intensity": "strong"
+      },
+      "brave": {
+        "image_id": "zenitsu_brave_01",
+        "description": "용기를 내는 젠이츠",
+        "intensity": "normal"
+      },
+      "determined": {
+        "image_id": "zenitsu_determined_01",
+        "description": "결심을 굳힌 젠이츠",
+        "intensity": "strong"
+      },
+      "crying": {
+        "image_id": "zenitsu_crying_01",
+        "description": "울고 있는 젠이츠",
+        "intensity": "normal"
+      },
+      "sleeping": {
+        "image_id": "zenitsu_sleeping_01",
+        "description": "잠들어 있는 젠이츠",
+        "intensity": "normal"
+      },
+      "relieved": {
+        "image_id": "zenitsu_relieved_01",
+        "description": "안도하는 젠이츠",
+        "intensity": "normal"
+      }
+    },
+    "rengoku": {
+      "encouraging": {
+        "image_id": "rengoku_encouraging_01",
+        "description": "격려하는 모습의 렌고쿠",
+        "intensity": "normal"
+      },
+      "serious": {
+        "image_id": "rengoku_serious_01",
+        "description": "진지한 표정의 렌고쿠",
+        "intensity": "strong"
+      },
+      "proud": {
+        "image_id": "rengoku_proud_01",
+        "description": "자랑스러워하는 렌고쿠",
+        "intensity": "normal"
+      },
+      "battle_ready": {
+        "image_id": "rengoku_battle_ready_01",
+        "description": "전투 준비를 마친 렌고쿠",
+        "intensity": "strong"
+      },
+      "confident": {
+        "image_id": "rengoku_confident_01",
+        "description": "자신감 넘치는 렌고쿠",
+        "intensity": "normal"
+      }
+    }
+  },
+
+  "ending_images": {
+    "original_ending": {
+      "image_id": "scene5_original_ending_01",
+      "description": "렌고쿠의 희생으로 끝나는 원작 엔딩",
+      "type": "tragic",
+      "generated": false
+    },
+    "hidden_ending": {
+      "image_id": "scene5_hidden_ending_01", 
+      "description": "모든 동료가 생존하는 히든 엔딩",
+      "type": "triumphant",
+      "generated": false
+    }
+  },
+
+  "special_generation_prompts": {
+    "hidden_ending_achievement": {
+      "base_prompt": "demon slayer anime style, all characters together victorious, tanjiro inosuke zenitsu rengoku, defeated akaza in background, teamwork triumph, golden light, heroic pose, high quality detailed illustration",
+      "mood_modifiers": {
+        "triumphant": "golden sunlight, victory celebration, bright colors",
+        "emotional": "tears of joy, relief expressions, warm lighting"
+      }
+    },
+    "perfect_teamwork": {
+      "base_prompt": "demon slayer anime style, perfect synchronization attack, tanjiro inosuke zenitsu combined breathing techniques, dynamic action scene, particle effects, speed lines",
+      "mood_modifiers": {
+        "action": "motion blur, impact effects, dramatic angles",
+        "unity": "matching poses, synchronized movement, harmony"
+      }
+    }
+  },
+
+  "image_metadata": {
+    "scene5_train_crash_01": {
+      "file_path": "assets/images/cutscenes/scene5_train_crash_01.png",
+      "url": "/static/images/cutscenes/scene5_train_crash_01.png", 
+      "size": "1920x1080",
+      "format": "PNG",
+      "description": "탈선한 무한열차와 흩어진 잔해들",
+      "tags": ["cutscene", "aftermath", "train", "debris"],
+      "mood": "aftermath",
+      "created_at": "2025-09-29T19:00:00Z"
+    },
+    "scene5_akaza_appears_01": {
+      "file_path": "assets/images/cutscenes/scene5_akaza_appears_01.png",
+      "url": "/static/images/cutscenes/scene5_akaza_appears_01.png",
+      "size": "1920x1080", 
+      "format": "PNG",
+      "description": "아카자가 등장하는 순간의 압도적 살기",
+      "tags": ["cutscene", "akaza", "villain", "menacing"],
+      "mood": "menacing",
+      "created_at": "2025-09-29T19:00:00Z"
+    },
+    "tanjiro_determined_01": {
+      "file_path": "assets/images/emotions/tanjiro_determined_01.png",
+      "url": "/static/images/emotions/tanjiro_determined_01.png",
+      "size": "512x512",
+      "format": "PNG", 
+      "description": "결연한 의지를 보이는 탄지로",
+      "tags": ["emotion", "tanjiro", "determined", "portrait"],
+      "character": "tanjiro",
+      "emotion": "determined",
+      "intensity": "strong",
+      "created_at": "2025-09-29T19:00:00Z"
+    },
+    "inosuke_excited_01": {
+      "file_path": "assets/images/emotions/inosuke_excited_01.png",
+      "url": "/static/images/emotions/inosuke_excited_01.png",
+      "size": "512x512",
+      "format": "PNG",
+      "description": "신나게 웃고 있는 이노스케", 
+      "tags": ["emotion", "inosuke", "excited", "portrait"],
+      "character": "inosuke",
+      "emotion": "excited",
+      "intensity": "strong",
+      "created_at": "2025-09-29T19:00:00Z"
+    },
+    "zenitsu_scared_01": {
+      "file_path": "assets/images/emotions/zenitsu_scared_01.png",
+      "url": "/static/images/emotions/zenitsu_scared_01.png",
+      "size": "512x512",
+      "format": "PNG",
+      "description": "무서워 떨고 있는 젠이츠",
+      "tags": ["emotion", "zenitsu", "scared", "portrait"],
+      "character": "zenitsu", 
+      "emotion": "scared",
+      "intensity": "strong",
+      "created_at": "2025-09-29T19:00:00Z"
+    },
+    "rengoku_encouraging_01": {
+      "file_path": "assets/images/emotions/rengoku_encouraging_01.png",
+      "url": "/static/images/emotions/rengoku_encouraging_01.png", 
+      "size": "512x512",
+      "format": "PNG",
+      "description": "격려하는 모습의 렌고쿠",
+      "tags": ["emotion", "rengoku", "encouraging", "portrait"],
+      "character": "rengoku",
+      "emotion": "encouraging", 
+      "intensity": "normal",
+      "created_at": "2025-09-29T19:00:00Z"
+    }
+  },
+
+  "asset_generation_settings": {
+    "cutscene_images": {
+      "resolution": "1920x1080",
+      "format": "PNG", 
+      "quality": "high",
+      "style": "anime_cinematic"
+    },
+    "emotion_images": {
+      "resolution": "512x512",
+      "format": "PNG",
+      "quality": "high", 
+      "style": "anime_portrait"
+    },
+    "special_images": {
+      "resolution": "1920x1080",
+      "format": "PNG",
+      "quality": "ultra_high",
+      "style": "anime_epic"
+    }
+  },
+
+  "file_structure": {
+    "base_path": "/static/images/",
+    "cutscenes": "cutscenes/",
+    "emotions": "emotions/",
+    "endings": "endings/", 
+    "generated": "generated/",
+    "ui": "ui/"
+  },
+
+  "cache_settings": {
+    "enable_caching": true,
+    "cache_duration": 3600,
+    "preload_frequently_used": true,
+    "compression": "webp_fallback"
+  }
+}

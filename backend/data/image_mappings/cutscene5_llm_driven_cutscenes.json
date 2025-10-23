@@ -1,0 +1,197 @@
+{
+  "default_image": "1",
+  "mappings": [
+    {
+      "priority": 100,
+      "stage": "INTRO",
+      "turn": [0, 0],
+      "dialogue_count": [0, 0],
+      "image": "1",
+      "description": "초기 - 무한열차 탈선 직후"
+    },
+    {
+      "priority": 95,
+      "stage": "INTRO",
+      "dialogue_count": [1, 8],
+      "image": "1",
+      "description": "탈선 현장 - 혼란과 부상자 대응"
+    },
+    {
+      "priority": 90,
+      "stage": "INTRO",
+      "dialogue_count": [9, 12],
+      "image": "2",
+      "description": "렌고쿠 등장 - 안정적인 모습"
+    },
+    {
+      "priority": 85,
+      "stage": "INTRO",
+      "dialogue_count": [13, 18],
+      "image": "3",
+      "description": "아카자 등장 - 상현 삼의 압도적 기운"
+    },
+    {
+      "priority": 80,
+      "stage": "INTRO",
+      "dialogue_count": [19, 25],
+      "image": "5",
+      "description": "술식 전개 - 파괴살 나침"
+    },
+    {
+      "priority": 75,
+      "stage": "INTRO",
+      "dialogue_count": [26, 999],
+      "image": "6",
+      "description": "전투 시작 - 붉은 화염 vs 푸른 투기"
+    },
+    {
+      "priority": 90,
+      "stage": "ROUTE_CHOICE",
+      "image": "3",
+      "description": "갈림길 선택 - 긴장된 순간"
+    },
+    {
+      "priority": 85,
+      "stage": "RECRUIT",
+      "dialogue_count": [0, 2],
+      "flags": ["inosuke_found"],
+      "image": "8",
+      "description": "이노스케 발견 - 어둠 속 칼날갈이"
+    },
+    {
+      "priority": 84,
+      "stage": "RECRUIT",
+      "dialogue_count": [3, 999],
+      "flags": ["inosuke_recruited"],
+      "image": "9",
+      "description": "이노스케 합류 - 짐승의 호흡, 돌격!"
+    },
+    {
+      "priority": 83,
+      "stage": "RECRUIT",
+      "dialogue_count": [0, 2],
+      "flags": ["zenitsu_found"],
+      "image": "11",
+      "description": "젠이츠 발견 - 고요한 열차, 잠든 번개"
+    },
+    {
+      "priority": 82,
+      "stage": "RECRUIT",
+      "dialogue_count": [3, 999],
+      "flags": ["zenitsu_recruited"],
+      "image": "12",
+      "description": "젠이츠 합류 - 벽력일섬"
+    },
+    {
+      "priority": 81,
+      "stage": "RECRUIT",
+      "flags": ["inosuke_recruited", "zenitsu_recruited"],
+      "image": "15",
+      "description": "이노+젠 합류 - 새벽을 향한 공조"
+    },
+    {
+      "priority": 80,
+      "stage": "INTERVENE",
+      "dialogue_count": [0, 3],
+      "image": "4",
+      "description": "렌고쿠 개입 - 나침반 위의 사투"
+    },
+    {
+      "priority": 78,
+      "stage": "INTERVENE",
+      "dialogue_count": [4, 7],
+      "image": "6",
+      "description": "격렬한 전투 - 화염과 투기의 충돌"
+    },
+    {
+      "priority": 76,
+      "stage": "INTERVENE",
+      "dialogue_count": [8, 11],
+      "image": "7",
+      "description": "염주와 상현의 격돌"
+    },
+    {
+      "priority": 74,
+      "stage": "INTERVENE",
+      "dialogue_count": [12, 15],
+      "image": "10",
+      "description": "일기토 - 불꽃과 권무"
+    },
+    {
+      "priority": 72,
+      "stage": "INTERVENE",
+      "dialogue_count": [16, 999],
+      "image": "17",
+      "description": "렌고쿠 오의 - 불꽃의 호흡, 오의: 연옥"
+    },
+    {
+      "priority": 70,
+      "stage": "RECKLESS_SACRIFICE",
+      "dialogue_count": [0, 2],
+      "image": "13",
+      "description": "최후의 일격 - 꿰뚫린 복부"
+    },
+    {
+      "priority": 68,
+      "stage": "RECKLESS_SACRIFICE",
+      "dialogue_count": [3, 999],
+      "image": "14",
+      "description": "남겨진 불꽃 - 렌고쿠의 하오리와 일륜도"
+    },
+    {
+      "priority": 75,
+      "stage": "RETURN_TO_FRONT",
+      "flags": ["three_united"],
+      "image": "16",
+      "description": "3인 합동 - 삼인삼색, 합동 전선 (히든 루트)"
+    },
+    {
+      "priority": 70,
+      "stage": "RETURN_TO_FRONT",
+      "dialogue_count": [0, 5],
+      "image": "7",
+      "description": "재전투 - 격렬한 격돌"
+    },
+    {
+      "priority": 68,
+      "stage": "RETURN_TO_FRONT",
+      "dialogue_count": [6, 999],
+      "image": "10",
+      "description": "재전투 - 일기토"
+    },
+    {
+      "priority": 100,
+      "stage": "END_HIDDEN",
+      "image": "21",
+      "description": "히든 엔딩 - 불꽃과 함께 맞이한 여명"
+    },
+    {
+      "priority": 90,
+      "stage": ["END_BASIC", "END_BAD"],
+      "dialogue_count": [0, 2],
+      "image": "14",
+      "description": "전투 이후 - 남겨진 불꽃"
+    },
+    {
+      "priority": 88,
+      "stage": ["END_BASIC", "END_BAD"],
+      "dialogue_count": [3, 5],
+      "image": "18",
+      "description": "여명, 그리고 패배의 눈물"
+    },
+    {
+      "priority": 86,
+      "stage": ["END_BASIC", "END_BAD"],
+      "dialogue_count": [6, 8],
+      "image": "19",
+      "description": "책무를 다하다 - 렌고쿠의 마지막 미소"
+    },
+    {
+      "priority": 84,
+      "stage": ["END_BASIC", "END_BAD"],
+      "dialogue_count": [9, 999],
+      "image": "20",
+      "description": "마음을 불태워라 - 마지막 유언"
+    }
+  ]
+}
