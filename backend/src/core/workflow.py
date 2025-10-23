@@ -19,7 +19,7 @@ from src.agents.parent_agent import run_parent_agent, parent_after_dialogue
 from src.agents.children_agent import run_children_agent 
 from src.utils.dialogue_agent import run_dialogue_agent
 from src.tools.state_tools import StateTools
-from src.tools.scene_tools import SceneTools
+from src.tools import scene_tools
 # from router_agent import get_intent
 
 

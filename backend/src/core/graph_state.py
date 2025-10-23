@@ -75,9 +75,11 @@ class GraphState(TypedDict):
     # ============================================================
     scenario_id: str  # 현재 시나리오 ID
     scenario_data: Optional[Dict[str, Any]]  # 로드된 전체 시나리오 JSON
+    scenario: Optional[Dict[str, Any]]  # parent_agent용 scenario alias
     current_stage: Optional[str]  # 현재 스테이지 ID (intro, fork, recruit_mission 등)
     stage_history: List[str]  # 진행한 스테이지 기록
     stage_states: Dict[str, Dict[str, Any]]  # 스테이지별 상태 저장
+    stage_turn: Optional[int]  # 현재 스테이지 내 턴 수 (scene["stage_turn"]의 복사본)
 
     # ============================================================
     # 메타데이터
@@ -198,9 +200,11 @@ def create_initial_graph_state(
         # 시나리오 관리
         scenario_id=scenario_id,
         scenario_data=None,
+        scenario=None,
         current_stage=None,
         stage_history=[],
         stage_states={},
+        stage_turn=0,
 
         # 메타데이터
         meta={

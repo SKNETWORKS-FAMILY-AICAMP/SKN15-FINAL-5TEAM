@@ -17,7 +17,7 @@
     "ko": {
       "beats_intro": [
         { "goal": "열차가 탈선하며 객차 안은 아비규환이다. 유리창이 깨지고 불꽃이 일렁인다. 먼지와 피 냄새가 뒤섞인다.", "speaker_hint": ["narr"], "fx": "brake_screech|ash_wind" },
-        { "goal": "렌고쿠가 {user}를 발견하고 다가온다. '무사하군! 잘 버텼다, {user}!'", "speaker_hint": ["rengoku"], "fx": "flame_roar" },
+        { "goal": "렌고쿠가 {user}를 발견하고 다가온다. '무사하군! 잘 버텼다, {user}, 탄지로!'", "speaker_hint": ["rengoku"], "fx": "flame_roar" },
         { "goal": "탄지로가 달려온다. '렌고쿠 님! 부상자들이 많아요!'", "speaker_hint": ["tanjiro","rengoku"] },
         { "goal": "엔무와의 싸움으로 부상을 당한 탄지로가 복부를 붙잡으며 비틀거린다. '으윽... 피가...'", "speaker_hint": ["tanjiro","rengoku"], "fx": "blood_spray|flame_ignition" },
         { "goal": "땅이 진동하며 먼지가 일어난다. '이건...' 렌고쿠의 표정이 굳는다.", "speaker_hint": ["narr","rengoku"], "fx": "ground_fissure|air_freeze" },

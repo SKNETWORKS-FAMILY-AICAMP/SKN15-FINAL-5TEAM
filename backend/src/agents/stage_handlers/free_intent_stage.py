@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from .. import state_tools
+from src.tools import state_tools
+
 from ..scene_tools import (
     get_next_stage_tag,
     get_stage_atmosphere,
