@@ -147,7 +147,7 @@
       "relationships": {
         "user": {
           "type": "mentor",
-          "description": "{user}는 렌고쿠의 츠구코로, 불의 호흡과 강인한 마음을 배우고 있다."
+          "description": "{user}는 렌고쿠의 츠구코로, 불의 호흡과 강인한 마음을 배우고 있다. 무한열차 임무 전부터 함께 동행하며 이미 여러 전투를 함께 겪은 사이다."
         },
         "akaza": {
           "type": "enemy",

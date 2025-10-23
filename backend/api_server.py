@@ -196,6 +196,7 @@ async def chat(request: ChatRequest):
 
             # 시나리오 데이터 세팅
             state["scenario_data"] = scenario_data
+            state["scenario"] = scenario_data  # parent_agent에서 사용
             state["scenario_id"] = backend_scenario_id
             state["user_name"] = request.user_name or "여행자"
 

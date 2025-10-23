@@ -122,6 +122,14 @@ class ChildrenAgent:
         beats = ctx.get("beats") or []                  # 시나리오 내 상황 묘사 텍스트
         stage_tag = ctx.get("stage_tag")                # 현재 스테이지명
 
+        # ⚠️ beats가 비어있으면 에러 반환 (LLM hallucination 방지)
+        if not beats:
+            log("children", "⚠️ No beats provided - cannot generate dialogue")
+            return [{
+                "speaker": "system",
+                "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
+            }]
+
         # ✅ (추가) 시나리오 키 감지
         scenario_id = state.get("scenario_id") or ctx.get("scenario_id")
         scenario_key = None
@@ -157,7 +165,7 @@ class ChildrenAgent:
                 system_prompt="당신은 Demon Slayer 시나리오의 대사 생성기입니다.",
                 user_prompt=llm_prompt,
                 temperature=0.65,
-                max_tokens=700,
+                max_tokens=2000,  # 확장된 대사를 위해 증가
             )
 
             # 응답이 정상적일 경우
@@ -180,6 +188,15 @@ class ChildrenAgent:
         # 5️⃣ Fallback: beats 그대로 사용
         # -----------------------------
         log("children", "⚙️ Using beats fallback (no LLM response).")
+
+        # beats가 비어있으면 에러 메시지 반환
+        if not beats:
+            log("children", "⚠️ No beats available for fallback")
+            return [{
+                "speaker": "system",
+                "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
+            }]
+
         fallback_dialogues = self._normalize_dialogues(beats)
         return self._render_dialogues(state, fallback_dialogues)
 

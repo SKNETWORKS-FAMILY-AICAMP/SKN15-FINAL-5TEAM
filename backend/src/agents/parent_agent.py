@@ -50,7 +50,7 @@ class ParentAgent:
         """
 
         # --- 0️⃣ 시나리오 자동 로드 처리 (Router에서 안 넘어온 경우) ---
-        scenario = state.get("scenario")
+        scenario = state.get("scenario") or state.get("scenario_data")
         if not scenario:
             user_intent = state.get("user_intent") or (state.get("routing_result") or {}).get("intent")
             if user_intent == "on_topic_start":
@@ -68,6 +68,8 @@ class ParentAgent:
                 log("parent", f"⚠️ No scenario loaded in state (intent={user_intent})")
                 # 시나리오가 없으면 빈 응답 처리
                 return self._handle_missing_scenario(state)
+        else:
+            state["scenario"] = scenario
 
         # --- 1️⃣ 현재 stage 정보 확보 ---
         stage_tag = self._ensure_current_stage(state, scenario)
@@ -109,6 +111,14 @@ class ParentAgent:
         state = state_tools.update_state(state, result, stage_tag)
 
         # --- 8️⃣ children_ctx 구성 ---
+        if getattr(result, "stage_complete", False) and next_stage:
+            log("codex_fix", "Stage complete; routing next stage", current=stage_tag, next=next_stage)
+            state_tools.set_current_stage(state, next_stage)
+            state_tools.reset_stage_turn(state)
+            state_tools.get_scene_state(state)["stage_completed"] = True
+            state["next_node"] = "router"
+            return state
+
         children_ctx = dict(result.children_ctx)
         children_ctx.setdefault("stage_tag", stage_tag)
         children_ctx.setdefault("stage_type", scene_tools.get_stage_type(stage))
@@ -119,16 +129,9 @@ class ParentAgent:
         if fallback_payload and "fallback" not in children_ctx:
             children_ctx["fallback"] = fallback_payload
 
-        # --- 9️⃣ state에 전달 ---
         state["children_ctx"] = children_ctx
         state["next_node"] = "children_agent"
 
-        if getattr(result, "stage_complete", False) and next_stage:
-            log("codex_fix", "Advancing to next stage immediately", current=stage_tag, next=next_stage)
-            state_tools.set_current_stage(state, next_stage)
-            state_tools.reset_stage_turn(state)
-
-        # --- 🔟 로깅 ---
         log("parent", f"→ Handed off to children_agent (stage={stage_tag}, type={stage.get('type')})")
         return state
 

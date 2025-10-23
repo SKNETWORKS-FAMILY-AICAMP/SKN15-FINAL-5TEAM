@@ -142,7 +142,7 @@
       "relationships": {
         "user": {
           "type": "ally",
-          "description": "{user}를 신뢰하며 함께 부상자 구출과 전투를 수행한다."
+          "description": "렌고쿠 님의 츠구코인 {user}. 무한열차 초반부터 함께 싸운 신뢰하는 동료이며, 함께 부상자 구출과 전투를 수행한다."
         },
         "rengoku": {
           "type": "respect",
