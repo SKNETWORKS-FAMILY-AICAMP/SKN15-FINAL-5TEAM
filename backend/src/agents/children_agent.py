@@ -164,11 +164,9 @@ class ChildrenAgent:
             if isinstance(response, dict) and "dialogues" in response:
                 dialogues = response["dialogues"]
                 if isinstance(dialogues, list):
-                    if not self._contains_narration(dialogues):
-                        narration = self._extract_intro_narration(beats)
-                        if narration:
-                            log("codex_fix", "Prepending intro narration to LLM output")
-                            dialogues = narration + dialogues
+                    dialogues = self._normalize_dialogues(dialogues)
+                    narration = self._extract_intro_narration(beats)
+                    dialogues = self._ensure_intro_narration(dialogues, narration)
                     log("children", f"✅ Generated {len(dialogues)} tone-aware dialogues.")
                     return self._render_dialogues(state, dialogues)
 
@@ -182,13 +180,7 @@ class ChildrenAgent:
         # 5️⃣ Fallback: beats 그대로 사용
         # -----------------------------
         log("children", "⚙️ Using beats fallback (no LLM response).")
-        fallback_dialogues = [
-            {
-                "speaker": b.get("speaker", "narr"),
-                "text": b.get("text") or b.get("line") or str(b)
-            }
-            for b in beats
-        ]
+        fallback_dialogues = self._normalize_dialogues(beats)
         return self._render_dialogues(state, fallback_dialogues)
 
     def _render_dialogues(self, state: Dict[str, Any], entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -201,12 +193,6 @@ class ChildrenAgent:
                 entry["text"] = self._render_text(state, text)
             rendered.append(entry)
         return rendered
-
-    def _contains_narration(self, dialogues: List[Dict[str, Any]]) -> bool:
-        for entry in dialogues:
-            if isinstance(entry, dict) and str(entry.get("speaker", "")).lower() == "narr":
-                return True
-        return False
 
     def _extract_intro_narration(self, beats: List[Any]) -> List[Dict[str, Any]]:
         for beat in beats:
@@ -226,6 +212,65 @@ class ChildrenAgent:
                     dialogue["fx"] = fx
                 return [dialogue]
         return []
+
+    def _ensure_intro_narration(
+        self,
+        dialogues: List[Dict[str, Any]],
+        intro: Optional[List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        if not intro:
+            return dialogues
+
+        intro_entry = intro[0]
+        intro_text_norm = self._normalize_text(intro_entry.get("text"))
+        if not intro_text_norm:
+            return dialogues
+
+        updated: List[Dict[str, Any]] = []
+        intro_found = False
+        for entry in dialogues:
+            if not isinstance(entry, dict):
+                continue
+            text_norm = self._normalize_text(entry.get("text"))
+            if text_norm == intro_text_norm:
+                entry["speaker"] = entry.get("speaker") or "narr"
+                intro_found = True
+            updated.append(entry)
+
+        if intro_found:
+            return updated
+
+        log("codex_fix", "Injecting canonical intro narration")
+        return intro + updated
+
+    def _normalize_text(self, text: Optional[str]) -> str:
+        return (text or "").strip().lower()
+
+    def _normalize_dialogues(self, entries: List[Any]) -> List[Dict[str, Any]]:
+        normalized: List[Dict[str, Any]] = []
+        for entry in entries:
+            if isinstance(entry, dict):
+                text = (
+                    entry.get("text")
+                    or entry.get("line")
+                    or entry.get("goal")
+                    or entry.get("description")
+                )
+                speaker = entry.get("speaker")
+                if not speaker:
+                    hints = entry.get("speaker_hint")
+                    if isinstance(hints, list) and hints:
+                        speaker = hints[0]
+                normalized.append(
+                    {
+                        "speaker": (speaker or "narr"),
+                        "text": text or json.dumps(entry, ensure_ascii=False),
+                        "fx": entry.get("fx"),
+                    }
+                )
+            else:
+                normalized.append({"speaker": "narr", "text": str(entry)})
+        return normalized
 
 # ----------------------------------------------------------------------
 # Module-level default instance (편의 함수)
