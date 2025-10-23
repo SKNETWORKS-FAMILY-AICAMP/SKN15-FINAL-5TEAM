@@ -63,10 +63,11 @@ class ParentAgent:
                     state["current_stage"] = "INTRO"
                     log("parent", f"✅ Auto-loaded scenario: {scenario_id}")
                 else:
-                    log("parent", f"❌ Failed to load` scenario: {scenario_id}")
+                    log("parent", f"❌ Failed to load scenario: {scenario_id}")
             else:
-                log("parent", f"❌ No scenario loaded in state (intent={user_intent})")
-                return state
+                log("parent", f"⚠️ No scenario loaded in state (intent={user_intent})")
+                # 시나리오가 없으면 빈 응답 처리
+                return self._handle_missing_scenario(state)
 
         # --- 1️⃣ 현재 stage 정보 확보 ---
         stage_tag = self._ensure_current_stage(state, scenario)
@@ -122,6 +123,11 @@ class ParentAgent:
         state["children_ctx"] = children_ctx
         state["next_node"] = "children_agent"
 
+        if getattr(result, "stage_complete", False) and next_stage:
+            log("codex_fix", "Advancing to next stage immediately", current=stage_tag, next=next_stage)
+            state_tools.set_current_stage(state, next_stage)
+            state_tools.reset_stage_turn(state)
+
         # --- 🔟 로깅 ---
         log("parent", f"→ Handed off to children_agent (stage={stage_tag}, type={stage.get('type')})")
         return state
@@ -165,10 +171,11 @@ class ParentAgent:
             return self._auto_continue(state)
 
         scene_state = state_tools.get_scene_state(state)
-        if scene_state.get("stage_completed"):
-            state["next_node"] = "wait_user_input"
-        else:
-            state["next_node"] = "router"
+        if scene_state.get("stage_completed") and not temp.get("auto_resume_active"):
+            log("codex_fix", "Auto-advancing completed stage", stage=state_tools.get_current_stage(state))
+            return self._auto_continue(state)
+
+        state["next_node"] = "router"
         return state
 
     # ----------------------------------------------------------------- helpers
@@ -350,6 +357,8 @@ class ParentAgent:
         auto_state["system_blocked"] = False
         auto_state.pop("blocked_until", None)
         auto_state["stage_forced_complete"] = True
+        scene = state_tools.get_scene_state(auto_state)
+        scene["stage_completed"] = False
         return auto_state
 
     def _compose_return_to_front_dialogue(self, state: Dict[str, Any]) -> Dict[str, Any]:

@@ -65,13 +65,40 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
         for name, tone in tone_profiles.items()
     )
 
-    # --- 관계 요약 ---
+    # --- 관계 요약 (처음 만남 여부 강조) ---
     rel_desc = []
+    first_encounter_pairs = set()  # 중복 제거용
+
     for name, tone in tone_profiles.items():
         rels = tone.get("relationships", {})
         for target, info in rels.items():
-            rel_desc.append(f"- {name} ↔ {target}: {info.get('description', '')}")
+            description = info.get('description', '')
+            rel_type = info.get('type', '')
+            rel_desc.append(f"- {name} ↔ {target} ({rel_type}): {description}")
+
+            # "처음", "첫", "조우" 등의 키워드로 처음 만남 감지
+            if any(keyword in description for keyword in ["처음", "첫", "조우", "첫 만남", "first"]):
+                # 양방향 관계이므로 정렬하여 중복 제거
+                pair = tuple(sorted([name, target]))
+                first_encounter_pairs.add(pair)
+
+    # 처음 만남 경고 메시지 생성
+    first_encounter_notes = []
+    if first_encounter_pairs:
+        first_encounter_notes.append("=" * 60)
+        first_encounter_notes.append("🚨 처음 만남 주의사항 🚨")
+        first_encounter_notes.append("=" * 60)
+        for pair in sorted(first_encounter_pairs):
+            first_encounter_notes.append(f"⚠️ {pair[0]}와 {pair[1]}는 이 장면에서 처음 만납니다!")
+        first_encounter_notes.append("")
+        first_encounter_notes.append("처음 만나는 캐릭터들은:")
+        first_encounter_notes.append("- 서로의 이름을 모릅니다 (이름을 부르지 마세요!)")
+        first_encounter_notes.append("- 처음 보는 반응을 보여야 합니다 (놀람, 경계, 호기심)")
+        first_encounter_notes.append("- 재회 표현 금지 ('또 만났네', '오랜만이야' 등)")
+        first_encounter_notes.append("=" * 60)
+
     rel_text = "\n".join(rel_desc)
+    first_encounter_text = "\n".join(first_encounter_notes) if first_encounter_notes else ""
 
     # --- beats ---
     beat_lines = "\n".join(f"- {b.get('goal', '')}" for b in beats)
@@ -91,9 +118,15 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     [인물 관계 요약]
     {rel_text}
 
-    [지침]
-    - 대사는 각 인물의 말투(tone)에 맞춰 자연스럽게 확장합니다. 2~3줄 출력합니다.
-    - 관계 정보를 반영해, 감정의 결을 유지합니다.
+    {first_encounter_text}
+
+    [중요 지침]
+    - 대사는 각 인물의 말투(tone)에 맞춰 자연스럽게 확장합니다.
+    - 관계 정보를 정확히 반영해야 합니다. 특히 "처음 만남"이 명시된 경우:
+      * 서로의 이름을 모르는 상태입니다
+      * 상대방을 처음 보는 반응(놀람, 경계, 호기심)을 보여야 합니다
+      * "오랜만이야", "또 만났네" 같은 재회 표현을 절대 사용하지 마세요
+      * 예: 아카자가 렌고쿠를 처음 본다면 "오… 염주인가. 강한 투기가 느껴진다." (이름 모름)
     - 'narr'는 내레이션으로, 전투와 감정의 흐름을 묘사합니다.
     - 출력은 JSON 형식:
       {{

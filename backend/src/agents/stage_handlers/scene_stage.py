@@ -49,6 +49,14 @@ class SceneHandler:
         if not complete and stage_turn >= min_turns and constraints.get("auto_advance"):
             complete = True
 
+        # INTRO stage는 첫 턴 이후 user 입력이 있으면 자동으로 다음 스테이지로 진행
+        if not complete and stage_tag == "INTRO" and stage_turn >= 1:
+            user_input = state.get("user_input", "")
+            # auto_continue가 아니고 실제 user 입력이 있는 경우
+            if user_input and user_input != "__AUTO_CONTINUE__":
+                complete = True
+                log("scene", "INTRO stage auto-advancing after user input", turn=stage_turn)
+
         next_stage = get_next_stage_tag(stage) if complete else None
         if complete:
             log("scene", "Scene constraints satisfied", stage=stage_tag, next_stage=next_stage)
