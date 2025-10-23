@@ -71,8 +71,7 @@ class RouterAgent:
             temp["mission_first_target"] = mission_target
         if intent in ("choose_allies_path", "choose_reckless_path"):
             temp["last_user_choice"] = intent
-        elif intent == "on_topic_start":
-            temp["last_user_choice"] = "start"
+        log("codex_fix", f"Router mapped intent={intent}", target=mission_target)
 
         # ✅ 다음 노드는 항상 parent_agent
         state["next_node"] = "parent_agent"

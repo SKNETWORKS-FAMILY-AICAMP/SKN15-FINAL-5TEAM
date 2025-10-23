@@ -13,7 +13,7 @@ ChildrenAgent
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.utils.llm_client import get_llm_client     # OpenAI 또는 커스텀 LLM 클라이언트
 from src.core import scene_dialogue_tools as dialogue_tools  # 새로 만든 tone/profile 유틸
@@ -164,8 +164,13 @@ class ChildrenAgent:
             if isinstance(response, dict) and "dialogues" in response:
                 dialogues = response["dialogues"]
                 if isinstance(dialogues, list):
+                    if not self._contains_narration(dialogues):
+                        narration = self._extract_intro_narration(beats)
+                        if narration:
+                            log("codex_fix", "Prepending intro narration to LLM output")
+                            dialogues = narration + dialogues
                     log("children", f"✅ Generated {len(dialogues)} tone-aware dialogues.")
-                    return dialogues
+                    return self._render_dialogues(state, dialogues)
 
             # 예상 포맷이 아닐 경우
             log("children", f"⚠️ Unexpected LLM response: {type(response)}")
@@ -177,13 +182,50 @@ class ChildrenAgent:
         # 5️⃣ Fallback: beats 그대로 사용
         # -----------------------------
         log("children", "⚙️ Using beats fallback (no LLM response).")
-        return [
+        fallback_dialogues = [
             {
                 "speaker": b.get("speaker", "narr"),
                 "text": b.get("text") or b.get("line") or str(b)
             }
             for b in beats
         ]
+        return self._render_dialogues(state, fallback_dialogues)
+
+    def _render_dialogues(self, state: Dict[str, Any], entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        rendered: List[Dict[str, Any]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            text = entry.get("text")
+            if isinstance(text, str):
+                entry["text"] = self._render_text(state, text)
+            rendered.append(entry)
+        return rendered
+
+    def _contains_narration(self, dialogues: List[Dict[str, Any]]) -> bool:
+        for entry in dialogues:
+            if isinstance(entry, dict) and str(entry.get("speaker", "")).lower() == "narr":
+                return True
+        return False
+
+    def _extract_intro_narration(self, beats: List[Any]) -> List[Dict[str, Any]]:
+        for beat in beats:
+            if not isinstance(beat, dict):
+                continue
+            text = beat.get("text") or beat.get("line") or beat.get("goal")
+            if not text:
+                continue
+            speaker = beat.get("speaker")
+            hints = beat.get("speaker_hint") or []
+            fx = beat.get("fx")
+            if (speaker and speaker.lower() == "narr") or any(
+                isinstance(h, str) and h.lower() == "narr" for h in hints
+            ):
+                dialogue = {"speaker": "narr", "text": text}
+                if fx:
+                    dialogue["fx"] = fx
+                return [dialogue]
+        return []
 
 # ----------------------------------------------------------------------
 # Module-level default instance (편의 함수)

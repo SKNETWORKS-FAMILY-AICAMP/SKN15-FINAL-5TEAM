@@ -153,6 +153,31 @@ def read_value(state: Dict[str, Any], path: str, default: Any = None) -> Any:
     return current
 
 
+def update_state(state: Dict[str, Any], result: Any, stage_tag: str) -> Dict[str, Any]:
+    """
+    Apply the outcome of a stage handler to the shared state.
+
+    Updates temp bookkeeping so ParentAgent.after_dialogue can advance correctly.
+    """
+    stage_complete = bool(getattr(result, "stage_complete", False))
+    next_stage = getattr(result, "next_stage", None)
+
+    temp = get_temp_data(state)
+    scene = get_scene_state(state)
+
+    if stage_complete:
+        temp["completed_stage"] = stage_tag
+        mark_stage_completed(state, stage_tag)
+        mark_pending_stage(state, next_stage)
+    else:
+        temp.pop("completed_stage", None)
+        scene["stage_completed"] = False
+        mark_pending_stage(state, None)
+
+    # Legacy key cleanup handled by caller; keep function focused on progression flags.
+    return state
+
+
 __all__ = [
     "get_scene_state",
     "get_temp_data",
@@ -170,4 +195,5 @@ __all__ = [
     "store_value",
     "read_value",
     "mark_stage_completed",
+    "update_state",
 ]
