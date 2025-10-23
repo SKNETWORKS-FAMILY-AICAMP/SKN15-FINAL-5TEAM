@@ -319,9 +319,47 @@ class ImageManager:
 
             dialogue_text = "\n".join(dialogue_lines)
 
-            # 이미지 목록을 텍스트로 포맷
-            image_lines = []
+            # 대화 내용에서 등장한 캐릭터 확인 (소문자로 통합)
+            dialogue_text_lower = dialogue_text.lower()
+
+            # 캐릭터별 등장 여부 체크
+            character_appeared = {
+                'akaza': 'akaza' in dialogue_text_lower or '아카자' in dialogue_text_lower,
+                'rengoku': 'rengoku' in dialogue_text_lower or '렌고쿠' in dialogue_text_lower or '쿄쥬로' in dialogue_text_lower,
+                'tanjiro': 'tanjiro' in dialogue_text_lower or '탄지로' in dialogue_text_lower,
+                'zenitsu': 'zenitsu' in dialogue_text_lower or '젠이츠' in dialogue_text_lower,
+                'inosuke': 'inosuke' in dialogue_text_lower or '이노스케' in dialogue_text_lower
+            }
+
+            if self.debug:
+                appeared_chars = [char for char, appeared in character_appeared.items() if appeared]
+                print(f"🤖 [LLM] Characters appeared in dialogue: {appeared_chars if appeared_chars else 'None'}")
+
+            # 등장하지 않은 캐릭터의 이미지 필터링
+            filtered_metadata = []
             for img in self.image_metadata:
+                img_tags = [tag.lower() for tag in img.get('tags', [])]
+                img_keywords = [kw.lower() for kw in img.get('keywords', [])]
+
+                # 아카자 관련 이미지는 아카자가 등장한 경우에만 포함
+                if 'akaza' in img_tags or '아카자' in img_keywords:
+                    if character_appeared['akaza']:
+                        filtered_metadata.append(img)
+                    elif self.debug:
+                        print(f"🤖 [LLM] Filtering out image {img['index']} (Akaza not appeared yet)")
+                else:
+                    # 아카자 관련이 아닌 이미지는 모두 포함
+                    filtered_metadata.append(img)
+
+            # 필터링 후 선택 가능한 이미지가 없으면 None 반환
+            if not filtered_metadata:
+                if self.debug:
+                    print(f"🤖 [LLM] No available images after filtering")
+                return None
+
+            # 이미지 목록을 텍스트로 포맷 (필터링된 목록 사용)
+            image_lines = []
+            for img in filtered_metadata:
                 index = img['index']
                 name = img['name']
                 description = img['description']
@@ -340,10 +378,13 @@ class ImageManager:
 주어진 대화 내용을 분석하여 가장 어울리는 배경 이미지를 선택하세요.
 
 선택 기준:
-1. 대화에 등장하는 캐릭터
+1. 대화에 **실제로 등장한** 캐릭터와 사건만 고려
 2. 대화의 분위기와 감정
 3. 현재 스토리 진행 상황
-4. 중요한 사건이나 전환점"""
+4. 중요한 사건이나 전환점
+
+⚠️ 중요: 대화에 명시적으로 등장하지 않은 캐릭터나 사건의 이미지는 절대 선택하지 마세요.
+예: 아카자가 대화에 나타나지 않았다면 아카자 관련 이미지는 선택 불가"""
 
             user_prompt = f"""=== 최근 대화 ({len(recent_dialogues)}개) ===
 {dialogue_text}
@@ -353,11 +394,11 @@ Stage: {current_stage}
 Dialogue Count: {dialogue_count}
 Event Flags: {flags_text}
 
-=== 선택 가능한 이미지 ({len(self.image_metadata)}개) ===
+=== 선택 가능한 이미지 ({len(filtered_metadata)}개) ===
 {images_text}
 
 위 대화 내용을 분석하여 가장 어울리는 배경 이미지를 선택하세요.
-대화에 등장하는 캐릭터, 감정, 상황을 고려하세요.
+**반드시 대화에 실제로 등장한 캐릭터와 상황만** 고려하세요.
 
 JSON 형식으로 응답하세요:
 {{
