@@ -187,6 +187,31 @@ class EmbeddingMatcher:
             return MatchResult(label=None, score=best_score)
         return MatchResult(label=best_label, score=best_score)
 
+    def best_match(self, text: str, *, embedding: Optional[Sequence[float]] = None) -> MatchResult:
+        """
+        threshold를 무시하고 가장 높은 점수의 label을 반환
+        fallback 모드에서 사용
+        """
+        if not text or not text.strip():
+            return MatchResult(label=None, score=0.0)
+
+        vector = embedding or self._client.embed(text)
+        if not vector:
+            return MatchResult(label=None, score=0.0)
+
+        best_label: Optional[str] = None
+        best_score = 0.0
+
+        for label, vectors in self._label_embeddings.items():
+            for ref in vectors:
+                score = self._client.cosine_similarity(vector, ref)
+                if score > best_score:
+                    best_score = score
+                    best_label = label
+
+        # threshold 체크 없이 best를 반환
+        return MatchResult(label=best_label, score=best_score)
+
     def is_match(self, text: str, *, embedding: Optional[Sequence[float]] = None) -> bool:
         result = self.match(text, embedding=embedding)
         return result.label is not None

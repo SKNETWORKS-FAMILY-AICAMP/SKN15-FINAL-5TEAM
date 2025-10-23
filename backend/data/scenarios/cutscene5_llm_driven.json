@@ -1,5 +1,5 @@
 {
-  "scenario_id": "cutscene5_llm_driven_refined",
+  "scenario_id": "cutscene5_llm_driven",
   "title": "🔥 상현 삼 조우 — 리듬형 완전판",
   "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
   "version": "6.0",
@@ -32,22 +32,22 @@
         { "goal": "【전투 중】 아카자의 공격이 연이어 터진다. 땅이 갈라지고 먼지가 일어난다.", "speaker_hint": ["narr"], "fx": "ground_tremor|explosion" },
         { "goal": "탄지로가 숨을 몰아쉰다. '렌고쿠 님이… 혼자 버티고 있어요.'", "speaker_hint": ["tanjiro"] },
         { "goal": "렌고쿠의 외침이 들린다. '이 자리에서 물러서지 않겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition" },
-        { "goal": "탄지로가 {user}를 본다. '두 가지 방법이 있어요. 동료를 찾거나, 지금 바로 돕거나.'", "speaker_hint": ["tanjiro"] },
         { "goal": "아카자가 웃는다. '하하, 더 와라! 모두 부숴주지!'", "speaker_hint": ["akaza"], "fx": "evil_laugh" },
-        { "goal": "탄지로가 급히 말한다. '{user}! 결정을 내려야 해요!'", "speaker_hint": ["tanjiro"], "fx": "urgent_heartbeat" },
+        { "goal": "탄지로가 급히 말한다. '{user}! 어떻게 할까요?!'", "speaker_hint": ["tanjiro"], "fx": "urgent_heartbeat" },
         { "goal": "렌고쿠가 외친다. '판단은 너희에게 맡기마!'", "speaker_hint": ["rengoku"] },
+        { "goal": "탄지로가 {user}를 본다. '두 가지 방법이 있어요. 동료를 찾거나, 지금 바로 렌고쿠씨와 함께 싸우던가.'", "speaker_hint": ["tanjiro"] },
         { "goal": "하늘에는 불길이 번지고, 결전의 시간이 다가온다.", "speaker_hint": ["narr"], "fx": "flame_flash" }
       ],
 
       "beats_intervene_hint": [
+        { "goal": "좋아요 {user}! 어서 그 방법으로 렌고쿠씨를 돕죠'", "speaker_hint": ["tanjiro"] },
         { "goal": "렌고쿠와 아카자가 충돌한다. 주먹과 검이 맞부딪히며 폭풍 같은 불꽃이 터진다.", "speaker_hint": ["rengoku","akaza"], "fx": "blade_clash|flame_roar" },
-        { "goal": "탄지로가 외친다. '{user}! 원거리 견제든 뭐든 해야 해요!'", "speaker_hint": ["tanjiro"] },
         { "goal": "렌고쿠의 검이 빛을 잃는다. '크윽… 아직…!'", "speaker_hint": ["rengoku"], "fx": "heavy_breath|flame_flicker" },
         { "goal": "아카자가 웃는다. '강하다… 그러나 인간은 약하다.'", "speaker_hint": ["akaza"], "fx": "evil_laugh|air_freeze" },
+        { "goal": "탄지로가 불길 속에서 외친다. '{user}! 지금 기술을 써서 막을까요, 아니면 렌고쿠씨에게 달려들까요?!'","speaker_hint": ["tanjiro"],"fx": "flame_burst"},
         { "goal": "탄지로가 결단을 내린다. '{user}, 어떻게 할까요?!'", "speaker_hint": ["tanjiro"], "fx": "urgent_heartbeat" },
         { "goal": "렌고쿠가 외친다. '내 몸이 불타도… 지켜내겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition|pulse_boom" },
-        { "goal": "공기가 뒤틀리고 폭발음이 울린다. 전장이 흔들린다.", "speaker_hint": ["narr"], "fx": "explosion|ground_fissure" },
-        { "goal": "이 싸움은 이미 인간의 한계를 넘어섰다.", "speaker_hint": ["narr"] }
+        { "goal": "공기가 뒤틀리고 폭발음이 울린다. 전장이 흔들린다.", "speaker_hint": ["narr"], "fx": "explosion|ground_fissure" }
       ],
 
       "beats_smell": [
@@ -104,6 +104,7 @@
 
 
       "beats_reckless_sacrifice": [
+        { "goal": "{user}에게 대답한다.좋아요 그 방법으로 가죠.", "speaker_hint": ["tanjiro"], "fx": "blood_spray" },
         { "goal": "【무모한 돌입】 {user}와 탄지로가 준비 없이 전장으로 뛰어든다.", "speaker_hint": ["rengoku","tanjiro"], "fx": "desperate_charge|shockwave_snap" },
         { "goal": "탄지로가 피를 토한다. '으윽... 몸이...'", "speaker_hint": ["tanjiro","rengoku"], "fx": "blood_spray" },
         { "goal": "아카자가 웃으며 주먹을 휘두른다. '하하하! 약한 자들은 죽어라!'", "speaker_hint": ["akaza"], "fx": "fatal_strike|explosion" },

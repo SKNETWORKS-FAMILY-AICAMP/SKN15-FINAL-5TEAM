@@ -27,7 +27,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const [transcript, setTranscript] = useState('');
   const [invitedCharacters, setInvitedCharacters] = useState<string[]>(['tanjiro', 'inosuke', 'zenitsu', 'nezuko']); // 현재 참여중인 캐릭터들
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  // localStorage에서 sessionId 로드
+  const [sessionId, setSessionId] = useState<string | undefined>(() => {
+    const saved = localStorage.getItem('kime_session_id');
+    return saved || undefined;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false); // 타이핑 중 표시
@@ -111,6 +115,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]); // 메시지 변경 또는 타이핑 상태 변경 시 스크롤
+
+  // sessionId가 변경될 때 localStorage에 저장
+  useEffect(() => {
+    if (sessionId) {
+      localStorage.setItem('kime_session_id', sessionId);
+      console.log('💾 Session ID saved to localStorage:', sessionId);
+    }
+  }, [sessionId]);
 
   // 타이핑 효과와 함께 메시지를 표시하는 함수 (50ms per character)
   const addMessageWithTypingEffect = async (message: Message): Promise<void> => {
@@ -219,7 +231,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
       const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
         id: generateMessageId(),
-        text: dialogue.content,
+        text: dialogue.text || dialogue.content || '',  // 백엔드는 'text' 사용
         isUser: false,
         timestamp: new Date(),
         characterId: dialogue.speaker,
@@ -273,7 +285,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
         const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
           id: generateMessageId(),
-          text: dialogue.content,
+          text: dialogue.text || dialogue.content || '',  // 백엔드는 'text' 사용
           isUser: false,
           timestamp: new Date(),
           characterId: dialogue.speaker,
@@ -593,7 +605,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       // Add backend responses to messages sequentially (고유 ID 사용)
       const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
         id: generateMessageId(),
-        text: dialogue.content,
+        text: dialogue.text || dialogue.content || '',  // 백엔드는 'text' 사용
         isUser: false,
         timestamp: new Date(),
         characterId: dialogue.speaker,
