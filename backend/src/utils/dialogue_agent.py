@@ -416,20 +416,6 @@ def run_dialogue_agent(state: AgentState) -> AgentState:
         state["output"]["dialogues"] = agent_responses.copy()
         print(f"[DIALOGUE] Updated output with {len(agent_responses)} new dialogues")
 
-        # 🔥 Increment dialogue counters for image transition tracking
-        dialogue_count = len(agent_responses)
-        if dialogue_count > 0:
-            # Increment session-wide counter (accumulates across entire session)
-            state["dialogues_generated_count"] = state.get("dialogues_generated_count", 0) + dialogue_count
-
-            # Increment stage-specific counter (accumulates per stage)
-            current_stage = state.get("current_stage", "INTRO")
-            stage_counts = state.get("stage_dialogue_counts", {})
-            stage_counts[current_stage] = stage_counts.get(current_stage, 0) + dialogue_count
-            state["stage_dialogue_counts"] = stage_counts
-
-            print(f"[DIALOGUE] Counters updated: total={state['dialogues_generated_count']}, {current_stage}={stage_counts[current_stage]}")
-
         # agent_responses 초기화 (다음 배치를 위해)
         state["agent_responses"] = []
 

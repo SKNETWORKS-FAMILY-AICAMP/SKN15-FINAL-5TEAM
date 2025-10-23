@@ -128,6 +128,7 @@ class ChildrenAgent:
         character_refs = ctx.get("character_refs", {})  # 캐릭터 JSON 경로들
         beats = ctx.get("beats") or []                  # 시나리오 내 상황 묘사 텍스트
         stage_tag = ctx.get("stage_tag")                # 현재 스테이지명
+        stage_type = ctx.get("stage_type")              # 스테이지 타입
 
         # ⚠️ beats가 비어있으면 에러 반환 (LLM hallucination 방지)
         if not beats:
@@ -136,6 +137,23 @@ class ChildrenAgent:
                 "speaker": "system",
                 "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
             }]
+
+        # 🔧 OFF_TOPIC이나 system_notice는 LLM 우회하고 fallback 직접 사용
+        if stage_type == "system_notice" or stage_tag == "OFF_TOPIC":
+            log("children", f"⚙️ Bypassing LLM for {stage_type or stage_tag} - using fallback directly")
+
+            # fallback에 dialogues가 있으면 우선 사용
+            fallback = ctx.get("fallback", {})
+            if isinstance(fallback, dict):
+                fallback_dialogues = fallback.get("dialogues", [])
+                if fallback_dialogues:
+                    log("children", f"✅ Using {len(fallback_dialogues)} fallback dialogues")
+                    return self._render_dialogues(state, fallback_dialogues)
+
+            # fallback이 없으면 beats 그대로 사용
+            log("children", f"✅ Using {len(beats)} beats as-is")
+            normalized = self._normalize_dialogues(beats)
+            return self._render_dialogues(state, normalized)
 
         # 🔍 디버깅: 받은 beats 확인
         log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
@@ -157,12 +175,19 @@ class ChildrenAgent:
         # -----------------------------
         # 2️⃣ 캐릭터 톤 + 관계 로드
         # -----------------------------
-        tone_profiles = dialogue_tools.load_tone_profiles(character_refs, scenario_key)
+        speaker_pool = ctx.get("speaker_pool", [])
+
+        # 🔧 speaker_pool에 있는 캐릭터만 tone_profile 로드
+        filtered_character_refs = {}
+        for char in speaker_pool:
+            if char in character_refs:
+                filtered_character_refs[char] = character_refs[char]
+
+        tone_profiles = dialogue_tools.load_tone_profiles(filtered_character_refs, scenario_key)
 
         # -----------------------------
         # 3️⃣ LLM 프롬프트 생성
         # -----------------------------
-        speaker_pool = ctx.get("speaker_pool", [])
         llm_prompt = dialogue_tools.compose_llm_prompt(
             stage_tag=stage_tag,
             beats=beats,

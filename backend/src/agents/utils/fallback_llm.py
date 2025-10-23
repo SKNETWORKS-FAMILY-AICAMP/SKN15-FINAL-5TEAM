@@ -120,12 +120,16 @@ def generate_off_topic_response(
 ) -> Optional[Dict[str, Any]]:
     scene = state.get("scene") or {}
     speaker_pool = scene.get("speaker_pool") or []
-    fallback_speakers = ["tanjiro", "rengoku", "inosuke", "zenitsu"]
-    candidates = [sp for sp in speaker_pool if isinstance(sp, str)] or fallback_speakers
+    fallback_speakers = ["tanjiro"]
+    # speaker_pool에서 아카자 제외 (스토리상 off-topic 응답에 부적절)
+    candidates = [sp for sp in speaker_pool if isinstance(sp, str) and sp.lower() != "akaza"] or fallback_speakers
     character = random.choice(candidates)
+
+    log("fallback_llm", f"Selected speaker for off-topic: {character} (pool: {speaker_pool})")
 
     profile = _load_character_profile(character)
     if not profile:
+        log("fallback_llm", f"⚠️ Failed to load profile for {character} - using system message")
         text = "지금은 임무에 집중해야 해요. 나중에 이야기해요!"
         return {
             "speaker": character,

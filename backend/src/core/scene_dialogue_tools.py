@@ -103,6 +103,21 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     # --- beats ---
     beat_lines = "\n".join(f"- {b.get('goal', '')}" for b in beats)
 
+    # INTRO 스테이지 감지 및 첫 narr 체크
+    is_intro = "INTRO" in stage_tag.upper()
+    has_narr_beat = any(
+        b.get("speaker", "").lower() == "narr"
+        for b in beats
+    )
+    intro_narr_reminder = ""
+    if is_intro and has_narr_beat:
+        intro_narr_reminder = """
+    ⭐ INTRO 스테이지 필수 요구사항:
+    - 반드시 narr(내레이션)으로 시작해야 합니다
+    - 첫 번째 dialogue는 무조건 speaker: "narr"이어야 합니다
+    - narr는 장면의 배경, 분위기, 환경을 생생하게 묘사합니다
+    """
+
     prompt = f"""
     당신은 Demon Slayer: 무한열차 시나리오의 대사 작가입니다.
 
@@ -119,6 +134,7 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     {rel_text}
 
     {first_encounter_text}
+    {intro_narr_reminder}
 
     [중요 지침]
     1. 대사 확장 규칙:
@@ -137,6 +153,8 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     3. 내레이션(narr):
        - 'narr'는 내레이션으로, 전투와 감정의 흐름을 시각적으로 묘사합니다
        - 분위기, 효과음, 장면 전환을 생생하게 표현하세요
+       - INTRO 스테이지에서는 narr가 반드시 첫 번째로 나와야 합니다
+       - narr를 생략하지 마세요. beats에 narr가 있다면 반드시 포함하세요
 
     4. 출력 형식 (JSON):
       {{
