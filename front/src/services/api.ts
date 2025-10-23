@@ -12,7 +12,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export interface ChatMessage {
   speaker: string
-  content: string
+  text?: string  // 백엔드가 사용하는 필드
+  content?: string  // 레거시 호환성
   emotion?: string
   timestamp?: string
 }

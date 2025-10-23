@@ -62,10 +62,13 @@ class RouterAgent:
             {
                 "choose_reckless_path": [
                     "렌고쿠와 함께 싸운다",
+                    "렌고쿠씨와 함께 싸울래요",
                     "렌고쿠와 지금 당장 싸울게요",
                     "제가 혼자 막아낼게요",
                     "렌고쿠 옆에서 싸울게요",
                     "제가 바로 싸울게요",
+                    "같이 싸우겠습니다",
+                    "함께 싸울래요",
                 ],
                 "choose_allies_path": [
                     "동료를 데려온다",
@@ -74,9 +77,10 @@ class RouterAgent:
                     "동료들을 불러올게요",
                     "젠이츠와 이노스케를 데려온다",
                     "동료 모두 데려올게요",
+                    "지원군을 부를게요",
                 ],
             },
-            threshold=0.80,
+            threshold=0.70,
             embedding_client=self._embedding_client,
         )
 
@@ -113,7 +117,7 @@ class RouterAgent:
             route_match = self._classify_route_choice(normalized, embedding=embedding)
             if route_match:
                 route_reason = "embedding"
-            elif self._embedding_client.is_using_fallback():
+            elif self._embedding_client._use_fallback:
                 fallback_match = self._route_choice_best_match(normalized, embedding=embedding)
                 if fallback_match and fallback_match.score >= ROUTE_FALLBACK_THRESHOLD:
                     route_match = fallback_match
@@ -285,18 +289,27 @@ JSON 형태로만 응답하십시오:
         state["user_intent"] = "off_topic"
         state["classification"] = "off_topic"
 
+        # 🔧 현재 스테이지의 speaker_pool을 state.scene에 설정 (fallback_llm이 사용)
+        current_stage = self._get_current_stage(state)
+        scenario = state.get("scenario") or state.get("scenario_data")
+        if isinstance(scenario, dict) and current_stage:
+            from src.tools.scene_tools import get_stage
+            stage_def = get_stage(scenario, current_stage)
+            if stage_def:
+                scene = state.setdefault("scene", {})
+                scene["speaker_pool"] = stage_def.get("speaker_pool", [])
+
         fallback = generate_off_topic_response(state, user_input) or {}
         fallback_text = fallback.get("text") or "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요."
         fallback_speaker = fallback.get("speaker", "system")
-
-        scenario = state.get("scenario") or state.get("scenario_data")
         character_refs = {}
         if isinstance(scenario, dict):
+            # character_refs = scenario.get("character_refs", {}) or {}
             scenario_refs = scenario.get("character_refs") or {}
             if isinstance(scenario_refs, dict):
                 fallback_ref = scenario_refs.get(fallback_speaker)
-                if fallback_ref:
-                    character_refs = {fallback_speaker: fallback_ref}
+            if fallback_ref:
+                character_refs = {fallback_speaker: fallback_ref}
 
         children_ctx = {
             "stage_tag": "OFF_TOPIC",

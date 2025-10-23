@@ -78,6 +78,14 @@ class FreeIntentHandler:
     def _match_action(self, stage: Dict[str, Any], intent: Optional[str]) -> Dict[str, Any]:
         if not intent:
             return {}
+
+        # 1. intent_mapping 방식 지원 (새로운 간단한 형식)
+        intent_mapping = stage.get("intent_mapping", {})
+        if intent in intent_mapping:
+            next_stage = intent_mapping[intent]
+            return {"goto": next_stage}
+
+        # 2. on_action 방식 지원 (기존 복잡한 형식)
         for entry in stage.get("on_action", []):
             action = entry.get("action")
             if isinstance(action, str) and action.lower() == intent:
