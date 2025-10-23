@@ -1,0 +1,28 @@
+{
+  "mission": {
+    "default": [
+      {
+        "speaker": "tanjiro",
+        "text": "시간이 없어! 누구를 먼저 찾을지 확실히 말해줘!"
+      },
+      {
+        "speaker": "rengoku",
+        "text": "결단이 필요하다. 이노스케냐, 젠이츠냐!"
+      }
+    ]
+  },
+  "free_intent": {
+    "default": [
+      {
+        "speaker": "tanjiro",
+        "text": "어느 쪽으로 움직일지 말해주세요! 모두 당신의 선택을 기다리고 있어요."
+      }
+    ]
+  },
+  "default": [
+    {
+      "speaker": "narr",
+      "text": "긴급 상황입니다. 빠르게 결정을 내려야 합니다."
+    }
+  ]
+}

@@ -457,14 +457,18 @@ function CharacterCardComponent({
           }}
         >
           {/* 캐릭터 이미지 */}
-          <div className="relative overflow-hidden rounded-t-[28px]"
-               style={{
-                 height: isCenter ? '300px' : '240px'
-               }}>
+          <div
+            className="relative overflow-hidden rounded-t-[28px] bg-black"
+            style={{
+              height: isCenter ? '300px' : '240px',
+            }}
+          >
             <img
               src={character.image}
               alt={character.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400 ease-in-out"
+              className={`w-full h-full transition-transform duration-400 ease-in-out group-hover:scale-105 ${
+                isCenter ? 'object-contain' : 'object-cover'
+              }`}
               draggable={false}
             />
           </div>

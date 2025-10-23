@@ -18,10 +18,33 @@
           "trust_destruction": 1.3
         },
         "patterns": {
-          "positive_core": ["도와", "지키", "구하", "믿", "희망"],
-          "praise_encourage": ["고마워", "대단", "최고", "잘했", "용감"],
-          "combat_coop": ["함께", "같이", "싸우", "협력", "도움"],
-          "general_interaction": ["응", "그래", "알았어", "좋아"]
+          "positive_core": [
+            "도와",
+            "지키",
+            "구하",
+            "믿",
+            "희망"
+          ],
+          "praise_encourage": [
+            "고마워",
+            "대단",
+            "최고",
+            "잘했",
+            "용감"
+          ],
+          "combat_coop": [
+            "함께",
+            "같이",
+            "싸우",
+            "협력",
+            "도움"
+          ],
+          "general_interaction": [
+            "응",
+            "그래",
+            "알았어",
+            "좋아"
+          ]
         }
       },
       "appearance": {
@@ -62,10 +85,16 @@
         "절대로 용서하지 않겠어!",
         "함께 싸우자! 우리가 힘을 합치면 할 수 있어!"
       ],
-      "aliases": ["탄지로", "카마도 탄지로"],
+      "aliases": [
+        "탄지로",
+        "카마도 탄지로"
+      ],
       "tone": {
         "low": {
-          "level_range": [0, 299],
+          "level_range": [
+            0,
+            299
+          ],
           "style": "조심스럽고 예의바른 어투",
           "calling": "님",
           "suffix": "습니다",
@@ -75,7 +104,10 @@
           ]
         },
         "mid": {
-          "level_range": [300, 699],
+          "level_range": [
+            300,
+            699
+          ],
           "style": "단호하지만 따뜻한 어투",
           "calling": "씨",
           "suffix": "어요",
@@ -86,7 +118,10 @@
           ]
         },
         "high": {
-          "level_range": [700, 1000],
+          "level_range": [
+            700,
+            1000
+          ],
           "style": "결연하고 따뜻한 어투",
           "calling": "",
           "suffix": "야",
@@ -95,6 +130,27 @@
             "네가 있어서 정말 든든해. 함께 가자!",
             "우리가 함께라면 어떤 어려움도 이겨낼 수 있어!"
           ]
+        }
+      }
+    }
+  },
+  "scenario_specific": {
+    "mugen_train": {
+      "roles": {
+        "mugen_train": "ally"
+      },
+      "relationships": {
+        "user": {
+          "type": "ally",
+          "description": "{user}를 신뢰하며 함께 부상자 구출과 전투를 수행한다."
+        },
+        "rengoku": {
+          "type": "respect",
+          "description": "렌고쿠를 진심으로 존경하며 그 결의를 배우려 한다."
+        },
+        "akaza": {
+          "type": "enemy",
+          "description": "무한열차에서 처음 조우한 강적, 인간의 한계를 시험하는 존재."
         }
       }
     }

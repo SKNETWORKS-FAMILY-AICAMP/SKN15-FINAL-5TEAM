@@ -96,5 +96,26 @@
         }
       }
     }
+  },
+  "scenario_specific": {
+    "mugen_train": {
+      "roles": {
+        "mugen_train": "antagonist"
+      },
+      "relationships": {
+        "rengoku": {
+          "type": "enemy",
+          "description": "렌고쿠의 정의감과 자신의 신념이 정면으로 부딪힌다."
+        },
+        "user": {
+          "type": "curiosity",
+          "description": "{user}의 잠재된 힘을 감지하고 흥미를 느낀다."
+        },
+        "tanjiro": {
+          "type": "opponent",
+          "description": "인간의 집념을 흥미롭게 지켜본다."
+        }
+      }
+    }
   }
 }

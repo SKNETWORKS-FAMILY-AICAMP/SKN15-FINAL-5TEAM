@@ -71,6 +71,7 @@ class KimeChatWorkflow:
             self._route_after_guardrail,
             {
                 "router": "router",
+                "dialogue_agent": "dialogue_agent",
                 "wait_user_input": END,
                 "blocked": END
             }
@@ -282,6 +283,8 @@ class KimeChatWorkflow:
         next_node = state.get("next_node", "router")
         if next_node in ["blocked", "wait_user_input"]:
             return next_node
+        if next_node == "dialogue_agent":
+            return "dialogue_agent"
         return "router"
 
     def _route_after_router(self, state: GraphState) -> str:
