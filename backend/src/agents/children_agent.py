@@ -129,14 +129,32 @@ class ChildrenAgent:
         beats = ctx.get("beats") or []                  # 시나리오 내 상황 묘사 텍스트
         stage_tag = ctx.get("stage_tag")                # 현재 스테이지명
         stage_type = ctx.get("stage_type")              # 스테이지 타입
+        prefetch_entries = ctx.get("prefetch_dialogues") or []
+        prefetch_dialogues = self._render_dialogues(state, [dict(entry) for entry in prefetch_entries if isinstance(entry, dict)]) if prefetch_entries else []
+
+        def merge_with_prefetch(dialogues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            if not prefetch_dialogues:
+                return dialogues
+            # 사본을 만들어 원본 훼손 방지
+            merged = []
+            for item in prefetch_dialogues:
+                merged.append(dict(item))
+            for item in dialogues:
+                merged.append(item)
+            return merged
 
         # ⚠️ beats가 비어있으면 에러 반환 (LLM hallucination 방지)
         if not beats:
+            fallback = (ctx.get("fallback") or {}).get("dialogues") or []
+            if fallback:
+                log("children", "⚙️ Using provided fallback dialogues (no beats)")
+                return merge_with_prefetch(self._render_dialogues(state, fallback))
+
             log("children", "⚠️ No beats provided - cannot generate dialogue")
-            return [{
+            return merge_with_prefetch([{
                 "speaker": "system",
                 "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
-            }]
+            }])
 
         # 🔧 OFF_TOPIC이나 system_notice는 LLM 우회하고 fallback 직접 사용
         if stage_type == "system_notice" or stage_tag == "OFF_TOPIC":
@@ -148,12 +166,12 @@ class ChildrenAgent:
                 fallback_dialogues = fallback.get("dialogues", [])
                 if fallback_dialogues:
                     log("children", f"✅ Using {len(fallback_dialogues)} fallback dialogues")
-                    return self._render_dialogues(state, fallback_dialogues)
+                    return merge_with_prefetch(self._render_dialogues(state, fallback_dialogues))
 
             # fallback이 없으면 beats 그대로 사용
             log("children", f"✅ Using {len(beats)} beats as-is")
             normalized = self._normalize_dialogues(beats)
-            return self._render_dialogues(state, normalized)
+            return merge_with_prefetch(self._render_dialogues(state, normalized))
 
         # 🔍 디버깅: 받은 beats 확인
         log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
@@ -195,32 +213,59 @@ class ChildrenAgent:
             speaker_pool=speaker_pool
         )
 
+        log("children", f"🧠 Prompt preview:\n{llm_prompt[:500]}...")
+
 
         # -----------------------------
         # 4️⃣ LLM 호출 시도
         # -----------------------------
         try:
+            system_prompt = (
+                "당신은 Demon Slayer 시나리오의 대사 생성기입니다.\n"
+                "주어진 [상황 요약] beats를 정확히 따라 대사를 생성하세요.\n"
+                "절대로 beats에 없는 장소, 상황, 캐릭터를 추가하지 마세요.\n"
+                "goal 텍스트를 복사하지 말고 자연스러운 대사나 내레이션으로 재해석하세요.대사는 2~3줄로 풍부하게 표현하세요\n"
+                "narr가 아닌 화자는 설명체 대신 캐릭터의 말만 하세요 (\"~라고 말한다\" 같은 서술 금지).\n"
+                "narr만 장면 묘사와 효과음을 담당합니다."
+            )
+            if not system_prompt.strip():
+                log("children", "⚠️ system_prompt missing - using default guardrail")
+                system_prompt = "You generate in-character dialogue for a scripted scene."
+
             response = self._llm.call_json(
-                system_prompt="당신은 Demon Slayer 시나리오의 대사 생성기입니다.",
+                system_prompt=system_prompt,
                 user_prompt=llm_prompt,
                 temperature=0.65,
-                max_tokens=2000,  # 확장된 대사를 위해 증가
+                max_tokens=2000,
             )
-            log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:200]}")
+            log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:500]}")
 
-            # 응답이 정상적일 경우
-            if isinstance(response, dict) and "dialogues" in response:
-                dialogues = response["dialogues"]
-                if isinstance(dialogues, list):
-                    dialogues = self._normalize_dialogues(dialogues)
-                    # INTRO 스테이지일 때만 intro narration 보장
+            dialogue_payload = None
+            if isinstance(response, dict):
+                dialogue_payload = response.get("dialogues")
+
+            # 1차 응답 검증
+            if not isinstance(dialogue_payload, list) or not dialogue_payload:
+                log("children", "⚠️ LLM response invalid or empty → retrying once")
+                retry_resp = self._llm.call_json(
+                    system_prompt=system_prompt,
+                    user_prompt=llm_prompt,
+                    temperature=0.9,
+                    max_tokens=2000,
+                )
+                log("children", f"LLM retry response: {json.dumps(retry_resp, ensure_ascii=False)[:500]}")
+
+                if isinstance(retry_resp, dict):
+                    dialogue_payload = retry_resp.get("dialogues")
+
+            if isinstance(dialogue_payload, list) and dialogue_payload:
+                dialogues = self._normalize_dialogues(dialogue_payload)
+                if dialogues:
                     log("children", f"✅ Generated {len(dialogues)} tone-aware dialogues.")
-                    return self._render_dialogues(state, dialogues)
+                    return merge_with_prefetch(self._render_dialogues(state, dialogues))
 
-            # 예상 포맷이 아닐 경우
-            log("children", f"⚠️ Unexpected LLM response: {type(response)}")
+            log("children", f"⚠️ LLM invalid response → {type(response)} {response}")
         except Exception as exc:
-            # LLM 호출 실패 (네트워크 / 포맷 오류 등)
             log("children", f"❌ LLM call failed: {exc}")
 
         # -----------------------------
@@ -228,16 +273,27 @@ class ChildrenAgent:
         # -----------------------------
         log("children", "⚙️ Using beats fallback (no LLM response).")
 
+        ctx.setdefault("fallback_count", 0)
+        ctx["fallback_count"] += 1
+        if ctx["fallback_count"] > 3:
+            log("children", "❌ Too many fallback calls → forcing stage advance")
+            state["stage_turn"] = int(state.get("stage_turn", 0) or 0) + 1
+            state.setdefault("temp_data", {})["force_story_resume"] = True
+
         # beats가 비어있으면 에러 메시지 반환
         if not beats:
             log("children", "⚠️ No beats available for fallback")
-            return [{
+            return merge_with_prefetch([{
                 "speaker": "system",
                 "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
-            }]
+            }])
 
         fallback_dialogues = self._normalize_dialogues(beats)
-        return self._render_dialogues(state, fallback_dialogues)
+        fallback = (ctx.get("fallback") or {}).get("dialogues") or []
+        if fallback:
+            log("children", "⚙️ Using provided fallback dialogues for this stage")
+            fallback_dialogues = self._normalize_dialogues(fallback)
+        return merge_with_prefetch(self._render_dialogues(state, fallback_dialogues))
 
     def _render_dialogues(self, state: Dict[str, Any], entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         rendered: List[Dict[str, Any]] = []
@@ -287,6 +343,11 @@ class ChildrenAgent:
                     hints = entry.get("speaker_hint")
                     if isinstance(hints, list) and hints:
                         speaker = hints[0]
+
+                # 🔥 goal에서 따옴표 안의 대사 추출 (더 자연스러운 대사를 위해)
+                if not entry.get("text") and text:
+                    text = self._extract_dialogue_from_goal(text, speaker or "narr")
+
                 normalized.append(
                     {
                         "speaker": (speaker or "narr"),
@@ -297,6 +358,33 @@ class ChildrenAgent:
             else:
                 normalized.append({"speaker": "narr", "text": str(entry)})
         return normalized
+
+    def _extract_dialogue_from_goal(self, goal: str, speaker: str) -> str:
+        """
+        goal 텍스트에서 따옴표 안의 대사를 추출하여 자연스럽게 만듦
+        예: "탄지로가 말한다. '이노스케! 지금은 싸움이 아니야!'"
+            → "이노스케! 지금은 싸움이 아니야! 우리가 지금 해야 할 일은 렌고쿠 님을 돕는 거야!"
+        """
+        import re
+
+        # 따옴표 안의 대사 찾기 (', ", 「」 모두 지원)
+        quotes_pattern = r"['\"\「]([^'\"」]+)['\"\」]"
+        matches = re.findall(quotes_pattern, goal)
+
+        if matches:
+            # 대사를 찾았으면 그것을 반환 (여러 개면 합침)
+            dialogue = " ".join(matches)
+
+            # narr(내레이션)인 경우 goal 전체 사용 (상황 묘사)
+            if speaker == "narr":
+                # 【 】 안의 상황 태그 제거
+                cleaned = re.sub(r"【[^】]+】\s*", "", goal)
+                return cleaned.strip()
+
+            return dialogue.strip()
+
+        # 대사를 못 찾았으면 goal 그대로 반환
+        return goal
 
 # ----------------------------------------------------------------------
 # Module-level default instance (편의 함수)

@@ -11,6 +11,10 @@ _INOSUKE_TERMS: Iterable[str] = (
     "ino",
     "멧돼",
     "ino suke",
+    "앞쪽",
+    "기관실",
+    "앞쪽 칸",
+    "기관실 쪽",
 )
 
 _ZENITSU_TERMS: Iterable[str] = (
@@ -20,6 +24,8 @@ _ZENITSU_TERMS: Iterable[str] = (
     "츠구코",
     "번개",
     "zen itsu",
+    "뒤쪽",
+    "뒤쪽 칸",
 )
 
 
