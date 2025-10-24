@@ -274,7 +274,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
 
-      // 타이핑 효과: 50ms마다 한 글자씩 추가
+      // 타이핑 효과: 3ms마다 한 글자씩 추가 (빠른 응답성)
       const chars = message.text.split('');
       let currentIndex = 0;
 
@@ -290,7 +290,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           clearInterval(typingInterval);
           resolve();
         }
-      }, 10); // 50ms per character
+      }, 3); // 3ms per character (fast typing)
     });
   };
 
@@ -328,9 +328,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         // 타이핑 효과로 메시지 표시
         await addMessageWithTypingEffect(newMessages[i]);
 
-        // 마지막 메시지가 아니면 2.5초 대기
+        // 마지막 메시지가 아니면 800ms 대기 (빠른 흐름)
         if (i < newMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 seconds
+          await new Promise(resolve => setTimeout(resolve, 800)); // 0.8 seconds
         }
       }
 
@@ -396,11 +396,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       // has_more가 true이면 계속 자동 요청
       if (response.has_more && !shouldCancelAutoRequest.current) {
-        console.log('🔄 has_more is true, scheduling next auto-request in 2.5s...');
-        // 2.5초 후 다음 배치 요청
+        console.log('🔄 has_more is true, scheduling next auto-request in 1s...');
+        // 1초 후 다음 배치 요청
         autoRequestTimerRef.current = window.setTimeout(() => {
           handleAutoRequest(response.session_id, 0); // 성공 시 재시도 카운트 리셋
-        }, 2500);
+        }, 1000);
       } else {
         console.log(`✅ Auto-request complete. has_more: ${response.has_more}, cancelled: ${shouldCancelAutoRequest.current}`);
         setIsAutoRequesting(false);
@@ -1332,6 +1332,30 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </button>
+            {/* 🔧 긴급 리셋 버튼 */}
+            {(isLoading || isTyping || isAutoRequesting) && (
+              <button
+                onClick={() => {
+                  console.log('🔧 [RESET] Emergency reset triggered');
+                  setIsAutoRequesting(false);
+                  setIsTyping(false);
+                  setIsLoading(false);
+                  setLoadingMessage(null);
+                  shouldCancelAutoRequest.current = true;
+                  if (autoRequestTimerRef.current) {
+                    clearTimeout(autoRequestTimerRef.current);
+                    autoRequestTimerRef.current = null;
+                  }
+                  isAddingMessages.current = false;
+                }}
+                className="p-2 hover:bg-red-100 rounded-full transition-colors text-red-500 hover:text-red-600"
+                title="입력 활성화 (긴급 리셋)"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
             <div className="flex-1 relative">
               <input
                 type="text"
