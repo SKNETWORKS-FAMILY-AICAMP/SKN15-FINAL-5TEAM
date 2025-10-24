@@ -313,29 +313,33 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     isAddingMessages.current = true;
     setIsTyping(true);
 
-    console.log(`📝 Adding ${newMessages.length} messages sequentially...`);
+    try {
+      console.log(`📝 Adding ${newMessages.length} messages sequentially...`);
 
-    for (let i = 0; i < newMessages.length; i++) {
-      // 사용자가 중단을 요청했는지 확인
-      if (shouldCancelAutoRequest.current) {
-        console.log('⚠️ User cancelled, stopping message display');
-        break;
+      for (let i = 0; i < newMessages.length; i++) {
+        // 사용자가 중단을 요청했는지 확인
+        if (shouldCancelAutoRequest.current) {
+          console.log('⚠️ User cancelled, stopping message display');
+          break;
+        }
+
+        console.log(`  → Message ${i + 1}/${newMessages.length}: ${newMessages[i].characterId} - ${newMessages[i].text.substring(0, 30)}...`);
+
+        // 타이핑 효과로 메시지 표시
+        await addMessageWithTypingEffect(newMessages[i]);
+
+        // 마지막 메시지가 아니면 2.5초 대기
+        if (i < newMessages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 seconds
+        }
       }
 
-      console.log(`  → Message ${i + 1}/${newMessages.length}: ${newMessages[i].characterId} - ${newMessages[i].text.substring(0, 30)}...`);
-
-      // 타이핑 효과로 메시지 표시
-      await addMessageWithTypingEffect(newMessages[i]);
-
-      // 마지막 메시지가 아니면 2.5초 대기
-      if (i < newMessages.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 seconds
-      }
+      console.log('✅ Finished adding messages');
+    } finally {
+      // 🔥 에러가 발생해도 반드시 타이핑 상태를 해제
+      setIsTyping(false);
+      isAddingMessages.current = false;
     }
-
-    setIsTyping(false);
-    isAddingMessages.current = false;
-    console.log('✅ Finished adding messages');
   };
 
   // 자동 요청 함수 (has_more가 true일 때 호출)

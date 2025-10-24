@@ -133,6 +133,13 @@
         { "goal": "하늘이 붉게 물든다. 아카자가 해를 바라보며 사라진다.", "speaker_hint": ["narr"], "fx": "dawn_light|ash_wind" },
         { "goal": "탄지로가 울부짖는다. '렌고쿠 님! 눈을 뜨세요!'", "speaker_hint": ["tanjiro"] },
         { "goal": "렌고쿠가 마지막으로 미소 짓는다. '너희의 길을… 계속 걸어라…'", "speaker_hint": ["rengoku"], "fx": "flame_flicker" }
+      ],
+
+      "beats_return_to_front": [
+        { "goal": "【전장 복귀】 탄지로가 동료들과 함께 전장으로 돌아온다.", "speaker_hint": ["narr"], "fx": "footstep_heavy|wind_howl" },
+        { "goal": "렌고쿠가 피투성이가 된 채 아카자와 맞서고 있다. '크윽… 아직 끝나지 않았다!'", "speaker_hint": ["rengoku"], "fx": "blood_drip|flame_flicker" },
+        { "goal": "아카자가 웃으며 탄지로 일행을 본다. '오, 원군을 데려왔나? 그래봤자 소용없지만.'", "speaker_hint": ["akaza"] },
+        { "goal": "탄지로가 검을 꺼내 든다. '렌고쿠 님! 우리가 왔습니다!'", "speaker_hint": ["tanjiro"], "fx": "sword_draw|determination" }
       ]
     }
   },
@@ -170,6 +177,7 @@
       "tag": "RECRUIT",
       "type": "mission",
       "atmosphere": "urgent",
+      "beats_i18n": "beats_smell",
       "intro_i18n": "beats_smell",
       "speaker_pool": ["tanjiro", "zenitsu", "inosuke", "narr"],
       "feedback_i18n": {
@@ -189,6 +197,8 @@
     {
       "tag": "RETURN_TO_FRONT",
       "type": "scene",
+      "atmosphere": "urgent",
+      "beats_i18n": "beats_return_to_front",
       "next": "END_ROUTER",
       "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
     },

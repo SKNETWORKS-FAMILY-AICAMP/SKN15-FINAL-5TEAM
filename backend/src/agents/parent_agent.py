@@ -125,6 +125,8 @@ class ParentAgent:
 
         # --- Children Context 구성
         children_ctx = dict(result.children_ctx)
+        initial_beats = children_ctx.get("beats", [])
+        log("parent", f"🔍 Initial children_ctx from handler: {len(initial_beats)} beats")
         if next_stage:
             children_ctx["stage_tag"] = stage_tag
         else:
@@ -144,13 +146,28 @@ class ParentAgent:
             children_ctx.setdefault("stage_type", stage_type_value)
 
         if stage:
+            # 🔥 Mission 타입은 handler가 동적으로 beats를 생성하므로 덮어쓰지 않음
+            stage_type = stage.get("type", "scene")
+            handler_has_beats = bool(children_ctx.get("beats"))
+
             # 다음 스테이지가 있으면 무조건 beats 갱신, 없으면 기존 beats 유지
-            if next_stage:
+            # 단, mission 타입이고 handler가 이미 beats를 설정했으면 유지
+            if next_stage and not (stage_type == "mission" and handler_has_beats):
+                log("parent", f"🔍 Overwriting beats (stage_type={stage_type}, handler_has_beats={handler_has_beats})")
                 children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
             else:
-                if not children_ctx.get("beats"):
-                    children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
+                # Mission handler의 beats를 유지하거나, beats가 없으면 i18n에서 가져옴
+                existing_beats = children_ctx.get("beats", [])
+                log("parent", f"🔍 No overwrite - Existing beats: {len(existing_beats)}")
+                if not existing_beats:
+                    resolved_beats = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
+                    log("parent", f"🔍 Resolved i18n beats: {len(resolved_beats)}")
+                    children_ctx["beats"] = resolved_beats
+                else:
+                    log("parent", f"✅ Keeping handler's beats ({len(existing_beats)} beats)")
+
+                # speaker_pool 설정
                 if not children_ctx.get("speaker_pool"):
                     children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
         else:

@@ -54,6 +54,7 @@ class MissionHandler:
         self._update_recruit_result(state, target, success)
 
         feedback_beats = self._build_feedback_beats(state, target, success, scenario)
+        log("mission", f"📋 Final feedback_beats count: {len(feedback_beats)}")
         children_ctx = {
             "stage_tag": stage_tag,
             "stage_type": get_stage_type(stage),
@@ -66,6 +67,7 @@ class MissionHandler:
                 "attempts": state.get("recruit_attempts", {}).get(target, 0),
             },
         }
+        log("mission", f"📋 Set children_ctx beats: {len(children_ctx['beats'])} items")
 
         stage_complete = self._all_missions_resolved(state)
         next_stage = None
@@ -81,7 +83,7 @@ class MissionHandler:
             log(
                 "codex_fix",
                 "Mission still in progress",
-                stage=stage_tag,
+                stage_tag=stage_tag,
                 target=target,
             )
 
@@ -197,9 +199,10 @@ class MissionHandler:
             if success
             else f"beats_feedback_fail_{character}"
         )
-        feedback_beats = self._to_dialogues(
-            get_i18n_entries(scenario, feedback_key, locale=self.locale)
-        )
+        raw_entries = get_i18n_entries(scenario, feedback_key, locale=self.locale)
+        log("mission", f"📋 Feedback key={feedback_key}, entries_count={len(raw_entries)}")
+        feedback_beats = self._to_dialogues(raw_entries)
+        log("mission", f"📋 Converted to {len(feedback_beats)} dialogue beats")
         dialogues = [sys_entry] + feedback_beats
         if remaining is not None:
             if remaining > 0:
