@@ -1361,7 +1361,26 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    console.log('🔍 [ENTER KEY] Enter pressed!', {
+                      inputMessage: inputMessage.substring(0, 20),
+                      hasInput: !!inputMessage.trim(),
+                      isLoading,
+                      isTyping,
+                      isAutoRequesting
+                    });
+
+                    if (!inputMessage.trim()) return;
+                    if (isLoading || isTyping || isAutoRequesting) {
+                      console.log('⚠️ [ENTER] Blocked by state checks');
+                      return;
+                    }
+
+                    console.log('✅ [ENTER] Calling sendMessage');
+                    sendMessage(inputMessage);
+                  }
+                }}
                 onFocus={() => {
                   // 🔧 안전장치: 입력창 포커스 시 상태 리셋
                   console.log('🔍 [DEBUG] Input focused, current states:', {
@@ -1382,7 +1401,38 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
-                onClick={() => inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
+                onClick={() => {
+                  console.log('🔍 [BUTTON CLICK] Send button clicked!', {
+                    inputMessage: inputMessage.substring(0, 20),
+                    hasInput: !!inputMessage.trim(),
+                    isLoading,
+                    isTyping,
+                    isAutoRequesting
+                  });
+
+                  if (!inputMessage.trim()) {
+                    console.log('⚠️ [BUTTON] No input message');
+                    return;
+                  }
+
+                  if (isLoading) {
+                    console.log('⚠️ [BUTTON] Blocked: isLoading=true');
+                    return;
+                  }
+
+                  if (isTyping) {
+                    console.log('⚠️ [BUTTON] Blocked: isTyping=true');
+                    return;
+                  }
+
+                  if (isAutoRequesting) {
+                    console.log('⚠️ [BUTTON] Blocked: isAutoRequesting=true');
+                    return;
+                  }
+
+                  console.log('✅ [BUTTON] All checks passed, calling sendMessage');
+                  sendMessage(inputMessage);
+                }}
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting}
               >
