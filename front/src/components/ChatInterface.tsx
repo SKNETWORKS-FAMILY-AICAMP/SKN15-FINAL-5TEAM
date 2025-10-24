@@ -720,6 +720,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     // unlock이 완전히 완료될 때까지 기다림
     await unlockAudio();
 
+    // 🔥 디버깅: 현재 상태 출력
+    console.log('🔍 [DEBUG] sendMessage called:', {
+      isLoading,
+      isTyping,
+      isAutoRequesting,
+      text: text.substring(0, 20)
+    });
+
     // 🔥 자동 요청 중일 때는 사용자 입력 차단
     if (isAutoRequesting) {
       console.log('⚠️ Auto-requesting in progress, user input blocked');
@@ -1330,6 +1338,21 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
+                onFocus={() => {
+                  // 🔧 안전장치: 입력창 포커스 시 상태 리셋
+                  console.log('🔍 [DEBUG] Input focused, current states:', {
+                    isLoading,
+                    isTyping,
+                    isAutoRequesting
+                  });
+                  if (isAutoRequesting || isTyping) {
+                    console.log('🔧 [FIX] Resetting stuck states');
+                    setIsAutoRequesting(false);
+                    setIsTyping(false);
+                    setLoadingMessage(null);
+                    shouldCancelAutoRequest.current = true;
+                  }
+                }}
                 placeholder={isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요..."}
                 disabled={isLoading || isTyping || isAutoRequesting}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
