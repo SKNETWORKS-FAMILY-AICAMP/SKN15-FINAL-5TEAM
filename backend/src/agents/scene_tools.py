@@ -149,7 +149,7 @@ def get_speaker_pool(stage: Dict[str, Any], fallback: Iterable[str]) -> List[str
 
 
 def get_next_stage_tag(stage: Dict[str, Any]) -> Optional[str]:
-    for key in ("next_stage", "next"):
+    for key in ("next_stage", "next", "default_next", "default"):
         value = stage.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
