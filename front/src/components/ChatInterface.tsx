@@ -716,9 +716,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
-    // 🔊 오디오 활성화 (브라우저 자동재생 정책 우회)
-    // unlock이 완전히 완료될 때까지 기다림
-    await unlockAudio();
+    // 🔊 오디오 활성화 (브라우저 자동재생 정책 우회) - 비차단 방식
+    unlockAudio().catch(err => console.warn('Audio unlock failed:', err));
 
     // 🔥 디버깅: 현재 상태 출력
     console.log('🔍 [DEBUG] sendMessage called:', {
