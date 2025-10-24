@@ -112,7 +112,7 @@
         { "goal": "탄지로가 울부짖는다. '렌고쿠 님! 제가 잘못했습니다!'", "speaker_hint": ["tanjiro"] },
         { "goal": "렌고쿠가 피투성이가 된 채 웃는다. '괜찮다... 불꽃이 살아있다…'", "speaker_hint": ["rengoku"], "fx": "heavy_breath|flame_roar" },
         { "goal": "아카자가 마지막 일격을 준비한다.", "speaker_hint": ["akaza"], "fx": "air_freeze|power_charge" },
-        { "goal": "렌고쿠가 눈을 감는다. '이 몸이 타더라도... 동료는 지켜내겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition|pulse_boom" },
+        { "goal": "렌고쿠가 눈을 감는다. '이 몸이 타더라도... 동료는 지켜내겠다!'", "speaker_hint": ["rengoku"], "fx": "flame_ignition|pulse_boom", "image_index": "20" },
         { "goal": "붉은 불꽃이 폭발하며 전장을 뒤덮는다.", "speaker_hint": ["narr"], "fx": "explosion|flame_roar" },
         { "goal": "빛 속에서 렌고쿠의 목소리가 들린다. '불꽃은 꺼지지 않는다…'", "speaker_hint": ["rengoku"] }
       ],
@@ -189,10 +189,9 @@
     {
       "tag": "RECKLESS_SACRIFICE",
       "type": "scene",
-      "atmosphere": "urgent",
+      "atmosphere": "tragic",
       "beats_i18n": "beats_reckless_sacrifice",
-      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
-      "next": "END_ROUTER"
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
     },
     {
       "tag": "RETURN_TO_FRONT",
