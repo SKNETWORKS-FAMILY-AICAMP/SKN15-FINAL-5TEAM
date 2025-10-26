@@ -23,6 +23,8 @@ interface ChatInterfaceProps {
   characterId?: string;
 }
 
+const TYPING_INTERVAL_MS = 60; // 타이핑 애니메이션 속도 (값이 클수록 느려짐)
+
 export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending' }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -274,7 +276,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
 
-      // 타이핑 효과: 3ms마다 한 글자씩 추가 (빠른 응답성)
+      // 타이핑 효과: TYPING_INTERVAL_MS마다 한 글자씩 추가
       const chars = message.text.split('');
       let currentIndex = 0;
 
@@ -290,7 +292,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           clearInterval(typingInterval);
           resolve();
         }
-      }, 3); // 3ms per character (fast typing)
+      }, TYPING_INTERVAL_MS);
     });
   };
 

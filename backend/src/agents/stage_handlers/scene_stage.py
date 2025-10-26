@@ -51,14 +51,25 @@ class SceneHandler:
         if not complete and stage_turn >= min_turns and constraints.get("auto_advance"):
             complete = True
 
-        # INTRO stage는 첫 턴 이후 user 입력이 있으면 자동으로 다음 스테이지로 진행
-        if not complete and stage_tag == "INTRO" and stage_turn >= 1:
+        # INTRO stage는 첫 입력("시작")에는 beats를 보여주고, 두 번째 입력부터 다음 스테이지로 진행
+        if not complete and stage_tag == "INTRO":
             user_input = state.get("user_input", "")
             log("scene", f"🔍 INTRO check: turn={stage_turn}, user_input='{user_input}'")
-            # auto_continue가 아니고 실제 user 입력이 있는 경우
+
+            # turn=0: 첫 입력 (보통 "시작") → INTRO beats 표시
+            # turn>=1: 두 번째 입력 → ROUTE_CHOICE로 진행
             if user_input and user_input != "__AUTO_CONTINUE__":
+                if stage_turn >= 1:
+                    complete = True
+                    log("scene", "✅ INTRO stage auto-advancing after second user input", turn=stage_turn)
+                else:
+                    log("scene", "📖 INTRO stage showing beats on first input", turn=stage_turn)
+                    # 다음 입력에서는 ROUTE_CHOICE로 전환되도록 강제 완료 플래그 설정
+                    temp[f"{stage_tag}_complete"] = True
+            elif stage_turn >= 1:
+                # 사용자 입력이 빈 상태로 두 번째 턴에 진입한 경우에도 자동으로 다음 스테이지로 전환
                 complete = True
-                log("scene", "✅ INTRO stage auto-advancing after user input", turn=stage_turn)
+                log("scene", "✅ INTRO stage auto-advancing on empty follow-up turn", turn=stage_turn)
 
         next_stage = get_next_stage_tag(stage) if complete else None
         if complete:

@@ -23,6 +23,7 @@ class FreeIntentHandler:
 
     def handle(self, state: Dict[str, Any], stage: Dict[str, Any], scenario: Dict[str, Any]) -> StageResult:
         stage_tag = stage.get("tag") or stage.get("id") or "free_intent"
+        stage_turn = int(state.get("stage_turn", 0) or 0)
         scene_state = state_tools.get_scene_state(state)
         speaker_pool = get_speaker_pool(stage, scene_state.get("speaker_pool", []))
         beats = get_stage_beats(stage, scenario, locale=self.locale)
@@ -33,8 +34,22 @@ class FreeIntentHandler:
         if option_result and option_result.get("set"):
             self._apply_set_operations(state, option_result["set"])
 
-        next_stage = option_result.get("goto") if option_result else None
-        stage_complete = option_result is not None
+        stage_complete = bool(option_result)
+        next_stage = option_result.get("goto") if stage_complete else None
+
+        # 🔥 on-topic이지만 선택을 안 한 경우: 선택 재요청 대사만 생성
+        if not stage_complete and intent and intent in ["on_topic_generic", "on_topic"] and stage_turn >= 1:
+            log("free_intent", "⚠️ On-topic but no choice made → generating choice reminder", stage_tag=stage_tag, intent=intent)
+            reminder_beat = self._create_choice_reminder_beat(state, stage)
+            ctx = {
+                "stage_tag": stage_tag,
+                "stage_type": "choice_reminder",  # LLM에게 선택 재요청 모드임을 알림
+                "speaker_pool": speaker_pool,
+                "beats": [reminder_beat],
+                "atmosphere": get_stage_atmosphere(stage),
+            }
+            return StageResult(children_ctx=ctx, stage_complete=False, next_stage=None)
+
         if not stage_complete:
             turn_cap = int((stage.get("constraints") or {}).get("max_turns", 0) or 0)
             current_turn = int(state.get("stage_turn", 0) or 0)
@@ -75,9 +90,9 @@ class FreeIntentHandler:
         user_intent = state.get("user_intent")
         return str(user_intent).lower() if user_intent else None
 
-    def _match_action(self, stage: Dict[str, Any], intent: Optional[str]) -> Dict[str, Any]:
+    def _match_action(self, stage: Dict[str, Any], intent: Optional[str]) -> Optional[Dict[str, Any]]:
         if not intent:
-            return {}
+            return None
 
         # 1. intent_mapping 방식 지원 (새로운 간단한 형식)
         intent_mapping = stage.get("intent_mapping", {})
@@ -90,7 +105,46 @@ class FreeIntentHandler:
             action = entry.get("action")
             if isinstance(action, str) and action.lower() == intent:
                 return entry
-        return {}
+        return None
+
+    def _create_choice_reminder_beat(self, state: Dict[str, Any], stage: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        선택을 하지 않은 경우 LLM이 선택을 재요청하는 beat 생성
+        """
+        user_input = state.get("user_input", "")
+        choices = stage.get("choices", [])
+        objective = stage.get("objective", "")
+
+        # 선택지 텍스트 추출
+        choice_texts = []
+        for choice in choices:
+            if isinstance(choice, dict):
+                text = choice.get("text", "")
+                if text:
+                    choice_texts.append(text)
+
+        choices_str = " / ".join(choice_texts) if choice_texts else "결정"
+
+        # speaker_hint는 speaker_pool의 첫 번째 캐릭터 (보통 tanjiro)
+        speaker_pool = stage.get("speaker_pool", [])
+        main_speaker = speaker_pool[0] if speaker_pool else "tanjiro"
+
+        # 🔥 LLM에게 전달할 beat - 유저 질문에 답하면서 선택으로 유도
+        beat = {
+            "goal": (
+                f"{{{{user}}}}가 '{user_input}'라고 말했습니다. "
+                f"{main_speaker}는 {{{{user}}}}의 말에 먼저 짧게 반응하거나 답변합니다. "
+                f"그리고 지금은 빠르게 결정해야 한다며 자연스럽게 선택지로 유도합니다: {choices_str}. "
+                f"목표: {objective}"
+            ),
+            "speaker_hint": [main_speaker],
+            "objective": objective,
+            "choices": choice_texts,
+            "user_context": user_input,  # LLM이 유저 입력을 참고할 수 있도록
+        }
+
+        log("free_intent", "📝 Created choice reminder beat", speaker=main_speaker, choices_count=len(choice_texts), user_input=user_input)
+        return beat
 
     def _apply_set_operations(self, state: Dict[str, Any], operations: Dict[str, Any]) -> None:
         for key, value in operations.items():

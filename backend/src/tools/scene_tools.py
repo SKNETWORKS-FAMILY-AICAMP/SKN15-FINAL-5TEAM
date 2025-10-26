@@ -66,6 +66,8 @@ def resolve_i18n_beats(stage: Dict[str, Any], scenario: Dict[str, Any], locale: 
         "ko": [{"speaker":"tanjiro","text":"..."}, ...],
         "en": [...]
       }
+
+    mission 타입 스테이지의 경우 intro_i18n도 지원
     """
     try:
         # 방어 코드: stage와 scenario가 dict인지 확인
@@ -79,8 +81,20 @@ def resolve_i18n_beats(stage: Dict[str, Any], scenario: Dict[str, Any], locale: 
         if "beats" in stage and isinstance(stage["beats"], list):
             return stage["beats"]
 
-        beats_i18n = stage.get("beats_i18n")
+        # mission 타입은 intro_i18n 우선 사용
+        stage_type = stage.get("type", "")
+        if stage_type == "mission":
+            intro_i18n = stage.get("intro_i18n")
+            if intro_i18n:
+                beats_i18n = intro_i18n
+                log("scene", f"📋 Using intro_i18n for mission stage: {intro_i18n}")
+            else:
+                beats_i18n = stage.get("beats_i18n")
+        else:
+            beats_i18n = stage.get("beats_i18n")
+
         if not beats_i18n:
+            log("scene", f"⚠️ No beats_i18n or intro_i18n found for stage {stage.get('tag')}")
             return []
 
         # beats_i18n가 문자열이면 scenario.i18n에서 참조 해석
