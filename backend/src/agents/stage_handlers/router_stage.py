@@ -25,11 +25,45 @@ class RouterStageHandler:
             or stage.get("next_stage")
             or get_next_stage_tag(stage)
         )
+        stage_tag = stage.get("tag") or stage.get("id") or "router"
+
+        outcome_routes = stage.get("next_by_outcome") or stage.get("outcome_routes") or {}
+        if outcome_routes:
+            outcome_key_raw = state.get("_outcome")
+            outcome_key = str(outcome_key_raw or "").upper()
+            next_stage = (
+                outcome_routes.get(outcome_key)
+                or outcome_routes.get(outcome_key.lower())
+                or stage.get("default_next")
+                or default_route
+            )
+            if not next_stage and outcome_routes:
+                # pick first route as fallback
+                next_stage = next(iter(outcome_routes.values()), None)
+
+            ctx = {
+                "stage_tag": stage_tag,
+                "stage_type": "router",
+                "beats": [],
+                "router": {
+                    "mode": "outcome",
+                    "outcome": outcome_key,
+                    "fallback": next_stage,
+                },
+                "speaker_pool": stage.get("speaker_pool", []),
+            }
+
+            log(
+                "router_stage",
+                "Outcome routing resolved",
+                outcome=outcome_key or "UNKNOWN",
+                next_stage=next_stage,
+            )
+            return StageResult(children_ctx=ctx, stage_complete=True, next_stage=next_stage)
+
         next_stage = intent_mapping.get(intent)
         if not next_stage:
             next_stage = default_route
-
-        stage_tag = stage.get("tag") or stage.get("id") or "router"
 
         # 일부 기본 intent에 대한 fallback 반응
         if intent == "on_topic_generic" and stage_tag in ("INTRO", "ROUTE_CHOICE"):

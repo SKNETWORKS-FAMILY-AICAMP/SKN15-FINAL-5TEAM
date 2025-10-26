@@ -99,12 +99,23 @@ class RouterAgent:
         if stage_completed:
             scene["stage_completed"] = False
 
+        incoming_stage = str(state.get("stage_tag") or "").strip().upper()
+        current_stage = self._resolve_session_stage(state)
+        if incoming_stage and incoming_stage != "INTRO" and incoming_stage != current_stage:
+            log("router", "⚠️ Preserving existing stage", requested=incoming_stage, resolved=current_stage)
+            current_stage = incoming_stage
+        state["stage_tag"] = current_stage
+
         topic = self._classify_with_llm(state, normalized)
         if topic.is_off_topic:
             return self._handle_off_topic(state, normalized, topic)
 
         embedding: Sequence[float] = self._get_user_embedding(state, normalized) if normalized else []
-        current_stage = self._get_current_stage(state)
+        current_stage = self._resolve_session_stage(state)
+        if incoming_stage and incoming_stage != "INTRO" and incoming_stage != current_stage:
+            log("router", "⚠️ Preserving existing stage", requested=incoming_stage, resolved=current_stage)
+            current_stage = incoming_stage
+        state["stage_tag"] = current_stage
 
         intent = "on_topic_generic"
         confidence = topic.confidence
@@ -131,7 +142,13 @@ class RouterAgent:
                 reason_tag = "route" if route_reason == "embedding" else "route_fallback"
                 reason_notes.append(f"{reason_tag}={round(route_match.score, 3)}")
 
+        locked_target = (state.get("temp_data") or {}).get("locked_mission_target")
+        stored_target = state.get("mission_target") or locked_target
         mission_target = detect_mission_target(normalized, embedding=embedding) if normalized else None
+        if current_stage == "RECRUIT" and not mission_target:
+            mission_target = stored_target
+            if mission_target:
+                log("router", "Restored mission target for RECRUIT stage", mission_target=mission_target)
         if intent == "on_topic_generic" and mission_target in ("inosuke", "zenitsu", "both"):
             intent = "choose_allies_path"
             confidence = max(confidence, 0.88)
@@ -142,6 +159,9 @@ class RouterAgent:
         # 오프토픽 아님 → 카운터 초기화
         state["off_topic_count"] = 0
         state["classification"] = "on_topic"
+
+        if mission_target in ("inosuke", "zenitsu"):
+            state["mission_target"] = mission_target
 
         routing_result: Dict[str, Any] = {
             "intent": intent if intent in ALLOWED_INTENTS else "on_topic_generic",
@@ -190,7 +210,7 @@ class RouterAgent:
             )
 
         scenario_id = state.get("scenario_id") or (state.get("scenario") or {}).get("scenario_id") or "unknown"
-        current_stage = self._get_current_stage(state) or "unknown"
+        current_stage = self._resolve_session_stage(state) or "unknown"
         recent_history = self._summarize_recent_history(state, limit=4)
 
         allowed_categories = ", ".join(sorted(OFF_TOPIC_REASONS))
@@ -399,11 +419,51 @@ JSON 형태로만 응답하십시오:
         trimmed = entries[-limit:]
         return "\n".join(trimmed)
 
-    def _get_current_stage(self, state: Dict[str, Any]) -> str:
-        scene = state.get("scene") or {}
-        stage = scene.get("current_stage") or state.get("current_stage") or scene.get("current_scene") or ""
-        return str(stage).strip().upper()
+    def _resolve_session_stage(self, state: Dict[str, Any]) -> str:
+        candidates = [
+            state.get("stage_tag"),
+            (state.get("game") or {}).get("current_stage"),
+            (state.get("scene") or {}).get("current_stage"),
+            state.get("current_stage"),
+            (state.get("scene") or {}).get("current_scene"),
+        ]
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate.strip():
+                tag = candidate.strip().upper()
+                break
+        else:
+            tag = "INTRO"
+        return tag
 
+
+    def _resolve_session_stage(self, state: Dict[str, Any]) -> str:
+        scene = state.get("scene") or {}
+        candidates = [
+            state.get("stage_tag"),
+            (state.get("game") or {}).get("current_stage"),
+            scene.get("current_stage"),
+            state.get("current_stage"),
+            scene.get("current_scene"),
+        ]
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate.strip():
+                tag = candidate.strip().upper()
+                break
+        else:
+            tag = "INTRO"
+
+        if tag == "INTRO":
+            history = (state.get("game") or {}).get("stage_history") or state.get("stage_history") or []
+            if isinstance(history, list):
+                for previous in reversed(history):
+                    if isinstance(previous, str) and previous.strip() and previous.strip().upper() != "INTRO":
+                        log("router", "⚠️ Ignoring false INTRO fallback", keep_stage=previous.strip().upper())
+                        tag = previous.strip().upper()
+                        break
+        return tag
+
+    def _get_current_stage(self, state: Dict[str, Any]) -> str:  # Back-compat helper
+        return self._resolve_session_stage(state)
     def _get_user_embedding(self, state: Dict[str, Any], text: str) -> Optional[Sequence[float]]:
         cache = state.setdefault("_embedding_cache", {})
         cached_text = cache.get("text")

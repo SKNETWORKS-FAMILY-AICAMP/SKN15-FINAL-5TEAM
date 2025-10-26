@@ -73,39 +73,103 @@ class ParentAgent:
                 log("parent", f"❌ Scenario load failed: {scenario_id}")
                 return self._handle_missing_scenario(state)
 
-        # --- Stage 판정
+        scenario_module = self._load_scenario_module(scenario)
+
+        # --- Pending Stage (auto-resume between inputs)
+        self._resume_pending_stage(state, scenario)
         stage_tag = self._ensure_current_stage(state, scenario)
         stage = scene_tools.get_stage(scenario, stage_tag)
         if not stage:
             return self._handle_missing_stage(state, stage_tag)
 
-        # --- i18n Beats 처리
-        if stage.get("beats") is None and stage.get("beats_i18n"):
-            beats = scene_tools.resolve_i18n_beats(stage, scenario)
-            if beats:
-                stage["beats"] = beats
+        if (stage.get("type") or "").lower() == "mission" and not state.get("mission_target"):
+            locked = (state.get("temp_data") or {}).get("locked_mission_target")
+            if locked:
+                state["mission_target"] = locked
+            else:
+                log("parent", f"⚠️ Mission stage has no active target (stage_tag={stage_tag})")
 
-        # --- Handler 선택
-        handler = self._handlers.get(stage.get("type"), self._handlers["scene"])
-        result = handler.handle(state, stage, scenario)
+        while True:
+            if stage.get("beats") is None and stage.get("beats_i18n"):
+                beats = scene_tools.resolve_i18n_beats(stage, scenario)
+                if beats:
+                    stage["beats"] = beats
 
-        # --- 다음 Stage 처리
-        next_stage = getattr(result, "next_stage", None)
-        if next_stage:
-            st = get_state_tools()
-            st.set_current_stage(state, next_stage)
-            st.reset_stage_turn(state)
-            state["current_stage"] = next_stage
-            log("parent", f"🔄 Stage advanced: {stage_tag} → {next_stage}")
-            # 다음 스테이지 정의를 미리 로드
-            next_stage_def = scene_tools.get_stage(scenario, next_stage)
-        else:
+            handler = self._handlers.get(stage.get("type"), self._handlers["scene"])
+            result = handler.handle(state, stage, scenario)
+
+            original_stage_tag = stage_tag
+            stage_completed = bool(getattr(result, "stage_complete", False))
+
+            scene_state = state.setdefault("scene", {})
+            temp_data = state.setdefault("temp_data", {})
+            game_state = state.setdefault("game", {})
+
+            if stage_completed:
+                scene_state["stage_completed"] = True
+                temp_data["completed_stage"] = original_stage_tag
+                game_state["last_completed_stage"] = original_stage_tag
+            else:
+                scene_state["stage_completed"] = False
+                temp_data.pop("completed_stage", None)
+
+            next_stage = getattr(result, "next_stage", None)
             next_stage_def = None
+            immediate_advance = False
+            current_stage_type = (stage.get("type") or "scene").lower() if isinstance(stage, dict) else "scene"
+            constraints = stage.get("constraints") or {}
 
-        if next_stage:
-            state["next_stage"] = next_stage
-        else:
-            state.pop("next_stage", None)
+            def _has_dialogue_payload(ctx: Dict[str, Any]) -> bool:
+                if ctx.get("beats"):
+                    return True
+                fallback = ctx.get("fallback")
+                if isinstance(fallback, dict) and fallback.get("dialogues"):
+                    return True
+                if ctx.get("prefetch_dialogues"):
+                    return True
+                return False
+
+            child_payload = result.children_ctx or {}
+
+            auto_advance_now = stage_completed and (
+                bool(constraints.get("auto_advance"))
+                or original_stage_tag in {"INTRO", "RETURN_TO_FRONT"}
+                or current_stage_type == "mission"
+                or not _has_dialogue_payload(child_payload)
+            )
+
+            if next_stage:
+                if current_stage_type in ("router", "free_intent") or auto_advance_now:
+                    immediate_advance = True
+
+            if immediate_advance:
+                st = get_state_tools()
+                st.set_current_stage(state, next_stage)
+                st.reset_stage_turn(state)
+                state["current_stage"] = next_stage
+                log("parent", f"🔄 Stage advanced: {stage_tag} → {next_stage}")
+                next_stage_def = scene_tools.get_stage(scenario, next_stage)
+                scene_state["stage_completed"] = False
+                temp_data.pop("completed_stage", None)
+                game_state.pop("pending_stage", None)
+                state.pop("next_stage", None)
+                if next_stage_def:
+                    try:
+                        self._invoke_stage_enter(state, next_stage, next_stage_def, scenario, scenario_module)
+                    except Exception as e:
+                        log("parent", f"stage_enter failed: {e}")
+
+                    stage_tag = next_stage
+                    stage = next_stage_def
+                    continue
+            if next_stage and not immediate_advance:
+                game_state["pending_stage"] = next_stage
+                state["next_stage"] = next_stage
+                log("parent", f"⏳ Stage completed: {stage_tag} → pending {next_stage}")
+            else:
+                game_state.pop("pending_stage", None)
+                state.pop("next_stage", None)
+            break
 
         # --- Scene/StateTools 반영
         state = self._update_state_with_tools(state, result, stage_tag)
@@ -118,16 +182,14 @@ class ParentAgent:
                 beats = scene_tools.resolve_i18n_beats(stage, scenario)
                 if beats:
                     stage["beats"] = beats
-        elif next_stage:
+        elif next_stage and immediate_advance:
             # stage 정의를 찾지 못했을 때 경고만 남기고 stage_tag는 업데이트
             log("parent", f"⚠️ Stage '{next_stage}' not found in scenario")
             stage_tag = next_stage
 
         # --- Children Context 구성
         children_ctx = dict(result.children_ctx)
-        initial_beats = children_ctx.get("beats", [])
-        log("parent", f"🔍 Initial children_ctx from handler: {len(initial_beats)} beats")
-        if next_stage:
+        if next_stage and immediate_advance:
             children_ctx["stage_tag"] = stage_tag
         else:
             children_ctx.setdefault("stage_tag", stage_tag)
@@ -140,39 +202,73 @@ class ParentAgent:
         else:
             stage_type_value = "scene"
 
-        if next_stage:
+        if next_stage and immediate_advance:
             children_ctx["stage_type"] = stage_type_value
         else:
             children_ctx.setdefault("stage_type", stage_type_value)
 
         if stage:
-            # 🔥 Mission 타입은 handler가 동적으로 beats를 생성하므로 덮어쓰지 않음
-            stage_type = stage.get("type", "scene")
-            handler_has_beats = bool(children_ctx.get("beats"))
-
             # 다음 스테이지가 있으면 무조건 beats 갱신, 없으면 기존 beats 유지
-            # 단, mission 타입이고 handler가 이미 beats를 설정했으면 유지
-            if next_stage and not (stage_type == "mission" and handler_has_beats):
-                log("parent", f"🔍 Overwriting beats (stage_type={stage_type}, handler_has_beats={handler_has_beats})")
+            if next_stage and immediate_advance:
                 children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
             else:
-                # Mission handler의 beats를 유지하거나, beats가 없으면 i18n에서 가져옴
-                existing_beats = children_ctx.get("beats", [])
-                log("parent", f"🔍 No overwrite - Existing beats: {len(existing_beats)}")
-                if not existing_beats:
-                    resolved_beats = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
-                    log("parent", f"🔍 Resolved i18n beats: {len(resolved_beats)}")
-                    children_ctx["beats"] = resolved_beats
-                else:
-                    log("parent", f"✅ Keeping handler's beats ({len(existing_beats)} beats)")
-
-                # speaker_pool 설정
+                if not children_ctx.get("beats") and not children_ctx.get("fallback"):
+                    children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
                 if not children_ctx.get("speaker_pool"):
                     children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
         else:
             children_ctx.setdefault("beats", [])
             children_ctx.setdefault("speaker_pool", [])
+
+        # RETURN_TO_FRONT 및 엔딩 스테이지에서 영입 동료 화자 풀에 반영
+        stage_key = (stage.get("tag") if isinstance(stage, dict) else stage_tag) or ""
+        if stage_key in {"RETURN_TO_FRONT", "END_HIDDEN", "END_BASIC"}:
+            recruits = state.get("allies_recruited", [])
+            if recruits:
+                pool = list(children_ctx.get("speaker_pool", []) or [])
+                for recruit in recruits:
+                    if recruit and recruit not in pool:
+                        pool.append(recruit)
+                if pool:
+                    children_ctx["speaker_pool"] = pool
+                beats = children_ctx.get("beats") or []
+                if isinstance(beats, list) and beats:
+                    enriched_beats = []
+                    for beat in beats:
+                        if isinstance(beat, dict):
+                            beat_copy = dict(beat)
+                            hints = beat_copy.get("speaker_hint")
+                            if isinstance(hints, list):
+                                hints = hints[:]
+                            elif hints:
+                                hints = [hints]
+                            else:
+                                hints = []
+                            for recruit in recruits:
+                                if recruit not in hints:
+                                    hints.append(recruit)
+                            beat_copy["speaker_hint"] = hints
+                            enriched_beats.append(beat_copy)
+                        else:
+                            enriched_beats.append(beat)
+                    children_ctx["beats"] = enriched_beats
+
+        # RETURN_TO_FRONT 서사 프리롤 (한 번만 출력)
+        if stage_key == "RETURN_TO_FRONT":
+            queue = temp_data.get("mission_success_queue") or []
+            if queue:
+                prefetch_list = children_ctx.setdefault("prefetch_dialogues", [])
+                prefetch_list.extend(queue)
+                temp_data.pop("mission_success_queue", None)
+
+            token = "__return_to_front_preface__"
+            if not temp_data.get(token):
+                narrative = self._compose_return_to_front_dialogue(state)
+                if narrative:
+                    prefetch_list = children_ctx.setdefault("prefetch_dialogues", [])
+                    prefetch_list.append(narrative)
+                temp_data[token] = True
 
         children_ctx.setdefault("character_refs", scenario.get("character_refs", {}))
         children_ctx.setdefault("scenario_id", scenario.get("scenario_id", "unknown"))
@@ -184,10 +280,16 @@ class ParentAgent:
                 children_ctx["fallback"] = fallback_payload
 
         state["children_ctx"] = children_ctx
+        state["stage_tag"] = children_ctx.get("stage_tag", stage_tag)
         state["next_node"] = "children_agent"
 
         # --- 상세 로깅: children_ctx 내용 확인
-        beats_count = len(children_ctx.get("beats", []))
+        beats = children_ctx.get("beats") or []
+        if not beats:
+            mission_target = (children_ctx.get("mission") or {}).get("target") or state.get("mission_target")
+            if mission_target:
+                log("parent", f"⚠️ Mission target={mission_target} has empty beats! Using fallback.")
+        beats_count = len(beats)
         speaker_pool = children_ctx.get("speaker_pool", [])
         log("parent", "→ Handed off to children_agent",
             stage_tag=children_ctx.get('stage_tag'),
@@ -197,7 +299,7 @@ class ParentAgent:
 
         # 첫 3개 beats 미리보기
         if beats_count > 0:
-            preview_beats = children_ctx.get("beats", [])[:3]
+            preview_beats = beats[:3]
             for i, beat in enumerate(preview_beats):
                 if isinstance(beat, dict):
                     goal = beat.get("goal", "")[:60]
@@ -269,6 +371,11 @@ class ParentAgent:
             next_def = scene_tools.get_stage(scenario, next_stage)
             if next_def:
                 self._invoke_stage_enter(state, next_stage, next_def, scenario, scenario_module)
+            state["stage_tag"] = next_stage
+        else:
+            current = st.get_current_stage(state)
+            if current:
+                state["stage_tag"] = current
 
         state["next_node"] = "router"
         return state
@@ -289,10 +396,21 @@ class ParentAgent:
         st = get_state_tools()
         log("parent", f"[StageEnter] {stage_tag}")
 
+        # RECRUIT 진입 시 안내 플래그 초기화
+        if stage_tag == "RECRUIT":
+            temp = state.setdefault("temp_data", {})
+            temp.pop("mission_intro_shown", None)
+            temp.pop("mission_success_queue", None)
+            mission_state = state.setdefault("mission", {})
+            mission_state["active"] = False
+            mission_state["target"] = None
+            state["mission_target"] = None
+
         # RETURN_TO_FRONT 서사 자동 추가
         if stage_tag == "RETURN_TO_FRONT":
-            narrative = self._compose_return_to_front_dialogue(state)
-            state.setdefault("output", {}).setdefault("dialogues", []).append(narrative)
+            token = "__return_to_front_preface__"
+            temp = state.setdefault("temp_data", {})
+            temp.pop(token, None)  # 새 스테이지 진입 시 프리롤 플래그 초기화
 
         # 엔딩 처리
         if stage_tag == "END_ROUTER":
@@ -312,10 +430,26 @@ class ParentAgent:
     def _compose_return_to_front_dialogue(self, state):
         allies = state.get("allies_recruited", [])
         fails = state.get("recruit_failures", [])
+        name_map = {
+            "inosuke": "이노스케",
+            "zenitsu": "젠이츠",
+            "tanjiro": "탄지로"
+        }
+
+        def _display(names):
+            converted = [name_map.get(name, name) for name in names]
+            if not converted:
+                return ""
+            if len(converted) == 1:
+                return converted[0]
+            if len(converted) == 2:
+                return f"{converted[0]}와 {converted[1]}"
+            return ", ".join(converted[:-1]) + f" 그리고 {converted[-1]}"
+
         if allies and not fails:
-            msg = f"좋아, {'와 '.join(allies)}를 모았어! 이제 렌고쿠 님을 도우러 가자!"
+            msg = f"좋아, {_display(allies)}를 모았어! 이제 렌고쿠 님을 도우러 가자!"
         elif allies and fails:
-            msg = f"{'와 '.join(allies)}는 합류했지만, {', '.join(fails)}는 설득하지 못했어... 그래도 서두르자!"
+            msg = f"{_display(allies)}는 합류했지만, {_display(fails)}는 설득하지 못했어... 그래도 서두르자!"
         else:
             msg = "아무도 합류하지 못했어... 그래도 우리라도 어서 돌아가자!"
         return {"speaker": "tanjiro", "text": msg, "fx": "urgent_heartbeat|flame_flash"}
@@ -382,6 +516,38 @@ class ParentAgent:
         temp = st.get_temp_data(state)
         return temp.pop("completed_stage", None)
 
+    def _resume_pending_stage(self, state: Dict[str, Any], scenario: Dict[str, Any]) -> None:
+        """
+        이전 턴에서 stage가 완료된 뒤 pending_stage만 남아 있을 경우
+        다음 사용자 입력 전에 자동으로 다음 스테이지로 진입시킨다.
+        """
+        game = state.get("game") or {}
+        scene = state.get("scene") or {}
+        pending = game.get("pending_stage")
+        if not pending:
+            return
+        if not scene.get("stage_completed"):
+            return
+
+        st = get_state_tools()
+        next_stage = st.consume_pending_stage(state)
+        if not next_stage:
+            return
+
+        st.set_current_stage(state, next_stage)
+        st.reset_stage_turn(state)
+
+        scenario_module = self._load_scenario_module(scenario)
+        next_def = scene_tools.get_stage(scenario, next_stage)
+        temp = st.get_temp_data(state)
+        temp.pop("completed_stage", None)
+        if next_def:
+            try:
+                self._invoke_stage_enter(state, next_stage, next_def, scenario, scenario_module)
+            except Exception as e:
+                log("parent", f"resume_pending_stage invoke failed: {e}")
+        else:
+            log("parent", f"resume_pending_stage missing stage definition: {next_stage}")
 
 # ============================================================
 # 🚀 Runner

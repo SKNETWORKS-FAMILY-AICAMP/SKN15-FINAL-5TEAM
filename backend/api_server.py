@@ -24,10 +24,13 @@ load_dotenv(override=True)
 # ------------------------------------------------------------
 # ✅ LangGraph 관련 내부 모듈 로드
 # ------------------------------------------------------------
-from src.core.workflow import create_workflow             # 그래프 구성 생성기
-from src.core.graph_state import create_initial_graph_state, GraphState  # 초기 상태 생성
-from src.utils.scenario_loader import scenario_loader     # 시나리오(JSON) 로더
-from src.tools.image_manager import ImageManager          # 이미지 매니저
+from src.core.workflow import create_workflow  # 그래프 구성 생성기
+from src.core.graph_state import (
+    create_initial_graph_state,
+    GraphState,
+)  # 초기 상태 생성
+from src.utils.scenario_loader import scenario_loader  # 시나리오(JSON) 로더
+from src.tools.image_manager import ImageManager  # 이미지 매니저
 
 # ------------------------------------------------------------
 # ✅ FastAPI 인스턴스 생성
@@ -35,7 +38,7 @@ from src.tools.image_manager import ImageManager          # 이미지 매니저
 app = FastAPI(
     title="KIME Chat API",
     description="Backend API for KIME Chat Agent using LangGraph",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # ------------------------------------------------------------
@@ -46,12 +49,13 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-        "http://localhost:5173"
+        "http://localhost:5173",
     ],  # 허용할 프론트엔드 도메인
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # ------------------------------------------------------------
 # ✅ 세션 저장소 (임시: 메모리 기반)
@@ -93,13 +97,14 @@ workflow = None
 # ✅ 프론트엔드 시나리오 ID → 백엔드 시나리오 파일 매핑
 # ------------------------------------------------------------
 SCENARIO_MAPPING = {
-    "train": "cutscene5_llm_driven",      # 무한열차 시나리오
-    "ending": "cutscene5_llm_driven",     # 엔딩 이후 (동일 파일 사용)
+    "train": "cutscene5_llm_driven",  # 무한열차 시나리오
+    "ending": "cutscene5_llm_driven",  # 엔딩 이후 (동일 파일 사용)
     "infinity-castle": "cutscene5_akaza_encounter",  # 무한성 시나리오
-    "tanjiro": "cutscene5_simple",        # 편의점 탄지로
-    "counseling": "cutscene5_simple",     # 상담소
-    "idol": "cutscene5_simple",           # 아이돌/밴드 버전
+    "tanjiro": "cutscene5_simple",  # 편의점 탄지로
+    "counseling": "cutscene5_simple",  # 상담소
+    "idol": "cutscene5_simple",  # 아이돌/밴드 버전
 }
+
 
 # ------------------------------------------------------------
 # ✅ LangGraph 워크플로우 가져오기 (싱글톤)
@@ -141,16 +146,19 @@ def load_scenario(scenario_id: str) -> Optional[Dict]:
 # 🧩 Request / Response 데이터 모델 정의
 # ============================================================
 
+
 class ChatRequest(BaseModel):
     """프론트엔드 → 백엔드 요청 구조"""
+
     session_id: Optional[str] = None
     scenario_id: str  # 예: "train", "ending", ...
-    user_input: str   # 사용자의 입력 문장
+    user_input: str  # 사용자의 입력 문장
     user_name: Optional[str] = "츠구코"  # 유저 이름 (없으면 기본값)
 
 
 class DialogueResponse(BaseModel):
     """단일 대화 응답"""
+
     speaker: str
     content: str
     emotion: Optional[str] = "neutral"
@@ -158,19 +166,21 @@ class DialogueResponse(BaseModel):
 
 class ChatResponse(BaseModel):
     """백엔드 → 프론트엔드 응답 구조"""
+
     session_id: str
     turn_count: int
     dialogues: List[DialogueResponse]
     current_stage: Optional[str] = None
     affinity_scores: Optional[Dict[str, int]] = None
-    is_ended: bool = False       # 시나리오 종료 여부
-    has_more: bool = False       # 더 생성할 대화가 남아있는지 여부
+    is_ended: bool = False  # 시나리오 종료 여부
+    has_more: bool = False  # 더 생성할 대화가 남아있는지 여부
     system_message: Optional[str] = None  # 시스템 메시지 (fallback, 경고 등)
     current_image: Optional[str] = None  # 현재 표시할 이미지 파일명
 
 
 class SessionInfoResponse(BaseModel):
     """세션 상태 조회 응답"""
+
     session_id: str
     scenario_id: str
     current_stage: Optional[str]
@@ -182,14 +192,11 @@ class SessionInfoResponse(BaseModel):
 # 🧠 API 엔드포인트 구현부
 # ============================================================
 
+
 @app.get("/")
 async def root():
     """서버 상태 확인용"""
-    return {
-        "status": "running",
-        "service": "KIME Chat API",
-        "version": "1.0.0"
-    }
+    return {"status": "running", "service": "KIME Chat API", "version": "1.0.0"}
 
 
 @app.post("/api/chat")
@@ -222,16 +229,19 @@ async def chat(request: Request):
 
         if is_new_session:
             if not scenario_id:
-                raise HTTPException(status_code=400, detail="scenario_id is required to start a session")
+                raise HTTPException(
+                    status_code=400, detail="scenario_id is required to start a session"
+                )
 
             backend_scenario_id = SCENARIO_MAPPING.get(scenario_id, scenario_id)
             scenario_data = load_scenario(scenario_id)
             if not scenario_data:
-                raise HTTPException(status_code=404, detail=f"Scenario '{scenario_id}' not found")
+                raise HTTPException(
+                    status_code=404, detail=f"Scenario '{scenario_id}' not found"
+                )
 
             state = create_initial_graph_state(
-                session_id=session_id,
-                scenario_id=backend_scenario_id
+                session_id=session_id, scenario_id=backend_scenario_id
             )
             state["scenario_data"] = scenario_data
             state["scenario"] = scenario_data
@@ -248,7 +258,9 @@ async def chat(request: Request):
             state["current_stage"] = initial_stage
         else:
             print(f"🔄 Loading existing session: {session_id}")
-            print(f"📊 Session state: stage={state.get('current_stage')}, stage_turn={state.get('stage_turn')}")
+            print(
+                f"📊 Session state: stage={state.get('current_stage')}, stage_turn={state.get('stage_turn')}"
+            )
             if user_name:
                 state["user_name"] = user_name
 
@@ -257,7 +269,9 @@ async def chat(request: Request):
             if scenario_data:
                 state["scenario_data"] = scenario_data
                 state["scenario"] = scenario_data
-                state.setdefault("scenario_id", SCENARIO_MAPPING.get(scenario_id, scenario_id))
+                state.setdefault(
+                    "scenario_id", SCENARIO_MAPPING.get(scenario_id, scenario_id)
+                )
 
         state["session_id"] = session_id
         state["user_input"] = user_input
@@ -283,7 +297,9 @@ async def chat(request: Request):
         result_state["turn_count"] = turn_count
         SESSION_MANAGER.save(session_id, result_state)
 
-        print(f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}")
+        print(
+            f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}"
+        )
 
         agent_responses = result_state.get("output", {}).get("dialogues", [])
         has_more_flag = result_state.get("has_more")
@@ -291,7 +307,9 @@ async def chat(request: Request):
             has_more_flag = result_state.get("has_more_dialogues", False)
         result_state["has_more"] = has_more_flag
 
-        print(f"✅ Response sent: {len(agent_responses)} dialogues, has_more: {has_more_flag}")
+        print(
+            f"✅ Response sent: {len(agent_responses)} dialogues, has_more: {has_more_flag}"
+        )
 
         # ImageManager를 사용하여 각 대화별로 이미지 결정
         current_image = result_state.get("current_image")  # 이전 이미지
@@ -300,37 +318,45 @@ async def chat(request: Request):
 
         if scenario_id_for_image:
             # 시나리오별 ImageManager 로드 (캐시)
-            if scenario_id_for_image not in globals().get('image_managers', {}):
-                image_config_path = f"data/image_mappings/{scenario_id_for_image}_cutscenes.json"
+            if scenario_id_for_image not in globals().get("image_managers", {}):
+                image_config_path = (
+                    f"data/image_mappings/{scenario_id_for_image}_cutscenes.json"
+                )
                 abs_path = os.path.abspath(image_config_path)
                 print(f"🔍 Checking image config path: {abs_path}")
                 print(f"🔍 File exists: {os.path.exists(image_config_path)}")
 
                 if os.path.exists(image_config_path):
-                    if 'image_managers' not in globals():
-                        globals()['image_managers'] = {}
+                    if "image_managers" not in globals():
+                        globals()["image_managers"] = {}
 
                     # 이미지 메타데이터 경로 설정 (LLM 분석용)
                     metadata_path = os.path.join(
                         os.path.dirname(__file__),
-                        "data/image_mappings/mugen_train_images.json"
+                        "data/image_mappings/mugen_train_images.json",
                     )
 
                     # ImageManager 초기화 (use_llm=True로 LLM 기능 활성화)
-                    globals()['image_managers'][scenario_id_for_image] = ImageManager(
+                    globals()["image_managers"][scenario_id_for_image] = ImageManager(
                         config_path=image_config_path,
                         debug=True,
                         use_llm=True,
-                        llm_metadata_path=metadata_path
+                        llm_metadata_path=metadata_path,
                     )
-                    print(f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM enabled)")
+                    print(
+                        f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM enabled)"
+                    )
                 else:
                     print(f"⚠️ Image config not found at: {abs_path}")
 
             # ImageManager가 있으면 각 대화별로 이미지 분석
-            image_manager = globals().get('image_managers', {}).get(scenario_id_for_image)
+            image_manager = (
+                globals().get("image_managers", {}).get(scenario_id_for_image)
+            )
             print(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
-            print(f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}")
+            print(
+                f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}"
+            )
             print(f"🔍 DEBUG: image_manager={image_manager}")
             if image_manager:
                 # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
@@ -352,7 +378,9 @@ async def chat(request: Request):
                         continue
 
                     # 해당 대화 인덱스까지의 컨텍스트로 이미지 선택
-                    new_image = image_manager.get_image_for_dialogue_at_index(result_state, i)
+                    new_image = image_manager.get_image_for_dialogue_at_index(
+                        result_state, i
+                    )
 
                     if new_image is not None and new_image != previous_image:
                         # 이미지가 변경되면 해당 대화에 image_index 추가
@@ -368,17 +396,19 @@ async def chat(request: Request):
                 print(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
 
         # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
-        return JSONResponse({
-            "session_id": session_id,
-            "dialogues": agent_responses,  # 루트 레벨에 dialogues
-            "turn_count": result_state.get("turn_count", 0),
-            "current_stage": result_state.get("current_stage"),
-            "affinity_scores": result_state.get("affinity_scores", {}),
-            "is_ended": result_state.get("is_ended", False),
-            "has_more": has_more_flag,
-            "current_image": current_image,  # 현재 이미지 파일명
-            "output": result_state.get("output", {})  # 하위 호환성을 위해 유지
-        })
+        return JSONResponse(
+            {
+                "session_id": session_id,
+                "dialogues": agent_responses,  # 루트 레벨에 dialogues
+                "turn_count": result_state.get("turn_count", 0),
+                "current_stage": result_state.get("current_stage"),
+                "affinity_scores": result_state.get("affinity_scores", {}),
+                "is_ended": result_state.get("is_ended", False),
+                "has_more": has_more_flag,
+                "current_image": current_image,  # 현재 이미지 파일명
+                "output": result_state.get("output", {}),  # 하위 호환성을 위해 유지
+            }
+        )
 
     # ------------------------------------------------------------
     # (8) 예외 처리
@@ -388,6 +418,7 @@ async def chat(request: Request):
     except Exception as e:
         print(f"❌ Error in chat endpoint: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -407,7 +438,7 @@ async def get_session(session_id: str):
         scenario_id=state.get("scenario_id", "unknown"),
         current_stage=state.get("current_stage"),
         turn_count=state.get("turn_count", 0),
-        affinity_scores=state.get("affinity_scores", {})
+        affinity_scores=state.get("affinity_scores", {}),
     )
 
 
@@ -463,6 +494,6 @@ if __name__ == "__main__":
         "api_server:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,   # 코드 변경 시 자동 리로드
-        log_level="info"
+        reload=True,  # 코드 변경 시 자동 리로드
+        log_level="info",
     )

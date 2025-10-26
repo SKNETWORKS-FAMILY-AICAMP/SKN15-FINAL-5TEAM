@@ -65,6 +65,12 @@ class GraphState(TypedDict):
     mission_result: Optional[str]  # 'success', 'failure'
     system_flags: List[str]  # 시스템 플래그 ["rengoku_arrived", "mission_started"]
 
+    # RECRUIT 미션 관련
+    allies_recruited: Optional[List[str]]  # 설득 성공한 캐릭터 목록
+    recruit_attempts: Optional[Dict[str, int]]  # 캐릭터별 설득 시도 횟수
+    recruit_failures: Optional[List[str]]  # 설득 실패한 캐릭터 목록
+    recruit_order: Optional[List[str]]  # 설득 시도 순서
+
     # ============================================================
     # 엔딩
     # ============================================================
@@ -201,6 +207,12 @@ def create_initial_graph_state(
         is_persuasion_successful=None,
         mission_result=None,
         system_flags=[],
+
+        # RECRUIT 미션 관련
+        allies_recruited=[],
+        recruit_attempts={},
+        recruit_failures=[],
+        recruit_order=[],
 
         # 엔딩
         final_ending=None,

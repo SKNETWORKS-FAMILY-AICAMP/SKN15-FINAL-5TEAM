@@ -121,11 +121,24 @@ def generate_off_topic_response(
     scene = state.get("scene") or {}
     speaker_pool = scene.get("speaker_pool") or []
     fallback_speakers = ["tanjiro"]
-    # speaker_pool에서 아카자 제외 (스토리상 off-topic 응답에 부적절)
-    candidates = [sp for sp in speaker_pool if isinstance(sp, str) and sp.lower() != "akaza"] or fallback_speakers
+    # speaker_pool에서 아카자, narr 제외
+    # - akaza: 스토리상 off-topic 응답에 부적절
+    # - narr: 내레이션은 대사를 할 수 없음
+    candidates = [
+        sp for sp in speaker_pool
+        if isinstance(sp, str) and sp.lower() not in ("akaza", "narr","inosuke",'zenitsu','rengoku')
+    ] or fallback_speakers
     character = random.choice(candidates)
 
     log("fallback_llm", f"Selected speaker for off-topic: {character} (pool: {speaker_pool})")
+
+    # scenario_specific 정보 추출
+    scenario_id = state.get("scenario_id", "")
+    scenario_key = None
+    if "cutscene5" in str(scenario_id).lower():
+        scenario_key = "mugen_train"
+    # elif "cutscene6" in str(scenario_id).lower():
+    #     scenario_key = "final_battle"
 
     profile = _load_character_profile(character)
     if not profile:
@@ -140,6 +153,13 @@ def generate_off_topic_response(
     name = _coalesce((profile.get("name"), character.capitalize()))
     style = _extract_style(profile)
 
+    # scenario_specific tone/relationships 로드
+    relationships = {}
+    if scenario_key and "scenario_specific" in profile:
+        scenario_data = profile.get("scenario_specific", {}).get(scenario_key, {})
+        if scenario_data:
+            relationships = scenario_data.get("relationships", {})
+
     system_prompt = (
         f"You are {name}, a character from Demon Slayer. "
         "Respond in Korean, in 1-2 concise sentences. "
@@ -152,6 +172,16 @@ def generate_off_topic_response(
         f"\nMannerisms: {style['mannerisms']}"
     )
 
+    # 관계성 정보 추가
+    if relationships:
+        rel_desc = []
+        for target, info in relationships.items():
+            desc = info.get('description', '')
+            if desc:
+                rel_desc.append(f"{target}: {desc}")
+        if rel_desc:
+            system_prompt += f"\nRelationships: {'; '.join(rel_desc[:3])}"  # 최대 3개
+
     stage = state.get("current_stage") or (scene.get("current_stage") or "")
     mission_hint = state.get("mission_hint") or ""
 
@@ -160,7 +190,7 @@ def generate_off_topic_response(
         f"현재 스테이지: {stage or '알 수 없음'}\n"
         f"사용자 입력: \"{user_input}\"\n"
         f"미션 힌트: {mission_hint}\n"
-        "캐릭터의 말투로 부드럽게 주의를 돌려주세요."
+        "캐릭터의 말투와 현재 관계성을 반영하여 부드럽게 주의를 돌려주세요."
     )
 
     try:
@@ -168,7 +198,7 @@ def generate_off_topic_response(
         response_text = client.call(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.6,
+            temperature=0.8,  # 다양한 응답을 위해 증가
             max_tokens=80,
         )
         text = response_text.strip()
@@ -234,6 +264,14 @@ def generate_stage_fallback(
         candidates = ["tanjiro"]
     character = random.choice(candidates)
 
+    # scenario_specific 정보 추출
+    scenario_id = state.get("scenario_id", "")
+    scenario_key = None
+    if "cutscene5" in str(scenario_id).lower():
+        scenario_key = "mugen_train"
+    elif "cutscene6" in str(scenario_id).lower():
+        scenario_key = "final_battle"
+
     profile = _load_character_profile(character)
     if not profile:
         return {
@@ -244,6 +282,13 @@ def generate_stage_fallback(
 
     name = _coalesce((profile.get("name"), character.capitalize()))
     style = _extract_style(profile)
+
+    # scenario_specific tone/relationships 로드
+    relationships = {}
+    if scenario_key and "scenario_specific" in profile:
+        scenario_data = profile.get("scenario_specific", {}).get(scenario_key, {})
+        if scenario_data:
+            relationships = scenario_data.get("relationships", {})
 
     atmosphere = stage.get("atmosphere") or scene.get("atmosphere") or "unknown"
     stage_tag = stage.get("tag") or stage.get("id") or (state.get("current_stage") or "unknown")
@@ -267,6 +312,16 @@ def generate_stage_fallback(
         f"\n버릇/행동: {style['mannerisms']}"
     )
 
+    # 관계성 정보 추가
+    if relationships:
+        rel_desc = []
+        for target, info in relationships.items():
+            desc = info.get('description', '')
+            if desc:
+                rel_desc.append(f"{target}: {desc}")
+        if rel_desc:
+            system_prompt += f"\n캐릭터 관계: {'; '.join(rel_desc[:3])}"
+
     recent_turns = "\n".join(_recent_dialogue_turns(state, limit=3)) or "대화 기록 없음"
 
     user_prompt = (
@@ -280,7 +335,7 @@ def generate_stage_fallback(
         response_text = client.call(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.4,
+            temperature=0.75,  # 다양한 응답을 위해 증가
             max_tokens=90,
         )
         text = response_text.strip()
