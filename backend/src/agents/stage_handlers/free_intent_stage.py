@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+# ============================================================
+# 🎛️ FreeIntentHandler — 라우터 의도 결과에 따라 다음 스테이지를 선택
+#  - 라우터가 분류한 intent를 읽어 적절한 on_action/intent_mapping 매칭
+#  - 선택이 없으면 LLM에게 "선택을 재촉하는 beat"를 만들어 다시 요청
+#  - state_tools를 통해 intent/sticky_intent 등을 추적하고 stage 전환
+# ============================================================
+
 from src.tools import state_tools
 from src.tools.scene_tools import (
     get_next_stage_tag,
@@ -21,6 +28,9 @@ class FreeIntentHandler:
         self.locale = locale
 
     def handle(self, state: Dict[str, Any], stage: Dict[str, Any], scenario: Dict[str, Any]) -> StageResult:
+        # ========================================================
+        # 🎯 핵심 로직: 현재 intent 파악 → 액션 매칭 → StageResult 생성
+        # ========================================================
         stage_tag = stage.get("tag") or stage.get("id") or "free_intent"
         stage_turn = int(state.get("stage_turn", 0) or 0)
         scene_state = state_tools.get_scene_state(state)
@@ -76,6 +86,9 @@ class FreeIntentHandler:
         return StageResult(children_ctx=ctx, stage_complete=stage_complete, next_stage=next_stage)
 
     def _extract_intent(self, state: Dict[str, Any]) -> Optional[str]:
+        # ----------------------------------------
+        # 🧭 intent 추출 우선순위: temp.intent → sticky → routing_result → fallback
+        # ----------------------------------------
         temp = state_tools.get_temp_data(state)
         if temp.get("intent"):
             return str(temp.get("intent")).lower()
@@ -90,6 +103,9 @@ class FreeIntentHandler:
         return str(user_intent).lower() if user_intent else None
 
     def _match_action(self, stage: Dict[str, Any], intent: Optional[str]) -> Optional[Dict[str, Any]]:
+        # ----------------------------------------
+        # 🧩 intent와 stage 정의(on_action / intent_mapping) 매칭
+        # ----------------------------------------
         if not intent:
             return None
 
@@ -146,6 +162,9 @@ class FreeIntentHandler:
         return beat
 
     def _apply_set_operations(self, state: Dict[str, Any], operations: Dict[str, Any]) -> None:
+        # ----------------------------------------
+        # ⚙️ on_action.set 명령 처리 (ex. {"story.flags.joined": {"$inc": 1}})
+        # ----------------------------------------
         for key, value in operations.items():
             increment = None
             if isinstance(value, dict):

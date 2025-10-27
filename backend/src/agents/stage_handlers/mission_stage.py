@@ -1,13 +1,9 @@
-"""
-리팩터링 요약 (Refactoring Summary):
-1. 중복된 타겟 선택 로직 통합 → _determine_mission_target() 메서드로 추출
-2. 중복된 speaker pool 추출 로직 → _extract_speaker_pool_from_beats() 메서드로 추출
-3. mission 상태 업데이트 로직 통합 → _activate_mission(), _deactivate_mission() 메서드로 추출
-4. 반복되는 context 생성 로직 통합 → _build_children_context() 메서드로 추출
-5. 불필요한 변수 재할당 제거 및 명확한 변수명 사용
-6. intro 처리 로직 단순화 및 중복 제거
-7. PEP8 스타일 가이드 적용 및 일관된 코드 구조 유지
-"""
+# ============================================================
+# 🧑‍🤝‍🧑 MissionHandler — LLM 기반 동료 영입/설득 스테이지 처리
+#  - 인트로 → 동료 탐색 → 설득 시도 흐름 제어
+#  - mission 상태(타겟, 시도 횟수, 성공 큐) 관리
+#  - 사용자 입력을 분석해 적절한 target을 점수화하고 beats 생성
+# ============================================================
 
 from __future__ import annotations
 
@@ -64,6 +60,9 @@ class MissionHandler:
         stage: Dict[str, Any],
         scenario: Dict[str, Any]
     ) -> StageResult:
+        # ====================================================
+        # 🎬 메인 흐름: 인트로 → 타겟 결정 → 발견/설득 단계 분기
+        # ====================================================
         """미션 스테이지 처리 메인 로직"""
         stage_tag = stage.get("tag") or stage.get("id") or "mission"
         speaker_pool = get_speaker_pool(stage, stage.get("speaker_pool", []))
@@ -125,6 +124,9 @@ class MissionHandler:
         stage_tag: str,
         speaker_pool: List[str]
     ) -> StageResult:
+        # ----------------------------------------
+        # 🎞️ 1단계: intro 비트 전달 + 잠재 타겟 잠금
+        # ----------------------------------------
         """미션 인트로 처리"""
         temp_data = state.setdefault("temp_data", {})
         temp_data["mission_intro_shown"] = True
@@ -157,6 +159,9 @@ class MissionHandler:
         stage_tag: str,
         speaker_pool: List[str]
     ) -> StageResult:
+        # ----------------------------------------
+        # 🚫 사용자 입력이 타겟으로 연결되지 않을 때 fallback 처리
+        # ----------------------------------------
         """유효하지 않은 타겟 처리"""
         # 모든 미션이 완료된 경우
         if self._all_missions_resolved(state):
@@ -187,6 +192,9 @@ class MissionHandler:
         stage_tag: str,
         speaker_pool: List[str]
     ) -> StageResult:
+        # ----------------------------------------
+        # 🏁 모든 미션 성공 시 wrap-up 대사 큐잉
+        # ----------------------------------------
         """모든 미션 완료 처리"""
         allies = state.get("allies_recruited", [])
         wrap_up_dialogue = self._generate_mission_complete_message(allies)
@@ -223,6 +231,9 @@ class MissionHandler:
         stage_tag: str,
         mission_state: Dict[str, Any]
     ) -> StageResult:
+        # ----------------------------------------
+        # 🔍 2단계: 발견 파트 - target 전용 beat를 보여주고 mission 활성화
+        # ----------------------------------------
         """Discovery 단계 처리"""
         temp_data = state.setdefault("temp_data", {})
         temp_data["current_discovery_target"] = target
@@ -256,6 +267,9 @@ class MissionHandler:
         stage_tag: str,
         mission_state: Dict[str, Any]
     ) -> StageResult:
+        # ----------------------------------------
+        # 🗣️ 3단계: 설득 시도 → LLM 판정 → 성공/실패 브랜치
+        # ----------------------------------------
         """Persuasion 단계 처리"""
         self._activate_mission(state, target)
         self._increment_attempt(state, target)
@@ -290,6 +304,9 @@ class MissionHandler:
         target: str,
         stage_tag: str
     ) -> StageResult:
+        # ----------------------------------------
+        # ✅ 설득 성공 처리: 다음 타겟 스위칭 또는 미션 종료
+        # ----------------------------------------
         """설득 성공 처리"""
         temp_data = state.setdefault("temp_data", {})
         temp_data["current_discovery_target"] = None
@@ -358,6 +375,9 @@ class MissionHandler:
         stage_tag: str,
         remaining_attempts: int
     ) -> StageResult:
+        # ----------------------------------------
+        # ❌ 설득 실패 처리: 남은 시도에 따라 재도전 또는 자동 스위칭
+        # ----------------------------------------
         """설득 실패 처리"""
         log("mission", f"[PERSUASION] {target} → FAIL, keeping discovery target for retry")
 

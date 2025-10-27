@@ -1,3 +1,10 @@
+# ============================================================
+# 🗺️ scene_tools — 시나리오 JSON을 탐색/정규화하는 헬퍼
+#  - 시나리오 파일 로드, 스테이지 목록/타입/비트 조회
+#  - i18n 비트를 locale에 맞게 해석하고 speaker_pool 추출
+#  - Parent/StageHandler가 공용으로 사용하는 util 모음
+# ============================================================
+
 from __future__ import annotations
 
 import json
@@ -9,6 +16,7 @@ from src.utils.logger import log
 
 
 def _scenario_search_paths(scenario_id: str) -> List[Path]:
+    """시나리오 파일 탐색 우선순위 (대소문자 변형 포함)."""
     base = Path(__file__).resolve().parents[3] / "data" / "scenarios"
     candidates = [
         base / f"{scenario_id}.json",
@@ -20,6 +28,7 @@ def _scenario_search_paths(scenario_id: str) -> List[Path]:
 
 @lru_cache(maxsize=8)
 def _load_scenario_file(scenario_id: str) -> Optional[Dict[str, Any]]:
+    """scenario_id에 해당하는 JSON을 캐시에 로드."""
     for path in _scenario_search_paths(scenario_id):
         if path.exists():
             with path.open("r", encoding="utf-8") as handle:
@@ -29,6 +38,7 @@ def _load_scenario_file(scenario_id: str) -> Optional[Dict[str, Any]]:
 
 
 def resolve_scenario(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """state에 시나리오가 없다면 로드하고 state에 캐시."""
     scenario = state.get("scenario_data")
     if isinstance(scenario, dict):
         return scenario
@@ -43,6 +53,7 @@ def resolve_scenario(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def list_stages(scenario: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """시나리오에서 stage dict 리스트를 추출."""
     stages = scenario.get("stages") or []
     if isinstance(stages, dict):
         return [value for value in stages.values() if isinstance(value, dict)]
@@ -52,6 +63,7 @@ def list_stages(scenario: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def get_stage(scenario: Dict[str, Any], stage_tag: str) -> Optional[Dict[str, Any]]:
+    """tag/id/name 중 하나가 stage_tag와 일치하는 스테이지 반환."""
     target = stage_tag.lower()
     for stage in list_stages(scenario):
         for key in ("tag", "id", "name"):
@@ -62,15 +74,18 @@ def get_stage(scenario: Dict[str, Any], stage_tag: str) -> Optional[Dict[str, An
 
 
 def get_stage_type(stage: Dict[str, Any]) -> str:
+    """stage.type을 소문자 문자열로 정규화."""
     return str(stage.get("type", "scene")).lower()
 
 
 def get_stage_atmosphere(stage: Dict[str, Any]) -> Optional[str]:
+    """stage.atmosphere를 문자열로 반환(없으면 None)."""
     atmosphere = stage.get("atmosphere")
     return str(atmosphere) if atmosphere else None
 
 
 def _normalize_beats(items: Iterable[Any]) -> List[Dict[str, Any]]:
+    """beat 리스트를 dict 형태로 정규화."""
     beats: List[Dict[str, Any]] = []
     for item in list(items):
         if isinstance(item, dict):
@@ -81,6 +96,7 @@ def _normalize_beats(items: Iterable[Any]) -> List[Dict[str, Any]]:
 
 
 def _resolve_locale_bucket(i18n: Dict[str, Any], locale: str) -> Optional[Dict[str, Any]]:
+    """locale 우선순위에 따라 i18n bucket 선택."""
     if not i18n:
         return None
     candidates: List[str] = []
@@ -103,6 +119,7 @@ def _resolve_locale_bucket(i18n: Dict[str, Any], locale: str) -> Optional[Dict[s
 def get_i18n_entries(
     scenario: Dict[str, Any], key: Optional[str], locale: str = "ko"
 ) -> List[Dict[str, Any]]:
+    """scenario.i18n에서 주어진 key의 beats 목록을 locale 우선으로 반환."""
     if not key:
         return []
     root = scenario.get("i18n") or {}
@@ -114,6 +131,7 @@ def get_i18n_entries(
 
 # beats_i18n 키를 읽어서, 실제 텍스트를 i18n["ko"][beats_i18n]에서 찾아 반환
 def resolve_i18n_beats(stage: Dict[str, Any], scenario: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """stage.beats_i18n 키를 사용해 실제 beat 리스트 획득."""
     key = stage.get("beats_i18n")
     if not key:
         return []
@@ -124,6 +142,7 @@ def resolve_i18n_beats(stage: Dict[str, Any], scenario: Dict[str, Any]) -> List[
 def get_stage_beats(
     stage: Dict[str, Any], scenario: Dict[str, Any], locale: str = "ko"
 ) -> List[Dict[str, Any]]:
+    """stage의 beats 정의(beats/beat_i18n 등)를 locale에 맞게 반환."""
     if isinstance(stage.get("beats"), list):
         return _normalize_beats(stage["beats"])
     beats_i18n = stage.get("beats_i18n")
@@ -142,6 +161,7 @@ def get_stage_beats(
 
 
 def get_speaker_pool(stage: Dict[str, Any], fallback: Iterable[str]) -> List[str]:
+    """stage.speaker_pool이 있으면 사용, 없으면 fallback."""
     pool = stage.get("speaker_pool") or stage.get("speakerPool")
     if isinstance(pool, list) and pool:
         return [str(item) for item in pool]
@@ -149,6 +169,7 @@ def get_speaker_pool(stage: Dict[str, Any], fallback: Iterable[str]) -> List[str
 
 
 def get_next_stage_tag(stage: Dict[str, Any]) -> Optional[str]:
+    """stage next 속성 우선순위(default_next 등)를 따라 다음 tag 반환."""
     for key in ("next_stage", "next", "default_next", "default"):
         value = stage.get(key)
         if isinstance(value, str) and value.strip():

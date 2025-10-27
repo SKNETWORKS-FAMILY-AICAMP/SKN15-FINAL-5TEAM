@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+# ============================================================
+# 🚦 RouterStageHandler — intent/결과에 따라 다음 스테이지를 결정
+#  - routing_result.intent / classification을 기준으로 분기
+#  - outcome router, intent_mapping, 기본 경로 순으로 fallback
+#  - INTRO와 ROUTE_CHOICE에서 on_topic_generic 대응 대사 제공
+# ============================================================
+
 from src.utils.logger import log
 from src.tools.scene_tools import get_next_stage_tag
 from src.config.constants import INTRO_STAGE_TAGS
@@ -12,6 +19,9 @@ class RouterStageHandler:
     """A lightweight handler that jumps to the next stage based on routing metadata."""
 
     def handle(self, state: Dict[str, Any], stage: Dict[str, Any], scenario: Dict[str, Any]) -> StageResult:
+        # ====================================================
+        # 🧭 intent / outcome 정보를 읽어 다음 stage tag 계산
+        # ====================================================
         routing = state.get("routing_result") or {}
         intent = str(routing.get("intent") or routing.get("classification") or "").lower()
 
@@ -28,6 +38,9 @@ class RouterStageHandler:
         )
         stage_tag = stage.get("tag") or stage.get("id") or "router"
 
+        # ----------------------------------------
+        # 🧾 1) outcome 기반 라우팅 (전투/판정 결과 등)
+        # ----------------------------------------
         outcome_routes = stage.get("next_by_outcome") or stage.get("outcome_routes") or {}
         if outcome_routes:
             outcome_key_raw = state.get("_outcome")
@@ -62,6 +75,9 @@ class RouterStageHandler:
             )
             return StageResult(children_ctx=ctx, stage_complete=True, next_stage=next_stage)
 
+        # ----------------------------------------
+        # 🧾 2) intent 기반 라우팅 (intent_mapping / routes)
+        # ----------------------------------------
         next_stage = intent_mapping.get(intent)
         if not next_stage:
             next_stage = default_route
