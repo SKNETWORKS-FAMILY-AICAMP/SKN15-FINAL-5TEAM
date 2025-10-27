@@ -1,3 +1,10 @@
+# ============================================================
+# 🧰 state_tools — 세션/스테이지 상태를 갱신·보조하는 헬퍼 모음
+#  - SQLite 기반 체크포인트 저장, turn/flag 업데이트
+#  - 시나리오 로딩, pending stage 재개, fallback 생성 지원
+#  - ParentAgent, StateTools 노드 등에서 공통으로 사용
+# ============================================================
+
 import json
 import importlib
 import sqlite3

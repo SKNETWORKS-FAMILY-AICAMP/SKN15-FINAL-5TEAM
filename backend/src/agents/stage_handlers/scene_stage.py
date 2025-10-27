@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+# ============================================================
+# 🎬 SceneHandler — 선형 장면(beats)을 렌더링하고 진행 조건을 관리
+#  - stage_turn, min/max 턴, auto_advance 조건을 확인
+#  - INTRO 스테이지는 첫 입력/두 번째 입력 흐름을 별도로 처리
+#  - 장면 완료 시 beats를 정리하여 ParentAgent가 다음 스테이지로 이동하도록 지원
+# ============================================================
+
 from src.tools import state_tools
 from src.tools.scene_tools import (
     get_next_stage_tag,
@@ -76,7 +83,11 @@ class SceneHandler:
         next_stage = get_next_stage_tag(stage) if complete else None
         if complete:
             log("scene", "Scene constraints satisfied", current=stage_tag, next=next_stage)
-            should_trim = bool(constraints.get("auto_advance")) or stage_tag.upper() in intro_stage_aliases
+            should_trim = (
+                bool(constraints.get("auto_advance"))
+                or stage_tag.upper() in intro_stage_aliases
+                or (next_stage is not None)
+            )
             if should_trim and stage_turn >= max_turns:
                 ctx["beats"] = []
         return StageResult(
