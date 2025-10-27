@@ -17,6 +17,9 @@ export interface ChatMessage {
   emotion?: string
   timestamp?: string
   fx?: string | null
+  image_index?: string
+  affinity_level?: string
+  emotion_intensity?: string
 }
 
 export interface ChatRequest {
@@ -36,6 +39,7 @@ export interface ChatResponse {
   has_more: boolean  // 더 생성할 대화가 있는지 여부 (배치 모드)
   system_message?: string
   current_image?: string  // 현재 표시할 이미지 경로 (ImageManager 제공)
+  output?: Record<string, unknown>
 }
 
 export interface SessionInfo {

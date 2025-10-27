@@ -40,7 +40,10 @@ def _cosine_similarity(a: Counter, b: Counter) -> float:
     return dot / (norm_a * norm_b)
 
 
-def detect_mission_target(user_input: str) -> Optional[MissionTarget]:
+def detect_mission_target(
+    user_input: str,
+    keywords: Optional[Dict[str, Iterable[str]]] = None,
+) -> Optional[MissionTarget]:
     """
     Determine which mission branch the user referenced.
 
@@ -52,10 +55,11 @@ def detect_mission_target(user_input: str) -> Optional[MissionTarget]:
 
     normalized = _normalize(user_input)
     lowered = normalized.lower()
+    keyword_map = keywords or _TARGET_KEYWORDS
 
-    matches = {key: False for key in _TARGET_KEYWORDS}
-    for target, keywords in _TARGET_KEYWORDS.items():
-        for keyword in keywords:
+    matches = {key: False for key in keyword_map}
+    for target, variants in keyword_map.items():
+        for keyword in variants:
             if keyword and keyword.lower() in lowered:
                 matches[target] = True
                 break
@@ -73,8 +77,8 @@ def detect_mission_target(user_input: str) -> Optional[MissionTarget]:
         return None
 
     scored = []
-    for target, keywords in _TARGET_KEYWORDS.items():
-        ref_vec = _char_vector(" ".join(keywords))
+    for target, variants in keyword_map.items():
+        ref_vec = _char_vector(" ".join(variants))
         scored.append((target, _cosine_similarity(user_vec, ref_vec)))
 
     scored.sort(key=lambda item: item[1], reverse=True)

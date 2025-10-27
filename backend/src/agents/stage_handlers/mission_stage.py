@@ -41,6 +41,22 @@ class MissionHandler:
     def __init__(self, locale: str = "ko", llm: Any = None):
         self.locale = locale
         self._llm = llm
+        self._default_valid_targets = tuple(self.VALID_TARGETS)
+        self._current_settings: Dict[str, Any] = {}
+
+    @property
+    def valid_targets(self) -> tuple[str, ...]:
+        targets = self._current_settings.get("valid_targets")
+        if targets:
+            return tuple(targets)
+        return self._default_valid_targets
+
+    @property
+    def max_attempts(self) -> int:
+        return int(self._current_settings.get("max_attempts", self.MAX_ATTEMPTS))
+
+    def _get_setting(self, key: str, default: Any = None) -> Any:
+        return self._current_settings.get(key, default)
 
     def handle(
         self,
@@ -55,6 +71,30 @@ class MissionHandler:
         temp_data = state.setdefault("temp_data", {})
         mission_state = state.setdefault("mission", {})
 
+        mission_meta = (scenario.get("metadata") or {}).get("mission") or {}
+        targets_meta = mission_meta.get("targets") or []
+        valid_targets = [entry.get("id") for entry in targets_meta if isinstance(entry, dict) and entry.get("id")]
+        target_keywords = {entry.get("id"): entry.get("keywords", []) for entry in targets_meta if isinstance(entry, dict) and entry.get("id")}
+        max_attempts = int(mission_meta.get("max_attempts", self.MAX_ATTEMPTS))
+        success_queue_key = mission_meta.get("success_queue_key", "mission_success_queue")
+        complete_next_stage = mission_meta.get("complete_next_stage")
+        ally_name_map = mission_meta.get("ally_name_map") or self.CHARACTER_NAMES_KR
+        success_dialogues = mission_meta.get("success_dialogues") or {}
+        success_speaker = mission_meta.get("success_speaker", "tanjiro")
+        success_fx = mission_meta.get("success_fx")
+
+        self._current_settings = {
+            "valid_targets": valid_targets or list(self._default_valid_targets),
+            "max_attempts": max_attempts,
+            "success_queue_key": success_queue_key,
+            "complete_next_stage": complete_next_stage,
+            "ally_name_map": ally_name_map,
+            "success_dialogues": success_dialogues,
+            "target_keywords": target_keywords,
+            "success_speaker": success_speaker,
+            "success_fx": success_fx,
+        }
+
         # Intro 처리
         intro_shown = temp_data.get("mission_intro_shown", False)
         if not intro_shown:
@@ -64,7 +104,7 @@ class MissionHandler:
         target = self._determine_mission_target(state, user_input, mission_state)
 
         # 타겟이 유효하지 않으면 fallback 또는 완료 처리
-        if target not in self.VALID_TARGETS:
+        if target not in self.valid_targets:
             return self._handle_invalid_target(state, stage, scenario, stage_tag, speaker_pool)
 
         # Discovery 단계 처리
@@ -89,8 +129,8 @@ class MissionHandler:
         temp_data = state.setdefault("temp_data", {})
         temp_data["mission_intro_shown"] = True
 
-        detected_target = detect_mission_target(user_input)
-        if detected_target in self.VALID_TARGETS:
+        detected_target = detect_mission_target(user_input, keywords=self._get_setting("target_keywords"))
+        if detected_target in self.valid_targets:
             temp_data["locked_mission_target"] = detected_target
             state["mission_target"] = detected_target
 
@@ -149,19 +189,12 @@ class MissionHandler:
     ) -> StageResult:
         """모든 미션 완료 처리"""
         allies = state.get("allies_recruited", [])
-        msg = self._generate_mission_complete_message(allies)
-
-        wrap_up_dialogues = [
-            {
-                "speaker": "tanjiro",
-                "text": msg,
-                "fx": "urgent_heartbeat|flame_flash"
-            }
-        ]
+        wrap_up_dialogue = self._generate_mission_complete_message(allies)
 
         temp_data = state.setdefault("temp_data", {})
-        queue = temp_data.setdefault("mission_success_queue", [])
-        queue.extend(wrap_up_dialogues)
+        queue_key = self._get_setting("success_queue_key", "mission_success_queue")
+        queue = temp_data.setdefault(queue_key, [])
+        queue.append(dict(wrap_up_dialogue))
 
         self._deactivate_mission(state)
 
@@ -173,7 +206,7 @@ class MissionHandler:
             mission_info={"phase": "complete"}
         )
 
-        next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
+        next_stage = stage.get("next") or get_next_stage_tag(stage) or self._get_setting("complete_next_stage")
         log("mission", f"[AUTO-COMPLETE] all allies ready → {next_stage}", allies=allies)
         return StageResult(
             children_ctx=children_ctx,
@@ -229,11 +262,11 @@ class MissionHandler:
 
         attempts_map = state.get("recruit_attempts", {})
         current_attempts = attempts_map.get(target, 0)
-        remaining_attempts = max(0, self.MAX_ATTEMPTS - current_attempts)
+        remaining_attempts = max(0, self.max_attempts - current_attempts)
 
         log(
             "mission",
-            f"[ATTEMPT] {target} try={current_attempts}/{self.MAX_ATTEMPTS}",
+            f"[ATTEMPT] {target} try={current_attempts}/{self.max_attempts}",
             remaining=remaining_attempts,
         )
 
@@ -297,11 +330,12 @@ class MissionHandler:
         next_stage = None
 
         if stage_complete:
-            queue = temp_data.setdefault("mission_success_queue", [])
+            queue_key = self._get_setting("success_queue_key", "mission_success_queue")
+            queue = temp_data.setdefault(queue_key, [])
             queue.extend(feedback_dialogues)
             self._deactivate_mission(state)
             children_ctx.pop("fallback", None)
-            next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
+            next_stage = stage.get("next") or get_next_stage_tag(stage) or self._get_setting("complete_next_stage")
             log(
                 "mission",
                 f"[RESOLVED] stage={stage_tag}, next={next_stage}",
@@ -347,7 +381,8 @@ class MissionHandler:
         next_stage = None
 
         if remaining_attempts == 0:
-            queue = temp_data.setdefault("mission_success_queue", [])
+            queue_key = self._get_setting("success_queue_key", "mission_success_queue")
+            queue = temp_data.setdefault(queue_key, [])
             queue.extend(feedback_dialogues)
             next_target = self._select_next_target(state, exclude=[target])
             self._deactivate_mission(state)
@@ -367,7 +402,7 @@ class MissionHandler:
 
             log("mission", "[AUTO-SWITCH] All mission targets exhausted; finishing mission")
             stage_complete = True
-            next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
+            next_stage = stage.get("next") or get_next_stage_tag(stage) or self._get_setting("complete_next_stage")
             children_ctx.pop("fallback", None)
         else:
             log("codex_fix", "Mission still in progress", stage_tag=stage_tag, target=target)
@@ -389,22 +424,22 @@ class MissionHandler:
         """미션 타겟 결정 (중복 로직 통합)"""
         temp_data = state.setdefault("temp_data", {})
         locked_target = temp_data.get("locked_mission_target")
-        detected_target = detect_mission_target(user_input)
+        detected_target = detect_mission_target(user_input, keywords=self._get_setting("target_keywords"))
 
         # 이미 활성화된 미션이 있으면 해당 타겟 사용
-        if mission_state.get("active") and mission_state.get("target") in self.VALID_TARGETS:
+        if mission_state.get("active") and mission_state.get("target") in self.valid_targets:
             target = mission_state["target"]
             temp_data["locked_mission_target"] = target
             state["mission_target"] = target
             return target
 
         # locked_target이 있으면 사용
-        if locked_target in self.VALID_TARGETS:
+        if locked_target in self.valid_targets:
             mission_state["target"] = locked_target
             return locked_target
 
         # 사용자가 명시적으로 타겟을 지정했으면 사용
-        if detected_target in self.VALID_TARGETS:
+        if detected_target in self.valid_targets:
             temp_data["locked_mission_target"] = detected_target
             state["mission_target"] = detected_target
             mission_state["target"] = detected_target
@@ -414,8 +449,8 @@ class MissionHandler:
         allies = state.get("allies_recruited", [])
         attempts = state.get("recruit_attempts", {})
 
-        for candidate in self.VALID_TARGETS:
-            if candidate not in allies and attempts.get(candidate, 0) < self.MAX_ATTEMPTS:
+        for candidate in self.valid_targets:
+            if candidate not in allies and attempts.get(candidate, 0) < self.max_attempts:
                 temp_data["locked_mission_target"] = candidate
                 state["mission_target"] = candidate
                 mission_state["target"] = candidate
@@ -566,10 +601,10 @@ class MissionHandler:
         attempts = state.get("recruit_attempts", {})
         allies = state.get("allies_recruited", [])
 
-        for candidate in self.VALID_TARGETS:
+        for candidate in self.valid_targets:
             if candidate in exclude or candidate in allies:
                 continue
-            if attempts.get(candidate, 0) < self.MAX_ATTEMPTS:
+            if attempts.get(candidate, 0) < self.max_attempts:
                 return candidate
 
         return None
@@ -612,16 +647,14 @@ class MissionHandler:
     def _heuristic_fallback(self, text: str, target: str) -> bool:
         """휴리스틱 기반 fallback 판정"""
         lowered = (text or "").lower()
-        if target == "zenitsu":
-            return any(keyword in lowered for keyword in ["네즈코", "사랑", "지켜", "위험"])
-        if target == "inosuke":
-            return any(keyword in lowered for keyword in ["겁쟁", "약하", "싸우", "도전", "멧돼"])
-        return False
+        keyword_map = self._get_setting("heuristic_keywords", {}) or {}
+        keywords = keyword_map.get(target, [])
+        return any(str(keyword).lower() in lowered for keyword in keywords) if keywords else False
 
     def _update_recruit_result(self, state: Dict[str, Any], character: str, success: bool) -> None:
         """설득 결과 업데이트"""
         attempts = state.get("recruit_attempts", {}).get(character, 0)
-        remaining = max(0, self.MAX_ATTEMPTS - attempts)
+        remaining = max(0, self.max_attempts - attempts)
 
         if success:
             allies = state.setdefault("allies_recruited", [])
@@ -658,16 +691,17 @@ class MissionHandler:
         scenario: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """피드백 beats 생성"""
-        char_display = self.CHARACTER_NAMES_KR.get(character.lower(), character.capitalize())
+        name_map = self._get_setting("ally_name_map", self.CHARACTER_NAMES_KR)
+        char_display = name_map.get(character.lower(), name_map.get(character, character.capitalize()))
 
         temp_status = state.get("temp_data", {}).get("last_mission_status") or {}
         attempts_map = state.get("recruit_attempts", {})
         current_attempt = attempts_map.get(character, 0)
         remaining = temp_status.get("remaining")
         if remaining is None:
-            remaining = max(0, self.MAX_ATTEMPTS - current_attempt)
+            remaining = max(0, self.max_attempts - current_attempt)
 
-        attempt_ratio = f"{current_attempt}/{self.MAX_ATTEMPTS}"
+        attempt_ratio = f"{current_attempt}/{self.max_attempts}"
 
         if success:
             sys_text = f"{char_display} 🎉 설득 성공! 🎉 ({attempt_ratio})"
@@ -719,7 +753,7 @@ class MissionHandler:
         if final_transition_needed:
             next_target_raw = self._select_next_target(state, exclude=[character])
             next_target_display = (
-                self.CHARACTER_NAMES_KR.get(next_target_raw)
+                name_map.get(next_target_raw)
                 if next_target_raw
                 else None
             )
@@ -793,26 +827,45 @@ class MissionHandler:
         attempts = state.get("recruit_attempts", {})
         allies = state.get("allies_recruited", [])
 
-        for character in self.VALID_TARGETS:
+        for character in self.valid_targets:
             if character in allies:
                 continue
-            if attempts.get(character, 0) < self.MAX_ATTEMPTS:
+            if attempts.get(character, 0) < self.max_attempts:
                 return False
 
         return True
 
-    def _generate_mission_complete_message(self, allies: List[str]) -> str:
+    def _generate_mission_complete_message(self, allies: List[str]) -> Dict[str, Any]:
         """미션 완료 메시지 생성"""
-        if not allies:
-            return "동료를 더 설득할 시간이 없습니다. 곧바로 전장으로 돌아가야 해요!"
+        name_map = self._get_setting("ally_name_map", self.CHARACTER_NAMES_KR)
+        dialogues = self._get_setting("success_dialogues", {}) or {}
+        speaker = self._get_setting("success_speaker", "tanjiro")
+        fx = self._get_setting("success_fx")
 
-        converted_names = [self.CHARACTER_NAMES_KR.get(name, name) for name in allies]
+        def _display(names: List[str]) -> str:
+            translated = [name_map.get(name, name) for name in names]
+            if not translated:
+                return ""
+            if len(translated) == 1:
+                return translated[0]
+            if len(translated) == 2:
+                return f"{translated[0]}와 {translated[1]}"
+            return ", ".join(translated[:-1]) + f" 그리고 {translated[-1]}"
 
-        if len(converted_names) == 1:
-            ally_text = converted_names[0]
-        elif len(converted_names) == 2:
-            ally_text = f"{converted_names[0]}와 {converted_names[1]}"
+        if allies:
+            template = dialogues.get("allies")
+            message = template.format(allies=_display(allies)) if template else ""
         else:
-            ally_text = ", ".join(converted_names[:-1]) + f" 그리고 {converted_names[-1]}"
+            template = dialogues.get("none")
+            message = template if template else ""
 
-        return f"{ally_text}가 모두 합류했어요! 이제 바로 전장으로 돌아가 렌고쿠 님을 도와요!"
+        if not message:
+            if allies:
+                message = f"{_display(allies)}가 모두 합류했어요! 이제 바로 전장으로 돌아가 렌고쿠 님을 도와요!"
+            else:
+                message = "동료를 더 설득할 시간이 없습니다. 곧바로 전장으로 돌아가야 해요!"
+
+        payload = {"speaker": speaker, "text": message}
+        if fx:
+            payload["fx"] = fx
+        return payload

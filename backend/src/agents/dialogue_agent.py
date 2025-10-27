@@ -1,12 +1,3 @@
-# Dialogue Agent - 대사 품질 검증
-"""
-Dialogue Agent - Parent와 Children에서 생성된 대사의 품질 검증
-- 캐릭터 일관성 확인
-- 문맥 적합성 확인
-- 게임 규칙 준수 확인
-- GPT-4를 활용한 고품질 검증
-"""
-
 from datetime import datetime
 import time
 from typing import Dict, List, Optional
@@ -14,8 +5,14 @@ from typing import Dict, List, Optional
 from src.core.graph_state import AgentState, Dialogue
 from src.utils.llm_client import get_llm_client
 
+# ============================================================
+# 🗣️ DialogueAgent — children_agent가 만든 대사를 검증·미세조정
+# ============================================================
 
 class DialogueAgent:
+    # ============================================================
+    # 🛠️ 초기화
+    # ============================================================
     def __init__(self, use_llm: bool = True, enable_multi_conversation: bool = False):
         """Dialogue Agent 초기화"""
         self.use_llm = use_llm
@@ -27,14 +24,6 @@ class DialogueAgent:
             except Exception as e:
                 print(f"LLM 클라이언트 초기화 실패: {str(e)}")
                 self.use_llm = False
-
-        # 멀티캐릭터 대화 시스템
-        if self.enable_multi_conversation:
-            try:
-                self.multi_conv = MultiCharacterConversation()
-            except Exception as e:
-                print(f"멀티캐릭터 대화 시스템 초기화 실패: {str(e)}")
-                self.enable_multi_conversation = False
 
         # 검증 기준
         self.validation_criteria = {
@@ -56,6 +45,9 @@ class DialogueAgent:
             }
         }
 
+    # ============================================================
+    # 🚦 메인 처리 루프
+    # ============================================================
     def process(self, state: AgentState) -> AgentState:
         """Dialogue Agent 메인 처리"""
         start_time = time.perf_counter()
@@ -127,6 +119,9 @@ class DialogueAgent:
         print(f"[DIALOGUE] process() end", flush=True)
         return _finish(state, "completed")
 
+    # ============================================================
+    # 🔍 대사 검증 파이프라인
+    # ============================================================
     def _validate_dialogue(self, dialogue: Dialogue, state: AgentState) -> Dict:
         """대사 검증"""
         print(f"[DIALOGUE] _validate_dialogue: use_llm={self.use_llm}", flush=True)
@@ -197,6 +192,9 @@ class DialogueAgent:
             print(f"LLM 검증 실패: {str(e)}")
             return None
 
+    # ============================================================
+    # 📏 규칙 기반 보정
+    # ============================================================
     def _validate_with_rules(self, dialogue: Dialogue, state: AgentState) -> Dict:
         """규칙 기반 대사 검증"""
         scores = {
@@ -251,6 +249,9 @@ class DialogueAgent:
             "suggestions": "기본 규칙 기반 검증 통과" if passed else "대사 수정 필요"
         }
 
+    # ============================================================
+    # ✏️ 대사 자동 수정
+    # ============================================================
     def _correct_dialogue(self, dialogue: Dialogue, state: AgentState,
                          validation_result: Dict) -> Optional[Dialogue]:
         """대사 자동 수정"""
@@ -298,6 +299,9 @@ class DialogueAgent:
             print(f"대사 수정 실패: {str(e)}")
             return None
 
+    # ============================================================
+    # 📚 캐릭터 정보/멀티 대화 유틸
+    # ============================================================
     def _get_character_info(self, speaker: str) -> Dict:
         """캐릭터 정보 가져오기"""
         # 간단한 캐릭터 정보 (실제로는 DB에서 가져옴)
@@ -327,6 +331,9 @@ class DialogueAgent:
         # 기능 비활성화
         return
 
+# ============================================================
+# 🚀 모듈 수준 엔트리 포인트
+# ============================================================
 def run_dialogue_agent(state: AgentState) -> AgentState:
     """
     Dialogue Agent 실행 함수 (Simplified for Blueprint 5)

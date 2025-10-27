@@ -1,15 +1,3 @@
-'''ParentAgent
- └── children_ctx 전달
-       ├─ stage_tag
-       ├─ beats
-       └─ character_refs (tone 파일 경로)
-          ↓
-ChildrenAgent
- ├─ SceneDialogueTools.load_tone_profiles()
- ├─ SceneDialogueTools.compose_llm_prompt()
- ├─ LLM 호출 → tone 반영된 대사 JSON 생성
- └─ 실패 시 beats fallback'''
-
 from __future__ import annotations
 
 import json
@@ -19,28 +7,22 @@ from src.core import scene_dialogue_tools as dialogue_tools
 from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 
+# ============================================================
+# 🎭 ChildrenAgent — parent가 넘겨준 children_ctx로 실제 대사를 생성
+# ============================================================
 
 class ChildrenAgent:
-    """
-    ChildrenAgent - LLM을 사용해 실제 대사(dialogue)를 생성하는 핵심 클래스.
 
-    🎯 주요 역할:
-    - ParentAgent가 넘긴 children_ctx를 받아서
-      → tone_profiles (캐릭터 말투)
-      → beats (상황 가이드)
-      → stage_tag (현재 스테이지명)
-      정보를 종합한 뒤 LLM에 프롬프트를 보냄.
-    - LLM이 생성한 대사를 JSON으로 받아서 반환.
-    - LLM 실패 시 beats를 그대로 출력하여 fallback 작동.
-    """
-
+    # ============================================================
+    # 🛠️ 초기화
+    # ============================================================
     def __init__(self):
         """LLM 클라이언트 초기화"""
         self._llm = get_llm_client()
 
-    # ----------------------------------------------------------------------
-    # Public Entry
-    # ----------------------------------------------------------------------
+    # ============================================================
+    # 🚦 실행 엔트리 포인트
+    # ============================================================
     def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         ChildrenAgent의 메인 엔트리 포인트.
@@ -67,9 +49,9 @@ class ChildrenAgent:
 
         return state
 
-    # ----------------------------------------------------------------------
-    # Internal Helpers
-    # ----------------------------------------------------------------------
+    # ============================================================
+    # 🔧 내부 헬퍼
+    # ============================================================
     def _extract_context(self, state: Dict[str, Any]) -> Dict[str, Any] | None:
         """
         children_ctx를 추출하는 함수.
@@ -106,21 +88,10 @@ class ChildrenAgent:
             result = result.replace(token, value)
         return result
 
-    # ----------------------------------------------------------------------
-    # Core Dialogue Builder
-    # ----------------------------------------------------------------------
+    # ============================================================
+    # 💬 대사 생성
+    # ============================================================
     def _build_dialogues(self, ctx: Dict[str, Any], state: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        핵심 로직:
-        1️⃣ ParentAgent가 전달한 children_ctx에서
-            - character_refs
-            - beats
-            - stage_tag
-        를 추출.
-        2️⃣ SceneDialogueTools를 통해 tone_profiles 로드 및 llm_prompt 생성.
-        3️⃣ LLM 호출하여 tone-aware 대사 생성.
-        4️⃣ 실패 시 beats 그대로 fallback.
-        """
 
         # -----------------------------
         # 1️⃣ 컨텍스트 추출
@@ -129,6 +100,10 @@ class ChildrenAgent:
         beats = ctx.get("beats") or []                  # 시나리오 내 상황 묘사 텍스트
         stage_tag = ctx.get("stage_tag")                # 현재 스테이지명
         stage_type = ctx.get("stage_type")              # 스테이지 타입
+        stage_objective = ctx.get("stage_objective")
+        intent_options = ctx.get("intent_options")
+        latest_user_input = ctx.get("latest_user_input")
+        recent_dialogues = ctx.get("recent_dialogues")
         prefetch_entries = ctx.get("prefetch_dialogues") or []
         prefetch_dialogues = self._render_dialogues(state, [dict(entry) for entry in prefetch_entries if isinstance(entry, dict)]) if prefetch_entries else []
 
@@ -181,19 +156,16 @@ class ChildrenAgent:
                 log("children", f"  Beat[{i}]: {goal}...")
 
         # ✅ (추가) 시나리오 키 감지
-        scenario_id = state.get("scenario_id") or ctx.get("scenario_id")
-        scenario_key = None
-        if scenario_id:
-            if "cutscene5" in str(scenario_id).lower():
-                scenario_key = "mugen_train"
-            elif "cutscene6" in str(scenario_id).lower():
-                scenario_key = "final_battle"
-            # 나중에 다른 스토리 확장 시 elif로 추가
+        scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
+        metadata = scenario_ref.get("metadata") if isinstance(scenario_ref, dict) else {}
+        tone_meta = metadata.get("tone") or {}
+        scenario_key = tone_meta.get("scenario_key")
 
         # -----------------------------
         # 2️⃣ 캐릭터 톤 + 관계 로드
         # -----------------------------
         speaker_pool = ctx.get("speaker_pool", [])
+        context_summary = ctx.get("context_summary")
 
         # 🔧 speaker_pool에 있는 캐릭터만 tone_profile 로드
         filtered_character_refs = {}
@@ -206,11 +178,19 @@ class ChildrenAgent:
         # -----------------------------
         # 3️⃣ LLM 프롬프트 생성
         # -----------------------------
+        stage_turn = int(state.get("stage_turn", 0) or 0)
         llm_prompt = dialogue_tools.compose_llm_prompt(
             stage_tag=stage_tag,
             beats=beats,
             tone_profiles=tone_profiles,
-            speaker_pool=speaker_pool
+            speaker_pool=speaker_pool,
+            context_summary=context_summary,
+            stage_turn=stage_turn,
+            stage_type=stage_type or "",
+            stage_objective=stage_objective,
+            intent_options=intent_options if isinstance(intent_options, dict) else None,
+            latest_user_input=latest_user_input if isinstance(latest_user_input, str) else None,
+            recent_dialogues=recent_dialogues if isinstance(recent_dialogues, list) else None,
         )
 
 
@@ -219,12 +199,17 @@ class ChildrenAgent:
         # -----------------------------
         try:
             system_prompt = (
-                "당신은 Demon Slayer 시나리오의 대사 생성기입니다.\n"
-                "주어진 [상황 요약] beats를 정확히 따라 대사를 생성하세요.\n"
-                "절대로 beats에 없는 장소, 상황, 캐릭터를 추가하지 마세요.\n"
-                "goal 텍스트를 복사하지 말고 자연스러운 대사나 내레이션으로 재해석하세요.대사는 2~3줄로 풍부하게 표현하세요\n"
-                "narr가 아닌 화자는 설명체 대신 캐릭터의 말만 하세요 (\"~라고 말한다\" 같은 서술 금지).\n"
-                "narr만 장면 묘사와 효과음을 담당합니다."
+                "당신은 귀멸의 칼날 시나리오의 대사 작가이자 편집자입니다.\n"
+                "주어진 [상황 요약] beats는 장면의 목표일 뿐이므로, 그 문장을 반복하거나 따옴표 안의 문장을 그대로 쓰면 안 됩니다.\n"
+                "각 beat의 의미를 해석해 캐릭터가 실제로 말하거나 느낄 법한 자연스러운 대사를 2~3문장으로 새롭게 작성하세요.\n"
+                "goal에 나온 단어, 문장, 말투, 따옴표, 감탄사를 그대로 복사하거나 부분 발췌하지 말고, 동의어·비유·감정을 활용해 재구성하세요.\n"
+                "[이전 턴 요약]에 있는 사용자 입력과 직전 대사에 반드시 반응하고, 같은 말을 반복하지 말며 이야기와 감정을 앞으로 전개하세요.\n"
+                "사용자가 한 질문이나 요청이 있다면 직접적으로 답하거나 행동으로 보여주세요.\n"
+                "narr는 장면 묘사와 감각을 서술하되 다른 인물의 대사를 대신하지 않습니다.\n"
+                "캐릭터 화자는 설명체 대신 말투와 감정을 살린 직접 화법으로 대사만 말합니다 (\"~라고 말한다\" 등 금지).\n"
+                "가능하다면 마지막 발화(또는 내레이션)에서 플레이어가 다음 행동을 취하도록 자연스럽게 촉구하거나, 현재 스테이지 목표/선택지를 상기시키세요.\n"
+                "출력은 반드시 JSON 객체 하나로 응답하고, 구조는 {\"dialogues\": [...]} 형식을 지키세요.\n"
+                "캐릭터의 말투·관계는 tone_profile과 상황을 준수하고, narr는 beats에 나온 감각/효과음을 활용해 생생하게 묘사하세요."
             )
             if not system_prompt.strip():
                 log("children", "⚠️ system_prompt missing - using default guardrail")
@@ -384,13 +369,12 @@ class ChildrenAgent:
         # 대사를 못 찾았으면 goal 그대로 반환
         return goal
 
-# ----------------------------------------------------------------------
-# Module-level default instance (편의 함수)
-# ----------------------------------------------------------------------
+# ============================================================
+# 🚀 모듈 수준 헬퍼
+# ============================================================
 DEFAULT_AGENT = ChildrenAgent()
 
 def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
-    """외부에서 호출하는 엔트리 포인트 (ex. LangGraph 노드에서 사용)"""
     return DEFAULT_AGENT.run(state)
 
 

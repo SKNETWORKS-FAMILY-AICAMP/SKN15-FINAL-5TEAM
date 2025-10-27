@@ -50,7 +50,6 @@ class FallbackManager:
         """
         # 현재 스테이지 데이터 가져오기
         current_stage_data = self._get_current_stage_data(state)
-        # cutscene5_llm_driven.json에서 stage에 한 블록에서 atmosphere 가져오고 없으면 normal 키 사용
         scene_atmosphere = current_stage_data.get("atmosphere", "normal")
 
         # 허용 횟수 가져오기

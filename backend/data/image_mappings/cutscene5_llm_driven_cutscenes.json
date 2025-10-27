@@ -3,7 +3,7 @@
   "mappings": [
     {
       "priority": 100,
-      "stage": "INTRO",
+      "stage": "상현_삼_등장",
       "turn": [0, 0],
       "dialogue_count": [0, 0],
       "image": "1",
@@ -11,35 +11,35 @@
     },
     {
       "priority": 95,
-      "stage": "INTRO",
+      "stage": "상현_삼_등장",
       "dialogue_count": [1, 8],
       "image": "1",
       "description": "탈선 현장 - 혼란과 부상자 대응"
     },
     {
       "priority": 90,
-      "stage": "INTRO",
+      "stage": "상현_삼_등장",
       "dialogue_count": [9, 12],
       "image": "2",
       "description": "렌고쿠 등장 - 안정적인 모습"
     },
     {
       "priority": 85,
-      "stage": "INTRO",
+      "stage": "상현_삼_등장",
       "dialogue_count": [13, 18],
       "image": "3",
       "description": "아카자 등장 - 상현 삼의 압도적 기운"
     },
     {
       "priority": 80,
-      "stage": "INTRO",
+      "stage": "상현_삼_등장",
       "dialogue_count": [19, 25],
       "image": "5",
       "description": "술식 전개 - 파괴살 나침"
     },
     {
       "priority": 75,
-      "stage": "INTRO",
+      "stage": "상현_삼_등장",
       "dialogue_count": [26, 999],
       "image": "6",
       "description": "전투 시작 - 붉은 화염 vs 푸른 투기"

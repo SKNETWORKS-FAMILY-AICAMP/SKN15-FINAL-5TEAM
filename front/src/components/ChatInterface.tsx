@@ -25,6 +25,12 @@ interface ChatInterfaceProps {
 
 const TYPING_INTERVAL_MS = 60; // 타이핑 애니메이션 속도 (값이 클수록 느려짐)
 
+const SCENARIO_ID_MAP: Record<string, string> = {
+  train: 'cutscene5_llm_driven',
+  ending: 'cutscene5_llm_driven',
+  cutscene5_llm_driven: 'cutscene5_llm_driven',
+};
+
 export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending' }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -75,6 +81,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     playTypingStartSound,
     unlockAudio
   } = useSoundEffects();
+
+  const backendScenarioId = useMemo(() => {
+    if (!characterId) {
+      return 'cutscene5_llm_driven';
+    }
+    return SCENARIO_ID_MAP[characterId] || characterId;
+  }, [characterId]);
 
   // 배경 이미지 프리로드 (성능 최적화)
   useEffect(() => {
@@ -367,10 +380,10 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       // 자동 요청 시에는 "__AUTO_CONTINUE__"를 user_input으로 전송
       const response: ChatResponse = await sendChatMessage(
-        characterId,
+        backendScenarioId,
         '__AUTO_CONTINUE__',
         currentSessionId,
-        '츠고쿠'
+        '츠구코'
       );
 
       setLoadingMessage(null);
@@ -426,10 +439,10 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       try {
         // 첫 메시지로 대화 시작 (시나리오 초기화)
         const response: ChatResponse = await sendChatMessage(
-          characterId,
+          backendScenarioId,
           '시작',  // Initial trigger message
           undefined,
-          '츠고쿠'
+          '츠구코'
         );
 
         // 세션 ID 저장
@@ -763,10 +776,10 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
     try {
       const response: ChatResponse = await sendChatMessage(
-        characterId,
+        backendScenarioId,
         text,
         sessionId,
-        '츠고쿠'
+        '츠구코'
       );
 
       // Update session ID if it changed
@@ -790,31 +803,47 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         imageIndex: dialogue.image_index  // 배경 이미지 인덱스
       }));
 
+      const hasSystemMessageInBackend = backendMessages.some(
+        (message) => message.isSystemMessage && message.text.trim().length > 0
+      );
+      const systemDialogue = response.dialogues.find(
+        (dialogue) =>
+          dialogue.speaker &&
+          dialogue.speaker.toLowerCase() === 'system' &&
+          (dialogue.text || dialogue.content)
+      );
+      const fallbackSystemMessage =
+        response.system_message ||
+        systemDialogue?.text ||
+        systemDialogue?.content ||
+        '';
+
       // 시스템 메시지와 종료 메시지를 백엔드 메시지에 추가
       const allMessages = [...backendMessages];
+      let extraMessageOffset = 1;
 
-      // Show system message if provided
-      if (response.system_message) {
+      const pushSystemMessage = (text: string) => {
         allMessages.push({
-          id: Date.now() + backendMessages.length + 1,
-          text: response.system_message,
+          id: Date.now() + backendMessages.length + extraMessageOffset,
+          text,
           isUser: false,
           timestamp: new Date(),
           characterId: 'system',
           isSystemMessage: true
         });
+        extraMessageOffset += 1;
+      };
+
+      // Show system message if provided
+      if (response.system_message) {
+        pushSystemMessage(response.system_message);
+      } else if (!hasSystemMessageInBackend && fallbackSystemMessage) {
+        pushSystemMessage(fallbackSystemMessage);
       }
 
       // Check if chat has ended
       if (response.is_ended) {
-        allMessages.push({
-          id: Date.now() + backendMessages.length + 2,
-          text: '🎬 시나리오가 종료되었습니다. 새로운 시나리오를 시작하려면 페이지를 새로고침 해주세요.',
-          isUser: false,
-          timestamp: new Date(),
-          characterId: 'system',
-          isSystemMessage: true
-        });
+        pushSystemMessage('🎬 시나리오가 종료되었습니다. 새로운 시나리오를 시작하려면 페이지를 새로고침 해주세요.');
       }
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)

@@ -4,9 +4,11 @@ SceneDialogueTools - 톤/대사/프롬프트 관리
 - beats + tone_profiles 기반 LLM 프롬프트 구성
 """
 
-from pathlib import Path
 import json
+from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+from src.config.constants import INTRO_STAGE_TAGS
 
 def load_tone_profiles(
     character_refs: Dict[str, str],
@@ -55,7 +57,19 @@ def load_tone_profiles(
             profiles[name] = {}
     return profiles
 
-def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profiles: Dict[str, Any], speaker_pool: List[str]) -> str:
+def compose_llm_prompt(
+    stage_tag: str,
+    beats: List[Dict[str, Any]],
+    tone_profiles: Dict[str, Any],
+    speaker_pool: List[str],
+    context_summary: Optional[str] = None,
+    stage_turn: int = 0,
+    stage_type: str = "",
+    stage_objective: Optional[str] = None,
+    intent_options: Optional[Dict[str, Any]] = None,
+    latest_user_input: Optional[str] = None,
+    recent_dialogues: Optional[List[str]] = None,
+) -> str:
     """
     tone_profiles + beats + 관계 정보를 포함한 LLM 프롬프트
     """
@@ -103,8 +117,26 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     # --- beats ---
     beat_lines = "\n".join(f"- {b.get('goal', '')}" for b in beats)
 
-    # INTRO 스테이지 감지 및 첫 narr 체크
-    is_intro = "INTRO" in stage_tag.upper()
+    objective_block = ""
+    if stage_objective:
+        objective_block = f"""
+    [미션 목표]
+    {stage_objective}
+    """
+
+    intent_block = ""
+    if intent_options:
+        option_lines = "\n".join(
+            f"- {key}: {value}" for key, value in intent_options.items()
+        )
+        intent_block = f"""
+    [선택지]
+    {option_lines}
+    """
+
+    # 인트로 스테이지 감지 및 첫 narr 체크
+    intro_stage_aliases = {tag.upper() for tag in INTRO_STAGE_TAGS}
+    is_intro = stage_tag.upper() in intro_stage_aliases
     has_narr_beat = any(
         b.get("speaker", "").lower() == "narr"
         for b in beats
@@ -112,10 +144,31 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     intro_narr_reminder = ""
     if is_intro and has_narr_beat:
         intro_narr_reminder = """
-    ⭐ INTRO 스테이지 필수 요구사항:
+    ⭐ 인트로 스테이지 필수 요구사항:
     - 반드시 narr(내레이션)으로 시작해야 합니다
     - 첫 번째 dialogue는 무조건 speaker: "narr"이어야 합니다
     - narr는 장면의 배경, 분위기, 환경을 생생하게 묘사합니다
+    """
+
+    summary_block = ""
+    if context_summary:
+        summary_block = f"""
+    [이전 턴 요약]
+    {context_summary}
+    """
+
+    user_input_block = ""
+    if latest_user_input:
+        user_input_block = f"""
+    [사용자 입력]
+    {latest_user_input}
+    """
+
+    recent_dialogues_block = ""
+    if recent_dialogues:
+        recent_dialogues_block = f"""
+    [최근 대화]
+    {"; ".join(recent_dialogues)}
     """
 
     prompt = f"""
@@ -130,6 +183,10 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
     [현재 스테이지]
     {stage_tag}
 
+    {user_input_block}
+
+    {recent_dialogues_block}
+
     [상황 요약]
     {beat_lines}
 
@@ -138,6 +195,17 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
 
     [인물 관계 요약]
     {rel_text}
+
+    [스테이지 타입]
+    {stage_type or "scene"}
+
+    [현재 턴]
+    {stage_turn}
+
+    {objective_block}
+    {intent_block}
+
+    {summary_block}
 
     {first_encounter_text}
     {intro_narr_reminder}
@@ -169,10 +237,17 @@ def compose_llm_prompt(stage_tag: str, beats: List[Dict[str, Any]], tone_profile
 
     3. narr(내레이션):
     - narr는 장면 묘사·감각·효과음을 담당하며, 캐릭터 대사는 하지 않습니다.
-    - INTRO에서는 narr가 반드시 첫 번째로 등장해야 합니다.
+    - 인트로 스테이지에서는 narr가 반드시 첫 번째로 등장해야 합니다.
     - narr는 생략하지 말고, beat에 포함되어 있다면 반드시 생성하세요.
 
-    4. 출력 형식 (JSON):
+    4. 장면 전진 규칙:
+    - [이전 턴 요약]과 사용자 입력을 먼저 읽고, 그 흐름을 자연스럽게 이어가세요.
+    - 이미 언급된 문장을 반복하지 말고, 새로운 감정·행동·정보로 장면을 전진시키세요.
+    - stage_turn이 0이면 장면을 소개하고, 그 이상이면 기존 전개를 기반으로 긴장감과 감정을 발전시키세요.
+    - 스테이지 타입과 목표(예: mission objective, intent 선택지)에 맞춰 플레이어가 다음 행동을 하도록 자연스럽게 유도하세요.
+    - 선택지를 제시해야 하는 장면이라면, beats 내용을 바탕으로 플레이어가 답하거나 결정을 내릴 수 있게 질문이나 촉구로 마무리하세요.
+
+    5. 출력 형식 (JSON):
       {{
         "dialogues": [{{"speaker": "...", "text": "..."}}]
       }}
