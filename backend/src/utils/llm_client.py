@@ -253,21 +253,24 @@ _llm_client_instance: Optional[LLMClient] = None
 
 def get_llm_client() -> LLMClient:
     """
-    전역 LLM 클라이언트 인스턴스 가져오기 (싱글톤)
+    전역 LLM 클라이언트 인스턴스 가져오기 (싱글톤, Thread-safe)
     """
-    global _llm_client_instance  # TODO: Use with _global_lock: for thread safety
+    global _llm_client_instance
 
-    if _llm_client_instance is None:
-        _llm_client_instance = LLMClient()
+    with _global_lock:
+        if _llm_client_instance is None:
+            _llm_client_instance = LLMClient()
 
     return _llm_client_instance
 
 def set_llm_client(client: LLMClient):
     """
-    전역 LLM 클라이언트 인스턴스 설정
+    전역 LLM 클라이언트 인스턴스 설정 (Thread-safe)
     """
-    global _llm_client_instance  # TODO: Use with _global_lock: for thread safety
-    _llm_client_instance = client
+    global _llm_client_instance
+
+    with _global_lock:
+        _llm_client_instance = client
 
 
 # 테스트용 함수

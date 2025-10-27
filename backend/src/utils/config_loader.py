@@ -5,10 +5,10 @@ Config Loader - YAML 설정 파일 통합 로더
 중앙에서 로드하고 관리하는 유틸리티
 """
 
-import yaml
 import os
-from typing import Dict, Any, Optional
+import yaml
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 
 class ConfigLoader:
@@ -16,6 +16,7 @@ class ConfigLoader:
 
     _instance = None
     _configs = {}
+    _printed_files = {}  # {pid: set(printed_files)}
 
     def __new__(cls):
         """싱글톤 패턴으로 구현"""
@@ -51,17 +52,40 @@ class ConfigLoader:
         filepath = self.configs_dir / filename
 
         if not filepath.exists():
-            print(f"⚠️ 설정 파일을 찾을 수 없습니다: {filepath}")
+            if self._should_print_message(filename):
+                print(f"⚠️ 설정 파일을 찾을 수 없습니다: {filepath}")
             return {}
 
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
-                print(f"✅ 설정 로드 성공: {filename}")
+                # 각 프로세스에서 각 파일당 한 번만 출력
+                if self._should_print_message(filename):
+                    print(f"✅ 설정 로드 성공: {filename}")
                 return data if data else {}
         except Exception as e:
-            print(f"❌ 설정 로드 실패 ({filename}): {str(e)}")
+            if self._should_print_message(filename):
+                print(f"❌ 설정 로드 실패 ({filename}): {str(e)}")
             return {}
+
+    def _should_print_message(self, filename: str) -> bool:
+        """
+        메시지를 출력할지 결정
+        - 각 프로세스에서 각 파일당 한 번만 출력
+        """
+        current_pid = os.getpid()
+
+        # 현재 프로세스의 출력 기록 가져오기
+        if current_pid not in ConfigLoader._printed_files:
+            ConfigLoader._printed_files[current_pid] = set()
+
+        # 이미 이 파일을 출력했으면 False 반환
+        if filename in ConfigLoader._printed_files[current_pid]:
+            return False
+
+        # 처음 출력하는 파일이면 기록하고 True 반환
+        ConfigLoader._printed_files[current_pid].add(filename)
+        return True
 
     def _load_all_configs(self):
         """모든 설정 파일 로드"""
