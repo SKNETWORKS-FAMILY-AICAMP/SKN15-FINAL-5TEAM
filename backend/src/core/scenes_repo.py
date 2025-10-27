@@ -17,10 +17,10 @@ if str(SRC_DIR) not in sys.path:
 # ✅ 안전한 logger import
 # -------------------------------
 try:
-    from src.agents.utils import log  # 정상 경로
+    from src.utils import log  # 정상 경로
 except Exception:
     # fallback: 로컬 실행 시 상대 import
-    sys.path.append(str(BASE_DIR / "src" / "agents" / "utils"))
+    sys.path.append(str(BASE_DIR / "src" / "utils"))
     from logger import log
 
 

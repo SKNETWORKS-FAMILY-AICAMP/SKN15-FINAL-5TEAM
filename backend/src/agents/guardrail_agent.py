@@ -10,12 +10,13 @@
    '''
 
 from __future__ import annotations
+
 import time
 from typing import Dict, Optional, Sequence
 
-from .utils.embedding_matcher import EmbeddingMatcher, EmbeddingClient, get_embedding_client
-from .utils.logger import log
-from src.utils.spellcheck import get_spell_checker, SpellChecker
+from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
+from src.utils.logger import log
+from src.utils.spellcheck import SpellChecker, get_spell_checker
 
 
 class GuardrailAgent:

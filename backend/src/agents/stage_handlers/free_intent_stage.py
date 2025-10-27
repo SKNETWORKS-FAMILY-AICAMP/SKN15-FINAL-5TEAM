@@ -3,15 +3,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from src.tools import state_tools
-
-from ..scene_tools import (
+from src.tools.scene_tools import (
     get_next_stage_tag,
     get_stage_atmosphere,
     get_stage_beats,
     get_stage_type,
     get_speaker_pool,
 )
-from ..utils.logger import log
+from src.utils.logger import log
 from . import StageResult
 
 

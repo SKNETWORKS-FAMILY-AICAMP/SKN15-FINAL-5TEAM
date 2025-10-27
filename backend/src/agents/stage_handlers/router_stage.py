@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ..utils.logger import log
-from ..scene_tools import get_next_stage_tag
+from src.utils.logger import log
+from src.tools.scene_tools import get_next_stage_tag
 from . import StageResult
 
 

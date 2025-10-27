@@ -3,17 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
-from src.utils.llm_client import LLMClient, get_llm_client
-
-from .utils.embedding_matcher import (
+from src.utils.embedding_matcher import (
     EmbeddingClient,
     EmbeddingMatcher,
     MatchResult,
     get_embedding_client,
 )
-from .utils.fallback_llm import generate_off_topic_response
-from .utils.logger import log
-from .utils.mission_target import detect_mission_target
+from src.utils.fallback_llm import generate_off_topic_response
+from src.utils.llm_client import LLMClient, get_llm_client
+from src.utils.logger import log
+from src.utils.mission_target import detect_mission_target
 
 
 ALLOWED_INTENTS = {
