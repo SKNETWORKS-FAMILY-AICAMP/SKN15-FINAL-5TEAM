@@ -1,3 +1,14 @@
+"""
+리팩터링 요약 (Refactoring Summary):
+1. 중복된 타겟 선택 로직 통합 → _determine_mission_target() 메서드로 추출
+2. 중복된 speaker pool 추출 로직 → _extract_speaker_pool_from_beats() 메서드로 추출
+3. mission 상태 업데이트 로직 통합 → _activate_mission(), _deactivate_mission() 메서드로 추출
+4. 반복되는 context 생성 로직 통합 → _build_children_context() 메서드로 추출
+5. 불필요한 변수 재할당 제거 및 명확한 변수명 사용
+6. intro 처리 로직 단순화 및 중복 제거
+7. PEP8 스타일 가이드 적용 및 일관된 코드 구조 유지
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
@@ -20,294 +31,276 @@ class MissionHandler:
     """LLM 기반 동료 영입 미션 처리기"""
 
     MAX_ATTEMPTS = 3
+    VALID_TARGETS = ("inosuke", "zenitsu")
+    CHARACTER_NAMES_KR = {
+        "inosuke": "이노스케",
+        "zenitsu": "젠이츠",
+        "tanjiro": "탄지로",
+        "nezuko": "네즈코",
+    }
 
     def __init__(self, locale: str = "ko", llm: Any = None):
         self.locale = locale
         self._llm = llm
 
-    def handle(self, state: Dict[str, Any], stage: Dict[str, Any], scenario: Dict[str, Any]) -> StageResult:
+    def handle(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any]
+    ) -> StageResult:
+        """미션 스테이지 처리 메인 로직"""
         stage_tag = stage.get("tag") or stage.get("id") or "mission"
         speaker_pool = get_speaker_pool(stage, stage.get("speaker_pool", []))
         user_input = (state.get("user_input") or "").strip()
-        stage_turn = int(state.get("stage_turn", 0) or 0)
         temp_data = state.setdefault("temp_data", {})
-        intro_flag = temp_data.get("mission_intro_shown", False)
-        locked_target = temp_data.get("locked_mission_target")
-
-        target = detect_mission_target(user_input)
         mission_state = state.setdefault("mission", {})
-        mission_active = bool(mission_state.get("active"))
 
-        if not intro_flag:
-            temp_data["mission_intro_shown"] = True
-            if target in ("inosuke", "zenitsu") and not locked_target:
-                temp_data["locked_mission_target"] = target
-                state["mission_target"] = target
-            intro_key = stage.get("intro_i18n") or "beats_smell"
-            intro_beats = self._to_dialogues(get_i18n_entries(scenario, intro_key, locale=self.locale))
-            log("mission", f"[INTRO] Showing mission intro via {intro_key}")
-            children_ctx = {
-                "stage_tag": stage_tag,
-                "stage_type": get_stage_type(stage),
-                "speaker_pool": speaker_pool,
-                "beats": intro_beats,
-                "atmosphere": stage.get("atmosphere"),
-                "mission": {
-                    "phase": "intro",
-                },
+        # Intro 처리
+        intro_shown = temp_data.get("mission_intro_shown", False)
+        if not intro_shown:
+            return self._handle_intro(state, stage, scenario, user_input, stage_tag, speaker_pool)
+
+        # 타겟 결정
+        target = self._determine_mission_target(state, user_input, mission_state)
+
+        # 타겟이 유효하지 않으면 fallback 또는 완료 처리
+        if target not in self.VALID_TARGETS:
+            return self._handle_invalid_target(state, stage, scenario, stage_tag, speaker_pool)
+
+        # Discovery 단계 처리
+        if self._should_show_discovery(state, user_input, target, mission_state):
+            return self._handle_discovery(state, stage, scenario, target, stage_tag, mission_state)
+
+        # Persuasion 단계 처리
+        return self._handle_persuasion(state, stage, scenario, target, stage_tag, mission_state)
+
+    # ==================== Handler Methods ====================
+
+    def _handle_intro(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        user_input: str,
+        stage_tag: str,
+        speaker_pool: List[str]
+    ) -> StageResult:
+        """미션 인트로 처리"""
+        temp_data = state.setdefault("temp_data", {})
+        temp_data["mission_intro_shown"] = True
+
+        detected_target = detect_mission_target(user_input)
+        if detected_target in self.VALID_TARGETS:
+            temp_data["locked_mission_target"] = detected_target
+            state["mission_target"] = detected_target
+
+        intro_key = stage.get("intro_i18n") or "beats_smell"
+        intro_beats = self._to_dialogues(
+            get_i18n_entries(scenario, intro_key, locale=self.locale)
+        )
+        log("mission", f"[INTRO] Showing mission intro via {intro_key}")
+
+        children_ctx = self._build_children_context(
+            stage_tag=stage_tag,
+            stage=stage,
+            speaker_pool=speaker_pool,
+            beats=intro_beats,
+            mission_info={"phase": "intro"}
+        )
+        return StageResult(children_ctx=children_ctx, stage_complete=False)
+
+    def _handle_invalid_target(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        stage_tag: str,
+        speaker_pool: List[str]
+    ) -> StageResult:
+        """유효하지 않은 타겟 처리"""
+        # 모든 미션이 완료된 경우
+        if self._all_missions_resolved(state):
+            return self._handle_mission_complete(state, stage, stage_tag, speaker_pool)
+
+        # Fallback 처리
+        user_input = state.get("user_input", "")
+        fallback_payload = trigger_fallback(state, stage, reason="invalid_target")
+        beats_smell = self._to_dialogues(
+            get_i18n_entries(scenario, "beats_smell", locale=self.locale)
+        )
+        fallback_payload.setdefault("dialogues", []).extend(beats_smell)
+
+        children_ctx = self._build_children_context(
+            stage_tag=stage_tag,
+            stage=stage,
+            speaker_pool=speaker_pool,
+            beats=[],
+            fallback={"dialogues": fallback_payload.get("dialogues", [])}
+        )
+        log("mission", f"[FALLBACK] ambiguous target on {stage_tag}", user_input=user_input)
+        return StageResult(children_ctx=children_ctx, fallback_payload=fallback_payload)
+
+    def _handle_mission_complete(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        stage_tag: str,
+        speaker_pool: List[str]
+    ) -> StageResult:
+        """모든 미션 완료 처리"""
+        allies = state.get("allies_recruited", [])
+        msg = self._generate_mission_complete_message(allies)
+
+        wrap_up_dialogues = [
+            {
+                "speaker": "tanjiro",
+                "text": msg,
+                "fx": "urgent_heartbeat|flame_flash"
             }
-            return StageResult(children_ctx=children_ctx, stage_complete=False)
+        ]
 
-        # 🔧 타겟이 없으면 자동으로 다음 캐릭터 선택 (순서: inosuke → zenitsu)
-        if locked_target in ("inosuke", "zenitsu"):
-            target = locked_target
-            mission_state["target"] = locked_target
+        temp_data = state.setdefault("temp_data", {})
+        queue = temp_data.setdefault("mission_success_queue", [])
+        queue.extend(wrap_up_dialogues)
 
-        if target in ("inosuke", "zenitsu") and not locked_target:
-            temp_data["locked_mission_target"] = target
-            state["mission_target"] = target
+        self._deactivate_mission(state)
 
-        if target not in ("inosuke", "zenitsu") and intro_flag and not locked_target:
-            allies = state.get("allies_recruited", [])
-            attempts = state.get("recruit_attempts", {})
-
-            # inosuke를 아직 설득 안 했으면 inosuke
-            if "inosuke" not in allies and attempts.get("inosuke", 0) < self.MAX_ATTEMPTS:
-                target = "inosuke"
-                log("mission", "[AUTO-TARGET] Selecting inosuke (first priority)")
-            # inosuke 완료했으면 zenitsu
-            elif "zenitsu" not in allies and attempts.get("zenitsu", 0) < self.MAX_ATTEMPTS:
-                target = "zenitsu"
-                log("mission", "[AUTO-TARGET] Selecting zenitsu (inosuke already handled)")
-            if target in ("inosuke", "zenitsu"):
-                temp_data["locked_mission_target"] = target
-                state["mission_target"] = target
-
-        skip_discovery = False
-        active_target = mission_state.get("target")
-        if mission_active and active_target in ("inosuke", "zenitsu"):
-            target = active_target
-            mission_state["target"] = active_target
-            temp_data["locked_mission_target"] = active_target
-            state["mission_target"] = active_target
-            skip_discovery = True
-            attempts_snapshot = state.get("recruit_attempts", {})
-            log("mission", f"🔁 Continuing active mission: {target}", attempts=attempts_snapshot.get(target, 0))
-        elif target in ("inosuke", "zenitsu"):
-            mission_state["target"] = target
-
-        # 그래도 타겟이 없으면 fallback
-        if target not in ("inosuke", "zenitsu"):
-            if not intro_flag and stage_turn == 0:
-                intro_key = stage.get("intro_i18n") or "beats_smell"
-                intro_beats = self._to_dialogues(get_i18n_entries(scenario, intro_key, locale=self.locale))
-                children_ctx = {
-                    "stage_tag": stage_tag,
-                    "stage_type": get_stage_type(stage),
-                    "speaker_pool": speaker_pool,
-                    "beats": intro_beats,
-                    "atmosphere": stage.get("atmosphere"),
-                    "mission": {"phase": "intro"},
-                }
-                temp_data["mission_intro_shown"] = True
-                return StageResult(children_ctx=children_ctx, stage_complete=False)
-
-            if self._all_missions_resolved(state):
-                allies = state.get("allies_recruited", [])
-                name_map = {
-                    "inosuke": "이노스케",
-                    "zenitsu": "젠이츠",
-                    "tanjiro": "탄지로",
-                    "nezuko": "네즈코",
-                }
-
-                def _display(names):
-                    converted = [name_map.get(name, name) for name in names]
-                    if not converted:
-                        return ""
-                    if len(converted) == 1:
-                        return converted[0]
-                    if len(converted) == 2:
-                        return f"{converted[0]}와 {converted[1]}"
-                    return ", ".join(converted[:-1]) + f" 그리고 {converted[-1]}"
-
-                msg = (
-                    f"{_display(allies)}가 모두 합류했어요! 이제 바로 전장으로 돌아가 렌고쿠 님을 도와요!"
-                    if allies else "동료를 더 설득할 시간이 없습니다. 곧바로 전장으로 돌아가야 해요!"
-                )
-                wrap_up_dialogues = [
-                    {"speaker": "tanjiro", "text": msg, "fx": "urgent_heartbeat|flame_flash"},
-                ]
-                queue = state.setdefault("temp_data", {}).setdefault("mission_success_queue", [])
-                queue.extend(wrap_up_dialogues)
-                temp_data.pop("locked_mission_target", None)
-                state["mission_target"] = None
-                mission_state["active"] = False
-                mission_state["target"] = None
-                children_ctx = {
-                    "stage_tag": stage_tag,
-                    "stage_type": get_stage_type(stage),
-                    "speaker_pool": speaker_pool or ["tanjiro", "narr"],
-                    "beats": [],
-                    "atmosphere": stage.get("atmosphere"),
-                    "mission": {"phase": "complete"},
-                }
-                next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
-                log("mission", f"[AUTO-COMPLETE] all allies ready → {next_stage}", allies=allies)
-                return StageResult(children_ctx=children_ctx, stage_complete=True, next_stage=next_stage)
-
-            fallback_payload = trigger_fallback(state, stage, reason="invalid_target")
-            beats_smell = self._to_dialogues(
-                get_i18n_entries(scenario, "beats_smell", locale=self.locale)
-            )
-            fallback_dialogues = fallback_payload.setdefault("dialogues", [])
-            fallback_dialogues.extend(beats_smell)
-            children_ctx = {
-                "stage_tag": stage_tag,
-                "stage_type": get_stage_type(stage),
-                "speaker_pool": speaker_pool,
-                "beats": [],
-                "fallback": {"dialogues": fallback_dialogues},
-                "atmosphere": stage.get("atmosphere"),
-            }
-            log("mission", f"[FALLBACK] ambiguous target on {stage_tag}", user_input=user_input)
-            return StageResult(children_ctx=children_ctx, fallback_payload=fallback_payload)
-
-        # 🔧 단계 구분: 찾기 (discovery) vs 설득 (persuasion)
-        current_discovery_target = state.get("temp_data", {}).get("current_discovery_target")
-
-        # 사용자 입력이 이름만 있으면 discovery로 간주 (설득 시도 아님)
-        user_input_lower = user_input.lower()
-        is_name_only = (
-            user_input_lower in (target, target + "요", target + "를", target + "을") or
-            len(user_input.strip()) <= 5  # 매우 짧은 입력은 이름만 언급한 것으로 간주
+        children_ctx = self._build_children_context(
+            stage_tag=stage_tag,
+            stage=stage,
+            speaker_pool=speaker_pool or ["tanjiro", "narr"],
+            beats=[],
+            mission_info={"phase": "complete"}
         )
 
-        if (current_discovery_target != target or is_name_only) and not skip_discovery:
-            # 새로운 캐릭터를 찾으러 가는 경우 → discovery scene 표시
-            state.setdefault("temp_data", {})["current_discovery_target"] = target
-            log("mission", f"[DISCOVERY] Finding {target}")
+        next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
+        log("mission", f"[AUTO-COMPLETE] all allies ready → {next_stage}", allies=allies)
+        return StageResult(
+            children_ctx=children_ctx,
+            stage_complete=True,
+            next_stage=next_stage
+        )
 
-            # {character}_scene beats 로드
-            discovery_beats = get_i18n_entries(scenario, f"{target}_scene", locale=self.locale)
+    def _handle_discovery(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        target: str,
+        stage_tag: str,
+        mission_state: Dict[str, Any]
+    ) -> StageResult:
+        """Discovery 단계 처리"""
+        temp_data = state.setdefault("temp_data", {})
+        temp_data["current_discovery_target"] = target
+        log("mission", f"[DISCOVERY] Finding {target}")
 
-            # discovery beats에서 speaker_pool 추출 (speaker_hint 사용)
-            discovery_speakers = set()
-            for beat in discovery_beats:
-                if isinstance(beat, dict):
-                    hints = beat.get("speaker_hint", [])
-                    if isinstance(hints, list):
-                        discovery_speakers.update(str(h) for h in hints if h)
-                    speaker = beat.get("speaker")
-                    if speaker:
-                        discovery_speakers.add(str(speaker))
+        discovery_beats = get_i18n_entries(scenario, f"{target}_scene", locale=self.locale)
+        discovery_pool = self._extract_speaker_pool_from_beats(discovery_beats, target)
 
-            # narr는 항상 포함, target도 포함
-            discovery_speakers.add("narr")
-            discovery_speakers.add(target)
-            discovery_pool = sorted(discovery_speakers)
+        log("mission", f"[DISCOVERY] Speaker pool for {target}_scene: {discovery_pool}")
 
-            log("mission", f"[DISCOVERY] Speaker pool for {target}_scene: {discovery_pool}")
-
-            children_ctx = {
-                "stage_tag": stage_tag,
-                "stage_type": get_stage_type(stage),
-                "speaker_pool": discovery_pool,
-                "beats": self._to_dialogues(discovery_beats),
-                "atmosphere": stage.get("atmosphere"),
-                "mission": {
-                    "target": target,
-                    "phase": "discovery",
-                },
+        children_ctx = self._build_children_context(
+            stage_tag=stage_tag,
+            stage=stage,
+            speaker_pool=discovery_pool,
+            beats=self._to_dialogues(discovery_beats),
+            mission_info={
+                "target": target,
+                "phase": "discovery",
             }
-            # discovery 단계에서는 stage_complete=False
-            mission_state["active"] = True
-            mission_state["target"] = target
-            log("mission", f"🟢 Mission activated for {target}")
-            return StageResult(children_ctx=children_ctx, stage_complete=False)
+        )
 
-        # 이미 찾은 캐릭터에 대한 설득 시도
-        mission_state["active"] = True
-        mission_state["target"] = target
+        self._activate_mission(state, target)
+        return StageResult(children_ctx=children_ctx, stage_complete=False)
+
+    def _handle_persuasion(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        target: str,
+        stage_tag: str,
+        mission_state: Dict[str, Any]
+    ) -> StageResult:
+        """Persuasion 단계 처리"""
+        self._activate_mission(state, target)
         self._increment_attempt(state, target)
-        attempts_snapshot = state.get("recruit_attempts", {})
-        current_attempts = attempts_snapshot.get(target, 0)
+
+        attempts_map = state.get("recruit_attempts", {})
+        current_attempts = attempts_map.get(target, 0)
         remaining_attempts = max(0, self.MAX_ATTEMPTS - current_attempts)
+
         log(
             "mission",
             f"[ATTEMPT] {target} try={current_attempts}/{self.MAX_ATTEMPTS}",
             remaining=remaining_attempts,
         )
+
         success = self._evaluate_recruit_attempt_llm(state, target)
         self._update_recruit_result(state, target, success)
 
-        # 🔥 설득 성공 시에만 discovery 리셋 (다음 캐릭터 찾기 가능)
-        # 실패 시에는 리셋하지 않음 (같은 캐릭터 재시도)
         if success:
-            state.setdefault("temp_data", {})["current_discovery_target"] = None
-            temp_data["locked_mission_target"] = None
-            state["mission_target"] = None
-            mission_state["active"] = False
-            mission_state["target"] = None
-            log("mission", f"[PERSUASION] {target} → SUCCESS, discovery reset for next character")
+            return self._handle_persuasion_success(
+                state, stage, scenario, target, stage_tag
+            )
         else:
-            log("mission", f"[PERSUASION] {target} → FAIL, keeping discovery target for retry")
+            return self._handle_persuasion_failure(
+                state, stage, scenario, target, stage_tag, remaining_attempts
+            )
 
-        next_target_after_success = None
-        if success:
-            next_target_after_success = self._select_next_target(state, exclude=[target])
+    def _handle_persuasion_success(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        target: str,
+        stage_tag: str
+    ) -> StageResult:
+        """설득 성공 처리"""
+        temp_data = state.setdefault("temp_data", {})
+        temp_data["current_discovery_target"] = None
+        self._deactivate_mission(state)
 
-        feedback_dialogues = self._build_feedback_beats(state, target, success, scenario)
+        log("mission", f"[PERSUASION] {target} → SUCCESS, discovery reset for next character")
 
-        # 🔥 Feedback speaker_pool: 현재 타겟 + tanjiro + narr (다른 캐릭터 제외)
+        next_target = self._select_next_target(state, exclude=[target])
+        feedback_dialogues = self._build_feedback_beats(state, target, True, scenario)
         feedback_speakers = sorted(set([target, "tanjiro", "narr"]))
-        system_prefetch = [
-            dict(entry)
-            for entry in feedback_dialogues
-            if isinstance(entry, dict) and str(entry.get("speaker", "")).lower() == "system"
-        ]
 
-        if success and next_target_after_success:
-            log("mission", f"[AUTO-SWITCH] {target} succeeded → moving to {next_target_after_success}")
-            temp_data["locked_mission_target"] = next_target_after_success
-            temp_data["current_discovery_target"] = next_target_after_success
-            state["mission_target"] = next_target_after_success
-            mission_state["target"] = next_target_after_success
-            mission_state["active"] = False
-            rediscovery = self._rediscovery_context(stage, scenario, next_target_after_success, preface=feedback_dialogues)
-            return StageResult(children_ctx=rediscovery, stage_complete=False)
+        if next_target:
+            log("mission", f"[AUTO-SWITCH] {target} succeeded → moving to {next_target}")
+            temp_data["locked_mission_target"] = next_target
+            temp_data["current_discovery_target"] = next_target
+            state["mission_target"] = next_target
+            state["mission"]["target"] = next_target
+            state["mission"]["active"] = False
 
-        children_ctx = {
-            "stage_tag": stage_tag,
-            "stage_type": get_stage_type(stage),
-            "speaker_pool": feedback_speakers,  # 타겟 캐릭터에 맞는 제한된 pool
-            "beats": feedback_dialogues,
-            "atmosphere": stage.get("atmosphere"),
-            "mission": {
+            rediscovery_ctx = self._build_rediscovery_context(
+                stage, scenario, next_target, preface=feedback_dialogues
+            )
+            return StageResult(children_ctx=rediscovery_ctx, stage_complete=False)
+
+        children_ctx = self._build_children_context(
+            stage_tag=stage_tag,
+            stage=stage,
+            speaker_pool=feedback_speakers,
+            beats=feedback_dialogues,
+            mission_info={
                 "target": target,
-                "success": success,
+                "success": True,
                 "attempts": state.get("recruit_attempts", {}).get(target, 0),
-            },
-        }
-        if not feedback_dialogues:
-            children_ctx["fallback"] = {"dialogues": feedback_dialogues}
-        if system_prefetch:
-            prefetch_list = children_ctx.setdefault("prefetch_dialogues", [])
-            prefetch_list.extend(system_prefetch)
-
-        attempts_snapshot = state.get("recruit_attempts", {})
-        current_attempts = attempts_snapshot.get(target, 0)
-        remaining = max(0, self.MAX_ATTEMPTS - current_attempts)
+            }
+        )
 
         stage_complete = self._all_missions_resolved(state)
         next_stage = None
+
         if stage_complete:
-            queue = state.setdefault("temp_data", {}).setdefault("mission_success_queue", [])
+            queue = temp_data.setdefault("mission_success_queue", [])
             queue.extend(feedback_dialogues)
-            temp_data.pop("locked_mission_target", None)
-            state["mission_target"] = None
-            mission_state["active"] = False
-            mission_state["target"] = None
+            self._deactivate_mission(state)
             children_ctx.pop("fallback", None)
             next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
             log(
@@ -316,41 +309,6 @@ class MissionHandler:
                 recruited=state.get("allies_recruited"),
                 attempts=state.get("recruit_attempts"),
             )
-        else:
-            if remaining == 0:
-                queue = state.setdefault("temp_data", {}).setdefault("mission_success_queue", [])
-                queue.extend(feedback_dialogues)
-                next_target = self._select_next_target(state, exclude=[target])
-                temp_data["locked_mission_target"] = None
-                state["mission_target"] = None
-                mission_state["active"] = False
-                mission_state["target"] = None
-                if next_target:
-                    log("mission", f"[AUTO-SWITCH] Attempts exhausted for {target} → switching to {next_target}")
-                    temp_data["locked_mission_target"] = next_target
-                    state["mission_target"] = next_target
-                    temp_data["current_discovery_target"] = next_target
-                    mission_state["target"] = next_target
-                    mission_state["active"] = False
-                    rediscovery = self._rediscovery_context(stage, scenario, next_target, preface=feedback_dialogues)
-                    return StageResult(children_ctx=rediscovery, stage_complete=False)
-
-                log("mission", "[AUTO-SWITCH] All mission targets exhausted; finishing mission")
-                stage_complete = True
-                next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
-                children_ctx.pop("fallback", None)
-                return StageResult(
-                    children_ctx=children_ctx,
-                    stage_complete=stage_complete,
-                    next_stage=next_stage,
-                )
-
-            log(
-                "codex_fix",
-                "Mission still in progress",
-                stage_tag=stage_tag,
-                target=target,
-            )
 
         return StageResult(
             children_ctx=children_ctx,
@@ -358,8 +316,240 @@ class MissionHandler:
             next_stage=next_stage,
         )
 
-    # ------------------------------------------------------------------ helpers
+    def _handle_persuasion_failure(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        target: str,
+        stage_tag: str,
+        remaining_attempts: int
+    ) -> StageResult:
+        """설득 실패 처리"""
+        log("mission", f"[PERSUASION] {target} → FAIL, keeping discovery target for retry")
+
+        temp_data = state.setdefault("temp_data", {})
+        feedback_dialogues = self._build_feedback_beats(state, target, False, scenario)
+        feedback_speakers = sorted(set([target, "tanjiro", "narr"]))
+
+        children_ctx = self._build_children_context(
+            stage_tag=stage_tag,
+            stage=stage,
+            speaker_pool=feedback_speakers,
+            beats=feedback_dialogues,
+            mission_info={
+                "target": target,
+                "success": False,
+                "attempts": state.get("recruit_attempts", {}).get(target, 0),
+            }
+        )
+
+        stage_complete = False
+        next_stage = None
+
+        if remaining_attempts == 0:
+            queue = temp_data.setdefault("mission_success_queue", [])
+            queue.extend(feedback_dialogues)
+            next_target = self._select_next_target(state, exclude=[target])
+            self._deactivate_mission(state)
+
+            if next_target:
+                log("mission", f"[AUTO-SWITCH] Attempts exhausted for {target} → switching to {next_target}")
+                temp_data["locked_mission_target"] = next_target
+                state["mission_target"] = next_target
+                temp_data["current_discovery_target"] = next_target
+                state["mission"]["target"] = next_target
+                state["mission"]["active"] = False
+
+                rediscovery_ctx = self._build_rediscovery_context(
+                    stage, scenario, next_target, preface=feedback_dialogues
+                )
+                return StageResult(children_ctx=rediscovery_ctx, stage_complete=False)
+
+            log("mission", "[AUTO-SWITCH] All mission targets exhausted; finishing mission")
+            stage_complete = True
+            next_stage = stage.get("next") or get_next_stage_tag(stage) or "RETURN_TO_FRONT"
+            children_ctx.pop("fallback", None)
+        else:
+            log("codex_fix", "Mission still in progress", stage_tag=stage_tag, target=target)
+
+        return StageResult(
+            children_ctx=children_ctx,
+            stage_complete=stage_complete,
+            next_stage=next_stage,
+        )
+
+    # ==================== Helper Methods ====================
+
+    def _determine_mission_target(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+        mission_state: Dict[str, Any]
+    ) -> Optional[str]:
+        """미션 타겟 결정 (중복 로직 통합)"""
+        temp_data = state.setdefault("temp_data", {})
+        locked_target = temp_data.get("locked_mission_target")
+        detected_target = detect_mission_target(user_input)
+
+        # 이미 활성화된 미션이 있으면 해당 타겟 사용
+        if mission_state.get("active") and mission_state.get("target") in self.VALID_TARGETS:
+            target = mission_state["target"]
+            temp_data["locked_mission_target"] = target
+            state["mission_target"] = target
+            return target
+
+        # locked_target이 있으면 사용
+        if locked_target in self.VALID_TARGETS:
+            mission_state["target"] = locked_target
+            return locked_target
+
+        # 사용자가 명시적으로 타겟을 지정했으면 사용
+        if detected_target in self.VALID_TARGETS:
+            temp_data["locked_mission_target"] = detected_target
+            state["mission_target"] = detected_target
+            mission_state["target"] = detected_target
+            return detected_target
+
+        # 자동 타겟 선택 (우선순위: inosuke → zenitsu)
+        allies = state.get("allies_recruited", [])
+        attempts = state.get("recruit_attempts", {})
+
+        for candidate in self.VALID_TARGETS:
+            if candidate not in allies and attempts.get(candidate, 0) < self.MAX_ATTEMPTS:
+                temp_data["locked_mission_target"] = candidate
+                state["mission_target"] = candidate
+                mission_state["target"] = candidate
+                log("mission", f"[AUTO-TARGET] Selecting {candidate}")
+                return candidate
+
+        return None
+
+    def _should_show_discovery(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+        target: str,
+        mission_state: Dict[str, Any]
+    ) -> bool:
+        """Discovery 단계를 보여줄지 판단"""
+        if mission_state.get("active") and mission_state.get("target") == target:
+            return False
+
+        current_discovery_target = state.get("temp_data", {}).get("current_discovery_target")
+        if current_discovery_target == target:
+            # 사용자 입력이 이름만 있는 경우는 discovery로 간주하지 않음
+            user_input_lower = user_input.lower()
+            is_name_only = (
+                user_input_lower in (target, target + "요", target + "를", target + "을") or
+                len(user_input.strip()) <= 5
+            )
+            if not is_name_only:
+                return False
+
+        return True
+
+    def _extract_speaker_pool_from_beats(
+        self,
+        beats: List[Dict[str, Any]],
+        target: str
+    ) -> List[str]:
+        """Beats에서 speaker pool 추출 (중복 로직 통합)"""
+        speakers = set()
+        for beat in beats:
+            if isinstance(beat, dict):
+                hints = beat.get("speaker_hint", [])
+                if isinstance(hints, list):
+                    speakers.update(str(h) for h in hints if h)
+                speaker = beat.get("speaker")
+                if speaker:
+                    speakers.add(str(speaker))
+
+        speakers.add("narr")
+        speakers.add(target)
+        return sorted(speakers)
+
+    def _build_children_context(
+        self,
+        stage_tag: str,
+        stage: Dict[str, Any],
+        speaker_pool: List[str],
+        beats: List[Dict[str, Any]],
+        mission_info: Optional[Dict[str, Any]] = None,
+        fallback: Optional[Dict[str, Any]] = None,
+        prefetch: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Children context 생성 (중복 로직 통합)"""
+        ctx = {
+            "stage_tag": stage_tag,
+            "stage_type": get_stage_type(stage),
+            "speaker_pool": speaker_pool,
+            "beats": beats,
+            "atmosphere": stage.get("atmosphere"),
+        }
+
+        if mission_info:
+            ctx["mission"] = mission_info
+
+        if fallback:
+            ctx["fallback"] = fallback
+
+        if prefetch:
+            ctx["prefetch_dialogues"] = prefetch
+
+        return ctx
+
+    def _build_rediscovery_context(
+        self,
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any],
+        target: str,
+        preface: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """재발견 context 생성"""
+        discovery_beats = get_i18n_entries(scenario, f"{target}_scene", locale=self.locale)
+        discovery_pool = self._extract_speaker_pool_from_beats(discovery_beats, target)
+
+        ctx = self._build_children_context(
+            stage_tag=stage.get("tag") or stage.get("id") or "mission",
+            stage=stage,
+            speaker_pool=discovery_pool,
+            beats=self._to_dialogues(discovery_beats),
+            mission_info={
+                "target": target,
+                "phase": "discovery",
+            }
+        )
+
+        if preface:
+            ctx["prefetch_dialogues"] = preface
+
+        return ctx
+
+    def _activate_mission(self, state: Dict[str, Any], target: str) -> None:
+        """미션 활성화"""
+        mission_state = state.setdefault("mission", {})
+        temp_data = state.setdefault("temp_data", {})
+
+        mission_state["active"] = True
+        mission_state["target"] = target
+        temp_data["locked_mission_target"] = target
+        state["mission_target"] = target
+
+        log("mission", f"🟢 Mission activated for {target}")
+
+    def _deactivate_mission(self, state: Dict[str, Any]) -> None:
+        """미션 비활성화"""
+        mission_state = state.setdefault("mission", {})
+        temp_data = state.setdefault("temp_data", {})
+
+        mission_state["active"] = False
+        mission_state["target"] = None
+        temp_data.pop("locked_mission_target", None)
+        state["mission_target"] = None
+
     def _increment_attempt(self, state: Dict[str, Any], character: str) -> None:
+        """시도 횟수 증가"""
         attempts = state.setdefault("recruit_attempts", {})
         attempts[character] = attempts.get(character, 0) + 1
 
@@ -367,56 +557,29 @@ class MissionHandler:
         if character not in order:
             order.append(character)
 
-    def _select_next_target(self, state: Dict[str, Any], exclude: Optional[List[str]] = None) -> Optional[str]:
+    def _select_next_target(
+        self,
+        state: Dict[str, Any],
+        exclude: Optional[List[str]] = None
+    ) -> Optional[str]:
+        """다음 타겟 선택"""
         exclude = set(exclude or [])
         attempts = state.get("recruit_attempts", {})
         allies = state.get("allies_recruited", [])
-        candidates = []
-        if "inosuke" not in exclude:
-            candidates.append("inosuke")
-        if "zenitsu" not in exclude:
-            candidates.append("zenitsu")
-        for character in candidates:
-            if character in allies:
+
+        for candidate in self.VALID_TARGETS:
+            if candidate in exclude or candidate in allies:
                 continue
-            if attempts.get(character, 0) < self.MAX_ATTEMPTS:
-                return character
+            if attempts.get(candidate, 0) < self.MAX_ATTEMPTS:
+                return candidate
+
         return None
 
-    def _rediscovery_context(self, stage: Dict[str, Any], scenario: Dict[str, Any], target: str, *, preface: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        discovery_beats = get_i18n_entries(scenario, f"{target}_scene", locale=self.locale)
-        discovery_speakers = set()
-        for beat in discovery_beats:
-            if isinstance(beat, dict):
-                hints = beat.get("speaker_hint", [])
-                if isinstance(hints, list):
-                    discovery_speakers.update(str(h) for h in hints if h)
-                speaker = beat.get("speaker")
-                if speaker:
-                    discovery_speakers.add(str(speaker))
-
-        discovery_speakers.add("narr")
-        discovery_speakers.add(target)
-        discovery_pool = sorted(discovery_speakers)
-        ctx = {
-            "stage_tag": stage.get("tag") or stage.get("id") or "mission",
-            "stage_type": get_stage_type(stage),
-            "speaker_pool": discovery_pool,
-            "beats": self._to_dialogues(discovery_beats),
-            "atmosphere": stage.get("atmosphere"),
-            "mission": {
-                "target": target,
-                "phase": "discovery",
-            },
-        }
-        if preface:
-            ctx["prefetch_dialogues"] = preface
-        return ctx
-
-# 임베딩, 키워드 매핑보다 llm 붙임
     def _evaluate_recruit_attempt_llm(self, state: Dict[str, Any], target: str) -> bool:
+        """LLM을 사용한 설득 시도 평가"""
         client = self._llm or get_llm_client()
         user_text = state.get("user_input", "")
+
         system_prompt = (
             "You are a mission adjudicator for a Demon Slayer interactive story. "
             "Return only True or False to indicate whether the recruitment attempt succeeded."
@@ -443,11 +606,12 @@ class MissionHandler:
             decision = "true" in (result or "").lower()
             log("mission", f"[LLM DECISION] target={target} → {'SUCCESS' if decision else 'FAIL'}")
             return decision
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             log("mission", f"[LLM ERROR] fallback heuristic used: {exc}", level=40)
             return self._heuristic_fallback(user_text, target)
 
     def _heuristic_fallback(self, text: str, target: str) -> bool:
+        """휴리스틱 기반 fallback 판정"""
         lowered = (text or "").lower()
         if target == "zenitsu":
             return any(keyword in lowered for keyword in ["네즈코", "사랑", "지켜", "위험"])
@@ -456,6 +620,7 @@ class MissionHandler:
         return False
 
     def _update_recruit_result(self, state: Dict[str, Any], character: str, success: bool) -> None:
+        """설득 결과 업데이트"""
         attempts = state.get("recruit_attempts", {}).get(character, 0)
         remaining = max(0, self.MAX_ATTEMPTS - attempts)
 
@@ -463,7 +628,7 @@ class MissionHandler:
             allies = state.setdefault("allies_recruited", [])
             if character not in allies:
                 allies.append(character)
-            # 🔥 SUCCESS 시 failures에서 제거 (이전에 실패했더라도)
+
             fails = state.get("recruit_failures", [])
             if character in fails:
                 fails.remove(character)
@@ -472,16 +637,12 @@ class MissionHandler:
             if character not in fails:
                 fails.append(character)
 
-        sys_text = (
-            f"{character} 설득 성공!"
-            if success
-            else f"{character} 설득 실패... 남은 시도 {remaining}회"
-        )
         state.setdefault("temp_data", {})["last_mission_status"] = {
             "target": character,
             "success": success,
             "remaining": remaining,
         }
+
         log(
             "mission",
             f"[RESULT] {character} → {'SUCCESS' if success else 'FAIL'}",
@@ -497,96 +658,162 @@ class MissionHandler:
         success: bool,
         scenario: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        # 캐릭터 이름 한글 매핑
-        char_names = {
-            "inosuke": "이노스케",
-            "zenitsu": "젠이츠",
-        }
-        char_display = char_names.get(character.lower(), character.capitalize())
+        """피드백 beats 생성"""
+        char_display = self.CHARACTER_NAMES_KR.get(character.lower(), character.capitalize())
 
         temp_status = state.get("temp_data", {}).get("last_mission_status") or {}
         attempts_map = state.get("recruit_attempts", {})
         current_attempt = attempts_map.get(character, 0)
-        max_attempts = self.MAX_ATTEMPTS
         remaining = temp_status.get("remaining")
         if remaining is None:
-            remaining = max(0, max_attempts - current_attempt)
-        attempt_ratio = f"{current_attempt}/{max_attempts}" if max_attempts else str(current_attempt)
+            remaining = max(0, self.MAX_ATTEMPTS - current_attempt)
+
+        attempt_ratio = f"{current_attempt}/{self.MAX_ATTEMPTS}"
+
         if success:
             sys_text = f"{char_display} 🎉 설득 성공! 🎉 ({attempt_ratio})"
+            fx = "ui_confirm|success_chime"
         else:
-            suffix = f" ({attempt_ratio})"
             remaining_note = f" 남은 시도 {remaining}회" if remaining is not None else ""
-            sys_text = f"⏰ {char_display} 설득 실패...{suffix}{remaining_note}"
-        sys_entry: Dict[str, Any] = {
-            "text": (
-                sys_text
-            ),
+            sys_text = f"⏰ {char_display} 설득 실패... ({attempt_ratio}){remaining_note}"
+            fx = "ui_alert|heartbeat_slow"
+
+        sys_entry = {
+            "text": sys_text,
             "goal": sys_text,
             "speaker": "system",
-            "fx": "ui_confirm|success_chime" if success else "ui_alert|heartbeat_slow",
+            "fx": fx,
         }
 
+        # 피드백 beats 로드
         feedback_key = (
             f"beats_feedback_success_{character}"
             if success
             else f"beats_feedback_fail_{character}"
         )
-        if not success and remaining is not None and remaining == 0:
+
+        if not success and remaining == 0:
             alt_key = f"beats_feedback_fail_{character}_end"
             alt_beats = get_i18n_entries(scenario, alt_key, locale=self.locale)
             if alt_beats:
                 feedback_key = alt_key
+
         feedback_beats = self._to_dialogues(
             get_i18n_entries(scenario, feedback_key, locale=self.locale)
         )
-        dialogues: List[Dict[str, Any]] = []
-        dialogues.extend(feedback_beats)
 
+        dialogues = list(feedback_beats)
         dialogues.append(sys_entry)
 
-        # 🔥 최대 시도 소진 시에만 추가 메시지 표시 (sys_entry에 이미 "남은 시도 X회" 포함됨)
-        if not success and remaining is not None and remaining == 0:
-            exhaustion_text = "⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다."
+        # 최대 시도 소진 시 추가 메시지
+        if not success and remaining == 0:
             exhaustion = {
                 "speaker": "system",
-                "text": exhaustion_text,
-                "goal": exhaustion_text,
+                "text": "⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다.",
+                "goal": "⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다.",
             }
             dialogues.append(exhaustion)
             log("codex_fix", "Mission attempts exhausted", character=character)
+
+        # 전환 대사 추가: 캐릭터 미션이 완전히 끝났을 때만 출력
+        final_transition_needed = success or (not success and remaining == 0)
+        if final_transition_needed:
+            next_target_raw = self._select_next_target(state, exclude=[character])
+            next_target_display = (
+                self.CHARACTER_NAMES_KR.get(next_target_raw)
+                if next_target_raw
+                else None
+            )
+
+            transition_line = self._generate_transition_line(
+                "success" if success else "fail",
+                char_display,
+                next_target_display,
+            )
+            if transition_line:
+                dialogues.append(transition_line)
+
         return dialogues
 
+    def _generate_transition_line(
+        self,
+        mission_result: str,
+        completed_ally: str,
+        next_target: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        """전환 대사 생성"""
+        if mission_result not in {"success", "fail"}:
+            return None
+
+        if next_target:
+            if mission_result == "success":
+                text = f"탄지로: {completed_ally}를 데려오는 데 성공했어! 이제 {next_target}를 찾으러 가자."
+            else:
+                text = f"탄지로: {completed_ally}를 설득하지 못했어... 그래도 포기할 순 없어. 이번엔 {next_target}를 찾아보자."
+        else:
+            if mission_result == "success":
+                text = f"탄지로: {completed_ally}를 데려오는 데 성공했어! 이제 전장으로 돌아가자."
+            else:
+                text = f"탄지로: {completed_ally}를 설득하지 못했어... 그래도 포기할 순 없어. 다른 길을 찾아보자."
+
+        log("mission", text)
+        return {
+            "speaker": "tanjiro",
+            "text": text,
+            "goal": text,
+        }
+
     def _to_dialogues(self, beats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        dialogues: List[Dict[str, Any]] = []
+        """Beats를 대화 형식으로 변환"""
+        dialogues = []
         for beat in beats:
             if isinstance(beat, dict):
                 text = beat.get("text") or beat.get("goal") or ""
                 if not text:
                     continue
+
                 speaker = beat.get("speaker")
                 if not speaker:
                     hints = beat.get("speaker_hint")
                     if isinstance(hints, list) and hints:
                         speaker = hints[0]
+
                 entry = dict(beat)
                 entry["text"] = text
                 entry["speaker"] = speaker or "narr"
                 entry.setdefault("goal", beat.get("goal") or text)
-                # fx already present if existed; ensure no unexpected keys removed
                 dialogues.append(entry)
             else:
                 text = str(beat)
                 dialogues.append({"text": text, "speaker": "narr", "goal": text})
+
         return dialogues
 
     def _all_missions_resolved(self, state: Dict[str, Any]) -> bool:
+        """모든 미션이 완료되었는지 확인"""
         attempts = state.get("recruit_attempts", {})
         allies = state.get("allies_recruited", [])
-        for character in ("inosuke", "zenitsu"):
+
+        for character in self.VALID_TARGETS:
             if character in allies:
                 continue
-            if attempts.get(character, 0) >= self.MAX_ATTEMPTS:
-                continue
-            return False
+            if attempts.get(character, 0) < self.MAX_ATTEMPTS:
+                return False
+
         return True
+
+    def _generate_mission_complete_message(self, allies: List[str]) -> str:
+        """미션 완료 메시지 생성"""
+        if not allies:
+            return "동료를 더 설득할 시간이 없습니다. 곧바로 전장으로 돌아가야 해요!"
+
+        converted_names = [self.CHARACTER_NAMES_KR.get(name, name) for name in allies]
+
+        if len(converted_names) == 1:
+            ally_text = converted_names[0]
+        elif len(converted_names) == 2:
+            ally_text = f"{converted_names[0]}와 {converted_names[1]}"
+        else:
+            ally_text = ", ".join(converted_names[:-1]) + f" 그리고 {converted_names[-1]}"
+
+        return f"{ally_text}가 모두 합류했어요! 이제 바로 전장으로 돌아가 렌고쿠 님을 도와요!"

@@ -1,21 +1,19 @@
-from __future__ import annotations  # ⚠️ 항상 맨 위!
+from __future__ import annotations
 
-# --- [Dynamic import path fix: local & server 호환] ---
-import os, sys
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-SRC_DIR = os.path.join(BASE_DIR, "src")
-if SRC_DIR not in sys.path:
-    sys.path.append(SRC_DIR)
+from src.utils.llm_client import LLMClient, get_llm_client
 
-# --- Internal project imports ---
+from .utils.embedding_matcher import (
+    EmbeddingClient,
+    EmbeddingMatcher,
+    MatchResult,
+    get_embedding_client,
+)
+from .utils.fallback_llm import generate_off_topic_response
 from .utils.logger import log
 from .utils.mission_target import detect_mission_target
-from .utils.embedding_matcher import MatchResult, EmbeddingClient, get_embedding_client, EmbeddingMatcher
-from .utils.fallback_llm import generate_off_topic_response
-from src.utils.llm_client import get_llm_client, LLMClient
 
 
 ALLOWED_INTENTS = {
@@ -78,6 +76,7 @@ class RouterAgent:
                     "젠이츠와 이노스케를 데려온다",
                     "동료 모두 데려올게요",
                     "지원군을 부를게요",
+                    '동료를 모을게요'
                 ],
             },
             threshold=0.70,
@@ -420,23 +419,6 @@ JSON 형태로만 응답하십시오:
         return "\n".join(trimmed)
 
     def _resolve_session_stage(self, state: Dict[str, Any]) -> str:
-        candidates = [
-            state.get("stage_tag"),
-            (state.get("game") or {}).get("current_stage"),
-            (state.get("scene") or {}).get("current_stage"),
-            state.get("current_stage"),
-            (state.get("scene") or {}).get("current_scene"),
-        ]
-        for candidate in candidates:
-            if isinstance(candidate, str) and candidate.strip():
-                tag = candidate.strip().upper()
-                break
-        else:
-            tag = "INTRO"
-        return tag
-
-
-    def _resolve_session_stage(self, state: Dict[str, Any]) -> str:
         scene = state.get("scene") or {}
         candidates = [
             state.get("stage_tag"),
@@ -462,8 +444,10 @@ JSON 형태로만 응답하십시오:
                         break
         return tag
 
-    def _get_current_stage(self, state: Dict[str, Any]) -> str:  # Back-compat helper
+    def _get_current_stage(self, state: Dict[str, Any]) -> str:
+        """Back-compat helper"""
         return self._resolve_session_stage(state)
+
     def _get_user_embedding(self, state: Dict[str, Any], text: str) -> Optional[Sequence[float]]:
         cache = state.setdefault("_embedding_cache", {})
         cached_text = cache.get("text")
