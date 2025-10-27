@@ -14,11 +14,11 @@ import threading
 from langgraph.graph import END, StateGraph
 
 from src.agents.children_agent import run_children_agent
+from src.agents.dialogue_agent import run_dialogue_agent
 from src.agents.guardrail_agent import run_guardrail_agent
 from src.agents.parent_agent import parent_after_dialogue, run_parent_agent
 from src.agents.router_agent import run_router_agent
 from src.core.graph_state import GraphState
-from src.utils.dialogue_agent import run_dialogue_agent
 
 # Thread-safe global variable lock
 _global_lock = threading.Lock()

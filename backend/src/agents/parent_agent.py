@@ -30,8 +30,8 @@ from .stage_handlers import (
 )
 
 # 🧱 유틸 계층
-from .utils.fallback import trigger_fallback
-from .utils.logger import log
+from src.utils.fallback import trigger_fallback
+from src.utils.logger import log
 
 # 🧠 LLM 클라이언트
 from src.utils.llm_client import get_llm_client

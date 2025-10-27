@@ -15,9 +15,9 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from src.utils.llm_client import get_llm_client     # OpenAI 또는 커스텀 LLM 클라이언트
-from src.core import scene_dialogue_tools as dialogue_tools  # 새로 만든 tone/profile 유틸
-from .utils.logger import log                        # 로깅 유틸
+from src.core import scene_dialogue_tools as dialogue_tools
+from src.utils.llm_client import get_llm_client
+from src.utils.logger import log
 
 
 class ChildrenAgent:
