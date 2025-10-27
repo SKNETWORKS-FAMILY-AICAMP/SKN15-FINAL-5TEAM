@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from src.utils.logger import log
 from src.tools.scene_tools import get_next_stage_tag
+from src.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
 
 
@@ -66,7 +67,8 @@ class RouterStageHandler:
             next_stage = default_route
 
         # 일부 기본 intent에 대한 fallback 반응
-        if intent == "on_topic_generic" and stage_tag in ("INTRO", "ROUTE_CHOICE"):
+        intro_stage_aliases = {tag.upper() for tag in INTRO_STAGE_TAGS}
+        if intent == "on_topic_generic" and stage_tag.upper() in (intro_stage_aliases | {"ROUTE_CHOICE"}):
             next_stage = next_stage or default_route
             log("codex_fix", f"Intent fallback triggered: {intent}", stage=stage_tag)
             return StageResult(

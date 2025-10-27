@@ -356,7 +356,9 @@ class Dialogue:
     speaker: str
     content: str
     emotion: str = "neutral"
-    intensity: str = "normal"
+    emotion_intensity: str = "normal"
+    affinity_level: str = "medium"
+    order: int = 0
 
 
 @dataclass

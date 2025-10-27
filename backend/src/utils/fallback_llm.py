@@ -120,25 +120,33 @@ def generate_off_topic_response(
 ) -> Optional[Dict[str, Any]]:
     scene = state.get("scene") or {}
     speaker_pool = scene.get("speaker_pool") or []
-    fallback_speakers = ["tanjiro"]
-    # speaker_pool에서 아카자, narr 제외
-    # - akaza: 스토리상 off-topic 응답에 부적절
-    # - narr: 내레이션은 대사를 할 수 없음
+
+    scenario = state.get("scenario") or state.get("scenario_data") or {}
+    metadata = scenario.get("metadata") if isinstance(scenario, dict) else {}
+    fallback_meta = metadata.get("fallback") or {}
+    tone_meta = metadata.get("tone") or {}
+
+    exclude_speakers = {
+        str(name).lower()
+        for name in (fallback_meta.get("exclude_speakers") or [])
+        if isinstance(name, str)
+    }
+    exclude_speakers.update({"akaza", "narr"})  # 안전 장치
+
+    fallback_speakers = [
+        str(name) for name in (fallback_meta.get("fallback_speakers") or []) if isinstance(name, str)
+    ] or ["tanjiro"]
+
     candidates = [
         sp for sp in speaker_pool
-        if isinstance(sp, str) and sp.lower() not in ("akaza", "narr","inosuke",'zenitsu','rengoku')
+        if isinstance(sp, str) and sp.lower() not in exclude_speakers
     ] or fallback_speakers
     character = random.choice(candidates)
 
     log("fallback_llm", f"Selected speaker for off-topic: {character} (pool: {speaker_pool})")
 
     # scenario_specific 정보 추출
-    scenario_id = state.get("scenario_id", "")
-    scenario_key = None
-    if "cutscene5" in str(scenario_id).lower():
-        scenario_key = "mugen_train"
-    # elif "cutscene6" in str(scenario_id).lower():
-    #     scenario_key = "final_battle"
+    scenario_key = tone_meta.get("scenario_key")
 
     profile = _load_character_profile(character)
     if not profile:
@@ -259,18 +267,28 @@ def generate_stage_fallback(
     speaker_pool = stage.get("speaker_pool") or scene.get("speaker_pool") or []
     if not speaker_pool:
         speaker_pool = ["tanjiro", "rengoku"]
-    candidates = [sp for sp in speaker_pool if isinstance(sp, str)]
+
+    scenario = state.get("scenario") or state.get("scenario_data") or {}
+    metadata = scenario.get("metadata") if isinstance(scenario, dict) else {}
+    fallback_meta = metadata.get("fallback") or {}
+    tone_meta = metadata.get("tone") or {}
+
+    exclude_speakers = {
+        str(name).lower()
+        for name in (fallback_meta.get("exclude_speakers") or [])
+        if isinstance(name, str)
+    }
+    exclude_speakers.update({"akaza", "narr"})
+
+    candidates = [
+        sp for sp in speaker_pool
+        if isinstance(sp, str) and sp.lower() not in exclude_speakers
+    ]
     if not candidates:
-        candidates = ["tanjiro"]
+        candidates = [str(name) for name in (fallback_meta.get("fallback_speakers") or ["tanjiro"])]
     character = random.choice(candidates)
 
-    # scenario_specific 정보 추출
-    scenario_id = state.get("scenario_id", "")
-    scenario_key = None
-    if "cutscene5" in str(scenario_id).lower():
-        scenario_key = "mugen_train"
-    elif "cutscene6" in str(scenario_id).lower():
-        scenario_key = "final_battle"
+    scenario_key = tone_meta.get("scenario_key")
 
     profile = _load_character_profile(character)
     if not profile:

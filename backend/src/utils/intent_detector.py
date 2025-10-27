@@ -14,6 +14,7 @@ from src.utils.characters_repo import (
     affinity_applicable,
     character_names_aliases,
 )
+from src.config.constants import INTRO_STAGE_TAGS
 
 logger = getLogger(__name__)
 
@@ -47,7 +48,8 @@ def _apply_sensitivities(scores: Dict[str, float], sens: Dict[str, float]) -> Di
 def _context_boost(state: dict) -> Dict[str, float]:
     stage = ((state.get("current_stage") or "").upper())
     boost: Dict[str, float] = {}
-    if any(x in stage for x in ("INTERVENE", "BATTLE", "COMBAT", "INTRO")):
+    intro_stages = {tag.upper() for tag in INTRO_STAGE_TAGS}
+    if stage in intro_stages or any(x in stage for x in ("INTERVENE", "BATTLE", "COMBAT")):
         boost["combat_coop"] = 1.0
         boost["positive_core"] = 0.2
     return boost

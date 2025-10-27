@@ -1,13 +1,17 @@
-"""
-State Tools - 게임 상태 관리 및 데이터베이스 연동 (dict-safe 버전)
-Router → Parent → Scene/State Tools → Children
-게임 상태(턴, 스테이지, 시나리오, 플래그 등) DB 반영 및 유틸
-"""
-
-from typing import Dict, Optional, Any, Tuple
 import json
+import importlib
 import sqlite3
+from functools import lru_cache
 from datetime import datetime
+from typing import Any, Dict, Optional, Tuple
+
+from src.core.scenes_repo import ScenesRepo
+from src.tools import scene_tools
+from src.utils.fallback import trigger_fallback
+from src.utils.logger import log
+from src.config.constants import INTRO_STAGE_TAG
+
+_SCENES_REPO = ScenesRepo()
 
 
 class StateTools:
@@ -70,7 +74,7 @@ class StateTools:
         session_id = meta.get("session_id", "unknown")
         scenario_id = game.get("scenario_id", "unknown")
         scene_id = game.get("scene_id", "unknown")
-        stage = game.get("current_stage", "INTRO")
+        stage = game.get("current_stage", INTRO_STAGE_TAG)
         turn = game.get("turn", 0)
         total_remaining_turns = game.get("total_remaining_turns", 0)
         flags_json = json.dumps(game.get("flags", []))
@@ -102,6 +106,201 @@ class StateTools:
 
 
 # ==========================================================
+# 🔹 시나리오 / 스테이지 관리
+# ==========================================================
+def ensure_scenario_state(state: dict, scenario_id: Optional[str] = None) -> Optional[dict]:
+    """
+    state에 시나리오 정보가 없으면 ScenesRepo를 통해 로드하고 저장한다.
+    """
+    scenario = resolve_scenario(state)
+    if isinstance(scenario, dict):
+        return scenario
+
+    candidate_id = scenario_id or state.get("scenario_id")
+    loaded = None
+    if candidate_id:
+        loaded = _SCENES_REPO.load(str(candidate_id))
+    if not loaded:
+        loaded = _SCENES_REPO.load_default()
+
+    if loaded:
+        state["scenario"] = loaded
+        state["scenario_data"] = loaded
+        resolved_id = loaded.get("scenario_id") or candidate_id
+        if resolved_id:
+            state["scenario_id"] = resolved_id
+            state.setdefault("game", {})["scenario_id"] = resolved_id
+        return loaded
+    return None
+
+
+def get_metadata(scenario: Optional[dict]) -> Dict[str, Any]:
+    if not isinstance(scenario, dict):
+        return {}
+    meta = scenario.get("metadata")
+    return meta if isinstance(meta, dict) else {}
+
+
+def get_default_stage_tag(scenario: Optional[dict]) -> str:
+    if not isinstance(scenario, dict):
+        return INTRO_STAGE_TAG
+
+    metadata = get_metadata(scenario)
+    default_stage = metadata.get("default_stage") or scenario.get("default_stage")
+    if isinstance(default_stage, str) and default_stage.strip():
+        return default_stage.strip()
+
+    stages = scene_tools.list_stages(scenario) if isinstance(scenario, dict) else []
+    if stages:
+        first = stages[0]
+        if isinstance(first, dict):
+            return first.get("tag") or first.get("id") or first.get("name") or INTRO_STAGE_TAG
+    return INTRO_STAGE_TAG
+
+
+@lru_cache(maxsize=16)
+def load_scenario_module(scenario_id: str) -> Optional[Any]:
+    """
+    시나리오 전용 파이썬 모듈을 동적으로 로드.
+    """
+    if not scenario_id:
+        return None
+    module_key = scenario_id.replace("-", "_")
+    module_name = f"src.scenarios.{module_key}"
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError:
+        return None
+
+
+def resolve_stage(state: dict, scenario: Optional[dict]) -> Tuple[str, Optional[dict]]:
+    """
+    현재 stage_tag와 stage 정의를 반환.
+    """
+    if scenario:
+        resume_pending_stage(state, scenario)
+
+    stage_tag = get_current_stage(state)
+    if (not stage_tag) and scenario:
+        stage_tag = get_default_stage_tag(scenario)
+        set_current_stage(state, stage_tag)
+
+    stage_def = scene_tools.get_stage(scenario, stage_tag) if scenario else None
+    return stage_tag, stage_def
+
+
+def update_stage_progress(state: dict, stage_tag: str, completed: bool) -> None:
+    """
+    스테이지 완료 여부에 따라 scene/temp/game 상태를 갱신한다.
+    """
+    scene_state = state.setdefault("scene", {})
+    temp_data = state.setdefault("temp_data", {})
+    game_state = state.setdefault("game", {})
+
+    if completed:
+        scene_state["stage_completed"] = True
+        temp_data["completed_stage"] = stage_tag
+        game_state["last_completed_stage"] = stage_tag
+    else:
+        scene_state["stage_completed"] = False
+        temp_data.pop("completed_stage", None)
+
+
+def consume_completed_stage(state: dict) -> Optional[str]:
+    """
+    temp_data에 기록된 completed_stage를 반환하고 제거한다.
+    """
+    temp = get_temp_data(state)
+    if isinstance(temp, dict):
+        return temp.pop("completed_stage", None)
+    return None
+
+
+def resume_pending_stage(state: dict, scenario: Optional[dict]) -> Optional[str]:
+    """
+    pending_stage가 존재하고 현재 스테이지가 완료된 경우 자동으로 다음 스테이지를 셋업한다.
+    """
+    game = state.get("game") or {}
+    scene = state.get("scene") or {}
+    pending = game.get("pending_stage")
+    if not pending or not scene.get("stage_completed"):
+        return None
+
+    next_stage = consume_pending_stage(state)
+    if not next_stage:
+        return None
+
+    set_current_stage(state, next_stage)
+    reset_stage_turn(state)
+
+    scenario_module = None
+    scenario_id = (scenario or {}).get("scenario_id")
+    if scenario_id:
+        scenario_module = load_scenario_module(scenario_id)
+
+    next_def = scene_tools.get_stage(scenario, next_stage) if scenario else None
+    temp = get_temp_data(state)
+    temp.pop("completed_stage", None)
+
+    if next_def and scenario_module and hasattr(scenario_module, "on_stage_enter"):
+        try:
+            scenario_module.on_stage_enter(state, next_def, scenario)
+        except Exception as exc:
+            log("state_tools", f"resume_pending_stage invoke failed: {exc}")
+    elif not next_def:
+        log("state_tools", f"resume_pending_stage missing stage definition: {next_stage}")
+
+    return next_stage
+
+
+def prepare_fallback(state: dict, stage: Optional[dict], reason: str = "urgent_atmosphere") -> Optional[Dict[str, Any]]:
+    """
+    긴급 상황 등에서 fallback 대사를 생성한다.
+    """
+    if not isinstance(stage, dict):
+        return None
+    if (stage.get("atmosphere") or "").lower() != "urgent":
+        return None
+    if not state.get("user_input"):
+        return None
+    return trigger_fallback(state, stage, reason=reason)
+
+
+def handle_missing_scenario(state: dict) -> dict:
+    """
+    시나리오가 없을 때 최소한의 children_ctx를 설정하고 state_tools 노드로 전환.
+    """
+    set_children_ctx(
+        state,
+        {
+            "stage_tag": "unknown",
+            "stage_type": "scene",
+            "speaker_pool": [],
+            "beats": [],
+        },
+    )
+    state["next_node"] = "state_tools"
+    return state
+
+
+def handle_missing_stage(state: dict, tag: str) -> dict:
+    """
+    스테이지 정의가 없을 때 fallback children_ctx를 구성.
+    """
+    set_children_ctx(
+        state,
+        {
+            "stage_tag": tag,
+            "stage_type": "scene",
+            "speaker_pool": [],
+            "beats": [],
+        },
+    )
+    state["next_node"] = "state_tools"
+    return state
+
+
+# ==========================================================
 # 🔹 유틸 함수
 # ==========================================================
 def get_current_stage(state: dict) -> str:
@@ -123,9 +322,9 @@ def get_current_stage(state: dict) -> str:
             if last:
                 return last
 
-        return "INTRO"
+        return INTRO_STAGE_TAG
     except Exception:
-        return "INTRO"
+        return INTRO_STAGE_TAG
 
 
 def get_scene_state(state: dict) -> Dict:
@@ -350,13 +549,26 @@ def run_state_tools(state: dict) -> dict:
 __all__ = [
     "StateTools",
     "run_state_tools",
+    "ensure_scenario_state",
+    "get_metadata",
+    "get_default_stage_tag",
+    "load_scenario_module",
+    "resolve_stage",
     "get_current_stage",
     "get_scene_state",
     "get_temp_data",
     "increment_stage_turn",
     "reset_stage_turn",
+    "consume_pending_stage",
+    "consume_completed_stage",
+    "resume_pending_stage",
+    "set_current_stage",
     "set_children_ctx",
     "mark_stage_entered",
+    "update_stage_progress",
+    "prepare_fallback",
+    "handle_missing_scenario",
+    "handle_missing_stage",
     "read_value",
     "store_value",
 ]

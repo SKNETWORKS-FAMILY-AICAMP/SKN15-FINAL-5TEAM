@@ -11,6 +11,7 @@ from src.tools.scene_tools import (
     get_speaker_pool,
 )
 from src.utils.logger import log
+from src.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
 
 
@@ -51,8 +52,9 @@ class SceneHandler:
         if not complete and stage_turn >= min_turns and constraints.get("auto_advance"):
             complete = True
 
-        # INTRO stage는 첫 입력("시작")에는 beats를 보여주고, 두 번째 입력부터 다음 스테이지로 진행
-        if not complete and stage_tag == "INTRO":
+        # 인트로 스테이지는 첫 입력("시작")에는 beats를 보여주고, 두 번째 입력부터 다음 스테이지로 진행
+        intro_stage_aliases = {tag.upper() for tag in INTRO_STAGE_TAGS}
+        if not complete and stage_tag.upper() in intro_stage_aliases:
             user_input = state.get("user_input", "")
             log("scene", f"🔍 INTRO check: turn={stage_turn}, user_input='{user_input}'")
 
@@ -74,6 +76,9 @@ class SceneHandler:
         next_stage = get_next_stage_tag(stage) if complete else None
         if complete:
             log("scene", "Scene constraints satisfied", current=stage_tag, next=next_stage)
+            should_trim = bool(constraints.get("auto_advance")) or stage_tag.upper() in intro_stage_aliases
+            if should_trim and stage_turn >= max_turns:
+                ctx["beats"] = []
         return StageResult(
             children_ctx=ctx,
             stage_complete=complete,

@@ -31,6 +31,7 @@ from src.core.graph_state import (
 )  # 초기 상태 생성
 from src.utils.scenario_loader import scenario_loader  # 시나리오(JSON) 로더
 from src.tools.image_manager import ImageManager  # 이미지 매니저
+from src.core.scenes_repo import ScenesRepo
 
 # ------------------------------------------------------------
 # ✅ FastAPI 인스턴스 생성
@@ -94,19 +95,6 @@ workflow = None
 
 
 # ------------------------------------------------------------
-# ✅ 프론트엔드 시나리오 ID → 백엔드 시나리오 파일 매핑
-# ------------------------------------------------------------
-SCENARIO_MAPPING = {
-    "train": "cutscene5_llm_driven",  # 무한열차 시나리오
-    "ending": "cutscene5_llm_driven",  # 엔딩 이후 (동일 파일 사용)
-    "infinity-castle": "cutscene5_akaza_encounter",  # 무한성 시나리오
-    "tanjiro": "cutscene5_simple",  # 편의점 탄지로
-    "counseling": "cutscene5_simple",  # 상담소
-    "idol": "cutscene5_simple",  # 아이돌/밴드 버전
-}
-
-
-# ------------------------------------------------------------
 # ✅ LangGraph 워크플로우 가져오기 (싱글톤)
 # ------------------------------------------------------------
 def get_workflow():
@@ -122,20 +110,27 @@ def get_workflow():
 def load_scenario(scenario_id: str) -> Optional[Dict]:
     """Frontend ID로 요청받은 시나리오를 JSON으로 로드"""
     try:
-        backend_filename = SCENARIO_MAPPING.get(scenario_id, scenario_id)
+        if not scenario_id:
+            return None
 
-        # 우선 scenario_loader(커스텀 로더) 사용
-        data = scenario_loader.load_scenario(backend_filename)
-        if data:
-            return data
+        candidates = []
+        if scenario_id.endswith(".json"):
+            candidates.append(scenario_id)
+        else:
+            candidates.extend([scenario_id, f"{scenario_id}.json"])
 
-        # Fallback: 직접 파일에서 로드
-        scenario_path = os.path.join("data", "scenarios", f"{backend_filename}.json")
-        if os.path.exists(scenario_path):
-            with open(scenario_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+        for candidate in candidates:
+            data = scenario_loader.load_scenario(candidate)
+            if data:
+                return data
 
-        print(f"⚠️ Scenario '{scenario_id}' (mapped to '{backend_filename}') not found")
+        repo = ScenesRepo()
+        for candidate in candidates:
+            result = repo.load(candidate.replace(".json", ""))
+            if result:
+                return result
+
+        print(f"⚠️ Scenario '{scenario_id}' not found")
         return None
     except Exception as e:
         print(f"❌ Error loading scenario '{scenario_id}': {e}")
@@ -233,28 +228,31 @@ async def chat(request: Request):
                     status_code=400, detail="scenario_id is required to start a session"
                 )
 
-            backend_scenario_id = SCENARIO_MAPPING.get(scenario_id, scenario_id)
             scenario_data = load_scenario(scenario_id)
             if not scenario_data:
                 raise HTTPException(
                     status_code=404, detail=f"Scenario '{scenario_id}' not found"
                 )
 
+            resolved_id = scenario_data.get("scenario_id") or scenario_id
             state = create_initial_graph_state(
-                session_id=session_id, scenario_id=backend_scenario_id
+                session_id=session_id, scenario_id=resolved_id
             )
             state["scenario_data"] = scenario_data
             state["scenario"] = scenario_data
-            state["scenario_id"] = backend_scenario_id
+            state["scenario_id"] = resolved_id
             state["user_name"] = user_name
 
-            stages = scenario_data.get("stages", [])
-            if isinstance(stages, dict):
-                initial_stage = next(iter(stages.keys()), "intro")
-            elif isinstance(stages, list) and stages:
-                initial_stage = stages[0].get("tag") or stages[0].get("id") or "intro"
-            else:
-                initial_stage = "intro"
+            metadata = scenario_data.get("metadata", {}) if isinstance(scenario_data, dict) else {}
+            initial_stage = metadata.get("default_stage")
+            if not initial_stage:
+                stages = scenario_data.get("stages", [])
+                if isinstance(stages, dict):
+                    initial_stage = next(iter(stages.keys()), "intro")
+                elif isinstance(stages, list) and stages:
+                    initial_stage = stages[0].get("tag") or stages[0].get("id") or "intro"
+                else:
+                    initial_stage = "intro"
             state["current_stage"] = initial_stage
         else:
             print(f"🔄 Loading existing session: {session_id}")
@@ -270,7 +268,7 @@ async def chat(request: Request):
                 state["scenario_data"] = scenario_data
                 state["scenario"] = scenario_data
                 state.setdefault(
-                    "scenario_id", SCENARIO_MAPPING.get(scenario_id, scenario_id)
+                    "scenario_id", scenario_data.get("scenario_id") or scenario_id
                 )
 
         state["session_id"] = session_id
@@ -316,35 +314,66 @@ async def chat(request: Request):
         scenario_id_for_image = result_state.get("scenario_id", scenario_id)
         print(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
 
-        if scenario_id_for_image:
-            # 시나리오별 ImageManager 로드 (캐시)
-            if scenario_id_for_image not in globals().get("image_managers", {}):
-                image_config_path = (
-                    f"data/image_mappings/{scenario_id_for_image}_cutscenes.json"
-                )
-                abs_path = os.path.abspath(image_config_path)
-                print(f"🔍 Checking image config path: {abs_path}")
-                print(f"🔍 File exists: {os.path.exists(image_config_path)}")
+        scenario_reference = (
+            result_state.get("scenario")
+            or result_state.get("scenario_data")
+            or state.get("scenario")
+            or state.get("scenario_data")
+            or {}
+        )
+        images_meta: Dict[str, Any] = {}
+        if isinstance(scenario_reference, dict):
+            images_meta = (scenario_reference.get("metadata") or {}).get("images") or {}
 
-                if os.path.exists(image_config_path):
+        mapping_pattern = images_meta.get("mapping_pattern")
+        llm_metadata_config = images_meta.get("llm_metadata")
+
+        if scenario_id_for_image:
+            base_dir = os.path.abspath(os.path.dirname(__file__))
+            project_root = os.path.abspath(os.path.join(base_dir, ".."))
+
+            def resolve_path(path_value: Optional[str]) -> Optional[str]:
+                if not path_value:
+                    return None
+                if os.path.isabs(path_value):
+                    return path_value
+                candidate_backend = os.path.abspath(os.path.join(base_dir, path_value))
+                if os.path.exists(candidate_backend):
+                    return candidate_backend
+                return os.path.abspath(os.path.join(project_root, path_value))
+
+            if mapping_pattern and "{scenario_id" in mapping_pattern:
+                formatted = mapping_pattern.format(scenario_id=scenario_id_for_image)
+                image_config_candidate = formatted
+            elif mapping_pattern:
+                image_config_candidate = mapping_pattern
+            else:
+                image_config_candidate = os.path.join(
+                    "data", "image_mappings", f"{scenario_id_for_image}_cutscenes.json"
+                )
+
+            image_config_path = resolve_path(image_config_candidate)
+            abs_path = image_config_path or image_config_candidate
+            print(f"🔍 Checking image config path: {abs_path}")
+            print(f"🔍 File exists: {os.path.exists(image_config_path or '')}")
+
+            if scenario_id_for_image not in globals().get("image_managers", {}):
+                if image_config_path and os.path.exists(image_config_path):
                     if "image_managers" not in globals():
                         globals()["image_managers"] = {}
 
-                    # 이미지 메타데이터 경로 설정 (LLM 분석용)
-                    metadata_path = os.path.join(
-                        os.path.dirname(__file__),
-                        "data/image_mappings/mugen_train_images.json",
-                    )
+                    metadata_path = resolve_path(llm_metadata_config)
+                    use_llm = bool(metadata_path)
 
-                    # ImageManager 초기화 (use_llm=True로 LLM 기능 활성화)
                     globals()["image_managers"][scenario_id_for_image] = ImageManager(
                         config_path=image_config_path,
                         debug=True,
-                        use_llm=True,
+                        use_llm=use_llm,
                         llm_metadata_path=metadata_path,
                     )
+                    status_label = "enabled" if use_llm else "disabled"
                     print(
-                        f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM enabled)"
+                        f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM {status_label})"
                     )
                 else:
                     print(f"⚠️ Image config not found at: {abs_path}")
