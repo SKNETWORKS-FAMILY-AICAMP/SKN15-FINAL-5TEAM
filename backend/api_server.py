@@ -8,6 +8,7 @@ FastAPI Server for KIME Chat Agent
 import os
 import uuid
 import json
+import time
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
@@ -204,6 +205,7 @@ async def chat(request: Request):
     4. 결과를 반환
     """
     try:
+        request_start = time.perf_counter()
         data = await request.json()
 
         session_id = data.get("session_id")
@@ -289,7 +291,11 @@ async def chat(request: Request):
 
         print(f"🤖 Processing: session={session_id}, input='{user_input}'")
         workflow_instance = get_workflow()
+        workflow_start = time.perf_counter()
         result_state = workflow_instance.invoke(state)
+        workflow_end = time.perf_counter()
+        workflow_duration_ms = (workflow_end - workflow_start) * 1000.0
+        print(f"⏱️ Workflow execution time: {workflow_duration_ms:.2f} ms")
 
         turn_count = result_state.get("turn_count", 0) + 1
         result_state["turn_count"] = turn_count
@@ -308,6 +314,15 @@ async def chat(request: Request):
         print(
             f"✅ Response sent: {len(agent_responses)} dialogues, has_more: {has_more_flag}"
         )
+        if agent_responses:
+            for idx, dialogue in enumerate(agent_responses):
+                if isinstance(dialogue, dict):
+                    speaker = dialogue.get("speaker") or dialogue.get("character") or "unknown"
+                    content = dialogue.get("content") or dialogue.get("text") or ""
+                else:
+                    speaker = "unknown"
+                    content = str(dialogue)
+                print(f"🧠 LLM Output[{idx}] ({speaker}): {content}")
 
         # ImageManager를 사용하여 각 대화별로 이미지 결정
         current_image = result_state.get("current_image")  # 이전 이미지
@@ -425,6 +440,9 @@ async def chat(request: Request):
                 print(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
 
         # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
+        total_duration_ms = (time.perf_counter() - request_start) * 1000.0
+        print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
+
         return JSONResponse(
             {
                 "session_id": session_id,
