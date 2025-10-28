@@ -5,11 +5,11 @@
   "version": "6.0",
   "mountable": true,
   "character_refs": {
-    "rengoku": "character_data/rengoku.json",
-    "tanjiro": "character_data/tanjiro.json",
-    "akaza": "character_data/akaza.json",
-    "zenitsu": "character_data/zenitsu.json",
-    "inosuke": "character_data/inosuke.json"
+    "rengoku": "characters/rengoku.json",
+    "tanjiro": "characters/tanjiro.json",
+    "akaza": "characters/akaza.json",
+    "zenitsu": "characters/zenitsu.json",
+    "inosuke": "characters/inosuke.json"
   },
   "i18n": {
     "ko": {
