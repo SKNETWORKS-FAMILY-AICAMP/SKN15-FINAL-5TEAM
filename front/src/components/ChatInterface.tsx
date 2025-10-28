@@ -1401,8 +1401,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           const isLatestMessage = isLatestAiMessage || isLatestUserMessage;
 
           return (
-            <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4 ${!message.isUser ? 'animate-slide-in-fade' : ''} transition-all duration-500 ${
-              isLatestMessage ? `transform scale-[1.2] ${message.isUser ? 'origin-right' : 'origin-left'}` : ''
+            <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6 ${!message.isUser ? 'animate-slide-in-fade' : ''} transition-all duration-500 ${
+              isLatestMessage ? `transform scale-125 ${message.isUser ? 'origin-right' : 'origin-left'}` : ''
             }`}>
               {!message.isUser && (
                 <div
