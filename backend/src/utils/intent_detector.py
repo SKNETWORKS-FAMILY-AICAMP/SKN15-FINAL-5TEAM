@@ -15,8 +15,16 @@ from src.utils.characters_repo import (
     character_names_aliases,
 )
 from src.config.constants import INTRO_STAGE_TAGS
+from src.utils.config_loader import get_config_loader
 
 logger = getLogger(__name__)
+
+
+_PROMPTS = get_config_loader().get_prompts()
+_INTENT_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("intent_detector") or {})
+_INTENT_SCORE_PROMPT = (_INTENT_PROMPTS.get("score_aggregator") or "").strip()
+if not _INTENT_SCORE_PROMPT:
+    raise ValueError("Intent detector score_aggregator prompt missing in configs/prompts.yaml (llm_prompts.intent_detector.score_aggregator).")
 
 
 def _pattern_score(user_text: str, patterns: Dict[str, List[str]]) -> Dict[str, float]:
@@ -74,12 +82,14 @@ def _maybe_llm_boost(state: dict, user_text: str, totals: Dict[str, float]) -> D
             from src.utils.llm_client import get_llm_client
 
             llm = get_llm_client()
-            system = (
-                "You label user intent for a Demon Slayer game.\n"
-                "Return JSON with scores (0-1) for keys: combat_coop, praise_encourage, positive_core, general_interaction, optimal_interaction, core_goal_achievement, selfish_cowardly.\n"
-            )
             userp = f"Text: {user_text}\nReturn: {{\"combat_coop\":0-1,...}}"
-            resp = llm.call_json(system_prompt=system, user_prompt=userp, temperature=0.1)
+            resp = llm.call_json(
+                system_prompt=_INTENT_SCORE_PROMPT,
+                user_prompt=userp,
+                temperature=llm.get_agent_setting("intent_detector", "temperature", 0.1),
+                max_tokens=llm.get_agent_setting("intent_detector", "max_tokens", None),
+                agent="intent_detector",
+            )
             for k, v in (resp or {}).items():
                 try:
                     totals[k] = max(totals.get(k, 0.0), float(v or 0.0))

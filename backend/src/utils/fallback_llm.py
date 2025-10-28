@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from src.utils.llm_client import get_llm_client
+from src.utils.config_loader import get_config_loader
 
 from .logger import log
 
@@ -15,6 +16,14 @@ _CANDIDATE_CHAR_DIRS = [
     _BASE_DIR / "data" / "characters",
 ]
 _CHAR_DB_PATH = _BASE_DIR / "data" / "characters_db.json"
+_PROMPTS = get_config_loader().get_prompts()
+_FALLBACK_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("fallback") or {})
+_OFF_TOPIC_BASE_TEMPLATE = (_FALLBACK_PROMPTS.get("off_topic_base") or "").strip()
+_URGENT_OFF_TOPIC_BASE_TEMPLATE = (_FALLBACK_PROMPTS.get("urgent_off_topic_base") or "").strip()
+if not _OFF_TOPIC_BASE_TEMPLATE:
+    raise ValueError("Fallback off_topic_base prompt missing in configs/prompts.yaml (llm_prompts.fallback.off_topic_base).")
+if not _URGENT_OFF_TOPIC_BASE_TEMPLATE:
+    raise ValueError("Fallback urgent_off_topic_base prompt missing in configs/prompts.yaml (llm_prompts.fallback.urgent_off_topic_base).")
 
 
 def _load_character_profile(character: str) -> Optional[Dict[str, Any]]:
@@ -168,19 +177,7 @@ def generate_off_topic_response(
         if scenario_data:
             relationships = scenario_data.get("relationships", {})
 
-    system_prompt = (
-        f"You are {name}, a character from Demon Slayer. "
-        "Respond in Korean, in 1-2 concise sentences. "
-        "Stay fully in character, gently guiding the player back to the current mission."
-    )
-
-    system_prompt += (
-        f"\nTone guidance: {style['tone']}"
-        f"\nSpeech style: {style['speech_pattern']}"
-        f"\nMannerisms: {style['mannerisms']}"
-    )
-
-    # 관계성 정보 추가
+    relationships_section = ""
     if relationships:
         rel_desc = []
         for target, info in relationships.items():
@@ -188,8 +185,15 @@ def generate_off_topic_response(
             if desc:
                 rel_desc.append(f"{target}: {desc}")
         if rel_desc:
-            system_prompt += f"\nRelationships: {'; '.join(rel_desc[:3])}"  # 최대 3개
+            relationships_section = f"Relationships: {'; '.join(rel_desc[:3])}"  # 최대 3개
 
+    system_prompt = _OFF_TOPIC_BASE_TEMPLATE.format(
+        name=name,
+        tone=style['tone'],
+        speech_pattern=style['speech_pattern'],
+        mannerisms=style['mannerisms'],
+        relationships_section=relationships_section,
+    )
     stage = state.get("current_stage") or (scene.get("current_stage") or "")
     mission_hint = state.get("mission_hint") or ""
 
@@ -203,11 +207,14 @@ def generate_off_topic_response(
 
     try:
         client = get_llm_client()
+        temperature = client.get_agent_setting("fallback", "temperature", 0.8)
+        max_tokens = client.get_agent_setting("fallback", "max_tokens", 80)
         response_text = client.call(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.8,  # 다양한 응답을 위해 증가
-            max_tokens=80,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            agent="fallback",
         )
         text = response_text.strip()
         if not text:
@@ -311,26 +318,7 @@ def generate_stage_fallback(
     atmosphere = stage.get("atmosphere") or scene.get("atmosphere") or "unknown"
     stage_tag = stage.get("tag") or stage.get("id") or (state.get("current_stage") or "unknown")
 
-    system_prompt = (
-        "너는 현재 시나리오 속 캐릭터야.\n"
-        "사용자가 스토리와 관련 없는 말을 했지만, 직접 화를 내지 않고,\n"
-        "상황에 맞는 말투로 다시 스토리로 유도해야 해.\n"
-        f"현재 분위기: {atmosphere}\n"
-        f"참여 캐릭터: {', '.join(candidates)}\n"
-        f"현재 스테이지: {stage_tag}\n"
-        "tone과 감정은 각 캐릭터 json 데이터의 tone_profile을 참고.\n"
-        "한 명의 캐릭터가 자연스럽게 1-2문장으로 반응해.\n"
-        "시스템 톤(경고 메시지, 문구)은 사용하지 마.\n"
-    )
-
-    system_prompt += (
-        f"\n배역: {name}"
-        f"\n말투 가이드: {style['tone']}"
-        f"\n말하는 스타일: {style['speech_pattern']}"
-        f"\n버릇/행동: {style['mannerisms']}"
-    )
-
-    # 관계성 정보 추가
+    relationships_section = ""
     if relationships:
         rel_desc = []
         for target, info in relationships.items():
@@ -338,7 +326,18 @@ def generate_stage_fallback(
             if desc:
                 rel_desc.append(f"{target}: {desc}")
         if rel_desc:
-            system_prompt += f"\n캐릭터 관계: {'; '.join(rel_desc[:3])}"
+            relationships_section = f"캐릭터 관계: {'; '.join(rel_desc[:3])}"
+
+    system_prompt = _URGENT_OFF_TOPIC_BASE_TEMPLATE.format(
+        atmosphere=atmosphere,
+        participants=", ".join(candidates),
+        stage_tag=stage_tag,
+        name=name,
+        tone=style['tone'],
+        speech_pattern=style['speech_pattern'],
+        mannerisms=style['mannerisms'],
+        relationships_section=relationships_section,
+    )
 
     recent_turns = "\n".join(_recent_dialogue_turns(state, limit=3)) or "대화 기록 없음"
 
@@ -350,11 +349,22 @@ def generate_stage_fallback(
 
     try:
         client = get_llm_client()
+        urgent_temperature = client.get_agent_setting(
+            "fallback",
+            "urgent_temperature",
+            client.get_agent_setting("fallback", "temperature", 0.75),
+        )
+        urgent_max_tokens = client.get_agent_setting(
+            "fallback",
+            "urgent_max_tokens",
+            client.get_agent_setting("fallback", "max_tokens", 90),
+        )
         response_text = client.call(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.75,  # 다양한 응답을 위해 증가
-            max_tokens=90,
+            temperature=urgent_temperature,
+            max_tokens=urgent_max_tokens,
+            agent="fallback",
         )
         text = response_text.strip()
         if not text:
