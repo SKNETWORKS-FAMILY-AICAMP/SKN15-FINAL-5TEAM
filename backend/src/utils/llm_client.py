@@ -12,6 +12,7 @@ import json
 from typing import Dict, List, Optional, Any
 from openai import OpenAI
 from dotenv import load_dotenv
+from src.utils.logger import log
 
 # .env 파일 로드
 load_dotenv()
@@ -223,7 +224,15 @@ class LLMClient:
         if self.enable_caching and use_cache:
             cache_key = self._get_cache_key(system_prompt, user_prompt, resolved_temperature, target_model)
             if cache_key in self.cache:
-                return self.cache[cache_key]
+                cached_result = self.cache[cache_key]
+                log(
+                    "llm",
+                    "Cache hit",
+                    agent=agent or "default",
+                    model=target_model,
+                )
+                log("llm_output", cached_result)
+                return cached_result
 
         try:
             messages = [
@@ -243,7 +252,9 @@ class LLMClient:
             if response_format:
                 kwargs["response_format"] = response_format
 
+            call_started = time.perf_counter()
             response = self.client.chat.completions.create(**kwargs)
+            call_finished = time.perf_counter()
             result = response.choices[0].message.content
 
             # 호출 횟수 증가
@@ -253,6 +264,16 @@ class LLMClient:
             if self.enable_caching and use_cache:
                 cache_key = self._get_cache_key(system_prompt, user_prompt, resolved_temperature, target_model)
                 self.cache[cache_key] = result
+
+            duration_ms = (call_finished - call_started) * 1000.0
+            log(
+                "llm",
+                "Call completed",
+                agent=agent or "default",
+                model=target_model,
+                duration_ms=f"{duration_ms:.2f}",
+            )
+            log("llm_output", result)
 
             return result
 

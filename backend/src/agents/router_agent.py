@@ -110,6 +110,13 @@ class RouterAgent:
         confidence = max(0.0, min(1.0, match.score or 0.0))
         is_off_topic = match.label == "off_topic"
         reason = f"{match.label}_match"
+        log(
+            "router",
+            "embedding_classification",
+            label=match.label,
+            score=f"{confidence:.4f}",
+            is_off_topic=is_off_topic,
+        )
 
         return TopicClassification(
             is_off_topic=is_off_topic,
@@ -176,6 +183,15 @@ class RouterAgent:
             reason = reason.strip()
         else:
             reason = None
+
+        classification = "off_topic" if is_off_topic else "on_topic"
+        log(
+            "router",
+            "llm_classification",
+            classification=classification,
+            confidence=f"{confidence:.4f}",
+            reason=reason or "n/a",
+        )
 
         return TopicClassification(
             is_off_topic=is_off_topic,
@@ -334,7 +350,13 @@ class RouterAgent:
         state["children_ctx"] = children_ctx
 
         state["next_node"] = "children_agent"
-        log("router", "off_topic_detected", count=count, reason=routing_result["reason"])
+        log(
+            "router",
+            "off_topic_detected",
+            count=count,
+            reason=routing_result["reason"],
+            confidence=confidence,
+        )
         return state
 
 

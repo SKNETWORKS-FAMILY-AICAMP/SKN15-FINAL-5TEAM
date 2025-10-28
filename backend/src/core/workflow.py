@@ -10,6 +10,7 @@ LangGraph 워크플로우 통합
 """
 
 import threading
+import time
 
 from langgraph.graph import END, StateGraph
 
@@ -89,9 +90,12 @@ class KimeChatWorkflow:
         """Guardrail Agent 노드"""
         if self.debug:
             print("[WORKFLOW] → guardrail", flush=True)
+        started = time.perf_counter()
         result = run_guardrail_agent(state)
+        duration_ms = (time.perf_counter() - started) * 1000.0
         if self.debug:
             print(f"[WORKFLOW] ← guardrail (next: {result.get('next_node', 'unknown')})", flush=True)
+        print(f"⏱️ [guardrail] duration={duration_ms:.2f} ms", flush=True)
         return result
 
     def _router_node(self, state: GraphState) -> GraphState:
@@ -103,15 +107,19 @@ class KimeChatWorkflow:
         ) and not state.get("has_more_dialogues", False):
             if self.debug:
                 print("[WORKFLOW] → router (skipped: session already ended)", flush=True)
+            print("⏱️ [router] skipped (session already ended)", flush=True)
             state["next_node"] = END
             return state
 
         if self.debug:
             print("[WORKFLOW] → router", flush=True)
         user_input = state.get("user_input", "")
+        started = time.perf_counter()
         result = run_router_agent(state, user_input)
         if self.debug:
             print(f"[WORKFLOW] ← router (next: {result.get('next_node', 'unknown')})", flush=True)
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        print(f"⏱️ [router] duration={duration_ms:.2f} ms", flush=True)
         return result
 
     def _parent_node(self, state: GraphState) -> GraphState:
@@ -121,9 +129,12 @@ class KimeChatWorkflow:
                 f"[WORKFLOW] → parent_agent (stage: {state.get('current_stage', 'unknown')})",
                 flush=True,
             )
+        started = time.perf_counter()
         result = run_parent_agent(state)
+        duration_ms = (time.perf_counter() - started) * 1000.0
         if self.debug:
             print(f"[WORKFLOW] ← parent_agent (next: {result.get('next_node', 'unknown')})", flush=True)
+        print(f"⏱️ [parent_agent] duration={duration_ms:.2f} ms", flush=True)
         return result
 
     def _children_node(self, state: GraphState) -> GraphState:
@@ -147,20 +158,26 @@ class KimeChatWorkflow:
         except Exception:
             pass
 
+        started = time.perf_counter()
         result = run_children_agent(state)
+        duration_ms = (time.perf_counter() - started) * 1000.0
         if self.debug:
             print("[WORKFLOW] ← children_agent", flush=True)
+        print(f"⏱️ [children_agent] duration={duration_ms:.2f} ms", flush=True)
         return result
 
     def _dialogue_node(self, state: GraphState) -> GraphState:
         """Dialogue Agent 노드"""
         if self.debug:
             print("[WORKFLOW] → dialogue_agent", flush=True)
+        started = time.perf_counter()
         result = run_dialogue_agent(state)
         # 대화 생성 후 parent_after_dialogue 호출 (스테이지 전환 로직)
         result = parent_after_dialogue(result)
+        duration_ms = (time.perf_counter() - started) * 1000.0
         if self.debug:
             print("[WORKFLOW] ← dialogue_agent", flush=True)
+        print(f"⏱️ [dialogue_agent] duration={duration_ms:.2f} ms", flush=True)
         return result
 
     # ==================== 라우팅 함수들 ====================
