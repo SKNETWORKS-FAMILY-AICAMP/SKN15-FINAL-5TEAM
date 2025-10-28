@@ -2,6 +2,25 @@ llm_prompts:
   router:
     topic_classifier: |
       너는 인터랙티브 이야기의 RouterAgent다. 사용자 발화가 시나리오 진행과 관련있는지(on_topic)만 판단하고 JSON으로만 답하라.
+    topic_classifier_user: |
+      사용자 발화: "{text}"
+
+      과업:
+      - 발화가 현재 진행 중인 귀멸의 칼날 시나리오(시나리오 ID: {scenario_id}, 현재 스테이지: {current_stage})와 관계있는지 분류하십시오.
+
+      JSON 형태로만 응답하십시오:
+      {{
+        "classification": "on_topic" 또는 "off_topic",
+        "confidence": 0.0~1.0 숫자,
+        "explanation": "한 줄 설명"
+      }}
+
+      판단 기준:
+      - 최근 대화 요약과 시나리오 목표에 관련되면 on_topic.
+      - 맥락과 무관한 일상 잡담 또는 시나리오 외 요구는 off_topic.
+
+      최근 대화 요약:
+      {recent_history}
 
   children:
     dialogue_generation: |
@@ -40,6 +59,17 @@ llm_prompts:
   mission:
     recruitment_judge: |
       You are a mission adjudicator for a Demon Slayer interactive story. Return only True or False to indicate whether the recruitment attempt succeeded.
+    recruitment_judge_user: |
+      현재 캐릭터는 '{target}'을 설득하려고 한다.
+
+      플레이어의 대사: "{user_text}"
+
+      판정 기준:
+      - 젠이츠(Zenitsu)는 '네즈코', '사랑', '지켜야 해', '위험해' 같은 감정적 키워드나 설득 문맥이 포함되면 성공.
+      - 이노스케(Inosuke)는 '겁쟁이', '약하다', '싸우자', '도전해' 같은 도발성 발화가 있으면 성공.
+      - 그 외엔 실패.
+
+      성공이면 True, 실패면 False 만 출력해.
 
   fallback:
     off_topic_base: |

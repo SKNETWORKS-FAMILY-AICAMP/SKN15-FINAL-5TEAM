@@ -14,8 +14,11 @@ from src.utils.config_loader import get_config_loader
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
 _ROUTER_TOPIC_PROMPT = (_ROUTER_PROMPTS.get("topic_classifier") or "").strip()
+_ROUTER_TOPIC_USER_TEMPLATE = (_ROUTER_PROMPTS.get("topic_classifier_user") or "").strip()
 if not _ROUTER_TOPIC_PROMPT:
     raise ValueError("RouterAgent topic_classifier prompt missing in configs/prompts.yaml (llm_prompts.router.topic_classifier).")
+if not _ROUTER_TOPIC_USER_TEMPLATE:
+    raise ValueError("RouterAgent topic_classifier_user prompt missing in configs/prompts.yaml (llm_prompts.router.topic_classifier_user).")
 
 # ============================================================
 # 🎯 RouterAgent — 사용자의 발화가 시나리오 관련(on_topic)인지 아닌지(off_topic) 분류
@@ -131,26 +134,13 @@ class RouterAgent:
         scenario_id = state.get("scenario_id") or "unknown"
         current_stage = state.get("current_stage") or "unknown"
         recent_history = self._summarize_recent_history(state, limit=4)
-        user_prompt = f"""
-사용자 발화: "{text}"
 
-과업:
-- 발화가 현재 진행 중인 귀멸의 칼날 시나리오(시나리오 ID: {scenario_id}, 현재 스테이지: {current_stage})와 관계있는지 분류하십시오.
-
-JSON 형태로만 응답하십시오:
-{{
-  "classification": "on_topic" 또는 "off_topic",
-  "confidence": 0.0~1.0 숫자,
-  "explanation": "한 줄 설명"
-}}
-
-판단 기준:
-- 최근 대화 요약과 시나리오 목표에 관련되면 on_topic.
-- 맥락과 무관한 일상 잡담 또는 시나리오 외 요구는 off_topic.
-
-최근 대화 요약:
-{recent_history or "(최근 대화 없음)"}
-"""
+        user_prompt = _ROUTER_TOPIC_USER_TEMPLATE.format(
+            text=text,
+            scenario_id=scenario_id,
+            current_stage=current_stage,
+            recent_history=recent_history or "(최근 대화 없음)"
+        )
 
         try:
             temperature = self._llm_client.get_agent_setting("router", "temperature", 0.0)

@@ -28,8 +28,11 @@ from src.utils.config_loader import get_config_loader
 _PROMPTS = get_config_loader().get_prompts()
 _MISSION_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("mission") or {})
 _RECRUITMENT_PROMPT = (_MISSION_PROMPTS.get("recruitment_judge") or "").strip()
+_RECRUITMENT_USER_TEMPLATE = (_MISSION_PROMPTS.get("recruitment_judge_user") or "").strip()
 if not _RECRUITMENT_PROMPT:
     raise ValueError("MissionHandler recruitment_judge prompt missing in configs/prompts.yaml (llm_prompts.mission.recruitment_judge).")
+if not _RECRUITMENT_USER_TEMPLATE:
+    raise ValueError("MissionHandler recruitment_judge_user prompt missing in configs/prompts.yaml (llm_prompts.mission.recruitment_judge_user).")
 from . import StageResult
 
 
@@ -620,18 +623,10 @@ class MissionHandler:
         user_text = state.get("user_input", "")
 
         system_prompt = _RECRUITMENT_PROMPT
-        user_prompt = f"""
-현재 캐릭터는 '{target}'을 설득하려고 한다.
-
-플레이어의 대사: "{user_text}"
-
-판정 기준:
-- 젠이츠(Zenitsu)는 '네즈코', '사랑', '지켜야 해', '위험해' 같은 감정적 키워드나 설득 문맥이 포함되면 성공.
-- 이노스케(Inosuke)는 '겁쟁이', '약하다', '싸우자', '도전해' 같은 도발성 발화가 있으면 성공.
-- 그 외엔 실패.
-
-성공이면 True, 실패면 False 만 출력해.
-"""
+        user_prompt = _RECRUITMENT_USER_TEMPLATE.format(
+            target=target,
+            user_text=user_text
+        )
         try:
             get_setting = getattr(client, "get_agent_setting", None)
             if callable(get_setting):
