@@ -6,6 +6,19 @@ from typing import Any, Dict, List, Optional
 from src.core import scene_dialogue_tools as dialogue_tools
 from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
+from src.utils.config_loader import get_config_loader
+
+_PROMPTS = get_config_loader().get_prompts()
+_CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
+_CHILDREN_DIALOGUE_PROMPT = (_CHILDREN_PROMPTS.get("dialogue_generation") or "").strip()
+_LLM_BEATS_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("llm_beats") or {})
+_LLM_BEATS_SYSTEM = (_LLM_BEATS_PROMPTS.get("system") or "").strip()
+_LLM_BEATS_USER = (_LLM_BEATS_PROMPTS.get("user") or "").strip()
+
+if not _CHILDREN_DIALOGUE_PROMPT:
+    raise ValueError("ChildrenAgent dialogue_generation prompt missing in configs/prompts.yaml (llm_prompts.children.dialogue_generation).")
+if not _LLM_BEATS_SYSTEM or not _LLM_BEATS_USER:
+    raise ValueError("LLM beats prompts missing in configs/prompts.yaml (llm_prompts.llm_beats.system/user).")
 
 # ============================================================
 # 🎭 ChildrenAgent — parent가 넘겨준 children_ctx로 실제 대사를 생성
@@ -209,28 +222,22 @@ class ChildrenAgent:
         # 4️⃣ LLM 호출 시도
         # -----------------------------
         try:
-            system_prompt = (
-                "당신은 귀멸의 칼날 시나리오의 대사 작가이자 편집자입니다.\n"
-                "주어진 [상황 요약] beats는 장면의 목표일 뿐이므로, 그 문장을 반복하거나 따옴표 안의 문장을 그대로 쓰면 안 됩니다.\n"
-                "각 beat의 의미를 해석해 캐릭터가 실제로 말하거나 느낄 법한 자연스러운 대사를 2~3문장으로 새롭게 작성하세요.\n"
-                "goal에 나온 단어, 문장, 말투, 따옴표, 감탄사를 그대로 복사하거나 부분 발췌하지 말고, 동의어·비유·감정을 활용해 재구성하세요.\n"
-                "[이전 턴 요약]에 있는 사용자 입력과 직전 대사에 반드시 반응하고, 같은 말을 반복하지 말며 이야기와 감정을 앞으로 전개하세요.\n"
-                "사용자가 한 질문이나 요청이 있다면 직접적으로 답하거나 행동으로 보여주세요.\n"
-                "narr는 장면 묘사와 감각을 서술하되 다른 인물의 대사를 대신하지 않습니다.\n"
-                "캐릭터 화자는 설명체 대신 말투와 감정을 살린 직접 화법으로 대사만 말합니다 (\"~라고 말한다\" 등 금지).\n"
-                "가능하다면 마지막 발화(또는 내레이션)에서 플레이어가 다음 행동을 취하도록 자연스럽게 촉구하거나, 현재 스테이지 목표/선택지를 상기시키세요.\n"
-                "출력은 반드시 JSON 객체 하나로 응답하고, 구조는 {\"dialogues\": [...]} 형식을 지키세요.\n"
-                "캐릭터의 말투·관계는 tone_profile과 상황을 준수하고, narr는 beats에 나온 감각/효과음을 활용해 생생하게 묘사하세요."
-            )
-            if not system_prompt.strip():
-                log("children", "⚠️ system_prompt missing - using default guardrail")
-                system_prompt = "You generate in-character dialogue for a scripted scene."
+            # Phase 2 개선: yaml 기반 설정 + 개선된 기본값
+            system_prompt = _CHILDREN_DIALOGUE_PROMPT
+            primary_temperature = self._llm.get_agent_setting("children", "temperature", 0.8)  # 0.65 → 0.8
+            retry_temperature = self._llm.get_agent_setting("children", "retry_temperature", 1.0)  # 기본값 1.0
+            max_tokens = self._llm.get_agent_setting("children", "max_tokens", 2000)
 
+            # Phase 2 개선: Temperature 상향 (0.65 → 0.8)
+            # - 더 창의적이고 다양한 대사 생성
+            # - 캐릭터별 개성이 더 잘 드러남
+            # - 예측 가능한 패턴 감소
             response = self._llm.call_json(
                 system_prompt=system_prompt,
                 user_prompt=llm_prompt,
-                temperature=0.65,
-                max_tokens=2000,
+                temperature=primary_temperature,
+                max_tokens=max_tokens,
+                agent="children",
             )
             log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:500]}")
 
@@ -241,11 +248,16 @@ class ChildrenAgent:
             # 1차 응답 검증
             if not isinstance(dialogue_payload, list) or not dialogue_payload:
                 log("children", "⚠️ LLM response invalid or empty → retrying once")
+                # Phase 2 개선: Retry Temperature 상향 (0.9 → 1.0)
+                # - 첫 시도 실패 시 완전히 다른 접근 시도
+                # - 동일한 실패 패턴 반복 방지
+                # - 최대 다양성으로 성공 가능성 향상
                 retry_resp = self._llm.call_json(
                     system_prompt=system_prompt,
                     user_prompt=llm_prompt,
-                    temperature=0.9,
-                    max_tokens=2000,
+                    temperature=retry_temperature,
+                    max_tokens=max_tokens,
+                    agent="children",
                 )
                 log("children", f"LLM retry response: {json.dumps(retry_resp, ensure_ascii=False)[:500]}")
 
@@ -381,43 +393,16 @@ class ChildrenAgent:
             stage_context = f"현재 {stage_tag} 장면이 진행 중입니다."
 
         # LLM 프롬프트 구성
-        system_prompt = """당신은 귀멸의 칼날 시나리오의 beats 작가입니다.
-주어진 맥락과 유저 입력을 바탕으로 장면의 beats(상황 목표)를 생성하세요.
-
-Beats는 각 순간의 목표와 분위기를 설명하는 것이며, 대사가 아닙니다.
-각 beat는 다음 형식을 따릅니다:
-{
-  "goal": "이 순간에 일어나는 일이나 등장인물의 목표",
-  "speaker_hint": ["등장 가능한 인물"],
-  "fx": "효과음 (선택사항)"
-}
-
-출력은 JSON 배열로 반환하세요."""
+        system_prompt = _LLM_BEATS_SYSTEM
 
         recent_history_str = "\n".join(recent_dialogues[-4:]) if recent_dialogues else "(없음)"
 
-        user_prompt = f"""[현재 상황]
-{stage_context}
-
-[최근 대화]
-{recent_history_str}
-
-[유저 입력]
-{latest_user_input if latest_user_input else "(없음)"}
-
-[등장 가능한 인물]
-{", ".join(speaker_pool)}
-
----
-
-위 정보를 바탕으로 3~5개의 beats를 생성하세요.
-각 beat는 장면의 흐름을 자연스럽게 이어가며, 유저 입력에 반응하도록 구성하세요.
-
-JSON 배열로 응답하세요:
-[
-  {{"goal": "...", "speaker_hint": [...], "fx": "..."}},
-  ...
-]"""
+        user_prompt = _LLM_BEATS_USER.format(
+            stage_context=stage_context,
+            recent_history=recent_history_str,
+            latest_user_input=latest_user_input if latest_user_input else "(없음)",
+            speaker_pool=", ".join(speaker_pool),
+        )
 
         try:
             response = self._llm.call_json(
