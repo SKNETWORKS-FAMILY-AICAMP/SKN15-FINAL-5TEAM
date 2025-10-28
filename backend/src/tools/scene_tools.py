@@ -79,9 +79,32 @@ def get_stage_type(stage: Dict[str, Any]) -> str:
 
 
 def get_stage_atmosphere(stage: Dict[str, Any]) -> Optional[str]:
-    """stage.atmosphere를 문자열로 반환(없으면 None)."""
+    """
+    stage.atmosphere를 정규화된 문자열로 반환.
+
+    지원하는 입력 형식:
+    - 숫자: 0=urgent, 1=tense, 2=calm, 3=normal
+    - 문자열: "urgent", "combat", "battle", "normal" 등
+
+    Returns:
+        정규화된 atmosphere 문자열 (없으면 None)
+    """
     atmosphere = stage.get("atmosphere")
-    return str(atmosphere) if atmosphere else None
+    if atmosphere is None:
+        return None
+
+    # 숫자 → 문자열 변환 매핑
+    if isinstance(atmosphere, (int, float)):
+        atmosphere_map = {
+            0: "urgent",      # 긴급/자동전이
+            1: "tense",       # 긴장/전투
+            2: "calm",        # 차분함
+            3: "normal",      # 일반/자유발화
+        }
+        return atmosphere_map.get(int(atmosphere), "normal")
+
+    # 이미 문자열이면 소문자로 정규화
+    return str(atmosphere).lower()
 
 
 def _normalize_beats(items: Iterable[Any]) -> List[Dict[str, Any]]:

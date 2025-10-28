@@ -16,6 +16,7 @@ from .stage_handlers import (
     MissionHandler,
     RouterStageHandler,
     SceneHandler,
+    OpenNarrativeHandler,
 )
 
 from src.utils.logger import log
@@ -42,6 +43,7 @@ class ParentAgent:
             "scene": SceneHandler(locale),
             "free_intent": FreeIntentHandler(locale),
             "router": RouterStageHandler(),
+            "open_narrative": OpenNarrativeHandler(locale),
         }
 
     # ============================================================
@@ -71,12 +73,15 @@ class ParentAgent:
                 log("parent", f"⚠️ Mission stage has no active target (stage_tag={stage_tag})")
 
         while True:
-            if stage.get("beats") is None and stage.get("beats_i18n"):
-                beats = scene_tools.resolve_i18n_beats(stage, scenario)
-                if beats:
-                    stage["beats"] = beats
+            # open_narrative 스테이지는 beats 필요 없음 (LLM이 즉흥 생성)
+            stage_type = (stage.get("type") or "scene").lower()
+            if stage_type != "open_narrative":
+                if stage.get("beats") is None and stage.get("beats_i18n"):
+                    beats = scene_tools.resolve_i18n_beats(stage, scenario)
+                    if beats:
+                        stage["beats"] = beats
 
-            handler = self._handlers.get(stage.get("type"), self._handlers["scene"])
+            handler = self._handlers.get(stage_type, self._handlers["scene"])
             result = handler.handle(state, stage, scenario)
 
             original_stage_tag = stage_tag
@@ -120,8 +125,15 @@ class ParentAgent:
                 or not has_dialogue_payload
             )
 
+            # open_narrative는 turn_count 기반 자동 전환
             turn_count = int(state.get("stage_turn", 0) or 0)
-            if stage_completed and turn_count >= 3:
+            narrative_turn_count = int(state.get("turn_count", 0) or 0)
+
+            if current_stage_type == "open_narrative" and narrative_turn_count >= 5:
+                auto_advance_now = True
+                log("parent", "⚡ Auto-advance via open_narrative turn threshold",
+                    stage_tag=original_stage_tag, turns=narrative_turn_count)
+            elif stage_completed and turn_count >= 3:
                 auto_advance_now = True
                 log("parent", "⚡ Auto-advance via turn threshold", stage_tag=original_stage_tag, turns=turn_count)
 
@@ -133,7 +145,8 @@ class ParentAgent:
                     log("parent", "⚡ Auto-advance via routed intent", stage_tag=original_stage_tag, next_stage=next_stage)
 
             if next_stage:
-                if current_stage_type in ("router", "free_intent") or auto_advance_now:
+                # open_narrative는 auto_advance_now일 때만 즉시 전환
+                if current_stage_type in ("router", "free_intent", "open_narrative") or auto_advance_now:
                     immediate_advance = True
 
             if immediate_advance:
@@ -203,11 +216,11 @@ class ParentAgent:
         if stage:
             # 다음 스테이지가 있으면 무조건 beats 갱신, 없으면 기존 beats 유지
             if next_stage and immediate_advance:
-                children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
+                children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario)
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
             else:
                 if not children_ctx.get("beats") and not children_ctx.get("fallback"):
-                    children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario, locale=self.locale)
+                    children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario)
                 if not children_ctx.get("speaker_pool"):
                     children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
             objective = stage.get("objective")

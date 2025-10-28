@@ -14,6 +14,7 @@ from .mission_stage import MissionHandler
 from .scene_stage import SceneHandler
 from .free_intent_stage import FreeIntentHandler
 from .router_stage import RouterStageHandler
+from .open_narrative_stage import OpenNarrativeHandler
 
 __all__ = [
     "StageResult",
@@ -21,4 +22,5 @@ __all__ = [
     "SceneHandler",
     "FreeIntentHandler",
     "RouterStageHandler",
+    "OpenNarrativeHandler",
 ]

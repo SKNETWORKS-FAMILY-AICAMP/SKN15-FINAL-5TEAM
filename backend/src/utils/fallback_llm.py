@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from src.utils.llm_client import get_llm_client
+from src.tools.scene_tools import get_stage_atmosphere
 
 from .logger import log
 
@@ -308,14 +309,23 @@ def generate_stage_fallback(
         if scenario_data:
             relationships = scenario_data.get("relationships", {})
 
-    atmosphere = stage.get("atmosphere") or scene.get("atmosphere") or "unknown"
+    # atmosphere를 정규화된 문자열로 가져오기
+    atmosphere = get_stage_atmosphere(stage) or get_stage_atmosphere(scene) or "unknown"
     stage_tag = stage.get("tag") or stage.get("id") or (state.get("current_stage") or "unknown")
+
+    # atmosphere를 사람이 읽기 좋은 형태로 변환
+    atmosphere_display = {
+        "urgent": "긴급/자동전이",
+        "tense": "긴장/전투",
+        "calm": "차분함",
+        "normal": "일반/자유발화"
+    }.get(atmosphere, atmosphere)
 
     system_prompt = (
         "너는 현재 시나리오 속 캐릭터야.\n"
         "사용자가 스토리와 관련 없는 말을 했지만, 직접 화를 내지 않고,\n"
         "상황에 맞는 말투로 다시 스토리로 유도해야 해.\n"
-        f"현재 분위기: {atmosphere}\n"
+        f"현재 분위기: {atmosphere_display}\n"
         f"참여 캐릭터: {', '.join(candidates)}\n"
         f"현재 스테이지: {stage_tag}\n"
         "tone과 감정은 각 캐릭터 json 데이터의 tone_profile을 참고.\n"
