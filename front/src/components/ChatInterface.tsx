@@ -1398,9 +1398,12 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           const isLatestAiMessage = message.id === latestAiMessageId;
           const isLatestUserMessage = message.id === latestUserMessageId;
           const glowColors = getCharacterGlowColor(message.characterId || characterId);
+          const isLatestMessage = isLatestAiMessage || isLatestUserMessage;
 
           return (
-            <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4 ${!message.isUser ? 'animate-slide-in-fade' : ''}`}>
+            <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4 ${!message.isUser ? 'animate-slide-in-fade' : ''} transition-all duration-500 ${
+              isLatestMessage ? `transform scale-[1.2] ${message.isUser ? 'origin-right' : 'origin-left'}` : ''
+            }`}>
               {!message.isUser && (
                 <div
                   className={`w-16 h-16 rounded-full mr-3 flex-shrink-0 transition-all duration-500`}
@@ -1419,10 +1422,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 </div>
               )}
               <div className={`flex flex-col transition-all duration-500 ${
-                message.isUser && isLatestUserMessage
-                  ? 'max-w-md lg:max-w-lg transform scale-[1.2]'
-                  : !message.isUser && isLatestAiMessage
-                  ? 'max-w-md lg:max-w-lg transform scale-[1.2]'
+                message.isUser
+                  ? 'max-w-md lg:max-w-lg'
                   : 'max-w-xs lg:max-w-md'
               }`}>
                 {/* 화자 표시 */}
