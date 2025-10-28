@@ -42,6 +42,9 @@ class StateTools:
                     turn INTEGER,
                     total_remaining_turns INTEGER,
                     flags TEXT,
+                    story_summary TEXT,
+                    turn_count INTEGER DEFAULT 0,
+                    world_state TEXT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -118,9 +121,12 @@ class StateTools:
 def ensure_scenario_state(state: dict, scenario_id: Optional[str] = None) -> Optional[dict]:
     """
     state에 시나리오 정보가 없으면 ScenesRepo를 통해 로드하고 저장한다.
+    Open Narrative 전용 필드도 초기화한다.
     """
     scenario = resolve_scenario(state)
     if isinstance(scenario, dict):
+        # Open Narrative 전용 필드 초기화
+        _initialize_open_narrative_fields(state)
         return scenario
 
     candidate_id = scenario_id or state.get("scenario_id")
@@ -137,8 +143,17 @@ def ensure_scenario_state(state: dict, scenario_id: Optional[str] = None) -> Opt
         if resolved_id:
             state["scenario_id"] = resolved_id
             state.setdefault("game", {})["scenario_id"] = resolved_id
+        # Open Narrative 전용 필드 초기화
+        _initialize_open_narrative_fields(state)
         return loaded
     return None
+
+
+def _initialize_open_narrative_fields(state: dict) -> None:
+    """Open Narrative 전용 상태 필드 초기화"""
+    state.setdefault("story_summary", "")
+    state.setdefault("turn_count", 0)
+    state.setdefault("world_state", {})
 
 
 def get_metadata(scenario: Optional[dict]) -> Dict[str, Any]:
@@ -266,7 +281,8 @@ def prepare_fallback(state: dict, stage: Optional[dict], reason: str = "urgent_a
     """
     if not isinstance(stage, dict):
         return None
-    if (stage.get("atmosphere") or "").lower() != "urgent":
+    atmosphere = scene_tools.get_stage_atmosphere(stage) or "normal"
+    if atmosphere != "urgent":
         return None
     if not state.get("user_input"):
         return None

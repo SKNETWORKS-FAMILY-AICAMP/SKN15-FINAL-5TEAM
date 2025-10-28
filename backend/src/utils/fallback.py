@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from .logger import log
 from .fallback_llm import generate_stage_fallback
+from src.tools.scene_tools import get_stage_atmosphere
 
 _FALLBACK_FILE = (
     Path(__file__).resolve().parents[3]
@@ -86,7 +87,7 @@ def trigger_fallback(
     """
     stage_tag = override_stage_tag or stage.get("tag") or stage.get("id") or "unknown"
     stage_type = stage.get("type", "scene")
-    atmosphere = (stage.get("atmosphere") or "").lower()
+    atmosphere = get_stage_atmosphere(stage) or "normal"
     temp_data = state.get("temp_data") or {}
     auto_resume = temp_data.get("auto_resume_active")
 

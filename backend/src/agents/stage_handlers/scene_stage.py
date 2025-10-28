@@ -37,6 +37,9 @@ class SceneHandler:
         speaker_pool = get_speaker_pool(stage, speaker_fallback)
         constraints = stage.get("constraints") or {}
 
+        # llm_beats 플래그 확인
+        llm_beats_enabled = stage.get("llm_beats", False)
+
         ctx = {
             "stage_tag": stage_tag,
             "stage_type": get_stage_type(stage),
@@ -44,6 +47,7 @@ class SceneHandler:
             "beats": beats,
             "constraints": constraints,
             "atmosphere": get_stage_atmosphere(stage),
+            "llm_beats": llm_beats_enabled,
         }
 
         stage_turn = int(state.get("stage_turn", 0) or 0)

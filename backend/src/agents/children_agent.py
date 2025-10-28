@@ -119,7 +119,10 @@ class ChildrenAgent:
             return merged
 
         # ⚠️ beats가 비어있으면 에러 반환 (LLM hallucination 방지)
-        if not beats:
+        # 단, llm_beats=true인 경우는 LLM이 beats를 실시간 생성
+        llm_beats_enabled = ctx.get("llm_beats", False)
+
+        if not beats and not llm_beats_enabled:
             fallback = (ctx.get("fallback") or {}).get("dialogues") or []
             if fallback:
                 log("children", "⚙️ Using provided fallback dialogues (no beats)")
@@ -149,11 +152,19 @@ class ChildrenAgent:
             return merge_with_prefetch(self._render_dialogues(state, normalized))
 
         # 🔍 디버깅: 받은 beats 확인
-        log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
-        for i, beat in enumerate(beats[:3]):  # 첫 3개만
-            if isinstance(beat, dict):
-                goal = beat.get("goal", "")[:60]
-                log("children", f"  Beat[{i}]: {goal}...")
+        if llm_beats_enabled:
+            log("children", f"🎭 LLM Beats mode enabled for stage={stage_tag}")
+            # llm_beats가 활성화되면 beats를 LLM이 즉흥 생성
+            if not beats:
+                # context를 기반으로 beats 생성 프롬프트를 만듦
+                beats = self._generate_beats_from_context(state, ctx)
+                log("children", f"✨ Generated {len(beats)} beats via LLM")
+        else:
+            log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
+            for i, beat in enumerate(beats[:3]):  # 첫 3개만
+                if isinstance(beat, dict):
+                    goal = beat.get("goal", "")[:60]
+                    log("children", f"  Beat[{i}]: {goal}...")
 
         # ✅ (추가) 시나리오 키 감지
         scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
@@ -341,6 +352,110 @@ class ChildrenAgent:
             else:
                 normalized.append({"speaker": "narr", "text": str(entry)})
         return normalized
+
+    def _generate_beats_from_context(
+        self,
+        state: Dict[str, Any],
+        ctx: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        llm_beats=true일 때 context를 기반으로 LLM이 beats를 실시간 생성
+        """
+        stage_tag = ctx.get("stage_tag", "unknown")
+        speaker_pool = ctx.get("speaker_pool", [])
+        latest_user_input = ctx.get("latest_user_input", "")
+        recent_dialogues = ctx.get("recent_dialogues", [])
+
+        # 시나리오 context 추출
+        scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
+        stage_context = ""
+
+        # 현재 스테이지의 context 찾기
+        stages = scenario_ref.get("stages", [])
+        for stage in stages:
+            if stage.get("tag") == stage_tag:
+                stage_context = stage.get("context", "")
+                break
+
+        if not stage_context:
+            stage_context = f"현재 {stage_tag} 장면이 진행 중입니다."
+
+        # LLM 프롬프트 구성
+        system_prompt = """당신은 귀멸의 칼날 시나리오의 beats 작가입니다.
+주어진 맥락과 유저 입력을 바탕으로 장면의 beats(상황 목표)를 생성하세요.
+
+Beats는 각 순간의 목표와 분위기를 설명하는 것이며, 대사가 아닙니다.
+각 beat는 다음 형식을 따릅니다:
+{
+  "goal": "이 순간에 일어나는 일이나 등장인물의 목표",
+  "speaker_hint": ["등장 가능한 인물"],
+  "fx": "효과음 (선택사항)"
+}
+
+출력은 JSON 배열로 반환하세요."""
+
+        recent_history_str = "\n".join(recent_dialogues[-4:]) if recent_dialogues else "(없음)"
+
+        user_prompt = f"""[현재 상황]
+{stage_context}
+
+[최근 대화]
+{recent_history_str}
+
+[유저 입력]
+{latest_user_input if latest_user_input else "(없음)"}
+
+[등장 가능한 인물]
+{", ".join(speaker_pool)}
+
+---
+
+위 정보를 바탕으로 3~5개의 beats를 생성하세요.
+각 beat는 장면의 흐름을 자연스럽게 이어가며, 유저 입력에 반응하도록 구성하세요.
+
+JSON 배열로 응답하세요:
+[
+  {{"goal": "...", "speaker_hint": [...], "fx": "..."}},
+  ...
+]"""
+
+        try:
+            response = self._llm.call_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.7,
+                max_tokens=1000,
+            )
+
+            if isinstance(response, list) and response:
+                log("children", f"✅ Generated {len(response)} beats via LLM")
+                return response
+            elif isinstance(response, dict) and response.get("beats"):
+                beats = response["beats"]
+                if isinstance(beats, list):
+                    return beats
+
+            log("children", "⚠️ LLM beats generation returned invalid format")
+            return self._create_fallback_beats(stage_context, speaker_pool)
+
+        except Exception as exc:
+            log("children", f"❌ LLM beats generation failed: {exc}")
+            return self._create_fallback_beats(stage_context, speaker_pool)
+
+    def _create_fallback_beats(self, context: str, speaker_pool: list) -> List[Dict[str, Any]]:
+        """LLM beats 생성 실패 시 기본 beats 반환"""
+        fallback_speaker = speaker_pool[0] if speaker_pool else "narr"
+
+        return [
+            {
+                "goal": context,
+                "speaker_hint": ["narr"],
+            },
+            {
+                "goal": "상황을 파악하고 다음 행동을 결정한다.",
+                "speaker_hint": [fallback_speaker],
+            },
+        ]
 
     def _extract_dialogue_from_goal(self, goal: str, speaker: str) -> str:
         """
