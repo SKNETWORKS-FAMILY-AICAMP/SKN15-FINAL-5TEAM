@@ -1186,7 +1186,7 @@
       }
     },
     "images": {
-      "mapping_pattern": "{scenario_id}_cutscenes.json",
+      "mapping_pattern": "backend/data/image_mappings/{scenario_id}_cutscenes.json",
       "llm_metadata": "backend/data/image_mappings/mugen_train_images.json"
     }
   }

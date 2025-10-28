@@ -4,6 +4,16 @@ from typing import Dict, List, Optional
 
 from src.core.graph_state import AgentState, Dialogue
 from src.utils.llm_client import get_llm_client
+from src.utils.config_loader import get_config_loader
+
+_PROMPTS = get_config_loader().get_prompts()
+_DIALOGUE_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("dialogue") or {})
+_DIALOGUE_VALIDATION_PROMPT = (_DIALOGUE_PROMPTS.get("validation") or "").strip()
+_DIALOGUE_CORRECTION_TEMPLATE = (_DIALOGUE_PROMPTS.get("correction_template") or "").strip()
+if not _DIALOGUE_VALIDATION_PROMPT:
+    raise ValueError("DialogueAgent validation prompt missing in configs/prompts.yaml (llm_prompts.dialogue.validation).")
+if not _DIALOGUE_CORRECTION_TEMPLATE:
+    raise ValueError("DialogueAgent correction_template missing in configs/prompts.yaml (llm_prompts.dialogue.correction_template).")
 
 # ============================================================
 # 🗣️ DialogueAgent — children_agent가 만든 대사를 검증·미세조정
@@ -141,15 +151,7 @@ class DialogueAgent:
     def _validate_with_llm(self, dialogue: Dialogue, state: AgentState) -> Optional[Dict]:
         """LLM을 이용한 대사 검증"""
         try:
-            system_prompt = """당신은 게임 대사의 품질을 검증하는 AI입니다.
-다음 기준으로 대사를 평가하세요:
-
-1. character_consistency (40%): 캐릭터 성격과 말투가 일관되는가?
-2. context_relevance (30%): 현재 게임 상황과 문맥에 적합한가?
-3. emotional_appropriateness (20%): 감정 표현이 자연스럽고 적절한가?
-4. game_rule_compliance (10%): 게임 규칙을 위반하지 않는가?
-
-각 기준을 0-100점으로 평가하고, 전체 점수가 70점 이상이면 합격입니다."""
+            system_prompt = _DIALOGUE_VALIDATION_PROMPT
 
             # 캐릭터 정보
             character_info = self._get_character_info(dialogue.speaker)
@@ -180,10 +182,19 @@ class DialogueAgent:
   "suggestions": "개선 제안"
 }}"""
 
+            temperature = self.llm_client.get_agent_setting(
+                "dialogue",
+                "validation_temperature",
+                self.llm_client.get_agent_setting("dialogue", "temperature", 0.2),
+            )
+            max_tokens = self.llm_client.get_agent_setting("dialogue", "validation_max_tokens", None)
+
             response = self.llm_client.call_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.2
+                temperature=temperature,
+                max_tokens=max_tokens,
+                agent="dialogue",
             )
 
             return response
@@ -260,15 +271,14 @@ class DialogueAgent:
 
         try:
             issues = validation_result.get("issues", [])
-            suggestions = validation_result.get("suggestions", "")
+            suggestions = validation_result.get("suggestions") or "대사를 상황에 맞게 다듬어 주세요."
 
-            system_prompt = f"""당신은 게임 캐릭터 '{dialogue.speaker}'입니다.
-다음 문제점을 해결하여 대사를 개선하세요:
-{chr(10).join(f'- {issue}' for issue in issues)}
-
-개선 제안: {suggestions}
-
-캐릭터 성격과 현재 상황에 맞게 자연스럽게 수정하세요."""
+            issues_block = "\n".join(f"- {issue}" for issue in issues) if issues else "- 자연스럽게 다듬어 주세요."
+            system_prompt = _DIALOGUE_CORRECTION_TEMPLATE.format(
+                speaker=dialogue.speaker,
+                issues_block=issues_block,
+                suggestions=suggestions,
+            )
 
             character_info = self._get_character_info(dialogue.speaker)
 
@@ -279,11 +289,19 @@ class DialogueAgent:
 
 수정된 대사만 출력하세요 (따옴표 없이):"""
 
+            correction_temperature = self.llm_client.get_agent_setting(
+                "dialogue",
+                "correction_temperature",
+                self.llm_client.get_agent_setting("dialogue", "temperature", 0.7),
+            )
+            correction_max_tokens = self.llm_client.get_agent_setting("dialogue", "correction_max_tokens", 100)
+
             corrected_content = self.llm_client.call(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.7,
-                max_tokens=100
+                temperature=correction_temperature,
+                max_tokens=correction_max_tokens,
+                agent="dialogue",
             )
 
             # 새 Dialogue 객체 생성

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
+from src.utils.config_loader import get_config_loader
 
 
 class StoryOrchestrator:
@@ -18,6 +19,14 @@ class StoryOrchestrator:
 
     def __init__(self):
         self._llm = get_llm_client()
+        config = get_config_loader()
+        prompts = config.get_prompts()
+        open_narrative_prompts = prompts.get("llm_prompts", {}).get("open_narrative", {})
+        self._system_prompt_template = open_narrative_prompts.get("system", "")
+        self._user_prompt_template = open_narrative_prompts.get("user", "")
+
+        if not self._system_prompt_template or not self._user_prompt_template:
+            raise ValueError("Open Narrative prompts missing in configs/prompts.yaml")
 
     def generate_narrative(
         self,
@@ -91,32 +100,7 @@ class StoryOrchestrator:
 
     def _build_system_prompt(self) -> str:
         """Open Narrative용 시스템 프롬프트"""
-        return """당신은 귀멸의 칼날 세계관의 서사 작가입니다.
-
-당신의 역할:
-1. 유저의 자유로운 입력을 받아 이야기를 즉흥적으로 전개합니다.
-2. 등장인물들의 대사와 행동을 생생하게 묘사합니다.
-3. 몰입감 있고 감정 중심의 서사를 만듭니다.
-4. narr(내레이션)를 통해 장면과 감각을 묘사합니다.
-
-규칙:
-- 유저 입력에 반응하되, 이야기의 흐름을 자연스럽게 이어갑니다.
-- 등장인물의 성격과 관계를 고려합니다.
-- 대사는 2~4개 정도로 적절히 구성합니다.
-- 내레이션(narr)으로 시작해 장면을 묘사하고, 캐릭터 대사로 이어갑니다.
-- 유저에게 다음 행동을 자연스럽게 유도합니다.
-
-출력 형식 (JSON):
-{
-  "dialogues": [
-    {"speaker": "narr", "text": "장면 묘사..."},
-    {"speaker": "tanjiro", "text": "대사..."}
-  ],
-  "state_update": {
-    "story_summary": "지금까지 일어난 일의 요약",
-    "important_event": "중요한 사건이나 변화"
-  }
-}"""
+        return self._system_prompt_template
 
     def _build_user_prompt(
         self,
@@ -129,6 +113,28 @@ class StoryOrchestrator:
         world_state: Dict[str, Any],
     ) -> str:
         """Open Narrative용 유저 프롬프트 생성"""
+        speakers_str = ", ".join(speaker_pool) if speaker_pool else "narr, tanjiro"
+
+        return self._user_prompt_template.format(
+            context=context,
+            story_summary=story_summary if story_summary else "(이야기 시작)",
+            recent_history=recent_history if recent_history else "(없음)",
+            user_input=user_input,
+            turn_count=f"{turn_count + 1}",
+            speaker_pool=speakers_str,
+        )
+
+    def _build_user_prompt_old_unused(
+        self,
+        context: str,
+        story_summary: str,
+        user_input: str,
+        speaker_pool: List[str],
+        turn_count: int,
+        recent_history: str,
+        world_state: Dict[str, Any],
+    ) -> str:
+        """DEPRECATED - Old hardcoded version kept for reference"""
         speakers_str = ", ".join(speaker_pool) if speaker_pool else "narr, tanjiro"
 
         prompt = f"""[현재 상황]
