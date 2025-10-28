@@ -1420,7 +1420,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
               )}
               <div className={`flex flex-col transition-all duration-500 ${
                 message.isUser && isLatestUserMessage
-                  ? 'max-w-md lg:max-w-lg transform scale-105'
+                  ? 'max-w-md lg:max-w-lg transform scale-[1.2]'
+                  : !message.isUser && isLatestAiMessage
+                  ? 'max-w-md lg:max-w-lg transform scale-[1.2]'
                   : 'max-w-xs lg:max-w-md'
               }`}>
                 {/* 화자 표시 */}
