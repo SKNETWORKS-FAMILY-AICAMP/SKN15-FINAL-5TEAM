@@ -53,6 +53,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const [affinityScores, setAffinityScores] = useState<Record<string, number>>({}); // 친밀도
   const [isTransitioning, setIsTransitioning] = useState(false); // 컷신 전환 효과
   const [isEnded, setIsEnded] = useState(false); // Phase 4: 시나리오 종료 여부
+  const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
+  const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
+  const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
+
+  // Skip 기능을 위한 ref
+  const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
+  const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
+  const shouldSkip = useRef(false); // Skip 플래그
 
   // 가장 최근의 AI 메시지 ID 계산 (몰입감 향상을 위한 스케일 효과)
   const latestAiMessageId = useMemo(() => {
@@ -60,6 +68,18 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       if (!msg.isUser && !msg.isSystemMessage) {
+        return msg.id;
+      }
+    }
+    return null;
+  }, [messages]);
+
+  // 가장 최근의 사용자 메시지 ID 계산 (입력 강조 효과)
+  const latestUserMessageId = useMemo(() => {
+    // 역순으로 탐색하여 가장 최근의 사용자 메시지 찾기
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.isUser) {
         return msg.id;
       }
     }
@@ -233,17 +253,71 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     };
   };
 
-  // 로딩 메시지 목록 (상황별로 다양하게)
+  // 캐릭터별 대사 생성 로딩 메시지 (각 캐릭터당 3개씩)
   const getRandomLoadingMessage = () => {
     const loadingMessages = [
-      '탄지로가 심각한 표정을 지으며 생각하고 있어요...',
-      '렌고쿠가 무언가를 결정하려 하고 있어요...',
-      '아카자가 주변을 살피고 있어요...',
-      '긴장감이 흐르고 있어요...',
-      '동료들이 상황을 파악하고 있어요...',
-      '잠시 후 대화가 이어집니다...',
+      // 탄지로 (3개) - 후각에 특화
+      '탄지로가 냄새를 맡는 중입니다...',
+      '탄지로가 상황의 냄새를 분석하고 있어요...',
+      '탄지로가 주변의 기운을 감지하고 있어요...',
+
+      // 아카자 (3개) - 투지/전투에 특화
+      '아카자가 투지를 감지하는 중입니다...',
+      '아카자가 상대의 강함을 측정하고 있어요...',
+      '아카자가 전투 의지를 불태우고 있어요...',
+
+      // 렌고쿠 (3개) - 열정/결의에 특화
+      '렌고쿠가 마음을 불태우고 있습니다...',
+      '렌고쿠가 굳은 결의를 다지고 있어요...',
+      '렌고쿠가 동료를 지키기 위해 고민하고 있어요...',
+
+      // 젠이츠 (3개) - 공포/용기에 특화
+      '젠이츠가 떨면서도 용기를 내고 있어요...',
+      '젠이츠가 위험을 감지하고 경계하고 있어요...',
+      '젠이츠가 번개같은 판단을 하려 하고 있어요...',
+
+      // 이노스케 (3개) - 야성/직감에 특화
+      '이노스케가 야생의 직감으로 상황을 파악하고 있어요...',
+      '이노스케가 돌격할 기회를 엿보고 있어요...',
+      '이노스케가 멧돼지처럼 코를 벌름거리며 냄새를 맡고 있어요...',
     ];
     return loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+  };
+
+  // INTRO 스테이지 판별 함수 (빠른 출력 적용용)
+  const isIntroStage = (stage?: string): boolean => {
+    if (!stage) return false;
+    const stageUpper = stage.toUpperCase();
+    // Backend constants의 INTRO_STAGE_TAGS와 동기화: "상현_삼_등장", "INTRO"
+    return stageUpper === 'INTRO' || stageUpper === '상현_삼_등장';
+  };
+
+  // 대화 내용 요약 생성 (엔딩 리워드용)
+  const generateConversationSummary = (): string => {
+    const userMessages = messages.filter(m => m.isUser);
+    const aiMessages = messages.filter(m => !m.isUser && !m.isSystemMessage);
+    const characterCounts: Record<string, number> = {};
+
+    aiMessages.forEach(m => {
+      const charId = m.characterId || 'unknown';
+      characterCounts[charId] = (characterCounts[charId] || 0) + 1;
+    });
+
+    const topCharacters = Object.entries(characterCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([charId]) => getCharacterName(charId));
+
+    const totalMessages = userMessages.length + aiMessages.length;
+
+    return `무한열차 시나리오를 클리어하셨습니다!\n\n` +
+           `총 대화 수: ${totalMessages}회\n` +
+           `사용자 입력: ${userMessages.length}회\n` +
+           `주요 대화 상대: ${topCharacters.join(', ')}\n\n` +
+           `당신은 동료들과 함께 위기를 극복하고,\n` +
+           `무한열차의 비밀을 밝혀냈습니다.\n\n` +
+           `지금까지의 여정을 기념하는\n` +
+           `특별한 이미지를 생성하고 있습니다...`;
   };
 
   // 음성 재생 함수
@@ -267,7 +341,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     scrollToBottom();
   }, [messages, isTyping]); // 메시지 변경 또는 타이핑 상태 변경 시 스크롤
 
-  // 타이핑 효과와 함께 메시지를 표시하는 함수 (50ms per character)
+  // 타이핑 효과와 함께 메시지를 표시하는 함수 (INTRO: 1ms, 일반: 10ms)
   const addMessageWithTypingEffect = async (message: Message): Promise<void> => {
     return new Promise((resolve) => {
       // 이 메시지에 배경 이미지 변경 요청이 있으면 먼저 처리
@@ -290,11 +364,29 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
 
-      // 타이핑 효과: TYPING_INTERVAL_MS마다 한 글자씩 추가
+      // INTRO 스테이지 판별하여 타이핑 속도 결정 (하드코딩에 가깝게 빠르게)
+      const typingSpeed = isIntroStage(currentStage) ? 1 : TYPING_INTERVAL_MS;
+      if (isIntroStage(currentStage)) {
+        console.log(`⚡ [INTRO] Fast typing enabled (${typingSpeed}ms) for stage: ${currentStage}`);
+      }
+
+      // 타이핑 효과: typingSpeed마다 한 글자씩 추가
       const chars = message.text.split('');
       let currentIndex = 0;
 
       const typingInterval = setInterval(() => {
+        // Skip 플래그 체크
+        if (shouldSkip.current) {
+          // 즉시 전체 텍스트 표시
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId ? { ...msg, text: message.text } : msg
+          ));
+          clearInterval(typingInterval);
+          typingIntervalRef.current = null;
+          resolve();
+          return;
+        }
+
         currentIndex++;
         const typedText = chars.slice(0, currentIndex).join('');
 
@@ -304,9 +396,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
         if (currentIndex >= chars.length) {
           clearInterval(typingInterval);
+          typingIntervalRef.current = null;
           resolve();
         }
-      }, TYPING_INTERVAL_MS);
+      }, typingSpeed);
+
+      // interval을 ref에 저장
+      typingIntervalRef.current = typingInterval;
     });
   };
 
@@ -325,6 +421,10 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
     // 🔥 플래그 리셋: 이전 요청에서 true로 남아있을 수 있음
     shouldCancelAutoRequest.current = false;
+    shouldSkip.current = false; // Skip 플래그 리셋
+
+    // 남은 메시지들을 ref에 저장 (Skip 기능용)
+    pendingMessagesRef.current = [...newMessages];
 
     isAddingMessages.current = true;
     setIsTyping(true);
@@ -341,6 +441,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
         console.log(`  → Message ${i + 1}/${newMessages.length}: ${newMessages[i].characterId} - ${newMessages[i].text.substring(0, 30)}...`);
 
+        // 남은 메시지 업데이트
+        pendingMessagesRef.current = newMessages.slice(i + 1);
+
         // 타이핑 효과로 메시지 표시
         await addMessageWithTypingEffect(newMessages[i]);
 
@@ -355,6 +458,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       // 🔥 에러가 발생해도 반드시 타이핑 상태를 해제
       setIsTyping(false);
       isAddingMessages.current = false;
+      pendingMessagesRef.current = []; // pending messages 초기화
+      shouldSkip.current = false; // Skip 플래그 리셋
     }
   };
 
@@ -389,12 +494,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       setLoadingMessage(null);
 
-      console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}`);
+      console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
 
-      // Update affinity_scores from response
+      // Update affinity_scores and current_stage from response
       // Note: background changes are now handled per-dialogue via imageIndex
       // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
       setAffinityScores(response.affinity_scores || {});
+      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
       // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
       const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
@@ -449,12 +555,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         // 세션 ID 저장
         setSessionId(response.session_id);
 
-        console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}`);
+        console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
 
-        // Update affinity_scores from response
+        // Update affinity_scores and current_stage from response
         // Note: background changes are now handled per-dialogue via imageIndex
         // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
         setAffinityScores(response.affinity_scores || {});
+        setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
         // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
         const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
@@ -729,6 +836,33 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   }, [characterId]);
   */
 
+  // Skip 버튼 핸들러 - 대화 출력 중 즉시 완료
+  const handleSkip = () => {
+    console.log('⏩ Skip button clicked');
+
+    // Skip 플래그 설정
+    shouldSkip.current = true;
+
+    // 현재 타이핑 interval이 있으면 즉시 완료 처리
+    if (typingIntervalRef.current) {
+      console.log('  → Stopping current typing animation');
+    }
+
+    // 남은 메시지들이 있으면 즉시 모두 표시
+    if (pendingMessagesRef.current.length > 0) {
+      console.log(`  → Adding ${pendingMessagesRef.current.length} pending messages immediately`);
+      const remainingMessages = [...pendingMessagesRef.current];
+      pendingMessagesRef.current = [];
+
+      // 남은 메시지들을 즉시 추가 (타이핑 효과 없이)
+      setMessages(prev => [...prev, ...remainingMessages]);
+
+      // 타이핑 상태 해제
+      setIsTyping(false);
+      isAddingMessages.current = false;
+    }
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
@@ -788,10 +922,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         setSessionId(response.session_id);
       }
 
-      // Update affinity_scores from response
+      // Update affinity_scores and current_stage from response
       // Note: background changes are now handled per-dialogue via imageIndex
       // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
       setAffinityScores(response.affinity_scores || {});
+      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
       // Add backend responses to messages sequentially (고유 ID 사용)
       const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
@@ -842,11 +977,18 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         pushSystemMessage(fallbackSystemMessage);
       }
 
-      // Check if chat has ended - Phase 4 개선
+      // Check if chat has ended - Phase 4 개선 + 엔딩 리워드
       if (response.is_ended) {
-        pushSystemMessage('🎬 시나리오가 종료되었습니다. 새로운 시나리오를 시작하려면 페이지를 새로고침 해주세요.');
+        pushSystemMessage('🎬 시나리오가 종료되었습니다.');
         setIsEnded(true); // Phase 4: 엔딩 상태 설정
         setBackgroundByIndex(21); // Phase 4: 엔딩 이미지 표시 (무한열차 마지막 이미지)
+
+        // 엔딩 리워드: 대화 요약 생성 및 모달 표시
+        setTimeout(() => {
+          const summary = generateConversationSummary();
+          setEndingSummary(summary);
+          setShowEndingReward(true);
+        }, 2000); // 2초 후 리워드 모달 표시
       }
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -1219,16 +1361,28 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
         {/* 메시지들 */}
         {messages.map((message) => {
-          // 시스템 메시지 렌더링
+          // 시스템 메시지 렌더링 (경고 메시지는 꺾쇄까마귀 + 붉은색)
           if (message.isSystemMessage) {
+            // 경고 메시지 판별 (오류, 경고, 제한 등의 키워드 포함 시)
+            const isWarning = /경고|오류|금지|제한|불가|실패|차단|거부/.test(message.text);
+
             return (
-              <div key={message.id} className="flex justify-center mb-4">
+              <div key={message.id} className="flex justify-center mb-4 animate-slide-in-fade">
                 <div className="max-w-lg">
-                  <div className="bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 border border-purple-200 rounded-xl px-4 py-3 shadow-sm">
-                    <p className="text-center text-sm text-gray-700 leading-relaxed italic">
+                  <div className={`rounded-xl px-4 py-3 shadow-lg border-2 ${
+                    isWarning
+                      ? 'bg-gradient-to-r from-red-50 via-red-100 to-red-50 border-red-300'
+                      : 'bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 border-purple-200'
+                  }`}>
+                    <p className={`text-center text-sm leading-relaxed font-medium ${
+                      isWarning ? 'text-red-700' : 'text-gray-700 italic'
+                    }`}>
+                      {isWarning && <span className="font-bold">⚠️ 꺾쇄까마귀: </span>}
                       {message.text}
                     </p>
-                    <div className="text-xs text-center text-gray-400 mt-1">
+                    <div className={`text-xs text-center mt-1 ${
+                      isWarning ? 'text-red-400' : 'text-gray-400'
+                    }`}>
                       {message.timestamp.toLocaleTimeString('ko-KR', {
                         hour: '2-digit',
                         minute: '2-digit'
@@ -1241,7 +1395,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           }
 
           // 일반 메시지 렌더링
-          const isLatestMessage = message.id === latestAiMessageId;
+          const isLatestAiMessage = message.id === latestAiMessageId;
+          const isLatestUserMessage = message.id === latestUserMessageId;
           const glowColors = getCharacterGlowColor(message.characterId || characterId);
 
           return (
@@ -1249,7 +1404,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
               {!message.isUser && (
                 <div
                   className={`w-16 h-16 rounded-full mr-3 flex-shrink-0 transition-all duration-500`}
-                  style={isLatestMessage ? {
+                  style={isLatestAiMessage ? {
                     boxShadow: `0 0 20px ${glowColors.shadow}, 0 0 40px ${glowColors.shadow.replace('0.6', '0.3')}, 0 0 60px ${glowColors.shadow.replace('0.6', '0.15')}`
                   } : {}}
                 >
@@ -1263,7 +1418,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   />
                 </div>
               )}
-              <div className="flex flex-col max-w-xs lg:max-w-md">
+              <div className={`flex flex-col transition-all duration-500 ${
+                message.isUser && isLatestUserMessage
+                  ? 'max-w-md lg:max-w-lg transform scale-105'
+                  : 'max-w-xs lg:max-w-md'
+              }`}>
                 {/* 화자 표시 */}
                 <div className={`text-xs mb-1 ${message.isUser ? 'text-right text-gray-500' : 'text-left text-gray-500'}`}>
                   {message.isUser ? '사용자' : getCharacterName(message.characterId || characterId)}
@@ -1273,12 +1432,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   <div
                     className={`px-4 py-3 rounded-2xl flex-1 transition-all duration-500 ${
                       message.isUser
-                        ? 'bg-purple-500 text-white rounded-br-md'
-                        : `text-gray-800 border border-gray-200 rounded-bl-md ${isLatestMessage ? '' : 'bg-white shadow-sm'}`
+                        ? `bg-purple-500 text-white rounded-br-md ${isLatestUserMessage ? 'shadow-lg' : ''}`
+                        : `text-gray-800 border border-gray-200 rounded-bl-md ${isLatestAiMessage ? '' : 'bg-white shadow-sm'}`
                     }`}
-                    style={!message.isUser && isLatestMessage ? {
+                    style={!message.isUser && isLatestAiMessage ? {
                       background: `${glowColors.bg}, white`,
                       boxShadow: `0 4px 20px ${glowColors.shadow.replace('0.6', '0.25')}, 0 8px 40px ${glowColors.shadow.replace('0.6', '0.15')}`
+                    } : message.isUser && isLatestUserMessage ? {
+                      boxShadow: '0 4px 30px rgba(147, 51, 234, 0.4), 0 8px 50px rgba(147, 51, 234, 0.2)'
                     } : {}}
                   >
                     <p className="text-sm leading-relaxed">{message.text}</p>
@@ -1365,6 +1526,18 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </button>
+            {/* ⏩ Skip 버튼 - 타이핑 중일 때만 표시 */}
+            {isTyping && !isAutoRequesting && (
+              <button
+                onClick={handleSkip}
+                className="p-2 hover:bg-blue-100 rounded-full transition-colors text-blue-500 hover:text-blue-600 animate-pulse"
+                title="대화 건너뛰기 (Skip)"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
             {/* 🔧 긴급 리셋 버튼 */}
             {(isLoading || isTyping || isAutoRequesting) && (
               <button
@@ -1490,6 +1663,62 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         onSelectFriend={handleFriendSelect}
         invitedCharacters={invitedCharacters}
       />
+
+      {/* 엔딩 리워드 모달 */}
+      {showEndingReward && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[10000]">
+          <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-3xl p-8 mx-4 max-w-2xl w-full shadow-2xl border-4 border-yellow-400">
+            {/* 헤더 */}
+            <div className="text-center mb-6">
+              <h2 className="text-3xl font-bold text-yellow-400 mb-2">🎉 시나리오 클리어! 🎉</h2>
+              <p className="text-purple-200 text-sm">숨겨진 엔딩 보상을 획득했습니다</p>
+            </div>
+
+            {/* 대화 요약 */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border-2 border-purple-400">
+              <h3 className="text-xl font-bold text-yellow-300 mb-4">📜 여정의 기록</h3>
+              <p className="text-white whitespace-pre-line leading-relaxed">
+                {endingSummary}
+              </p>
+            </div>
+
+            {/* 이미지 플레이스홀더 */}
+            <div className="bg-gradient-to-br from-purple-600/30 to-indigo-600/30 rounded-xl p-8 mb-6 border-2 border-purple-400 flex flex-col items-center justify-center min-h-[200px]">
+              <div className="animate-pulse mb-4">
+                <svg className="w-16 h-16 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-yellow-300 text-center font-medium">
+                🎨 귀멸의 칼날 스타일 이미지 생성 준비 중...
+              </p>
+              <p className="text-purple-300 text-sm text-center mt-2">
+                백엔드 이미지 생성 API 연동 예정
+              </p>
+            </div>
+
+            {/* 버튼 영역 */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEndingReward(false)}
+                className="flex-1 py-3 px-6 bg-white/20 text-white rounded-xl font-medium hover:bg-white/30 transition-all border-2 border-white/40"
+              >
+                계속 보기
+              </button>
+              <button
+                onClick={() => {
+                  setShowEndingReward(false);
+                  // 홈으로 돌아가기 (페이지 새로고침)
+                  window.location.reload();
+                }}
+                className="flex-1 py-3 px-6 bg-gradient-to-r from-yellow-400 to-yellow-500 text-purple-900 rounded-xl font-bold text-lg hover:from-yellow-300 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg"
+              >
+                🏠 홈으로
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* STT 음성 입력 모달 */}
       {showVoiceModal && (
