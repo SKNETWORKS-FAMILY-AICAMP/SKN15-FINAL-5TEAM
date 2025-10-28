@@ -62,26 +62,12 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
   const shouldSkip = useRef(false); // Skip 플래그
 
-  // 가장 최근의 AI 메시지 ID 계산 (몰입감 향상을 위한 스케일 효과)
-  const latestAiMessageId = useMemo(() => {
-    // 역순으로 탐색하여 가장 최근의 비사용자, 비시스템 메시지 찾기
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (!msg.isUser && !msg.isSystemMessage) {
-        return msg.id;
-      }
-    }
-    return null;
-  }, [messages]);
-
-  // 가장 최근의 사용자 메시지 ID 계산 (입력 강조 효과)
-  const latestUserMessageId = useMemo(() => {
-    // 역순으로 탐색하여 가장 최근의 사용자 메시지 찾기
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.isUser) {
-        return msg.id;
-      }
+  // 가장 최근 메시지 ID 계산 (모든 메시지 포함 - 시스템/나레이션/사용자/AI 모두)
+  // 단, 첫 메시지는 확대하지 않음 (겹침 방지)
+  const latestMessageId = useMemo(() => {
+    // 메시지가 2개 이상일 때만 마지막 메시지 확대
+    if (messages.length > 1) {
+      return messages[messages.length - 1].id;
     }
     return null;
   }, [messages]);
@@ -1360,14 +1346,24 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         )}
 
         {/* 메시지들 */}
-        {messages.map((message) => {
+        {messages.map((message, index) => {
+          const isLatestMessage = message.id === latestMessageId;
+          const isFirstMessage = index === 0;
+
           // 시스템 메시지 렌더링 (경고 메시지는 꺾쇄까마귀 + 붉은색)
           if (message.isSystemMessage) {
             // 경고 메시지 판별 (오류, 경고, 제한 등의 키워드 포함 시)
             const isWarning = /경고|오류|금지|제한|불가|실패|차단|거부/.test(message.text);
 
             return (
-              <div key={message.id} className="flex justify-center mb-4 animate-slide-in-fade">
+              <div key={message.id} className={`flex justify-center ${isFirstMessage ? 'mb-8' : 'mb-32'} animate-slide-in-fade`}>
+                <div
+                  style={{
+                    transform: isLatestMessage ? 'scale(1.35)' : 'scale(1)',
+                    transformOrigin: 'center',
+                    transition: 'transform 0.5s ease'
+                  }}
+                >
                 <div className="max-w-lg">
                   <div className={`rounded-xl px-4 py-3 shadow-lg border-2 ${
                     isWarning
@@ -1390,24 +1386,31 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
             );
           }
 
           // 일반 메시지 렌더링
-          const isLatestAiMessage = message.id === latestAiMessageId;
-          const isLatestUserMessage = message.id === latestUserMessageId;
           const glowColors = getCharacterGlowColor(message.characterId || characterId);
-          const isLatestMessage = isLatestAiMessage || isLatestUserMessage;
 
           return (
-            <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-6 ${!message.isUser ? 'animate-slide-in-fade' : ''} transition-all duration-500 ${
-              isLatestMessage ? `transform scale-125 ${message.isUser ? 'origin-right' : 'origin-left'}` : ''
-            }`}>
+            <div
+              key={message.id}
+              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isFirstMessage ? 'mb-8' : 'mb-32'} ${!message.isUser ? 'animate-slide-in-fade' : ''}`}
+            >
+              <div
+                style={{
+                  transform: isLatestMessage ? 'scale(1.35)' : 'scale(1)',
+                  transformOrigin: message.isUser ? 'right center' : 'left center',
+                  transition: 'transform 0.5s ease'
+                }}
+                className="flex"
+              >
               {!message.isUser && (
                 <div
                   className={`w-16 h-16 rounded-full mr-3 flex-shrink-0 transition-all duration-500`}
-                  style={isLatestAiMessage ? {
+                  style={isLatestMessage && !message.isUser ? {
                     boxShadow: `0 0 20px ${glowColors.shadow}, 0 0 40px ${glowColors.shadow.replace('0.6', '0.3')}, 0 0 60px ${glowColors.shadow.replace('0.6', '0.15')}`
                   } : {}}
                 >
@@ -1435,13 +1438,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   <div
                     className={`px-4 py-3 rounded-2xl flex-1 transition-all duration-500 ${
                       message.isUser
-                        ? `bg-purple-500 text-white rounded-br-md ${isLatestUserMessage ? 'shadow-lg' : ''}`
-                        : `text-gray-800 border border-gray-200 rounded-bl-md ${isLatestAiMessage ? '' : 'bg-white shadow-sm'}`
+                        ? `bg-purple-500 text-white rounded-br-md ${isLatestMessage ? 'shadow-lg' : ''}`
+                        : `text-gray-800 border border-gray-200 rounded-bl-md ${isLatestMessage ? '' : 'bg-white shadow-sm'}`
                     }`}
-                    style={!message.isUser && isLatestAiMessage ? {
+                    style={!message.isUser && isLatestMessage ? {
                       background: `${glowColors.bg}, white`,
                       boxShadow: `0 4px 20px ${glowColors.shadow.replace('0.6', '0.25')}, 0 8px 40px ${glowColors.shadow.replace('0.6', '0.15')}`
-                    } : message.isUser && isLatestUserMessage ? {
+                    } : message.isUser && isLatestMessage ? {
                       boxShadow: '0 4px 30px rgba(147, 51, 234, 0.4), 0 8px 50px rgba(147, 51, 234, 0.2)'
                     } : {}}
                   >
@@ -1477,6 +1480,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   </div>
                 </div>
               )}
+              </div> {/* scale wrapper 닫기 */}
             </div>
           );
         })}
