@@ -160,6 +160,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       'system': '/images/프로필_시스템.png',
       'narr': '/images/프로필_시스템.png',
       'ending': '/images/프로필_네즈코.png',
+      'user': '/images/프로필_탄지로.png',  // 플레이어 캐릭터 (렌고쿠의 제자)
     };
     return profileMap[charId.toLowerCase()] || '/images/프로필_탄지로.png';
   };
@@ -179,6 +180,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       'system': '시스템',
       'narr': '시스템', // 내레이터를 시스템으로 통합
       'ending': '네즈코',
+      'user': '츠구코',  // 플레이어 캐릭터 (렌고쿠의 제자 = 츠구코)
     };
     return nameMap[charId.toLowerCase()] || charId;
   };
@@ -230,6 +232,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         primary: '#8B5CF6',
         shadow: 'rgba(139, 92, 246, 0.6)',
         bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.03))'
+      },
+      'user': {
+        primary: '#F97316',  // 플레이어 캐릭터 (렌고쿠의 제자) - 오렌지 불꽃
+        shadow: 'rgba(249, 115, 22, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(249, 115, 22, 0.03))'
       },
     };
     return colorMap[charId.toLowerCase()] || {
@@ -1124,9 +1131,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           const newMessage: Message = {
             id: Date.now() + index,
             text: scene.text,
-            isUser: scene.characterId === 'user',
+            isUser: false,  // 시나리오 메시지는 모두 NPC (characterId='user'는 플레이어 캐릭터 NPC)
             timestamp: new Date(),
-            characterId: scene.characterId === 'user' ? undefined : scene.characterId,
+            characterId: scene.characterId,  // 'user' characterId도 NPC 캐릭터로 처리
             isSystemMessage: scene.isSystemMessage || false
           };
           setMessages(prev => [...prev, newMessage]);

@@ -167,11 +167,23 @@ class ChildrenAgent:
         # 🔍 디버깅: 받은 beats 확인
         if llm_beats_enabled:
             log("children", f"🎭 LLM Beats mode enabled for stage={stage_tag}")
-            # llm_beats가 활성화되면 beats를 LLM이 즉흥 생성
+
+            # 유저 입력이 있을 때만 beats를 LLM이 즉흥 생성
+            # 문제: 유저 입력 없이 자동으로 beats를 생성하면 캐릭터들이 알아서 대화 진행
+            # 해결: 유저 입력이 있을 때만 LLM beats 생성
             if not beats:
-                # context를 기반으로 beats 생성 프롬프트를 만듦
-                beats = self._generate_beats_from_context(state, ctx)
-                log("children", f"✨ Generated {len(beats)} beats via LLM")
+                latest_user_input = ctx.get("latest_user_input", "").strip()
+                user_input = state.get("user_input", "").strip()
+
+                # 유저 입력이 있을 때만 beats 생성
+                if latest_user_input or user_input:
+                    # context를 기반으로 beats 생성 프롬프트를 만듦
+                    beats = self._generate_beats_from_context(state, ctx)
+                    log("children", f"✨ Generated {len(beats)} beats via LLM based on user input")
+                else:
+                    # 유저 입력이 없으면 beats 생성하지 않음 (fallback으로 프롬프트 메시지 표시)
+                    log("children", "⚠️ LLM Beats mode: No user input detected, skipping auto-generation")
+                    # beats를 비워서 fallback 메시지 사용
         else:
             log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
             for i, beat in enumerate(beats[:3]):  # 첫 3개만
