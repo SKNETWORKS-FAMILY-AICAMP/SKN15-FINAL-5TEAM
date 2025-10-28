@@ -205,11 +205,16 @@ class ChildrenAgent:
         # 4️⃣ LLM 호출 시도
         # -----------------------------
         try:
+            # Phase 2 개선: yaml 기반 설정 + 개선된 기본값
             system_prompt = _CHILDREN_DIALOGUE_PROMPT
-            primary_temperature = self._llm.get_agent_setting("children", "temperature", 0.65)
-            retry_temperature = self._llm.get_agent_setting("children", "retry_temperature", primary_temperature)
+            primary_temperature = self._llm.get_agent_setting("children", "temperature", 0.8)  # 0.65 → 0.8
+            retry_temperature = self._llm.get_agent_setting("children", "retry_temperature", 1.0)  # 기본값 1.0
             max_tokens = self._llm.get_agent_setting("children", "max_tokens", 2000)
 
+            # Phase 2 개선: Temperature 상향 (0.65 → 0.8)
+            # - 더 창의적이고 다양한 대사 생성
+            # - 캐릭터별 개성이 더 잘 드러남
+            # - 예측 가능한 패턴 감소
             response = self._llm.call_json(
                 system_prompt=system_prompt,
                 user_prompt=llm_prompt,
@@ -226,6 +231,10 @@ class ChildrenAgent:
             # 1차 응답 검증
             if not isinstance(dialogue_payload, list) or not dialogue_payload:
                 log("children", "⚠️ LLM response invalid or empty → retrying once")
+                # Phase 2 개선: Retry Temperature 상향 (0.9 → 1.0)
+                # - 첫 시도 실패 시 완전히 다른 접근 시도
+                # - 동일한 실패 패턴 반복 방지
+                # - 최대 다양성으로 성공 가능성 향상
                 retry_resp = self._llm.call_json(
                     system_prompt=system_prompt,
                     user_prompt=llm_prompt,

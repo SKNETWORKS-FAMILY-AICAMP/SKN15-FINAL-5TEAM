@@ -77,12 +77,26 @@ def _maybe_llm_boost(state: dict, user_text: str, totals: Dict[str, float]) -> D
     if not use_llm:
         return totals
     try:
-        # quick ambiguity check: no flags or all below small threshold
-        if not totals or max(totals.values()) < 1.0:
+        # Phase 3 개선: LLM 활성화 조건 확장
+        # - 짧은 입력(10자 미만)이나 애매한 상황에서도 LLM 활용
+        # 조건: 1) totals가 비어있거나, 2) 최대값이 1.0 미만이거나, 3) 입력이 매우 짧을 때
+        should_use_llm = (
+            not totals or
+            max(totals.values()) < 1.0 or
+            len((user_text or "").strip()) < 10
+        )
+
+        if should_use_llm:
             from src.utils.llm_client import get_llm_client
 
             llm = get_llm_client()
-            userp = f"Text: {user_text}\nReturn: {{\"combat_coop\":0-1,...}}"
+
+            # Phase 3 개선: 현재 상황 정보 추가
+            # TODO: prompts.yaml의 intent_detector 프롬프트를 한국어로 개선하고 상황 정보 포함
+            current_stage = state.get("current_stage", "unknown")
+            scenario_context = f"현재 스테이지: {current_stage}"
+
+            userp = f"{scenario_context}\n\n사용자 입력: \"{user_text}\"\n\nReturn: {{\"combat_coop\":0-1,...}}"
             resp = llm.call_json(
                 system_prompt=_INTENT_SCORE_PROMPT,
                 user_prompt=userp,

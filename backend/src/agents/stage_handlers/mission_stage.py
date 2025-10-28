@@ -174,13 +174,42 @@ class MissionHandler:
         if self._all_missions_resolved(state):
             return self._handle_mission_complete(state, stage, stage_tag, speaker_pool)
 
-        # Fallback 처리
+        # Phase 3 개선: off-topic 시 명확한 가이드 제공
         user_input = state.get("user_input", "")
+        temp_data = state.setdefault("temp_data", {})
+
+        # Phase 3 개선: mission_intro_shown 플래그 유지 (fallback 후에도 인트로 반복 방지)
+        mission_intro_shown = temp_data.get("mission_intro_shown", False)
+
+        # Phase 3 개선: off-topic 가이드 메시지 생성
+        # - 사용자가 엉뚱한 말을 하면 탄지로가 명확히 안내
+        # - "이노스케", "젠이츠" 구체적 이름 제시로 혼란 제거
+        # - 부드러운 톤으로 게임 흐름 유지
+        guide_message = {
+            "speaker": "tanjiro",
+            "text": (
+                "지금은 동료를 찾는 데 집중해야 해. "
+                "이노스케나 젠이츠를 찾아서 함께 싸우자고 설득해야 해. "
+                "누구를 찾을지 말해줄래?"
+            )
+        }
+
+        # Fallback 처리
         fallback_payload = trigger_fallback(state, stage, reason="invalid_target")
-        beats_smell = self._to_dialogues(
-            get_i18n_entries(scenario, "beats_smell", locale=self.locale)
-        )
-        fallback_payload.setdefault("dialogues", []).extend(beats_smell)
+
+        # Phase 3 개선: Fallback 대화 구조 개선
+        # - 가이드 메시지를 fallback 대화에 추가
+        fallback_dialogues = [guide_message]
+
+        # 인트로를 아직 보지 않았다면 beats_smell도 추가
+        if not mission_intro_shown:
+            beats_smell = self._to_dialogues(
+                get_i18n_entries(scenario, "beats_smell", locale=self.locale)
+            )
+            fallback_dialogues.extend(beats_smell)
+            temp_data["mission_intro_shown"] = True
+
+        fallback_payload.setdefault("dialogues", []).extend(fallback_dialogues)
 
         children_ctx = self._build_children_context(
             stage_tag=stage_tag,
@@ -189,8 +218,14 @@ class MissionHandler:
             beats=[],
             fallback={"dialogues": fallback_payload.get("dialogues", [])}
         )
-        log("mission", f"[FALLBACK] ambiguous target on {stage_tag}", user_input=user_input)
-        return StageResult(children_ctx=children_ctx, fallback_payload=fallback_payload)
+        log("mission", f"[FALLBACK] ambiguous target on {stage_tag} - guiding user back", user_input=user_input)
+
+        # Phase 3 개선: stage_complete=False 명시하여 현재 미션 스테이지 유지
+        return StageResult(
+            children_ctx=children_ctx,
+            fallback_payload=fallback_payload,
+            stage_complete=False  # 미션이 완료되지 않았으므로 현재 스테이지 유지
+        )
 
     def _handle_mission_complete(
         self,

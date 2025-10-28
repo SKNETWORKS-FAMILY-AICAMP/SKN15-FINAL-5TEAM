@@ -736,7 +736,12 @@
         "akaza",
         "narr"
       ],
-      "atmosphere": "urgent"
+      "atmosphere": "urgent",
+      "constraints": {
+        "min_turns": 1,
+        "max_turns": 1,
+        "auto_advance": true
+      }
     },
     {
       "tag": "RECRUIT",
@@ -773,7 +778,12 @@
         "akaza",
         "narr"
       ],
-      "atmosphere": "urgent"
+      "atmosphere": "urgent",
+      "constraints": {
+        "min_turns": 1,
+        "max_turns": 1,
+        "auto_advance": true
+      }
     },
     {
       "tag": "RETURN_TO_FRONT",
@@ -993,7 +1003,7 @@
       }
     },
     "images": {
-      "mapping_pattern": "{scenario_id}_cutscenes.json",
+      "mapping_pattern": "backend/data/image_mappings/{scenario_id}_cutscenes.json",
       "llm_metadata": "backend/data/image_mappings/mugen_train_images.json"
     }
   }

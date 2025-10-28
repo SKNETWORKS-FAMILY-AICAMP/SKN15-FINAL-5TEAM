@@ -23,7 +23,7 @@ interface ChatInterfaceProps {
   characterId?: string;
 }
 
-const TYPING_INTERVAL_MS = 60; // 타이핑 애니메이션 속도 (값이 클수록 느려짐)
+const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
 
 const SCENARIO_ID_MAP: Record<string, string> = {
   train: 'cutscene5_llm_driven',
@@ -52,6 +52,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const isAddingMessages = useRef(false); // 메시지 추가 중 플래그 (중복 방지)
   const [affinityScores, setAffinityScores] = useState<Record<string, number>>({}); // 친밀도
   const [isTransitioning, setIsTransitioning] = useState(false); // 컷신 전환 효과
+  const [isEnded, setIsEnded] = useState(false); // Phase 4: 시나리오 종료 여부
 
   // 가장 최근의 AI 메시지 ID 계산 (몰입감 향상을 위한 스케일 효과)
   const latestAiMessageId = useMemo(() => {
@@ -343,9 +344,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         // 타이핑 효과로 메시지 표시
         await addMessageWithTypingEffect(newMessages[i]);
 
-        // 마지막 메시지가 아니면 800ms 대기 (빠른 흐름)
+        // 마지막 메시지가 아니면 50ms 대기 (빠른 흐름) - Phase 1 개선: 800ms → 50ms (16배 빠르게)
         if (i < newMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 800)); // 0.8 seconds
+          await new Promise(resolve => setTimeout(resolve, 50)); // 0.05 seconds
         }
       }
 
@@ -841,9 +842,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         pushSystemMessage(fallbackSystemMessage);
       }
 
-      // Check if chat has ended
+      // Check if chat has ended - Phase 4 개선
       if (response.is_ended) {
         pushSystemMessage('🎬 시나리오가 종료되었습니다. 새로운 시나리오를 시작하려면 페이지를 새로고침 해주세요.');
+        setIsEnded(true); // Phase 4: 엔딩 상태 설정
+        setBackgroundByIndex(21); // Phase 4: 엔딩 이미지 표시 (무한열차 마지막 이미지)
       }
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -1426,8 +1429,8 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                     shouldCancelAutoRequest.current = true;
                   }
                 }}
-                placeholder={isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요..."}
-                disabled={isLoading || isTyping || isAutoRequesting}
+                placeholder={isEnded ? "시나리오가 종료되었습니다" : (isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요...")}
+                disabled={isLoading || isTyping || isAutoRequesting || isEnded}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
@@ -1464,7 +1467,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   sendMessage(inputMessage);
                 }}
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting}
+                disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting || isEnded}
               >
                 {isLoading ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500"></div>
