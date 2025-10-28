@@ -78,7 +78,9 @@ def detect_intent_with_llm(
         response = client.call_json(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.1,
+            temperature=client.get_agent_setting("intent_handler", "temperature", 0.1),
+            max_tokens=client.get_agent_setting("intent_handler", "max_tokens", None),
+            agent="intent_handler",
         )
     except Exception as exc:
         print(f"[INTENT_HANDLER] LLM failed: {exc}")

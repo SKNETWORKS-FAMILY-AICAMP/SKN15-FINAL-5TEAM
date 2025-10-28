@@ -19,6 +19,13 @@ from src.tools.scene_tools import (
 from src.utils.fallback import trigger_fallback
 from src.utils.logger import log
 from src.utils.text_matcher import detect_mission_target
+from src.utils.config_loader import get_config_loader
+
+_PROMPTS = get_config_loader().get_prompts()
+_MISSION_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("mission") or {})
+_RECRUITMENT_PROMPT = (_MISSION_PROMPTS.get("recruitment_judge") or "").strip()
+if not _RECRUITMENT_PROMPT:
+    raise ValueError("MissionHandler recruitment_judge prompt missing in configs/prompts.yaml (llm_prompts.mission.recruitment_judge).")
 from . import StageResult
 
 
@@ -634,10 +641,7 @@ class MissionHandler:
         client = self._llm or get_llm_client()
         user_text = state.get("user_input", "")
 
-        system_prompt = (
-            "You are a mission adjudicator for a Demon Slayer interactive story. "
-            "Return only True or False to indicate whether the recruitment attempt succeeded."
-        )
+        system_prompt = _RECRUITMENT_PROMPT
         user_prompt = f"""
 현재 캐릭터는 '{target}'을 설득하려고 한다.
 
@@ -651,12 +655,24 @@ class MissionHandler:
 성공이면 True, 실패면 False 만 출력해.
 """
         try:
-            result = client.call(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=0,
-                max_tokens=5,
-            )
+            get_setting = getattr(client, "get_agent_setting", None)
+            if callable(get_setting):
+                temperature = get_setting("mission", "temperature", 0.0)
+                max_tokens = get_setting("mission", "max_tokens", 5)
+            else:
+                temperature = 0.0
+                max_tokens = 5
+
+            call_kwargs = {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if callable(get_setting):
+                call_kwargs["agent"] = "mission"
+
+            result = client.call(**call_kwargs)
             decision = "true" in (result or "").lower()
             log("mission", f"[LLM DECISION] target={target} → {'SUCCESS' if decision else 'FAIL'}")
             return decision

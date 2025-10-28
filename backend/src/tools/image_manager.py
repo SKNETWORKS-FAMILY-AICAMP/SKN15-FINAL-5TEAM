@@ -13,6 +13,13 @@ import json
 import os
 from typing import Dict, Any, List, Optional, Union
 from src.utils.llm_client import LLMClient
+from src.utils.config_loader import get_config_loader
+
+_PROMPTS = get_config_loader().get_prompts()
+_IMAGE_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("image_manager") or {})
+_IMAGE_SELECTION_PROMPT = (_IMAGE_PROMPTS.get("selection") or "").strip()
+if not _IMAGE_SELECTION_PROMPT:
+    raise ValueError("ImageManager selection prompt missing in configs/prompts.yaml (llm_prompts.image_manager.selection).")
 
 
 class ImageManager:
@@ -256,10 +263,8 @@ class ImageManager:
     def _init_llm_client(self):
         """LLM 클라이언트 초기화 (이미지 선택 전용 모델)"""
         try:
-            # 환경변수에서 이미지 선택 전용 모델 가져오기
-            image_model = os.getenv("IMAGE_SELECTOR_MODEL", "gpt-3.5-turbo")
-            self.llm_client = LLMClient(model=image_model)
-            print(f"✅ LLM client initialized for image selection: {image_model}")
+            self.llm_client = LLMClient()
+            print(f"✅ LLM client initialized for image selection: {self.llm_client.model}")
         except Exception as e:
             print(f"⚠️ Failed to initialize LLM client: {e}")
             self.use_llm = False
@@ -380,19 +385,6 @@ class ImageManager:
             event_flags = state.get('event_flags', [])
             flags_text = ", ".join(event_flags) if event_flags else "없음"
 
-            # LLM 프롬프트 생성
-            system_prompt = """당신은 애니메이션 장면 분석 전문가입니다.
-주어진 대화 내용을 분석하여 가장 어울리는 배경 이미지를 선택하세요.
-
-선택 기준:
-1. 대화에 **실제로 등장한** 캐릭터와 사건만 고려
-2. 대화의 분위기와 감정
-3. 현재 스토리 진행 상황
-4. 중요한 사건이나 전환점
-
-⚠️ 중요: 대화에 명시적으로 등장하지 않은 캐릭터나 사건의 이미지는 절대 선택하지 마세요.
-예: 아카자가 대화에 나타나지 않았다면 아카자 관련 이미지는 선택 불가"""
-
             user_prompt = f"""=== 최근 대화 ({len(recent_dialogues)}개) ===
 {dialogue_text}
 
@@ -418,10 +410,11 @@ JSON 형식으로 응답하세요:
 
             # LLM 호출
             response = self.llm_client.call_json(
-                system_prompt=system_prompt,
+                system_prompt=_IMAGE_SELECTION_PROMPT,
                 user_prompt=user_prompt,
-                temperature=0.3,
-                max_tokens=200
+                temperature=self.llm_client.get_agent_setting("image_manager", "temperature", 0.3),
+                max_tokens=self.llm_client.get_agent_setting("image_manager", "max_tokens", 200),
+                agent="image_manager",
             )
 
             # 응답 파싱

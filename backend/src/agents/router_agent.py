@@ -9,6 +9,13 @@ from src.utils.llm_client import LLMClient, get_llm_client
 from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
+from src.utils.config_loader import get_config_loader
+
+_PROMPTS = get_config_loader().get_prompts()
+_ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
+_ROUTER_TOPIC_PROMPT = (_ROUTER_PROMPTS.get("topic_classifier") or "").strip()
+if not _ROUTER_TOPIC_PROMPT:
+    raise ValueError("RouterAgent topic_classifier prompt missing in configs/prompts.yaml (llm_prompts.router.topic_classifier).")
 
 # ============================================================
 # 🎯 RouterAgent — 사용자의 발화가 시나리오 관련(on_topic)인지 아닌지(off_topic) 분류
@@ -146,14 +153,14 @@ JSON 형태로만 응답하십시오:
 """
 
         try:
+            temperature = self._llm_client.get_agent_setting("router", "temperature", 0.0)
+            max_tokens = self._llm_client.get_agent_setting("router", "max_tokens", 200)
             response = self._llm_client.call_json(
-                system_prompt=(
-                    "너는 인터랙티브 이야기의 RouterAgent다. "
-                    "사용자 발화가 시나리오 진행과 관련있는지(on_topic)만 판단하고 JSON으로만 답하라."
-                ),
+                system_prompt=_ROUTER_TOPIC_PROMPT,
                 user_prompt=user_prompt,
-                temperature=0.0,
-                max_tokens=200,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                agent="router",
             )
         except Exception as exc:
             log("router", "LLM topic classification failed", error=str(exc))
