@@ -2,18 +2,18 @@
   "default_image": "무한열차.jpeg",
   "mappings": [
     {
-      "stage": "상현_삼_등장",
+      "stage": "INTRO",
       "turn": [0, 999],
       "dialogue_count": [0, 18],
       "image": "cutscene_01_derail.png",
-      "description": "무한열차 탈선 - 혼란스러운 상황 (상현 삼 등장 전)"
+      "description": "무한열차 탈선 - 혼란스러운 상황 (INTRO 초중반)"
     },
     {
-      "stage": "상현_삼_등장",
+      "stage": "INTRO",
       "turn": [0, 999],
       "dialogue_count": [19, 999],
       "image": "cutscene_02_battle_begins.png",
-      "description": "아카자 등장 - 전투 시작 (상현 삼 등장 후반)"
+      "description": "아카자 등장 - 전투 시작 (INTRO 후반)"
     },
     {
       "stage": "STAGE1",

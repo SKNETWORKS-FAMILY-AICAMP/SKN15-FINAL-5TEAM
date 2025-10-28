@@ -1,27 +1,13 @@
 from __future__ import annotations
 import json
-import os
-import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-# -------------------------------
-# ✅ Dynamic path fix (서버/로컬 둘 다 동작)
-# -------------------------------
-BASE_DIR = Path(__file__).resolve().parents[2]  # backend/src → backend
-SRC_DIR = BASE_DIR / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.append(str(SRC_DIR))
+# Logging import aligned with remake branch
+from src.utils.logger import log
 
-# -------------------------------
-# ✅ 안전한 logger import
-# -------------------------------
-try:
-    from src.utils import log  # 정상 경로
-except Exception:
-    # fallback: 로컬 실행 시 상대 import
-    sys.path.append(str(BASE_DIR / "src" / "utils"))
-    from logger import log
+# Base directory for scenario files (backend/)
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 class ScenesRepo:
@@ -29,7 +15,9 @@ class ScenesRepo:
 
     def __init__(self, base_dir: Optional[str] = None):
         # 기본 시나리오 경로 지정
-        self.base_dir = Path(base_dir or BASE_DIR / "data" / "scenarios")
+        self.base_dir = Path(
+            base_dir or BASE_DIR / "data" / "scenarios"
+        )
         self._cache: Dict[str, Dict[str, Any]] = {}
 
     def load(self, scenario_id: str) -> Optional[Dict[str, Any]]:
@@ -52,19 +40,3 @@ class ScenesRepo:
         except Exception as e:
             log("scenes_repo", f"⚠️ Failed to load scenario: {e}")
             return None
-
-    def list_scenarios(self) -> Dict[str, Path]:
-        """사용 가능한 시나리오 파일 목록 반환 (id → 경로)."""
-        scenarios: Dict[str, Path] = {}
-        for path in sorted(self.base_dir.glob("*.json")):
-            scenarios[path.stem] = path
-        return scenarios
-
-    def load_default(self) -> Optional[Dict[str, Any]]:
-        """가장 먼저 발견되는 시나리오를 기본값으로 로드."""
-        scenarios = self.list_scenarios()
-        if not scenarios:
-            log("scenes_repo", "❌ No scenario files found")
-            return None
-        first_id = next(iter(scenarios))
-        return self.load(first_id)
