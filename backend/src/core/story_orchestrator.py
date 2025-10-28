@@ -124,60 +124,6 @@ class StoryOrchestrator:
             speaker_pool=speakers_str,
         )
 
-    def _build_user_prompt_old_unused(
-        self,
-        context: str,
-        story_summary: str,
-        user_input: str,
-        speaker_pool: List[str],
-        turn_count: int,
-        recent_history: str,
-        world_state: Dict[str, Any],
-    ) -> str:
-        """DEPRECATED - Old hardcoded version kept for reference"""
-        speakers_str = ", ".join(speaker_pool) if speaker_pool else "narr, tanjiro"
-
-        prompt = f"""[현재 상황]
-{context}
-
-[지금까지의 이야기]
-{story_summary if story_summary else "(이야기 시작)"}
-
-[최근 대화]
-{recent_history if recent_history else "(없음)"}
-
-[유저 입력]
-{user_input}
-
-[현재 턴]
-{turn_count + 1}턴째
-
-[등장 가능한 인물]
-{speakers_str}
-
----
-
-위 정보를 바탕으로 다음을 수행하세요:
-
-1. 유저의 입력({user_input})에 반응하는 자연스러운 대사와 장면을 생성하세요.
-2. 이야기가 앞으로 전개되도록 사건을 진행하세요.
-3. 캐릭터의 감정과 행동을 생생하게 묘사하세요.
-4. narr(내레이션)로 시작해 분위기를 잡고, 등장인물의 대사로 이어가세요.
-5. state_update에는 지금까지 일어난 일의 간단한 요약을 포함하세요.
-
-JSON 형식으로 응답하세요:
-{{
-  "dialogues": [
-    {{"speaker": "narr", "text": "..."}},
-    {{"speaker": "character_name", "text": "..."}}
-  ],
-  "state_update": {{
-    "story_summary": "지금까지 일어난 일 요약"
-  }}
-}}"""
-
-        return prompt
-
     def _extract_recent_history(self, state: Dict[str, Any], limit: int = 4) -> str:
         """최근 대화 히스토리를 문자열로 추출"""
         history_lines = []
