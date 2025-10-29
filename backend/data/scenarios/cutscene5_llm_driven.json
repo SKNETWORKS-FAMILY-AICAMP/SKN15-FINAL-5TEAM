@@ -33,7 +33,7 @@
         },
         {
           "goal": "{user}가 긴장한 채로 탄지로 일행에게 인사한다.",
-          "speaker_hint": ["user"],
+          "speaker_hint": ["narr"],
           "fx": "respectful_bow"
         },
         {
@@ -150,7 +150,7 @@
         },
         {
           "goal": "{user}와 탄지로가 동시에 검을 휘두른다. 물의 호흡과 불의 호흡이 하나가 되어 엔무의 목을 관통한다.",
-          "speaker_hint": ["tanjiro", "user"],
+          "speaker_hint": ["tanjiro", "narr"],
           "fx": "dual_slash|water_fire_fusion|blade_pierce"
         },
         {
@@ -679,7 +679,7 @@
         {
           "goal": "그 순간, 당신의 검이 불을 일으키며 아카자의 주먹을 막아낸다. 불꽃이 렌고쿠의 화염과 뒤섞여 두 개의 불길이 하나로 합쳐진다.",
           "speaker_hint": [
-            "user"
+            "narr"
           ],
           "fx": "flame_merge|flame_roar"
         },
@@ -728,7 +728,7 @@
         {
           "goal": "{user}가 불의 호흡 제십일형 승천염화를 펼쳐 두 불꽃이 용처럼 솟아올라 아카자를 집어삼킨다.",
           "speaker_hint": [
-            "user"
+            "narr"
           ],
           "fx": "flame_explosion|pulse_boom"
         },
@@ -836,7 +836,7 @@
     {
       "tag": "TRAIN_PRELUDE",
       "type": "open_narrative",
-      "context": "렌고쿠와 {user}는 무한열차 실종 사건을 조사하기 위해 먼저 탑승한다. 차 안은 이상할 정도로 조용하며, 승객들의 얼굴엔 불안이 깃들어 있다. 렌고쿠는 제자인 {user}에게 조사 방법을 물으며 관찰력을 시험한다.",
+      "context": "렌고쿠와 {user}는 무한열차 실종 사건을 조사하기 위해 먼저 탑승한다. {user}에게 무한열차에서 사람들이 실종되고 있으므로 조사해봐야한다고 개요를 설명한다.",
       "speaker_pool": ["rengoku", "narr"],
       "atmosphere": 3,
       "max_turns": 3,
@@ -856,7 +856,7 @@
       "type": "scene",
       "context": "탄지로가 히노카미 카구라에 대해 묻자, 렌고쿠는 불의 호흡과의 관계를 설명한다. 그는 {user}를 가리키며 '내 제자이자, 불의 뜻을 잇는 자'라고 소개한다.",
       "beats_i18n": "beats_rengoku_dialogue",
-      "speaker_pool": ["rengoku", "tanjiro", "zenitsu", "inosuke", "user", "narr"],
+      "speaker_pool": ["rengoku", "tanjiro", "zenitsu", "inosuke", "narr"],
       "atmosphere": 3,
       "next": "ENMU_APPEAR"
     },
