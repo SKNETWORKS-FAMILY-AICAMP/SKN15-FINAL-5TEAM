@@ -20,7 +20,7 @@ from src.tools.scene_tools import (
     get_stage_type,
     get_speaker_pool,
 )
-from src.utils.fallback import trigger_fallback
+from src.tools.fallback_tools import trigger_fallback
 from src.utils.logger import log
 from src.utils.text_matcher import detect_mission_target
 from src.utils.config_loader import get_config_loader
