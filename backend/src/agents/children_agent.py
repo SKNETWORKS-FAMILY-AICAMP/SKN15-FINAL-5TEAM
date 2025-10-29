@@ -101,6 +101,78 @@ class ChildrenAgent:
             result = result.replace(token, value)
         return result
 
+    def _is_player_speaker(self, speaker: str) -> bool:
+        """
+        주어진 speaker가 플레이어/유저 이름인지 확인
+
+        금지된 speaker 이름:
+        - "user", "player", "you", "당신", "유저", "플레이어"
+
+        Note: state가 필요한 동적 이름(player_name, user_name)은 여기서 체크 불가
+        """
+        if not speaker:
+            return False
+
+        speaker_lower = speaker.lower().strip()
+
+        # 고정된 금지 이름 목록
+        prohibited = {
+            "user", "player", "you", "당신", "유저", "플레이어",
+            "츠구코",  # 기본 플레이어 이름
+        }
+
+        return speaker_lower in prohibited
+
+    def _remove_player_speakers(self, state: Dict[str, Any], response_text: str) -> str:
+        """
+        LLM 응답에서 플레이어/유저 speaker를 제거하고 narr로 변환
+
+        금지된 speaker 이름:
+        - "user", "player", "you", "당신", "유저", "플레이어"
+        - state의 player_name (예: "츠구코")
+        - state의 user_name
+
+        예시:
+        {"speaker": "user", "text": "..."} → {"speaker": "narr", "text": "..."}
+        {"speaker": "츠구코", "text": "..."} → {"speaker": "narr", "text": "..."}
+        """
+        import re
+
+        # 금지된 speaker 이름 목록
+        prohibited_names = {
+            "user", "player", "you", "당신", "유저", "플레이어",
+            state.get("player_name", "").lower(),
+            state.get("user_name", "").lower(),
+        }
+        # 빈 문자열 제거
+        prohibited_names.discard("")
+
+        if not prohibited_names:
+            return response_text
+
+        # 각 금지된 이름에 대해 검사 및 교체
+        for name in prohibited_names:
+            if not name:
+                continue
+
+            # JSON 내 "speaker": "name" 패턴 찾기 (다양한 형태 지원)
+            patterns = [
+                f'"speaker"\\s*:\\s*"{name}"',
+                f'"speaker"\\s*:\\s*\'{name}\'',
+            ]
+
+            for pattern in patterns:
+                if re.search(pattern, response_text, flags=re.IGNORECASE):
+                    log("children", f"❌ Removing invalid speaker '{name}' from LLM response")
+                    response_text = re.sub(
+                        pattern,
+                        '"speaker": "narr"',
+                        response_text,
+                        flags=re.IGNORECASE
+                    )
+
+        return response_text
+
     # ============================================================
     # 💬 대사 생성
     # ============================================================
@@ -253,6 +325,11 @@ class ChildrenAgent:
             )
             log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:500]}")
 
+            # 🛑 플레이어 speaker 제거 (후처리)
+            response_text = json.dumps(response, ensure_ascii=False)
+            response_text = self._remove_player_speakers(state, response_text)
+            response = json.loads(response_text)
+
             dialogue_payload = None
             if isinstance(response, dict):
                 dialogue_payload = response.get("dialogues")
@@ -272,6 +349,11 @@ class ChildrenAgent:
                     agent="children",
                 )
                 log("children", f"LLM retry response: {json.dumps(retry_resp, ensure_ascii=False)[:500]}")
+
+                # 🛑 플레이어 speaker 제거 (후처리)
+                retry_text = json.dumps(retry_resp, ensure_ascii=False)
+                retry_text = self._remove_player_speakers(state, retry_text)
+                retry_resp = json.loads(retry_text)
 
                 if isinstance(retry_resp, dict):
                     dialogue_payload = retry_resp.get("dialogues")
@@ -347,6 +429,9 @@ class ChildrenAgent:
         return (text or "").strip().lower()
 
     def _normalize_dialogues(self, entries: List[Any]) -> List[Dict[str, Any]]:
+        """
+        대화 항목을 정규화하고 플레이어 speaker를 필터링
+        """
         normalized: List[Dict[str, Any]] = []
         for entry in entries:
             if isinstance(entry, dict):
@@ -366,9 +451,16 @@ class ChildrenAgent:
                 if not entry.get("text") and text:
                     text = self._extract_dialogue_from_goal(text, speaker or "narr")
 
+                # 🛑 플레이어 speaker 필터링 (normalize 단계에서도 체크)
+                # JSON 필터를 통과했더라도 beats/fallback에서 올 수 있음
+                final_speaker = speaker or "narr"
+                if self._is_player_speaker(final_speaker):
+                    log("children", f"❌ Filtering player speaker in normalize: '{final_speaker}' → 'narr'")
+                    final_speaker = "narr"
+
                 normalized.append(
                     {
-                        "speaker": (speaker or "narr"),
+                        "speaker": final_speaker,
                         "text": text or json.dumps(entry, ensure_ascii=False),
                         "fx": entry.get("fx"),
                     }

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import time
 import random
+import re
 from typing import Dict, Any, Optional, List
 
 from src.utils.llm_client import get_llm_client
@@ -317,6 +318,10 @@ class FallbackManager:
 
             # ✅ LLM 호출
             response_text = self._llm.call(system_prompt=sys, user_prompt=usr, temperature=temp, max_tokens=tokens)
+
+            # 🛑 플레이어 대사 금지 (강화)
+            response_text = self._remove_player_speakers(state, response_text)
+
             cleaned_text = response_text.strip() or "…"
 
             return {"speaker": char, "text": cleaned_text}
@@ -391,6 +396,50 @@ class FallbackManager:
             return "\n관계:\n" + "\n".join(lines)
         return ""
 
+    def _remove_player_speakers(self, state: Dict[str, Any], response_text: str) -> str:
+        """
+        LLM 응답에서 플레이어 speaker 제거 (강화)
+
+        - user, player, you, 당신, 유저, 플레이어
+        - state["player_name"] (예: "츠구코")
+        위 speaker를 모두 "narr"로 치환
+        """
+        # 🔹 금지 speaker 목록
+        prohibited_names = {
+            "user", "player", "you", "당신", "유저", "플레이어",
+            state.get("player_name", "").lower(),
+            state.get("user_name", "").lower(),
+        }
+
+        # 빈 문자열 제거
+        prohibited_names.discard("")
+
+        # 🔹 치환 처리
+        for name in prohibited_names:
+            if not name:
+                continue
+
+            # JSON 형식의 speaker 필드 검색 및 치환
+            patterns = [
+                f'"speaker": "{name}"',
+                f'"speaker":"{name}"',
+                f'"speaker": \'{name}\'',
+                f'"speaker":\'{name}\'',
+            ]
+
+            for pattern in patterns:
+                if pattern in response_text.lower():
+                    log("fallback", f"❌ Removing invalid speaker '{name}' from LLM response")
+                    # 대소문자 무관하게 치환
+                    response_text = re.sub(
+                        pattern.replace(name, name),
+                        '"speaker": "narr"',
+                        response_text,
+                        flags=re.IGNORECASE
+                    )
+
+        return response_text
+
     def _select_speaker(self, state: Dict[str, Any], stage_data: Dict[str, Any]) -> str:
         """
         응답할 캐릭터 선택 (speaker_pool 전용)
@@ -417,6 +466,26 @@ class FallbackManager:
     # ============================================================
     # 🔧 Guardrail 호환 함수
     # ============================================================
+    def _is_player_speaker(self, speaker: str) -> bool:
+        """
+        주어진 speaker가 플레이어/유저 이름인지 확인
+
+        금지된 speaker 이름:
+        - "user", "player", "you", "당신", "유저", "플레이어"
+        """
+        if not speaker:
+            return False
+
+        speaker_lower = speaker.lower().strip()
+
+        # 고정된 금지 이름 목록
+        prohibited = {
+            "user", "player", "you", "당신", "유저", "플레이어",
+            "츠구코",  # 기본 플레이어 이름
+        }
+
+        return speaker_lower in prohibited
+
     def _inject_dialogue(
         self,
         state: Dict[str, Any],
@@ -427,7 +496,14 @@ class FallbackManager:
     ) -> None:
         """
         대화를 state에 삽입 (GuardrailAgent와 동일한 구조)
+
+        🛑 플레이어 speaker 자동 필터링
         """
+        # 🛑 플레이어 speaker 체크
+        if self._is_player_speaker(speaker):
+            log("fallback", f"❌ Filtering player speaker in inject: '{speaker}' → 'narr'")
+            speaker = "narr"
+
         payload = {
             "speaker": speaker,
             "text": text,
