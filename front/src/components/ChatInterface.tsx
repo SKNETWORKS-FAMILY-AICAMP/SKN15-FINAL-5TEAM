@@ -145,101 +145,257 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     }, 500);
   };
 
-  // 캐릭터별 프로필 이미지 매핑 (백엔드 화자 ID -> 프로필 이미지)
+  // 캐릭터별 프로필 이미지 매핑 (패턴 기반 매칭)
   const getCharacterProfile = (charId: string) => {
-    const profileMap: Record<string, string> = {
-      'tanjiro': '/images/프로필_탄지로.png',
-      'tanjirou': '/images/프로필_탄지로.png',
-      'rengoku': '/images/프로필_렌고쿠.png',
-      'zenitsu': '/images/프로필_젠이츠.png',
-      'inosuke': '/images/프로필_이노스케.png',
-      'nezuko': '/images/프로필_네즈코.png',
-      'giyu': '/images/프로필_기유.png',
-      'shinobu': '/images/프로필_시노부.png',
-      'akaza': '/images/프로필_아카자.png',
-      'system': '/images/프로필_시스템.png',
-      'narr': '/images/프로필_시스템.png',
-      'ending': '/images/프로필_네즈코.png',
-      'user': '/images/프로필_탄지로.png',  // 플레이어 캐릭터 (렌고쿠의 제자)
-    };
-    return profileMap[charId.toLowerCase()] || '/images/프로필_탄지로.png';
+    const lowerCharId = charId.toLowerCase();
+
+    // 1. 주요 캐릭터 패턴 매칭 (정확한 이름이 아니어도 포함되면 매칭)
+    if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
+      return '/images/프로필_탄지로.png';
+    }
+    if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
+      return '/images/프로필_렌고쿠.png';
+    }
+    if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
+      return '/images/프로필_젠이츠.png';
+    }
+    if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
+      return '/images/프로필_이노스케.png';
+    }
+    if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
+      return '/images/프로필_네즈코.png';
+    }
+    if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
+      return '/images/프로필_기유.png';
+    }
+    if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
+      return '/images/프로필_시노부.png';
+    }
+    if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
+      return '/images/프로필_아카자.png';
+    }
+    if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
+      return '/images/엔무.jpg';
+    }
+
+    // 2. 시스템/특수 캐릭터
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return '/images/기본이미지.png';
+    }
+    if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
+      return '/images/기본이미지.png';
+    }
+
+    // 3. 역무원/차장 관련
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('역무원') || lowerCharId.includes('차장') ||
+        lowerCharId.includes('station')) {
+      return '/images/역무원.jpg';
+    }
+
+    // 4. 여성 캐릭터 관련 (woman을 man보다 먼저 체크 - 충돌 방지)
+    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
+        lowerCharId.includes('female') || lowerCharId.includes('girl')) {
+      return '/images/일반인_여성.png';
+    }
+
+    // 5. 남성 캐릭터 관련
+    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
+        lowerCharId.includes('male') || lowerCharId.includes('boy')) {
+      return '/images/일반인_남성.png';
+    }
+
+    // 6. 승객 관련 (passenger, 승객 포함) - 기본 남성으로
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('승객')) {
+      return '/images/일반인_남성.png';
+    }
+
+    // 7. NPC 관련 - 기본 남성으로
+    if (lowerCharId.includes('npc') || lowerCharId.includes('일반인')) {
+      return '/images/일반인_남성.png';
+    }
+
+    // 8. 기본 이미지로 폴백
+    return '/images/기본이미지.png';
   };
 
-  // 캐릭터별 화자 이름 매핑 (백엔드 화자 ID -> 한글 이름)
+  // 캐릭터별 화자 이름 매핑 (패턴 기반 매칭)
   const getCharacterName = (charId: string) => {
-    const nameMap: Record<string, string> = {
-      'tanjiro': '탄지로',
-      'tanjirou': '탄지로',
-      'rengoku': '렌고쿠',
-      'zenitsu': '젠이츠',
-      'inosuke': '이노스케',
-      'nezuko': '네즈코',
-      'giyu': '기유',
-      'shinobu': '시노부',
-      'akaza': '아카자',
-      'system': '시스템',
-      'narr': '시스템', // 내레이터를 시스템으로 통합
-      'ending': '네즈코',
-      'user': '츠구코',  // 플레이어 캐릭터 (렌고쿠의 제자 = 츠구코)
-    };
-    return nameMap[charId.toLowerCase()] || charId;
+    const lowerCharId = charId.toLowerCase();
+
+    // 1. 주요 캐릭터 패턴 매칭 (이름이 포함되면 매칭)
+    if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
+      return '탄지로';
+    }
+    if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
+      return '렌고쿠';
+    }
+    if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
+      return '젠이츠';
+    }
+    if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
+      return '이노스케';
+    }
+    if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
+      return '네즈코';
+    }
+    if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
+      return '기유';
+    }
+    if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
+      return '시노부';
+    }
+    if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
+      return '아카자';
+    }
+    if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
+      return '엔무';
+    }
+
+    // 2. 시스템/특수 캐릭터
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return '츠구코';
+    }
+    if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
+      return '내레이터';
+    }
+
+    // 3. 역무원/차장 관련
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('차장')) {
+      return '차장';
+    }
+    if (lowerCharId.includes('station') || lowerCharId.includes('역무원')) {
+      return '역무원';
+    }
+
+    // 4. 승객 관련
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('승객')) {
+      return '승객';
+    }
+
+    // 5. 일반 NPC 관련
+    if (lowerCharId.includes('npc') || lowerCharId.includes('일반인')) {
+      return '일반인';
+    }
+
+    // 6. 여성/남성 관련 (woman을 man보다 먼저 체크)
+    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
+        lowerCharId.includes('female') || lowerCharId.includes('girl')) {
+      return '승객';
+    }
+    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
+        lowerCharId.includes('male') || lowerCharId.includes('boy')) {
+      return '승객';
+    }
+
+    // 7. ID 그대로 반환
+    return charId;
   };
 
-  // 캐릭터별 글로우 색상 매핑 (몰입감 향상)
+  // 캐릭터별 글로우 색상 매핑 (패턴 기반 매칭)
   const getCharacterGlowColor = (charId: string) => {
-    const colorMap: Record<string, { primary: string; shadow: string; bg: string }> = {
-      'tanjiro': {
+    const lowerCharId = charId.toLowerCase();
+
+    // 1. 주요 캐릭터 패턴 매칭 (이름이 포함되면 매칭)
+    if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
+      return {
         primary: '#EF4444',
         shadow: 'rgba(239, 68, 68, 0.6)',
         bg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03))'
-      },
-      'tanjirou': {
-        primary: '#EF4444',
-        shadow: 'rgba(239, 68, 68, 0.6)',
-        bg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03))'
-      },
-      'rengoku': {
+      };
+    }
+    if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
+      return {
         primary: '#F59E0B',
         shadow: 'rgba(245, 158, 11, 0.6)',
         bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.03))'
-      },
-      'zenitsu': {
+      };
+    }
+    if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
+      return {
         primary: '#FBBF24',
         shadow: 'rgba(251, 191, 36, 0.6)',
         bg: 'linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(251, 191, 36, 0.03))'
-      },
-      'inosuke': {
+      };
+    }
+    if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
+      return {
         primary: '#10B981',
         shadow: 'rgba(16, 185, 129, 0.6)',
         bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.03))'
-      },
-      'nezuko': {
+      };
+    }
+    if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
+      return {
         primary: '#EC4899',
         shadow: 'rgba(236, 72, 153, 0.6)',
         bg: 'linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(236, 72, 153, 0.03))'
-      },
-      'akaza': {
-        primary: '#A855F7',
-        shadow: 'rgba(168, 85, 247, 0.6)',
-        bg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.03))'
-      },
-      'giyu': {
+      };
+    }
+    if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
+      return {
         primary: '#3B82F6',
         shadow: 'rgba(59, 130, 246, 0.6)',
         bg: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.03))'
-      },
-      'shinobu': {
+      };
+    }
+    if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
+      return {
         primary: '#8B5CF6',
         shadow: 'rgba(139, 92, 246, 0.6)',
         bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.03))'
-      },
-      'user': {
-        primary: '#F97316',  // 플레이어 캐릭터 (렌고쿠의 제자) - 오렌지 불꽃
+      };
+    }
+    if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
+      return {
+        primary: '#A855F7',
+        shadow: 'rgba(168, 85, 247, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
+      return {
+        primary: '#7C3AED',
+        shadow: 'rgba(124, 58, 237, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(124, 58, 237, 0.03))'
+      };
+    }
+
+    // 2. 시스템/특수 캐릭터
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return {
+        primary: '#F97316',
         shadow: 'rgba(249, 115, 22, 0.6)',
         bg: 'linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(249, 115, 22, 0.03))'
-      },
-    };
-    return colorMap[charId.toLowerCase()] || {
+      };
+    }
+
+    // 3. 역무원/차장 관련 - 중립 회색
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('station') ||
+        lowerCharId.includes('역무원') || lowerCharId.includes('차장')) {
+      return {
+        primary: '#6B7280',
+        shadow: 'rgba(107, 114, 128, 0.5)',
+        bg: 'linear-gradient(135deg, rgba(107, 114, 128, 0.06), rgba(107, 114, 128, 0.02))'
+      };
+    }
+
+    // 4. 승객, NPC, 일반인 관련 - 밝은 회색 (woman을 man보다 먼저 체크)
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('npc') ||
+        lowerCharId.includes('woman') || lowerCharId.includes('man') ||
+        lowerCharId.includes('승객') || lowerCharId.includes('일반인') ||
+        lowerCharId.includes('male') || lowerCharId.includes('female') ||
+        lowerCharId.includes('남자') || lowerCharId.includes('여자') ||
+        lowerCharId.includes('남성') || lowerCharId.includes('여성') ||
+        lowerCharId.includes('boy') || lowerCharId.includes('girl')) {
+      return {
+        primary: '#9CA3AF',
+        shadow: 'rgba(156, 163, 175, 0.4)',
+        bg: 'linear-gradient(135deg, rgba(156, 163, 175, 0.05), rgba(156, 163, 175, 0.02))'
+      };
+    }
+
+    // 5. 기본 색상으로 폴백
+    return {
       primary: '#6B7280',
       shadow: 'rgba(107, 114, 128, 0.4)',
       bg: 'linear-gradient(135deg, rgba(107, 114, 128, 0.05), rgba(107, 114, 128, 0.02))'
