@@ -92,6 +92,10 @@ class ParentAgent:
             temp_data = state.setdefault("temp_data", {})
             game_state = state.setdefault("game", {})
 
+            if stage_completed:
+                temp_data.pop("intent", None)
+                temp_data.pop("sticky_intent", None)
+
             next_stage = getattr(result, "next_stage", None)
             next_stage_def = None
             immediate_advance = False
