@@ -142,11 +142,11 @@
       "relationships": {
         "user": {
           "type": "ally",
-          "description": "렌고쿠 님의 츠구코인 {user}. 무한열차 초반부터 함께 싸운 신뢰하는 동료이며, 함께 부상자 구출과 전투를 수행한다."
+          "description": "렌고쿠 님의 츠구코인 {user}. 무한열차에서 처음 만난다."
         },
         "rengoku": {
           "type": "respect",
-          "description": "렌고쿠를 진심으로 존경하며 그 결의를 배우려 한다."
+          "description": "무한열차에서 처음 만남. 렌고쿠를 진심으로 존경하며 그 결의를 배우려 한다."
         },
         "akaza": {
           "type": "enemy",

@@ -137,8 +137,10 @@ class ScenarioLoader:
             has_situations = "situations" in stage_data
             has_beats = "beats" in stage_data or "beats_i18n" in stage_data
             has_variants = "variants" in stage_data
-            if not (has_dialogues or has_situations or has_beats or has_variants):
-                print(f"❌ {stage_type} 스테이지에 컨텐츠(dialogues/beats/variants)가 필요: {stage_id}")
+            has_llm_beats = stage_data.get("llm_beats") is True  # LLM이 동적으로 beats 생성
+
+            if not (has_dialogues or has_situations or has_beats or has_variants or has_llm_beats):
+                print(f"❌ {stage_type} 스테이지에 컨텐츠(dialogues/beats/variants/llm_beats)가 필요: {stage_id}")
                 return False
 
         elif stage_type_norm == "choice":
@@ -182,6 +184,16 @@ class ScenarioLoader:
             # Ending 스테이지 검증 (final_message 있으면 충분)
             if not any(stage_data.get(key) for key in ("final_message", "beats", "beats_i18n", "variants")):
                 print(f"⚠️ ending 스테이지에 final_message 또는 beats 권장: {stage_id}")
+
+        elif stage_type_norm == "open_narrative":
+            # Open Narrative 스테이지: LLM이 자유롭게 서사 생성
+            if "max_turns" not in stage_data:
+                print(f"⚠️ open_narrative 스테이지에 max_turns 권장: {stage_id}")
+
+        elif stage_type_norm == "llm_beats":
+            # LLM Beats 스테이지: LLM이 beats를 동적으로 생성
+            if not any(stage_data.get(key) for key in ("speaker_pool", "context")):
+                print(f"⚠️ llm_beats 스테이지에 speaker_pool 또는 context 권장: {stage_id}")
 
         else:
             print(f"⚠️ 알 수 없는 스테이지 타입: {stage_type} in {stage_id}")

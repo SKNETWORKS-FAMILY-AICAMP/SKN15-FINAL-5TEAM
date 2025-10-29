@@ -36,9 +36,9 @@ llm_client:
     fallback:
       model: "gpt-4o-mini"
       temperature: 0.8
-      max_tokens: 80
+      max_tokens: 800
       urgent_temperature: 0.75
-      urgent_max_tokens: 90
+      urgent_max_tokens: 900
     image_manager:
       model: "gpt-4o-mini"
       temperature: 0.3

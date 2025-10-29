@@ -93,7 +93,7 @@ def get_stage_atmosphere(stage: Dict[str, Any]) -> Optional[str]:
     if atmosphere is None:
         return None
 
-    # 숫자 → 문자열 변환 매핑
+    # 숫자 → 문자열 변환 매핑_generate_fallback_message
     if isinstance(atmosphere, (int, float)):
         atmosphere_map = {
             0: "urgent",      # 긴급/자동전이

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
-from src.utils.fallback_llm import generate_off_topic_response
+from src.tools.fallback_tools import handle_off_topic
 from src.utils.llm_client import LLMClient, get_llm_client
 from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
@@ -296,9 +296,18 @@ class RouterAgent:
         state["user_intent"] = "off_topic"
         state["classification"] = "off_topic"
 
-        fallback = generate_off_topic_response(state, user_input) or {}
-        fallback_text = fallback.get("text") or "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요."
-        fallback_speaker = fallback.get("speaker") or "system"
+        # fallback_tools 통합 함수 사용
+        fallback_result = handle_off_topic(state, user_input, use_llm=True)
+        print(f'fallback_result 확인 : {fallback_result}')
+
+        # dialogue 우선, 없으면 message 사용
+        dialogue = fallback_result.get("dialogue")
+        if dialogue:
+            fallback_text = dialogue.get("text", "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요.")
+            fallback_speaker = dialogue.get("speaker", "system")
+        else:
+            fallback_text = fallback_result.get("message", "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요.")
+            fallback_speaker = fallback_result.get("speaker", "system")
 
         scenario = state.get("scenario") or state.get("scenario_data")
         character_refs: Dict[str, Any] = {}
