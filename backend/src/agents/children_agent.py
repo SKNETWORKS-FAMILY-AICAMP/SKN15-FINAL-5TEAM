@@ -189,6 +189,7 @@ class ChildrenAgent:
         intent_options = ctx.get("intent_options")
         latest_user_input = ctx.get("latest_user_input")
         recent_dialogues = ctx.get("recent_dialogues")
+        stage_context = ctx.get("stage_context")        # 장면 설정 (새 장면 전환 시)
         prefetch_entries = ctx.get("prefetch_dialogues") or []
         prefetch_dialogues = self._render_dialogues(state, [dict(entry) for entry in prefetch_entries if isinstance(entry, dict)]) if prefetch_entries else []
 
@@ -299,6 +300,7 @@ class ChildrenAgent:
             intent_options=intent_options if isinstance(intent_options, dict) else None,
             latest_user_input=latest_user_input if isinstance(latest_user_input, str) else None,
             recent_dialogues=recent_dialogues if isinstance(recent_dialogues, list) else None,
+            stage_context=stage_context if isinstance(stage_context, str) else None,
         )
 
 
@@ -484,14 +486,21 @@ class ChildrenAgent:
 
         # 시나리오 context 추출
         scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
+
+        # 디버깅: scenario_ref 타입 확인
+        if not isinstance(scenario_ref, dict):
+            log("children", f"⚠️ scenario_ref is not dict: type={type(scenario_ref)}")
+            scenario_ref = {}
+
         stage_context = ""
 
         # 현재 스테이지의 context 찾기
         stages = scenario_ref.get("stages", [])
-        for stage in stages:
-            if stage.get("tag") == stage_tag:
-                stage_context = stage.get("context", "")
-                break
+        if isinstance(stages, list):
+            for stage in stages:
+                if isinstance(stage, dict) and stage.get("tag") == stage_tag:
+                    stage_context = stage.get("context", "")
+                    break
 
         if not stage_context:
             stage_context = f"현재 {stage_tag} 장면이 진행 중입니다."

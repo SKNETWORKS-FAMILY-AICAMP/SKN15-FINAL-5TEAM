@@ -69,6 +69,7 @@ def compose_llm_prompt(
     intent_options: Optional[Dict[str, Any]] = None,
     latest_user_input: Optional[str] = None,
     recent_dialogues: Optional[List[str]] = None,
+    stage_context: Optional[str] = None,
 ) -> str:
     """
     tone_profiles + beats + 관계 정보를 포함한 LLM 프롬프트
@@ -171,17 +172,35 @@ def compose_llm_prompt(
     {"; ".join(recent_dialogues)}
     """
 
+    # 장면 설정 블록 (새로운 장면 전환 시)
+    scene_context_block = ""
+    if stage_context:
+        scene_context_block = f"""
+    [장면 설정]
+    {stage_context}
+
+    ⭐ 장면 전환 규칙:
+    - 이 장면이 처음 시작되거나 이전 장면과 다른 경우, **반드시 첫 번째 대사를 narr(나레이션)으로** 시작하세요.
+    - narr는 위 [장면 설정]을 바탕으로 새로운 장면의 분위기, 환경, 상황을 1~2문장으로 묘사합니다.
+    - 장면 설정 문장을 그대로 복사하지 말고, 감각적이고 생생하게 재구성하세요.
+    - 예시:
+      * 설정: "열차가 출발하고 잠시 후, 탄지로 일행이 객차 문을 열고 들어온다."
+      * narr: "객차 문이 삐걱거리며 열리고, 탄지로 일행이 들어온다. 열차의 흔들림과 함께 새로운 기운이 느껴진다."
+    """
+
     prompt = f"""
     당신은 Demon Slayer: 무한열차 시나리오의 대사 작가입니다.
     🛑 절대 [상황 요약]의 goal 문장이나 따옴표 안 대사를 그대로 복사하거나 서술하지 마세요.
     🛑 goal을 참조해서 캐릭터 대사를 2~3줄 정도 생성하세요.
-    🛑 이름, 대사 모두 한국어로 작성하세요. 
-    🛑 goal은 “상황 요약”일 뿐, 실제 출력 문장이 아닙니다. goal과 동일한 문장, "~라고 말한다" 같은 설명체는 금지입니다.
+    🛑 이름, 대사 모두 한국어로 작성하세요.
+    🛑 goal은 "상황 요약"일 뿐, 실제 출력 문장이 아닙니다. goal과 동일한 문장, "~라고 말한다" 같은 설명체는 금지입니다.
 
     ⚠️ 핵심 규칙: 아래 [상황 요약]의 내용만 사용하세요. 다른 장면이나 상황을 창작하지 마세요.
 
     [현재 스테이지]
     {stage_tag}
+
+    {scene_context_block}
 
     {user_input_block}
 

@@ -40,6 +40,9 @@ class SceneHandler:
         # llm_beats 플래그 확인
         llm_beats_enabled = stage.get("llm_beats", False)
 
+        # stage.context 추출 (장면 전환 시 narr 생성용)
+        stage_context = stage.get("context")
+
         ctx = {
             "stage_tag": stage_tag,
             "stage_type": get_stage_type(stage),
@@ -48,6 +51,7 @@ class SceneHandler:
             "constraints": constraints,
             "atmosphere": get_stage_atmosphere(stage),
             "llm_beats": llm_beats_enabled,
+            "stage_context": stage_context if isinstance(stage_context, str) else None,
         }
 
         stage_turn = int(state.get("stage_turn", 0) or 0)
