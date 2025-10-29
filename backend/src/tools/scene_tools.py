@@ -64,6 +64,8 @@ def list_stages(scenario: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def get_stage(scenario: Dict[str, Any], stage_tag: str) -> Optional[Dict[str, Any]]:
     """tag/id/name 중 하나가 stage_tag와 일치하는 스테이지 반환."""
+    if not stage_tag:
+        return None
     target = stage_tag.lower()
     for stage in list_stages(scenario):
         for key in ("tag", "id", "name"):

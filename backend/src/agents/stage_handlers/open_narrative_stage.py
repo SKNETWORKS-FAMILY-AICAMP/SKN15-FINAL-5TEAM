@@ -132,7 +132,7 @@ class OpenNarrativeHandler:
         return StageResult(
             children_ctx=children_ctx,
             stage_complete=stage_complete,
-            next_stage=next_stage if stage_complete else None,
+            next_stage=next_stage,  # parent_agent가 auto_advance 판단하므로 항상 제공
         )
 
     def _initialize_narrative_state(self, state: Dict[str, Any]) -> None:

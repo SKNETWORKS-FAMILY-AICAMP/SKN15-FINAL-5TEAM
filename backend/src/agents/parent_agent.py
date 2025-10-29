@@ -131,16 +131,20 @@ class ParentAgent:
 
             # open_narrative는 turn_count 기반 자동 전환
             turn_count = int(state.get("stage_turn", 0) or 0)
-            narrative_turn_count = int(state.get("turn_count", 0) or 0)
 
-            if current_stage_type == "open_narrative" and narrative_turn_count >= 5:
+            # ✅ open_narrative는 stage_turn 기준으로 판단
+            # max_turns 또는 min_turns 중 하나 사용 (max_turns 우선)
+            turn_limit = stage.get("max_turns") or stage.get("min_turns", 3)
+            if current_stage_type == "open_narrative" and turn_count >= turn_limit:
                 auto_advance_now = True
-                log("parent", "⚡ Auto-advance via open_narrative turn threshold",
-                    stage_tag=original_stage_tag, turns=narrative_turn_count)
+                log("parent", f"⚡ Auto-advance via open_narrative turn threshold (stage_tag={original_stage_tag}, turns={turn_count}/{turn_limit})")
+
+            # ✅ 일반 스테이지도 turn 3 이상이면 자동 전이
             elif stage_completed and turn_count >= 3:
                 auto_advance_now = True
-                log("parent", "⚡ Auto-advance via turn threshold", stage_tag=original_stage_tag, turns=turn_count)
+                log("parent", f"⚡ Auto-advance via turn threshold (stage_tag={original_stage_tag}, turns={turn_count})")
 
+            # Intent 기반 전환 체크
             intent_triggers_next = False
             if next_stage:
                 intent_triggers_next = self._user_requested_next_stage(state, stage, next_stage)
@@ -148,9 +152,16 @@ class ParentAgent:
                     auto_advance_now = True
                     log("parent", "⚡ Auto-advance via routed intent", stage_tag=original_stage_tag, next_stage=next_stage)
 
-            if next_stage:
+            # 즉시 전환 결정
+            if next_stage and auto_advance_now:
+                # router/free_intent는 항상 즉시 전환
                 # open_narrative는 auto_advance_now일 때만 즉시 전환
-                if current_stage_type in ("router", "free_intent", "open_narrative") or auto_advance_now:
+                # scene은 auto_advance_now일 때만 즉시 전환
+                if current_stage_type in ("router", "free_intent"):
+                    immediate_advance = True
+                elif current_stage_type == "open_narrative":
+                    immediate_advance = True
+                elif auto_advance_now:
                     immediate_advance = True
 
             if immediate_advance:
