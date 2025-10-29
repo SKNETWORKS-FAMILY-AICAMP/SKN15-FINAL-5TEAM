@@ -1,17 +1,17 @@
 {
   "scenario_id": "cutscene5_llm_driven",
-  "title": "🔥 상현 삼 조우 — 리듬형 완전판",
+  "title": "🔥 상현 삼(參) 조우 — 리듬형 완전판",
   "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
   "version": "6.0",
   "mountable": true,
   "character_refs": {
-    "rengoku": "characters/rengoku.json",
-    "tanjiro": "characters/tanjiro.json",
-    "akaza": "characters/akaza.json",
-    "zenitsu": "characters/zenitsu.json",
-    "inosuke": "characters/inosuke.json",
-    "nezuko": "characters/nezuko.json",
-    "enmu": "characters/enmu.json"
+    "rengoku": "backend/data/characters/rengoku.json",
+    "tanjiro": "backend/data/characters/tanjiro.json",
+    "akaza": "backend/data/characters/akaza.json",
+    "zenitsu": "backend/data/characters/zenitsu.json",
+    "inosuke": "backend/data/characters/inosuke.json",
+    "nezuko": "backend/data/characters/nezuko.json",
+    "enmu": "backend/data/characters/enmu.json"
   },
   "i18n": {
     "ko": {
@@ -174,7 +174,7 @@
           "fx": "crash_impact|dust_settle|silence"
         }
       ],
-      "beats_상현_삼_등장": [
+      "beats_UpperMoons3_appeared": [
         {
           "goal": "【엔무전 직후】 열차가 멈추고, 잠시 정적이 흐른다. {user}와 탄지로는 숨을 고르며 서로를 확인한다.",
           "speaker_hint": ["narr"],
@@ -201,7 +201,7 @@
           "fx": "ground_fissure|air_freeze"
         },
         {
-          "goal": "먼지 속에서 상현 삼 아카자가 모습을 드러낸다. '염주인가... 좋은 냄새가 나는군.'",
+          "goal": "먼지 속에서 상현 삼(參) 아카자가 모습을 드러낸다. '염주인가... 좋은 냄새가 나는군.'",
           "speaker_hint": ["akaza"],
           "fx": "kanji_flash|evil_aura"
         },
@@ -885,13 +885,13 @@
       "beats_i18n": "beats_enmu_real_battle",
       "speaker_pool": ["tanjiro", "inosuke", "rengoku", "nezuko", "enmu", "narr"],
       "atmosphere": 0,
-      "next": "상현_삼_등장"
+      "next": "UpperMoons3_appeared"
     },
     {
-      "tag": "상현_삼_등장",
+      "tag": "UpperMoons3_appeared",
       "type": "scene",
       "next": "ROUTE_CHOICE",
-      "beats_i18n": "beats_상현_삼_등장",
+      "beats_i18n": "beats_UpperMoons3_appeared",
       "speaker_pool": [
         "rengoku",
         "tanjiro",
@@ -1033,7 +1033,7 @@
   "metadata": {
     "default_stage": "TRAIN_PRELUDE",
     "auto_advance_tags": [
-      "상현_삼_등장",
+      "UpperMoons3_appeared",
       "RETURN_TO_FRONT"
     ],
     "dynamic_speaker_stages": [
@@ -1170,8 +1170,8 @@
           "intervene_noise": "소란을 일으켜 틈을 만들기"
         }
       },
-      "상현_삼_등장": {
-        "description": "상현 삼 아카자 등장 직후 플레이어의 대응 의도를 파악",
+      "UpperMoons3_appeared": {
+        "description": "상현 삼(參) 아카자 등장 직후 플레이어의 대응 의도를 파악",
         "options": {
           "choose_allies_path": "동료를 모으거나 지원을 요청하려는 의도",
           "choose_reckless_path": "렌고쿠와 함께 바로 전투에 돌입하려는 의도"
