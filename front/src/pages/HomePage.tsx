@@ -6,6 +6,8 @@ import MyAccountModal from '@/components/MyAccountModal';
 import LoginModal from '@/components/LoginModal';
 import { useApp } from '@/contexts/AppContext';
 
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
+
 interface CharacterCard {
   id: string;
   title: string;
@@ -30,7 +32,7 @@ export default function HomePage() {
       id: 'tanjiro',
       title: '편의점 알바생 탄지로',
       description: '탄지로와 함께하는 편의점 일상 체험',
-      image: '/images/편의점탄지로.png',
+      image: `${CDN_URL}/편의점탄지로.png`,
       likes: 121,
       comments: 45,
       views: 1200,
@@ -42,7 +44,7 @@ export default function HomePage() {
       id: 'train',
       title: '무한열차',
       description: '열차 안에서 벌어지는 사건에 휘말려 캐릭터들과 협력하여 생존 및 해결을 도모',
-      image: '/images/무한열차.jpeg',
+      image: `${CDN_URL}/무한열차.jpeg`,
       likes: 98,
       comments: 32,
       views: 890,
@@ -54,7 +56,7 @@ export default function HomePage() {
       id: 'infinity-castle',
       title: '무한성',
       description: '최종 결전을 배경으로, 캐릭터들과 함께 전략을 세우며 전투 직전의 긴장감을 체험',
-      image: '/images/무한성.webp',
+      image: `${CDN_URL}/무한성.webp`,
       likes: 156,
       comments: 67,
       views: 1850,
@@ -66,7 +68,7 @@ export default function HomePage() {
       id: 'ending',
       title: '엔딩 이후',
       description: '최종 결전 후 동료들과 함께하는 평범하지만 소중한 일상. 탄지로, 젠이츠, 이노스케와 함께 마을 순찰과 훈련을 하며 서로를 돌보는 따뜻한 이야기',
-      image: '/images/엔딩이후.png',
+      image: `${CDN_URL}/엔딩이후.png`,
       likes: 87,
       comments: 28,
       views: 720,
@@ -78,7 +80,7 @@ export default function HomePage() {
       id: 'counseling',
       title: '귀칼 상담소 AU',
       description: '캐릭터들이 상담사가 되어 서로의 고민을 풀어가는 힐링 스토리',
-      image: '/images/귀칼상담소.png',
+      image: `${CDN_URL}/귀칼상담소.png`,
       likes: 134,
       comments: 52,
       views: 1150,
@@ -90,7 +92,7 @@ export default function HomePage() {
       id: 'idol',
       title: '아이돌/밴드 AU',
       description: '귀멸 캐릭터들이 아이돌 그룹으로 활동, 매니저 or 팬클럽으로서 그들의 성장과 무대를 지켜봄',
-      image: '/images/아이돌밴드.png',
+      image: `${CDN_URL}/아이돌밴드.png`,
       likes: 203,
       comments: 89,
       views: 2100,
@@ -151,7 +153,7 @@ export default function HomePage() {
       <main
         className="relative bg-zeplin-main"
         style={{
-          backgroundImage: "url('/images/홈배경.jpg')",
+          backgroundImage: `url('${CDN_URL}/홈배경.jpg')`,
           height: 'calc(100vh - 64px)'
         }}
       >

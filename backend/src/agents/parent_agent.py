@@ -3,12 +3,14 @@
 # ============================================================
 from __future__ import annotations
 import importlib
+import time
 from typing import Any, Dict, Optional, List
 
 # ============================================================
 # ⚙️ SceneTools Import
 # ============================================================
 from src.tools import scene_tools
+from src.tools.training_logger import log_agent
 
 # 🎯 Stage 핸들러 관련
 from .stage_handlers import (
@@ -608,7 +610,42 @@ class ParentAgent:
 DEFAULT_AGENT = ParentAgent()
 
 def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
-    return DEFAULT_AGENT.run(state)
+    # Phase 4: 로그 수집
+    start_time = time.perf_counter()
+
+    try:
+        result = DEFAULT_AGENT.run(state)
+
+        # Model output 추출
+        model_output = {
+            "agent_inputs": result.get("agent_inputs"),
+            "next_stage": result.get("next_stage"),
+            "stage_tag": result.get("stage_tag"),
+            "current_stage": result.get("current_stage"),
+        }
+
+        # 로그 저장
+        log_agent(
+            agent_name="parent",
+            state=state,
+            model_output=model_output,
+            start_time=start_time,
+            llm_model="gpt-4o",  # Parent Agent가 사용하는 LLM (스테이지 핸들러에서 사용)
+        )
+
+        return result
+
+    except Exception as e:
+        # 에러 발생 시에도 로그 수집 (실패 예시로 학습 가능)
+        log_agent(
+            agent_name="parent",
+            state=state,
+            model_output={"error": str(e)},
+            start_time=start_time,
+            is_error=True,
+            error_message=str(e),
+        )
+        raise  # 에러는 다시 발생시켜 상위에서 처리
 
 def parent_after_dialogue(state: Dict[str, Any]) -> Dict[str, Any]:
     return DEFAULT_AGENT.after_dialogue(state)

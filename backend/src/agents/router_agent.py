@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
@@ -10,6 +12,7 @@ from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
@@ -62,6 +65,9 @@ class RouterAgent:
     # ============================================================
     # 전체 실행 함수, 임베딩 -> LLM 순으로 분류, 입력이 없는 경우 off 토픽
     def run(self, state: Dict[str, Any], user_input: str) -> Dict[str, Any]:
+        # Phase 4: 로그 수집 시작
+        start_time = time.perf_counter()
+
         normalized = (user_input or "").strip()
         state["user_input"] = normalized
 
@@ -72,21 +78,40 @@ class RouterAgent:
                 category="empty",
                 reason="empty_input",
             )
-            return self._handle_off_topic(state, normalized, empty_topic)
+            result = self._handle_off_topic(state, normalized, empty_topic)
+            # Phase 4: 로그 수집
+            self._log_execution(state, result, start_time)
+            return result
 
         embedding = self._get_user_embedding(state, normalized)
         embedding_topic = self._classify_with_embedding(normalized, embedding=embedding)
         if embedding_topic:
-            return (
+            result = (
                 self._handle_off_topic(state, normalized, embedding_topic)
                 if embedding_topic.is_off_topic
                 else self._handle_on_topic(state, normalized, embedding_topic)
             )
+            # Phase 4: 로그 수집
+            self._log_execution(state, result, start_time)
+            return result
 
-        topic = self._classify_with_llm(state, normalized)
+        # 🚀 Phase 2 최적화: topic classification + intent detection 병렬 실행
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            topic_future = executor.submit(self._classify_with_llm, state, normalized)
+            intent_future = executor.submit(self._detect_route_intent, state, normalized)
+
+            topic = topic_future.result()
+            # topic이 on_topic일 때만 intent 결과 사용
+            detected_intent = intent_future.result() if not topic.is_off_topic else None
+
         if topic.is_off_topic:
-            return self._handle_off_topic(state, normalized, topic)
-        return self._handle_on_topic(state, normalized, topic)
+            result = self._handle_off_topic(state, normalized, topic)
+        else:
+            result = self._handle_on_topic(state, normalized, topic, precomputed_intent=detected_intent)
+
+        # Phase 4: 로그 수집
+        self._log_execution(state, result, start_time)
+        return result
 
     # ============================================================
     # 🔍 분류 헬퍼
@@ -364,6 +389,7 @@ class RouterAgent:
         state: Dict[str, Any],
         user_input: str,
         topic: TopicClassification,
+        precomputed_intent: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         state["off_topic_count"] = 0
         state["classification"] = "on_topic"
@@ -390,7 +416,8 @@ class RouterAgent:
         temp.pop("sticky_intent", None)
         temp.pop("intent_stage", None)
 
-        detected_intent = self._detect_route_intent(state, normalized_input)
+        # 🚀 Phase 2 최적화: precomputed_intent 우선 사용 (병렬 실행 결과)
+        detected_intent = precomputed_intent if precomputed_intent is not None else self._detect_route_intent(state, normalized_input)
         if detected_intent and isinstance(detected_intent, dict):
             intent_key = str(detected_intent.get("intent") or "").strip()
             if intent_key:
@@ -455,6 +482,33 @@ class RouterAgent:
         cache["text"] = text
         cache["vector"] = vector
         return vector
+
+    # ============================================================
+    # Phase 4: 로그 수집
+    # ============================================================
+    def _log_execution(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float):
+        """Router Agent 실행 로그를 LogDB에 저장"""
+        try:
+            # Model output 추출
+            model_output = {
+                "next_node": result.get("next_node"),
+                "classification": result.get("classification", "unknown"),
+                "confidence": result.get("confidence", 0.0),
+                "category": result.get("category"),
+                "reason": result.get("reason"),
+            }
+
+            # 로그 저장 (비동기 처리는 추후 개선 가능)
+            log_agent(
+                agent_name="router",
+                state=state,
+                model_output=model_output,
+                start_time=start_time,
+                llm_model="gpt-4o-mini",  # Router가 사용하는 LLM 모델
+            )
+        except Exception as e:
+            # 로깅 실패는 무시 (메인 로직에 영향 없도록)
+            log("router", "training_log_failed", error=str(e))
 
 DEFAULT_AGENT = RouterAgent()
 
