@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
-from src.tools.fallback_tools import handle_off_topic
+from src.tools.fallback_tools import handle_off_topic, reset_fallback_count
 from src.utils.llm_client import LLMClient, get_llm_client
 from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
@@ -376,6 +376,9 @@ class RouterAgent:
     ) -> Dict[str, Any]:
         state["off_topic_count"] = 0
         state["classification"] = "on_topic"
+
+        # ✅ Fallback 카운트도 초기화 (on-topic 복귀 시)
+        reset_fallback_count(state)
 
         normalized_input = (user_input or "").strip()
         confidence = round(max(0.0, min(1.0, topic.confidence or 0.0)), 4)

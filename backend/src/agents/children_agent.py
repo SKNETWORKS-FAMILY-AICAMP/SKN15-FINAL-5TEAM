@@ -242,21 +242,27 @@ class ChildrenAgent:
         if llm_beats_enabled:
             log("children", f"🎭 LLM Beats mode enabled for stage={stage_tag}")
 
-            # 유저 입력이 있을 때만 beats를 LLM이 즉흥 생성
-            # 문제: 유저 입력 없이 자동으로 beats를 생성하면 캐릭터들이 알아서 대화 진행
-            # 해결: 유저 입력이 있을 때만 LLM beats 생성
+            # beats 자동 생성 조건:
+            # 1. 유저 입력이 있을 때
+            # 2. 장면 첫 진입 시 (stage_turn == 0)
             if not beats:
                 latest_user_input = ctx.get("latest_user_input", "").strip()
                 user_input = state.get("user_input", "").strip()
+                stage_turn = int(state.get("stage_turn", 0) or 0)
 
-                # 유저 입력이 있을 때만 beats 생성
-                if latest_user_input or user_input:
+                # 유저 입력이 있거나, 장면 첫 진입인 경우 beats 생성
+                should_generate = (latest_user_input or user_input) or (stage_turn == 0)
+
+                if should_generate:
                     # context를 기반으로 beats 생성 프롬프트를 만듦
                     beats = self._generate_beats_from_context(state, ctx)
-                    log("children", f"✨ Generated {len(beats)} beats via LLM based on user input")
+                    if stage_turn == 0:
+                        log("children", f"✨ Generated {len(beats)} beats via LLM (first entry)")
+                    else:
+                        log("children", f"✨ Generated {len(beats)} beats via LLM (user input)")
                 else:
-                    # 유저 입력이 없으면 beats 생성하지 않음 (fallback으로 프롬프트 메시지 표시)
-                    log("children", "⚠️ LLM Beats mode: No user input detected, skipping auto-generation")
+                    # 유저 입력도 없고 첫 진입도 아니면 beats 생성하지 않음
+                    log("children", "⚠️ LLM Beats mode: No user input and not first entry, skipping auto-generation")
                     # beats를 비워서 fallback 메시지 사용
         else:
             log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")

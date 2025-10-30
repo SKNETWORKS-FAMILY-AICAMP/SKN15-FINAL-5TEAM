@@ -55,8 +55,18 @@ class SceneHandler:
         }
 
         stage_turn = int(state.get("stage_turn", 0) or 0)
-        min_turns = int(constraints.get("min_turns", 1) or 1)
-        max_turns = int(constraints.get("max_turns", min_turns) or min_turns)
+
+        # min_turns/max_turns 우선순위: constraints > stage 레벨 > 기본값
+        min_turns = int(
+            constraints.get("min_turns")
+            or stage.get("min_turns")
+            or 1
+        )
+        max_turns = int(
+            constraints.get("max_turns")
+            or stage.get("max_turns")
+            or min_turns
+        )
 
         log("scene", f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")
 

@@ -233,6 +233,8 @@ class ParentAgent:
             if next_stage and immediate_advance:
                 children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario)
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
+                # 🔧 fix: remove any fallback contamination
+                children_ctx.pop("fallback", None)
             else:
                 if not children_ctx.get("beats") and not children_ctx.get("fallback"):
                     children_ctx["beats"] = scene_tools.resolve_i18n_beats(stage, scenario)
