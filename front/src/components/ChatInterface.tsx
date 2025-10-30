@@ -7,6 +7,8 @@ import { sendChatMessage, ChatResponse } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
+
 interface Message {
   id: number;
   text: string;
@@ -151,71 +153,71 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
     // 1. 주요 캐릭터 패턴 매칭 (정확한 이름이 아니어도 포함되면 매칭)
     if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
-      return '/images/프로필_탄지로.png';
+      return `${CDN_URL}/프로필_탄지로.png`;
     }
     if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
-      return '/images/프로필_렌고쿠.png';
+      return `${CDN_URL}/프로필_렌고쿠.png`;
     }
     if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
-      return '/images/프로필_젠이츠.png';
+      return `${CDN_URL}/프로필_젠이츠.png`;
     }
     if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
-      return '/images/프로필_이노스케.png';
+      return `${CDN_URL}/프로필_이노스케.png`;
     }
     if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
-      return '/images/프로필_네즈코.png';
+      return `${CDN_URL}/프로필_네즈코.png`;
     }
     if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
-      return '/images/프로필_기유.png';
+      return `${CDN_URL}/프로필_기유.png`;
     }
     if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
-      return '/images/프로필_시노부.png';
+      return `${CDN_URL}/프로필_시노부.png`;
     }
     if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
-      return '/images/프로필_아카자.png';
+      return `${CDN_URL}/프로필_아카자.png`;
     }
     if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
-      return '/images/엔무.jpg';
+      return `${CDN_URL}/엔무.jpg`;
     }
 
     // 2. 시스템/특수 캐릭터
     if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
-      return '/images/기본이미지.png';
+      return `${CDN_URL}/기본이미지.png`;
     }
     if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
-      return '/images/기본이미지.png';
+      return `${CDN_URL}/기본이미지.png`;
     }
 
     // 3. 역무원/차장 관련
     if (lowerCharId.includes('conductor') || lowerCharId.includes('역무원') || lowerCharId.includes('차장') ||
         lowerCharId.includes('station')) {
-      return '/images/역무원.jpg';
+      return `${CDN_URL}/역무원.jpg`;
     }
 
     // 4. 여성 캐릭터 관련 (woman을 man보다 먼저 체크 - 충돌 방지)
     if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
         lowerCharId.includes('female') || lowerCharId.includes('girl')) {
-      return '/images/일반인_여성.png';
+      return `${CDN_URL}/일반인_여성.png`;
     }
 
     // 5. 남성 캐릭터 관련
     if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
         lowerCharId.includes('male') || lowerCharId.includes('boy')) {
-      return '/images/일반인_남성.png';
+      return `${CDN_URL}/일반인_남성.png`;
     }
 
     // 6. 승객 관련 (passenger, 승객 포함) - 기본 남성으로
     if (lowerCharId.includes('passenger') || lowerCharId.includes('승객')) {
-      return '/images/일반인_남성.png';
+      return `${CDN_URL}/일반인_남성.png`;
     }
 
     // 7. NPC 관련 - 기본 남성으로
     if (lowerCharId.includes('npc') || lowerCharId.includes('일반인')) {
-      return '/images/일반인_남성.png';
+      return `${CDN_URL}/일반인_남성.png`;
     }
 
     // 8. 기본 이미지로 폴백
-    return '/images/기본이미지.png';
+    return `${CDN_URL}/기본이미지.png`;
   };
 
   // 캐릭터별 화자 이름 매핑 (패턴 기반 매칭)
@@ -1478,7 +1480,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
                   style={{ marginLeft: index > 0 ? '-6px' : '0' }}
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/images/프로필_탄지로.png';
+                    (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
                   }}
                 />
               </div>

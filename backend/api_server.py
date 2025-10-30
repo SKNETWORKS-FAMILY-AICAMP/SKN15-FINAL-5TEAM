@@ -22,6 +22,9 @@ from dotenv import load_dotenv
 # ------------------------------------------------------------
 load_dotenv(override=True)
 
+# .env.local도 로드 (DB 설정용)
+load_dotenv(dotenv_path=".env.local", override=True)
+
 # ------------------------------------------------------------
 # ✅ LangGraph 관련 내부 모듈 로드
 # ------------------------------------------------------------
@@ -33,6 +36,11 @@ from src.core.graph_state import (
 from src.utils.scenario_loader import scenario_loader  # 시나리오(JSON) 로더
 from src.tools.image_manager import ImageManager  # 이미지 매니저
 from src.core.scenes_repo import ScenesRepo
+
+# ------------------------------------------------------------
+# ✅ Database 모듈 로드 (PostgreSQL + Redis)
+# ------------------------------------------------------------
+from src.database.session_manager import create_hybrid_session_manager_from_env
 
 # ------------------------------------------------------------
 # ✅ FastAPI 인스턴스 생성
@@ -60,34 +68,144 @@ app.add_middleware(
 
 
 # ------------------------------------------------------------
-# ✅ 세션 저장소 (임시: 메모리 기반)
-#    - 실제 서비스 환경에서는 Redis 등 외부 세션 스토어로 교체해야 함
+# ✅ 세션 저장소 (PostgreSQL + Redis 하이브리드)
+#    - GraphState 전체를 Redis(캐시) + PostgreSQL(영구)에 저장
+#    - 자동으로 대화, 친밀도 등을 정규화된 테이블에도 저장
 # ------------------------------------------------------------
-class SessionManager:
-    def __init__(self) -> None:
-        self._sessions: Dict[str, Dict[str, Any]] = {}
+class SessionManagerAdapter:
+    """
+    HybridSessionManager를 래핑하여 api_server.py가 기대하는 인터페이스 제공
+    - 전체 GraphState를 캐시(Redis) + 스냅샷(PostgreSQL)에 저장
+    """
+    def __init__(self, hybrid_manager):
+        self._hybrid = hybrid_manager
+        self._cache_key_prefix = "graphstate"
+
+    def _make_cache_key(self, session_id: str) -> str:
+        return f"{self._cache_key_prefix}:{session_id}"
 
     def load_or_create(self, session_id: str) -> Dict[str, Any]:
-        state = self._sessions.get(session_id)
-        if state is None:
-            state = {}
-            self._sessions[session_id] = state
-        return state
+        """
+        GraphState 로드 또는 빈 dict 생성
+        """
+        # 1. Redis 캐시에서 조회
+        cache_key = self._make_cache_key(session_id)
+        cached_state = self._hybrid.cache.get_session(cache_key)
+        if cached_state:
+            return cached_state
+
+        # 2. PostgreSQL 스냅샷에서 조회
+        snapshot = self._hybrid.load_latest_snapshot(session_id)
+        if snapshot and snapshot.get("state_json"):
+            state = snapshot["state_json"]
+            # 캐시에 저장
+            self._hybrid.cache.set_session(cache_key, state)
+            return state
+
+        # 3. 없으면 빈 dict 반환
+        return {}
 
     def save(self, session_id: str, state: Dict[str, Any]) -> None:
-        self._sessions[session_id] = state
+        """
+        GraphState 저장 (캐시 + 스냅샷 + 정규화 데이터)
+        """
+        turn_count = state.get("turn_count", 0)
+        scenario_id = state.get("scenario_id", "unknown")
+        user_name = state.get("user_name")
+        current_stage = state.get("current_stage")
+        final_ending = state.get("final_ending")
+        is_active = state.get("is_active", True)
+
+        # 1. 세션 메타데이터 먼저 저장 (foreign key를 위해)
+        session_meta = {
+            "session_id": session_id,
+            "scenario_id": scenario_id,
+            "user_name": user_name,
+            "current_stage": current_stage,
+            "turn_count": turn_count,
+            "stage_turn": state.get("stage_turn", 0),
+            "final_ending": final_ending,
+            "is_active": is_active
+        }
+        self._hybrid.db.save_session(session_meta)
+
+        # 2. PostgreSQL 스냅샷에 저장 (복구용) - session이 먼저 생성되어야 함
+        self._hybrid.save_snapshot(session_id, turn_count, state)
+
+        # 3. 캐시에 저장 (빠른 접근)
+        cache_key = self._make_cache_key(session_id)
+        self._hybrid.cache.set_session(cache_key, state)
+
+        # 4. 선택적: 대화, 친밀도 등 정규화 데이터 저장
+        # (필요시 나중에 추가)
 
     def get(self, session_id: str) -> Optional[Dict[str, Any]]:
-        return self._sessions.get(session_id)
+        """
+        GraphState 조회 (없으면 None 반환)
+        """
+        cache_key = self._make_cache_key(session_id)
+        cached_state = self._hybrid.cache.get_session(cache_key)
+        if cached_state:
+            return cached_state
+
+        snapshot = self._hybrid.load_latest_snapshot(session_id)
+        if snapshot and snapshot.get("state_json"):
+            state = snapshot["state_json"]
+            self._hybrid.cache.set_session(cache_key, state)
+            return state
+
+        return None
 
     def delete(self, session_id: str) -> None:
-        self._sessions.pop(session_id, None)
+        """
+        세션 삭제 (캐시에서만 제거, DB는 is_active=false)
+        """
+        cache_key = self._make_cache_key(session_id)
+        self._hybrid.cache.delete_session(cache_key)
+        self._hybrid.db.update_session(session_id, {"is_active": False})
 
     def exists(self, session_id: str) -> bool:
-        return session_id in self._sessions
+        """
+        세션 존재 여부 확인
+        """
+        cache_key = self._make_cache_key(session_id)
+        if self._hybrid.cache.exists(cache_key):
+            return True
+
+        snapshot = self._hybrid.load_latest_snapshot(session_id)
+        return snapshot is not None
 
 
-SESSION_MANAGER = SessionManager()
+# HybridSessionManager 초기화
+try:
+    _hybrid_manager = create_hybrid_session_manager_from_env()
+    SESSION_MANAGER = SessionManagerAdapter(_hybrid_manager)
+    print("✅ Database-backed SessionManager initialized")
+except Exception as e:
+    print(f"⚠️ Failed to initialize database session manager: {e}")
+    print("⚠️ Falling back to in-memory session storage")
+
+    # Fallback: 메모리 기반 SessionManager
+    class InMemorySessionManager:
+        def __init__(self):
+            self._sessions: Dict[str, Dict[str, Any]] = {}
+
+        def load_or_create(self, session_id: str) -> Dict[str, Any]:
+            return self._sessions.setdefault(session_id, {})
+
+        def save(self, session_id: str, state: Dict[str, Any]) -> None:
+            self._sessions[session_id] = state
+
+        def get(self, session_id: str) -> Optional[Dict[str, Any]]:
+            return self._sessions.get(session_id)
+
+        def delete(self, session_id: str) -> None:
+            self._sessions.pop(session_id, None)
+
+        def exists(self, session_id: str) -> bool:
+            return session_id in self._sessions
+
+    SESSION_MANAGER = InMemorySessionManager()
 
 # ------------------------------------------------------------
 # ✅ Workflow 싱글톤 (LangGraph 파이프라인)
@@ -406,7 +524,7 @@ async def chat(request: Request):
                 # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
                 all_dialogues = result_state.get("output", {}).get("dialogues", [])
 
-                # 각 대화마다 이미지를 분석하여 image_index 할당
+                # 🚀 배치 처리: 전체 대화를 한 번에 분석 (LLM 1회 호출)
                 previous_image = current_image
 
                 # 첫 대화이고 이전 이미지가 없으면 인트로 이미지(1번)로 시작
@@ -416,22 +534,22 @@ async def chat(request: Request):
                     current_image = "1"
                     print(f"🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
 
-                for i, dialogue in enumerate(all_dialogues):
-                    # 첫 대화는 이미 처리했으므로 스킵
-                    if i == 0 and dialogue.get("image_index"):
-                        continue
+                # 배치로 모든 대화의 이미지 선택 (1회 LLM 호출)
+                selected_images = image_manager.select_images_batch(result_state)
 
-                    # 해당 대화 인덱스까지의 컨텍스트로 이미지 선택
-                    new_image = image_manager.get_image_for_dialogue_at_index(
-                        result_state, i
-                    )
+                if selected_images:
+                    for i, new_image in enumerate(selected_images):
+                        # 첫 대화는 이미 처리했으므로 스킵
+                        if i == 0 and all_dialogues[i].get("image_index"):
+                            previous_image = all_dialogues[i]["image_index"]
+                            continue
 
-                    if new_image is not None and new_image != previous_image:
-                        # 이미지가 변경되면 해당 대화에 image_index 추가
-                        dialogue["image_index"] = new_image
-                        previous_image = new_image
-                        current_image = new_image
-                        print(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
+                        if new_image is not None and new_image != previous_image:
+                            # 이미지가 변경되면 해당 대화에 image_index 추가
+                            all_dialogues[i]["image_index"] = new_image
+                            previous_image = new_image
+                            current_image = new_image
+                            print(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
 
                 # 최종 current_image를 세션에 저장
                 result_state["current_image"] = current_image
