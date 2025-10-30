@@ -7,6 +7,7 @@ from src.core import scene_dialogue_tools as dialogue_tools
 from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 from src.utils.config_loader import get_config_loader
+from src.utils.world_loader import WorldLoader
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
@@ -270,6 +271,17 @@ class ChildrenAgent:
         tone_meta = metadata.get("tone") or {}
         scenario_key = tone_meta.get("scenario_key")
 
+        # 🌍 세계관 정보 로드
+        world_id = scenario_ref.get("world_id") if isinstance(scenario_ref, dict) else None
+        world_context = None
+        if world_id:
+            try:
+                world_context = WorldLoader.get_world_context(world_id)
+                if world_context:
+                    log("children", f"🌍 Loaded world context: {world_id}")
+            except Exception as e:
+                log("children", f"⚠️ Failed to load world {world_id}: {e}")
+
         # -----------------------------
         # 2️⃣ 캐릭터 톤 + 관계 로드
         # -----------------------------
@@ -301,6 +313,7 @@ class ChildrenAgent:
             latest_user_input=latest_user_input if isinstance(latest_user_input, str) else None,
             recent_dialogues=recent_dialogues if isinstance(recent_dialogues, list) else None,
             stage_context=stage_context if isinstance(stage_context, str) else None,
+            world_context=world_context if isinstance(world_context, str) else None,
         )
 
 

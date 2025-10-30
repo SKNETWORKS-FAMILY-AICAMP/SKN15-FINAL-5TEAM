@@ -4,6 +4,7 @@
   "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
   "version": "6.0",
   "mountable": true,
+  "world_id": "demon_slayer_taisho",
   "character_refs": {
     "rengoku": "backend/data/characters/rengoku.json",
     "tanjiro": "backend/data/characters/tanjiro.json",

@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from src.config.constants import INTRO_STAGE_TAGS
+from src.utils.config_loader import get_config_loader
+
+# 프롬프트 템플릿 로드
+_CONFIG_LOADER = get_config_loader()
+_PROMPTS = _CONFIG_LOADER.get_prompts()
+_SCENE_DIALOGUE_PROMPTS = _PROMPTS.get("llm_prompts", {}).get("scene_dialogue", {})
 
 def load_tone_profiles(
     character_refs: Dict[str, str],
@@ -70,9 +76,10 @@ def compose_llm_prompt(
     latest_user_input: Optional[str] = None,
     recent_dialogues: Optional[List[str]] = None,
     stage_context: Optional[str] = None,
+    world_context: Optional[str] = None,
 ) -> str:
     """
-    tone_profiles + beats + 관계 정보를 포함한 LLM 프롬프트
+    tone_profiles + beats + 관계 정보 + 세계관 정보를 포함한 LLM 프롬프트
     """
     # --- tone 요약 ---
     tone_desc = "\n".join(
@@ -97,20 +104,16 @@ def compose_llm_prompt(
                 pair = tuple(sorted([name, target]))
                 first_encounter_pairs.add(pair)
 
-    # 처음 만남 경고 메시지 생성
+    # 처음 만남 경고 메시지 생성 (템플릿 기반)
     first_encounter_notes = []
     if first_encounter_pairs:
-        first_encounter_notes.append("=" * 60)
-        first_encounter_notes.append("🚨 처음 만남 주의사항 🚨")
-        first_encounter_notes.append("=" * 60)
+        header = _SCENE_DIALOGUE_PROMPTS.get("first_encounter_header", "")
+        footer = _SCENE_DIALOGUE_PROMPTS.get("first_encounter_footer", "")
+
+        first_encounter_notes.append(header)
         for pair in sorted(first_encounter_pairs):
             first_encounter_notes.append(f"⚠️ {pair[0]}와 {pair[1]}는 이 장면에서 처음 만납니다!")
-        first_encounter_notes.append("")
-        first_encounter_notes.append("처음 만나는 캐릭터들은:")
-        first_encounter_notes.append("- 서로의 이름을 모릅니다 (이름을 부르지 마세요!)")
-        first_encounter_notes.append("- 처음 보는 반응을 보여야 합니다 (놀람, 경계, 호기심)")
-        first_encounter_notes.append("- 재회 표현 금지 ('또 만났네', '오랜만이야' 등)")
-        first_encounter_notes.append("=" * 60)
+        first_encounter_notes.append(footer)
 
     rel_text = "\n".join(rel_desc)
     first_encounter_text = "\n".join(first_encounter_notes) if first_encounter_notes else ""
@@ -135,7 +138,7 @@ def compose_llm_prompt(
     {option_lines}
     """
 
-    # 인트로 스테이지 감지 및 첫 narr 체크
+    # 인트로 스테이지 감지 및 첫 narr 체크 (템플릿 기반)
     intro_stage_aliases = {tag.upper() for tag in INTRO_STAGE_TAGS}
     is_intro = stage_tag.upper() in intro_stage_aliases
     has_narr_beat = any(
@@ -144,12 +147,7 @@ def compose_llm_prompt(
     )
     intro_narr_reminder = ""
     if is_intro and has_narr_beat:
-        intro_narr_reminder = """
-    ⭐ 인트로 스테이지 필수 요구사항:
-    - 반드시 narr(내레이션)으로 시작해야 합니다
-    - 첫 번째 dialogue는 무조건 speaker: "narr"이어야 합니다
-    - narr는 장면의 배경, 분위기, 환경을 생생하게 묘사합니다
-    """
+        intro_narr_reminder = _SCENE_DIALOGUE_PROMPTS.get("intro_narr_reminder", "")
 
     summary_block = ""
     if context_summary:
@@ -172,33 +170,29 @@ def compose_llm_prompt(
     {"; ".join(recent_dialogues)}
     """
 
-    # 장면 설정 블록 (새로운 장면 전환 시)
+    # 세계관 설정 블록 (템플릿 기반)
+    world_context_block = ""
+    if world_context:
+        template = _SCENE_DIALOGUE_PROMPTS.get("world_context_block", "")
+        world_context_block = template.format(world_context=world_context)
+
+    # 장면 설정 블록 (템플릿 기반)
     scene_context_block = ""
     if stage_context:
-        scene_context_block = f"""
-    [장면 설정]
-    {stage_context}
+        template = _SCENE_DIALOGUE_PROMPTS.get("scene_context_block", "")
+        scene_context_block = template.format(stage_context=stage_context)
 
-    ⭐ 장면 전환 규칙:
-    - 이 장면이 처음 시작되거나 이전 장면과 다른 경우, **반드시 첫 번째 대사를 narr(나레이션)으로** 시작하세요.
-    - narr는 위 [장면 설정]을 바탕으로 새로운 장면의 분위기, 환경, 상황을 1~2문장으로 묘사합니다.
-    - 장면 설정 문장을 그대로 복사하지 말고, 감각적이고 생생하게 재구성하세요.
-    - 예시:
-      * 설정: "열차가 출발하고 잠시 후, 탄지로 일행이 객차 문을 열고 들어온다."
-      * narr: "객차 문이 삐걱거리며 열리고, 탄지로 일행이 들어온다. 열차의 흔들림과 함께 새로운 기운이 느껴진다."
-    """
+    # 템플릿 기반 프롬프트 조립
+    header = _SCENE_DIALOGUE_PROMPTS.get("header", "")
+    instructions = _SCENE_DIALOGUE_PROMPTS.get("instructions", "")
 
     prompt = f"""
-    당신은 Demon Slayer: 무한열차 시나리오의 대사 작가입니다.
-    🛑 절대 [상황 요약]의 goal 문장이나 따옴표 안 대사를 그대로 복사하거나 서술하지 마세요.
-    🛑 goal을 참조해서 캐릭터 대사를 2~3줄 정도 생성하세요.
-    🛑 이름, 대사 모두 한국어로 작성하세요.
-    🛑 goal은 "상황 요약"일 뿐, 실제 출력 문장이 아닙니다. goal과 동일한 문장, "~라고 말한다" 같은 설명체는 금지입니다.
-
-    ⚠️ 핵심 규칙: 아래 [상황 요약]의 내용만 사용하세요. 다른 장면이나 상황을 창작하지 마세요.
+    {header}
 
     [현재 스테이지]
     {stage_tag}
+
+    {world_context_block}
 
     {scene_context_block}
 
@@ -229,46 +223,6 @@ def compose_llm_prompt(
     {first_encounter_text}
     {intro_narr_reminder}
 
-    [중요 지침]
-
-    1. 대사 생성 규칙:
-    - ✅ 위 [상황 요약]의 각 beat를 순서대로 처리하되, **goal 텍스트를 그대로 복사·설명하지 말고** 화자 입으로 재구성하세요.
-    - ✅ goal은 상황 요약일 뿐입니다. 화자는 자신의 감정, 관찰, 결심을 2~3문장 분량의 생생한 대사로 표현하세요.
-    - ✅ narr가 아닌 화자는 순수한 대사만 말합니다. "~라고 말한다", 행동 묘사, 지시문은 출력하지 마세요.
-    - 📝 narr만 장면/감각/효과음을 묘사할 수 있으며, 이때도 goal을 복사하지 말고 새롭게 묘사하세요.
-    - ❌ [상황 요약]에 없는 장소·시간·인물·사건을 추가하지 마세요.
-    - 예시:
-        * goal: "렌고쿠가 다가온다" → 대사: "괜찮나? 불길이 삼킬 뻔했군!"
-        * goal: "탄지로가 코를 킁킁거린다. '이 냄새… 젠이츠는 뒤쪽 칸에, 이노스케는 앞쪽 기관실 쪽이에요.'"  
-          → 대사: "이 냄새… 젠이츠는 뒤쪽, 이노스케는 앞쪽이에요. 틀림없어요!"
-    ⚙️ [{{user}} 관련 beat 처리 규칙]
-    - goal에 "{{user}}말에 대답한다" 또는 "{{user}}가 ~라고 말했다"가 있으면, 이는 **유저의 직전 발화에 답변하라**는 지시입니다.
-    - goal 문장 자체나 "{{user}}" 문자열을 출력하지 말고, 캐릭터가 유저에게 자연스럽게 답하는 대사를 만드세요.
-    - 예시: goal "{{user}}말에 대답한다" → "그렇죠, 지금은 동료를 모으는 게 먼저예요!"
-    - ⚠️ "{{user}}"는 시스템이 유저 이름으로 치환하니 절대 그대로 출력하지 마세요.
-
-
-    2. 처음 만남 규칙:
-    - 관계 정보를 정확히 반영하세요.
-    - "처음 만남"인 경우 이름을 모르며, 놀람·경계·호기심으로 반응해야 합니다.
-    - “오랜만이야”, “또 만났네” 같은 재회 표현 금지.
-    - 예시: 아카자가 렌고쿠를 처음 본다면 → "오… 염주인가. 강한 투기가 느껴진다."
-
-    3. narr(내레이션):
-    - narr는 장면 묘사·감각·효과음을 담당하며, 캐릭터 대사는 하지 않습니다.
-    - 인트로 스테이지에서는 narr가 반드시 첫 번째로 등장해야 합니다.
-    - narr는 생략하지 말고, beat에 포함되어 있다면 반드시 생성하세요.
-
-    4. 장면 전진 규칙:
-    - [이전 턴 요약]과 사용자 입력을 먼저 읽고, 그 흐름을 자연스럽게 이어가세요.
-    - 이미 언급된 문장을 반복하지 말고, 새로운 감정·행동·정보로 장면을 전진시키세요.
-    - stage_turn이 0이면 장면을 소개하고, 그 이상이면 기존 전개를 기반으로 긴장감과 감정을 발전시키세요.
-    - 스테이지 타입과 목표(예: mission objective, intent 선택지)에 맞춰 플레이어가 다음 행동을 하도록 자연스럽게 유도하세요.
-    - 선택지를 제시해야 하는 장면이라면, beats 내용을 바탕으로 플레이어가 답하거나 결정을 내릴 수 있게 질문이나 촉구로 마무리하세요.
-
-    5. 출력 형식 (JSON):
-      {{
-        "dialogues": [{{"speaker": "...", "text": "..."}}]
-      }}
+    {instructions}
     """
     return prompt.strip()
