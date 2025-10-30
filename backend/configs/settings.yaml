@@ -1,7 +1,7 @@
 # LLM 클라이언트 설정
 llm_client:
   provider: "openai"
-  default_model: "gpt-4-turbo"
+  default_model: "gpt-4o-mini"  # 최고 속도 (gpt-4o보다 10배 빠름)
   temperature: 0.7
   max_tokens: 4000
   agent_configs:
@@ -18,8 +18,8 @@ llm_client:
       temperature: 0.1
       max_tokens: 200
     children:
-      model: "gpt-4-turbo"
-      temperature: 0.65
+      model: "gpt-4o-mini"  # 최고 속도
+      temperature: 0.8  # 창의성 유지 (0.65 → 0.8)
       retry_temperature: 0.9
       max_tokens: 2000
     dialogue:
@@ -36,9 +36,9 @@ llm_client:
     fallback:
       model: "gpt-4o-mini"
       temperature: 0.8
-      max_tokens: 80
+      max_tokens: 400  # Children 실패 시 직접 대사 생성 (80 → 400)
       urgent_temperature: 0.75
-      urgent_max_tokens: 90
+      urgent_max_tokens: 400  # urgent도 동일하게 증가 (90 → 400)
     image_manager:
       model: "gpt-4o-mini"
       temperature: 0.3
