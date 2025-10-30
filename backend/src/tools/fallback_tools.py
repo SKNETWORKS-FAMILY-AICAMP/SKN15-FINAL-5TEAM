@@ -8,6 +8,7 @@ from src.config.constants import (
     FALLBACK_ALLOW_NORMAL,
     FALLBACK_ALLOW_URGENT
 )
+from src.tools.scene_tools import get_stage_atmosphere
 
 
 class FallbackManager:
@@ -22,12 +23,12 @@ class FallbackManager:
         장면 분위기에 따른 Fallback 허용 횟수 반환
 
         Args:
-            scene_atmosphere: 장면 분위기 ("normal", "urgent", "combat")
+            scene_atmosphere: 장면 분위기 ("normal", "urgent", "tense", "calm", "combat")
 
         Returns:
             허용 횟수
         """
-        if scene_atmosphere in ["urgent", "combat", "battle"]:
+        if scene_atmosphere in ["urgent", "tense", "combat", "battle"]:
             return FALLBACK_ALLOW_URGENT
         else:
             return FALLBACK_ALLOW_NORMAL
@@ -50,7 +51,6 @@ class FallbackManager:
         """
         # 현재 스테이지 데이터 가져오기
         current_stage_data = self._get_current_stage_data(state)
-        # cutscene5_llm_driven.json에서 stage에 한 블록에서 atmosphere 가져오고 없으면 normal 키 사용
         scene_atmosphere = current_stage_data.get("atmosphere", "normal")
 
         # 허용 횟수 가져오기
@@ -93,16 +93,23 @@ class FallbackManager:
         }
 
     def _get_current_stage_data(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """현재 스테이지 데이터 가져오기"""
+        """현재 스테이지 데이터 가져오기 (atmosphere 정규화 포함)"""
         scenario_data = state.get("scenario_data", {})
         current_stage = state.get("current_stage", "")
         stages = scenario_data.get("stages", {})
 
         # stages가 list인 경우 tag로 찾기
         if isinstance(stages, list):
-            return next((s for s in stages if s.get("tag", "").upper() == current_stage.upper()), {})
+            stage_data = next((s for s in stages if s.get("tag", "").upper() == current_stage.upper()), {})
         else:
-            return stages.get(current_stage, {})
+            stage_data = stages.get(current_stage, {})
+
+        # atmosphere를 정규화된 문자열로 변환
+        if stage_data and "atmosphere" in stage_data:
+            normalized_atmosphere = get_stage_atmosphere(stage_data)
+            stage_data = {**stage_data, "atmosphere": normalized_atmosphere}
+
+        return stage_data
 
     def _generate_fallback_message(
         self,
@@ -123,7 +130,7 @@ class FallbackManager:
         choices = stage_data.get("choices", [])
 
         # 급박한 장면
-        if scene_atmosphere in ["urgent", "combat", "battle"]:
+        if scene_atmosphere in ["urgent", "tense", "combat", "battle"]:
             if should_block:
                 return f"⚠️  지금은 선택할 시간이 없습니다! 즉시 결정해주세요.\n\n{self._format_choices(choices)}"
             else:

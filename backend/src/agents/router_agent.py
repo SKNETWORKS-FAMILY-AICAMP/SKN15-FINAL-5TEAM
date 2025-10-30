@@ -1,413 +1,520 @@
-# Router Agent (Context-aware variant)
-"""
-Router Agent - 사용자 입력을 분류하고 다음 처리 방향을 결정
-- on_topic/off_topic 구분 (LLM 기반 + 규칙 기반)
-- Fallback 정책 적용 (장면별 허용 횟수)
-- Loop 제어 적용 (반복 입력 자동 전환)
-- 다음 노드 결정 (parent_agent or children_agent)
+from __future__ import annotations
 
-본 모듈은 기존 router_agent에 `message_history` 컨텍스트를 포함해
-LLM 분류 정확도를 높인 버전입니다.
-"""
-
-from typing import List, Dict, Any
 import time
-import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Sequence
 
-from src.core.graph_state import AgentState
-from src.utils.llm_client import get_llm_client
-from src.tools.fallback_tools import check_fallback_policy, apply_fallback_result
-from src.tools.loop_tools import check_loop_detection, apply_loop_result
-from src.utils.characters_repo import list_characters
+from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
+from src.utils.fallback_llm import generate_off_topic_response
+from src.utils.llm_client import LLMClient, get_llm_client
+from src.utils.logger import log
+from src.utils.intent_handler import detect_intent_with_llm
+from src.utils.intent_detector import detect_intents
+from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
 
+_PROMPTS = get_config_loader().get_prompts()
+_ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
+_ROUTER_TOPIC_PROMPT = (_ROUTER_PROMPTS.get("topic_classifier") or "").strip()
+_ROUTER_TOPIC_USER_TEMPLATE = (_ROUTER_PROMPTS.get("topic_classifier_user") or "").strip()
+if not _ROUTER_TOPIC_PROMPT:
+    raise ValueError("RouterAgent topic_classifier prompt missing in configs/prompts.yaml (llm_prompts.router.topic_classifier).")
+if not _ROUTER_TOPIC_USER_TEMPLATE:
+    raise ValueError("RouterAgent topic_classifier_user prompt missing in configs/prompts.yaml (llm_prompts.router.topic_classifier_user).")
 
-def _ensure_speaker_pool(state: AgentState) -> None:
-    scene = state.setdefault("scene", {})
-    cc = state.get("children_ctx") or {}
-    if cc.get("speaker_pool"):
-        scene["speaker_pool"] = cc.get("speaker_pool")
-        return
-    pool = scene.get("speaker_pool") or []
-    if pool:
-        return
-    # Build a conservative pool from known characters
-    base = ["tanjiro", "rengoku", "zenitsu", "inosuke", "akaza", "system", "narr"]
-    present = set(list_characters())
-    candidates = [c for c in base if c in present or c in ("akaza", "system", "narr")]
-    scene["speaker_pool"] = candidates
+# ============================================================
+# 🎯 RouterAgent — 사용자의 발화가 시나리오 관련(on_topic)인지 아닌지(off_topic) 분류
+# (필요한 utils : llm_clien, fallback_llm, embedding_matcher, logger)
+# (1차 : 임베딩 매칭 / 2차 : LLM 판별)
+# ============================================================
 
-
-def _normalize_korean(text: str) -> str:
-    """
-    한글 형태소 정규화 (간이 버전)
-    조사와 어미를 제거하여 어간만 추출
-
-    예시:
-    - "돕죠" → "돕"
-    - "도와줘" → "도와"
-    - "찾자" → "찾"
-    - "함께하자" → "함께하"
-    """
-    # 일반적인 조사/어미 패턴 제거
-    patterns = [
-        r'(을|를|이|가|은|는|와|과|의|에|에서|으로|로|부터|까지|한테|께|님|씨)$',  # 조사
-        r'(죠|요|야|아|어|네|지|ㅂ니다|습니다)$',  # 종결어미
-        r'(자|까|줘|주|게|라)$',  # 명령/제안형 어미
-    ]
-    normalized = text
-    for pattern in patterns:
-        normalized = re.sub(pattern, '', normalized)
-    return normalized
+@dataclass
+class TopicClassification:
+    is_off_topic: bool
+    confidence: float
+    category: Optional[str] = None
+    reason: Optional[str] = None
 
 
-def _detect_intent_cutscene5(state: Dict[str, Any], user_input: str) -> str:
-    """cutscene5_llm_driven 시나리오 전용 의도 판별 (형태소 정규화 적용)"""
-    current_stage = (state.get("current_stage") or "").upper()
-    user_text = user_input.lower()
+class RouterAgent:
+    # ============================================================
+    # 🛠️ 초기화
+    # ============================================================
+    # 여기도 일단은 임시로 키워드를 넣어서 on / off 토픽을 코사인 유사도로 매치
+    def __init__(self) -> None:
+        self._llm_client: LLMClient = get_llm_client()
+        self._embedding_client: EmbeddingClient = get_embedding_client()
+        self._topic_matcher = EmbeddingMatcher(
+            {
+                # 임시 키워드 분류
+                "off_topic": [
+                    "학교 숙제 끝났어",
+                    "게임 얘기하자",
+                    "유튜브 추천해줘",
+                    "뉴스 알려줘",
+                    "mbti가 뭐야?"
+                ],
+            },
+            threshold=0.6,
+            embedding_client=self._embedding_client,
+        )
 
-    # 형태소 정규화된 텍스트 (조사/어미 제거)
-    normalized_text = _normalize_korean(user_text)
+    # ============================================================
+    # 🚦 분류 엔트리 포인트
+    # ============================================================
+    # 전체 실행 함수, 임베딩 -> LLM 순으로 분류, 입력이 없는 경우 off 토픽
+    def run(self, state: Dict[str, Any], user_input: str) -> Dict[str, Any]:
+        # Phase 4: 로그 수집 시작
+        start_time = time.perf_counter()
 
-    if current_stage == "ROUTE_CHOICE":
-        # 동료 찾기 키워드 (어간 중심)
-        allies_keywords = ["동료", "찾", "모아", "모으", "젠이츠", "이노스케", "데려", "규합", "도움", "부르", "모집", "둘"]
-        # 함께 싸우기 키워드 (어간 중심)
-        reckless_keywords = ["함께", "같이", "렌고쿠", "싸우", "돌진", "막", "지키", "지원", "붙", "돕", "도와"]
+        normalized = (user_input or "").strip()
+        state["user_input"] = normalized
 
-        # 세부 타깃 감지 (우선순위: 이노스케/젠이츠)
-        ally_targets = {
-            "inosuke": ["이노스케", "멧돼지", "inosuke"],
-            "zenitsu": ["젠이츠", "zenitsu", "츠고쿠", "츠구코"],
-        }
-        target_matches = {
-            target: any(kw in user_text or kw in normalized_text for kw in hints)
-            for target, hints in ally_targets.items()
-        }
-        if sum(1 for matched in target_matches.values() if matched) == 1:
-            chosen_target = next(t for t, matched in target_matches.items() if matched)
+        if not normalized:
+            empty_topic = TopicClassification(
+                is_off_topic=True,
+                confidence=1.0,
+                category="empty",
+                reason="empty_input",
+            )
+            result = self._handle_off_topic(state, normalized, empty_topic)
+            # Phase 4: 로그 수집
+            self._log_execution(state, result, start_time)
+            return result
+
+        embedding = self._get_user_embedding(state, normalized)
+        embedding_topic = self._classify_with_embedding(normalized, embedding=embedding)
+        if embedding_topic:
+            result = (
+                self._handle_off_topic(state, normalized, embedding_topic)
+                if embedding_topic.is_off_topic
+                else self._handle_on_topic(state, normalized, embedding_topic)
+            )
+            # Phase 4: 로그 수집
+            self._log_execution(state, result, start_time)
+            return result
+
+        # 🚀 Phase 2 최적화: topic classification + intent detection 병렬 실행
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            topic_future = executor.submit(self._classify_with_llm, state, normalized)
+            intent_future = executor.submit(self._detect_route_intent, state, normalized)
+
+            topic = topic_future.result()
+            # topic이 on_topic일 때만 intent 결과 사용
+            detected_intent = intent_future.result() if not topic.is_off_topic else None
+
+        if topic.is_off_topic:
+            result = self._handle_off_topic(state, normalized, topic)
         else:
-            chosen_target = None
+            result = self._handle_on_topic(state, normalized, topic, precomputed_intent=detected_intent)
 
-        # 원문과 정규화된 텍스트 모두에서 검색 : choose_allies_path -> RECRUIT 
-        if any(kw in user_text or kw in normalized_text for kw in allies_keywords) or chosen_target:
-            if chosen_target:
-                intent_name = f"choose_allies_{chosen_target}_first"
-                state["user_intent"] = intent_name
-                temp = state.setdefault("temp_data", {})
-                temp["mission_first_target"] = chosen_target
-                state["temp_data"] = temp
-                print(f"[ROUTER] 🎯 Detected intent: {intent_name} (input: '{user_input}')")
-                return intent_name
+        # Phase 4: 로그 수집
+        self._log_execution(state, result, start_time)
+        return result
 
-            state["user_intent"] = "choose_allies_path"
-            print(f"[ROUTER] 🎯 Detected intent: choose_allies_path (input: '{user_input}')")
-            return "choose_allies_path"
-        # 함께 싸우기 키워드 (reckless)
-        if any(kw in user_text or kw in normalized_text for kw in reckless_keywords):
-            state["user_intent"] = "choose_reckless_path"
-            print(f"[ROUTER] 🎯 Detected intent: choose_reckless_path (input: '{user_input}')")
-            return "choose_reckless_path"
-
-        print(f"[ROUTER] ⚠️ No intent matched for ROUTE_CHOICE (input: '{user_input}', normalized: '{normalized_text}')")
-        state.pop("user_intent", None)
-        state.pop("router_label", None)
-        return None
-
-    if current_stage == "INTERVENE":
-        # 형태소 정규화 적용
-        attack_keywords = ["검기", "궤도", "비틀", "원거리", "견제", "공격"]
-        noise_keywords = ["돌", "소리", "주의", "시선", "던"]
-        ignore_keywords = ["무시", "개입", "피", "도망"]
-
-        if any(kw in user_text or kw in normalized_text for kw in attack_keywords):
-            print(f"[ROUTER] 🎯 Detected intent: intervene_attack (input: '{user_input}')")
-            return "intervene_attack"
-        if any(kw in user_text or kw in normalized_text for kw in noise_keywords):
-            print(f"[ROUTER] 🎯 Detected intent: intervene_noise (input: '{user_input}')")
-            return "intervene_noise"
-        if any(kw in user_text or kw in normalized_text for kw in ignore_keywords):
-            print(f"[ROUTER] 🎯 Detected intent: intervene_ignore (input: '{user_input}')")
-            return "intervene_ignore"
-        return "intervene_ignore"
-
-    if current_stage == "RECRUIT":
-        # 형태소 정규화 적용
-        zenitsu_keywords = ["젠이츠", "네즈코", "위험", "깨우"]
-        inosuke_wake_keywords = ["이노스케", "대장", "앞장", "강한", "강", "왕", "멧돼지"]
-        inosuke_convince_keywords = ["함께", "같이", "도와", "지원", "합류", "전장", "렌고쿠", "힘", "가자", "따라", "참전", "동료"]
-        inosuke_engaged = bool(state.get("inosuke_engaged"))
-        inosuke_willing = bool(state.get("inosuke_willing"))
-
-        if any(kw in user_text or kw in normalized_text for kw in zenitsu_keywords):
-            print(f"[ROUTER] 🎯 Detected intent: wake_zenitsu (input: '{user_input}')")
-            return "wake_zenitsu"
-
-        if inosuke_engaged and not inosuke_willing:
-            if any(kw in user_text or kw in normalized_text for kw in inosuke_convince_keywords):
-                print(f"[ROUTER] 🎯 Detected intent: convince_inosuke (input: '{user_input}')")
-                return "convince_inosuke"
-            if any(kw in user_text or kw in normalized_text for kw in inosuke_wake_keywords):
-                print(f"[ROUTER] ⚠️ Inosuke engaged but persuasion keywords missing → treat as provoke fallback (input: '{user_input}')")
-                return "provoke_inosuke"
+    # ============================================================
+    # 🔍 분류 헬퍼
+    # ============================================================
+    # 임베딩을 통한 분류
+    def _classify_with_embedding(
+        self,
+        text: str,
+        *,
+        embedding: Optional[Sequence[float]] = None,
+    ) -> Optional[TopicClassification]:
+        if not text:
             return None
 
-        if (not inosuke_engaged) and any(kw in user_text or kw in normalized_text for kw in inosuke_wake_keywords):
-            print(f"[ROUTER] 🎯 Detected intent: provoke_inosuke (input: '{user_input}')")
-            return "provoke_inosuke"
-        # 🔥 매칭 실패 시 None 리턴 (기본값 제거)
-        print(f"[ROUTER] ⚠️ No intent matched for RECRUIT (input: '{user_input}')")
-        return None
+        match = self._topic_matcher.match(text, embedding=embedding)
+        if not match.label:
+            return None
 
-    return None
+        confidence = max(0.0, min(1.0, match.score or 0.0))
+        is_off_topic = match.label == "off_topic"
+        reason = f"{match.label}_match"
+        log(
+            "router",
+            "embedding_classification",
+            label=match.label,
+            score=f"{confidence:.4f}",
+            is_off_topic=is_off_topic,
+        )
 
+        return TopicClassification(
+            is_off_topic=is_off_topic,
+            confidence=confidence,
+            category="embedding",
+            reason=reason,
+        )
 
-def _format_message_history(state: AgentState, limit: int = 6, max_chars: int = 800) -> str:
-    """최근 message_history를 문자열 컨텍스트로 정리"""
-    history: List[Dict[str, Any]] = state.get("message_history") or []
-    if not history:
-        return ""
-
-    trimmed = history[-limit:]
-    lines: List[str] = []
-    for item in trimmed:
-        speaker = (item.get("speaker") or "unknown").strip()
-        text = (
-            item.get("text")
-            or item.get("content")
-            or ""
-        ).strip()
-        if text:
-            lines.append(f"{speaker}: {text}")
-
-    context_text = "\n".join(lines).strip()
-    if not context_text:
-        return ""
-
-    if len(context_text) > max_chars:
-        context_text = context_text[-max_chars:]
-    return context_text
-
-
-def run_router_agent(state: AgentState, user_input: str) -> AgentState:
-    """
-    Router Agent 실행 함수
-    - 사용자 의도 판별 (cutscene5_llm_driven 전용)
-    - LLM 기반 + 규칙 기반 분류 (message_history 컨텍스트 포함)
-    """
-    start_time = time.perf_counter()
-    # print(f"[ROUTER+] DEBUG label={state.get('router_label')}, keys={list(state.keys())}")
-    print(f"[ROUTER+] DEBUG routing_result={state.get('routing_result')}, temp_data={state.get('temp_data')}")
-    
-    def _finish(result_state: AgentState, stage: str) -> AgentState:
-        elapsed_ms = (time.perf_counter() - start_time) * 1000
-        ui = result_state.get("user_intent")
-        ctx_tag = ((result_state.get("temp_data") or {}).get("children_ctx") or {}).get("stage_tag")
-        print(f"[ROUTER+] Elapsed {elapsed_ms:.2f} ms ({stage}) | user_intent={ui} ctx_tag={ctx_tag}")
-        return result_state
-
-    print(f"[ROUTER+] Processing input: {user_input[:30]}...")
-
-    # Hard safety: ensure a minimal speaker_pool before intent detection
-    scene = state.setdefault("scene", {})
-    if not (state.get("children_ctx") or {}).get("speaker_pool") and not scene.get("speaker_pool"):
-        scene["speaker_pool"] = ["tanjiro", "rengoku", "akaza", "system", "narr"]
-
-    # Ensure a reasonable speaker_pool before intent detection
-    try:
-        scene = state.setdefault("scene", {})
-        cc = state.get("children_ctx") or {}
-        if not (cc.get("speaker_pool") or scene.get("speaker_pool")):
-            # Scenario-aware conservative defaults
-            scenario_id = (state.get("scenario_id") or "").strip().lower()
-            current_stage = (state.get("current_stage") or "").strip().upper()
-            present = set(list_characters())
-            default_pool = []
-            if scenario_id == "cutscene5_llm_driven" and current_stage in ("INTRO", "INTERVENE", "ROUTE_CHOICE"):
-                # Place known actors for this scene
-                for c in ["tanjiro", "rengoku", "akaza", "system", "narr"]:
-                    if c in present or c in ("akaza", "system", "narr"):
-                        default_pool.append(c)
-            else:
-                for c in ["tanjiro", "rengoku", "zenitsu", "inosuke", "akaza", "system", "narr"]:
-                    if c in present or c in ("akaza", "system", "narr"):
-                        default_pool.append(c)
-            scene["speaker_pool"] = default_pool
-    except Exception:
-        pass
-
-    # 0단계: 데이터 주도 의도 태깅(하이브리드 패턴/컨텍스트/선택적 LLM) - 친밀도
-    try:
-        from src.agents.intent_detector import detect_intents
-        state["intent_tags"] = detect_intents(state, user_input)
-        print(f"[ROUTER+] intent_tags: {state['intent_tags']}")
-        
-    except Exception as e:
-        print(f"[ROUTER+] intent detection skipped: {e}")
-
-    # 1단계: 시나리오별 의도 판별 (cutscene5_llm_driven)
-    current_stage = state.get("current_stage", "")
-    scenario_id = state.get("scenario_id", "")
-
-    print(f"[ROUTER+] 🔍 scenario_id='{scenario_id}', current_stage='{current_stage}'")
-
-    if scenario_id == "cutscene5_llm_driven":
-        print(f"[ROUTER+] 🎯 Calling _detect_intent_cutscene5() for stage '{current_stage}'")
-        detected_intent = _detect_intent_cutscene5(state, user_input)
-        print(f"[ROUTER+] 📌 _detect_intent_cutscene5() returned: {detected_intent}")
-
-        if detected_intent:
-            state["user_intent"] = detected_intent
-            state["router_label"] = detected_intent
-            # ❗ Persist intent so parent_after_dialogue can consume it reliably
-            temp = state.get("temp_data") or {}
-            temp["intent"] = detected_intent
-            temp["sticky_intent"] = detected_intent
-            state["temp_data"] = temp
-            rr = state.get("routing_result") or {}
-            rr["intent"] = detected_intent
-            state["routing_result"] = rr
-            print(f"[ROUTER+] ✅ Intent: '{detected_intent}' at '{current_stage}'")
-            state["next_node"] = "parent_agent"
-            return _finish(state, "scenario_intent")
-
-    # 2단계: 규칙 기반 빠른 분류
-    off_topic_keywords = ["날씨", "밥", "음식"]
-    user_input_lower = user_input.lower().strip()
-    is_off_topic_keyword = any(kw in user_input_lower for kw in off_topic_keywords) and len(user_input) < 10
-
-    # off_topic일 경우
-    if is_off_topic_keyword:
-        classification = "off_topic"
-        confidence = 0.95
-        detected_intent = "casual_chat"
-        print("[ROUTER+] Quick classification: off_topic (규칙 기반)")
-    else:
-        # 3단계: LLM 기반 정교한 분류 (컨텍스트 포함)
-        try:
-            # LLM 호출 객체를 전역으로 1개만 만들어서 재사용
-            llm_client = get_llm_client()
-            context_text = _format_message_history(state)
-
-            system_prompt = """You are a router agent for a Demon Slayer (Kimetsu no Yaiba) story game.
-
-Your task: Classify if user input is related to the game or not.
-
-**on_topic (게임 관련):**
-- Mentions game characters: 탄지로, 이노스케, 젠이츠, 렌고쿠, 아카자, 네즈코, etc.
-- Game actions: 설득하다, 싸우다, 선택하다, 도와주다, 함께하다, 가자, etc.
-- Story progression: 계속, 다음, 확인, 진행, 어떻게 해야, etc.
-- Questions about game/story: "탄지로는 어떻게 생각해?", "이노스케를 어떻게 설득해?"
-- Responses to character dialogue: 괜찮아, 고마워, 알았어, 네, 아니, 그래, 좋아, 싫어, etc.
-- Any response that could be a reply to a character in the story.
-
-**off_topic (게임 무관):**
-- Weather: 날씨, 비, 눈, 더워, 추워
-- Food/daily life: 밥, 점심, 저녁, 배고파
-- Greetings only: 안녕, hello, 하이 (단독 인사, 스토리와 무관)
-- Random chat: 오늘 뭐했어?, 심심해, 너는 누구야 (메타 질문), etc.
-
-**IMPORTANT:**
-- If unclear, classify as 'on_topic' (게임 진행 우선)
-- Short responses like "괜찮아", "네", "좋아" are usually on_topic (캐릭터에게 대답)
-
-Return JSON: {"classification": "on_topic or off_topic", "confidence": 0.0-1.0}"""
-
-            if context_text:
-                user_prompt = (
-                    f"Recent conversation:\n{context_text}\n\n"
-                    f"Current user input: \"{user_input}\"\n"
-                    "Classify this input."
-                )
-            else:
-                user_prompt = f"User input: \"{user_input}\"\nClassify this input."
-
-            response = llm_client.call_json(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=0.1
+    # ============================================================
+    # 🧠 LLM 보조 판정
+    # ============================================================
+    # LLM을 통한 분류
+    def _classify_with_llm(self, state: Dict[str, Any], text: str) -> TopicClassification:
+        if not text:
+            return TopicClassification(
+                is_off_topic=True,
+                confidence=1.0,
+                category="empty",
+                reason="empty_input",
             )
 
-            classification = response.get("classification", "on_topic")
-            confidence = response.get("confidence", 0.7)
-            detected_intent = "casual_chat" if classification == "off_topic" else "game_action"
-            state["router_label"] = classification
-            print(f"[ROUTER+] LLM classification: {classification} (conf: {confidence})")
-            
+        scenario_id = state.get("scenario_id") or "unknown"
+        current_stage = state.get("current_stage") or "unknown"
+        recent_history = self._summarize_recent_history(state, limit=4)
+
+        user_prompt = _ROUTER_TOPIC_USER_TEMPLATE.format(
+            text=text,
+            scenario_id=scenario_id,
+            current_stage=current_stage,
+            recent_history=recent_history or "(최근 대화 없음)"
+        )
+
+        try:
+            temperature = self._llm_client.get_agent_setting("router", "temperature", 0.0)
+            max_tokens = self._llm_client.get_agent_setting("router", "max_tokens", 200)
+            response = self._llm_client.call_json(
+                system_prompt=_ROUTER_TOPIC_PROMPT,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                agent="router",
+            )
         except Exception as exc:
-            print(f"[ROUTER+] LLM 분류 실패 ({exc}), 규칙 기반 폴백")
-            classification = "on_topic"
-            confidence = 0.6
-            detected_intent = "game_action"
-            print("[ROUTER+] Fallback classification: on_topic")
+            log("router", "LLM topic classification failed", error=str(exc))
+            return TopicClassification(
+                is_off_topic=True,
+                confidence=0.6,
+                category="llm_fallback",
+                reason="llm_error",
+            )
 
-    # 분류 결과 저장
-    is_off_topic = classification == "off_topic"
-    is_valid_input = classification == "on_topic"
+        raw_classification = str(response.get("classification") or "").strip().lower()
+        is_off_topic = raw_classification != "on_topic"
 
-    routing_result = state.get("routing_result") or {}
-    routing_result.update(
-        {
-            "classification": classification,
+        confidence_raw = response.get("confidence", 0.0)
+        try:
+            confidence = float(confidence_raw)
+        except (TypeError, ValueError):
+            confidence = 0.5
+        confidence = max(0.0, min(1.0, confidence))
+
+        reason = response.get("explanation") or response.get("reason")
+        if isinstance(reason, str):
+            reason = reason.strip()
+        else:
+            reason = None
+
+        classification = "off_topic" if is_off_topic else "on_topic"
+        log(
+            "router",
+            "llm_classification",
+            classification=classification,
+            confidence=f"{confidence:.4f}",
+            reason=reason or "n/a",
+        )
+
+        return TopicClassification(
+            is_off_topic=is_off_topic,
+            confidence=confidence,
+            category="llm",
+            reason=reason,
+        )
+
+    def _detect_route_intent(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        ROUTE_CHOICE 등 자유 의사결정 스테이지에서 사용할 intent 값을 추론한다.
+        LLM 기반 의도 판별 → 시나리오 예시 매칭 → 패턴 기반 감정 스코어 순으로 시도한다.
+        """
+        scenario = state.get("scenario") or state.get("scenario_data") or {}
+        if not isinstance(scenario, dict):
+            return None
+
+        metadata = scenario.get("metadata") or {}
+        router_meta = metadata.get("router") or {}
+        if not isinstance(router_meta, dict):
+            return None
+
+        normalized_input = (user_input or "").strip()
+        if not normalized_input:
+            return None
+
+        intent_stage = router_meta.get("intent_stage")
+        allies_key = router_meta.get("allies_intent")
+        reckless_key = router_meta.get("reckless_intent")
+        intent_examples = router_meta.get("intent_examples") or {}
+
+        resolved_stage = str(intent_stage or "").upper()
+        if not resolved_stage:
+            resolved_stage = str(state.get("current_stage") or "").upper()
+        resolved_stage = resolved_stage or None
+
+        llm_intent = detect_intent_with_llm(state, normalized_input, stage_tag=resolved_stage)
+        if llm_intent:
+            return {"intent": str(llm_intent), "stage": resolved_stage, "source": "llm"}
+
+        def _match_examples(example_map: Dict[str, Any]) -> Optional[str]:
+            lower_text = normalized_input.lower()
+            for intent_key, samples in (example_map or {}).items():
+                sample_list = samples if isinstance(samples, list) else [samples]
+                for sample in sample_list:
+                    sample_str = str(sample or "").strip().lower()
+                    if sample_str and sample_str in lower_text:
+                        return str(intent_key)
+            return None
+
+        example_match = _match_examples(intent_examples if isinstance(intent_examples, dict) else {})
+        if example_match:
+            return {"intent": example_match, "stage": resolved_stage, "source": "examples"}
+
+        intents_meta = metadata.get("intents") or {}
+        normalized_meta = {str(k).upper(): v for k, v in intents_meta.items()}
+        stage_meta = normalized_meta.get((resolved_stage or "").upper(), {})
+        options_map = stage_meta.get("options") if isinstance(stage_meta, dict) else {}
+        if isinstance(options_map, dict) and options_map:
+            option_match = _match_examples({key: [key] for key in options_map.keys()})
+            if option_match:
+                return {"intent": option_match, "stage": resolved_stage, "source": "options"}
+
+        heuristics = detect_intents(state, normalized_input)
+        player_flags = heuristics.get("player", {}) if isinstance(heuristics, dict) else {}
+        if player_flags.get("combat_coop") or player_flags.get("core_goal_achievement"):
+            if reckless_key:
+                return {"intent": str(reckless_key), "stage": resolved_stage, "source": "intent_detector"}
+        if any(player_flags.get(flag) for flag in ("positive_core", "general_interaction", "optimal_interaction")):
+            if allies_key:
+                return {"intent": str(allies_key), "stage": resolved_stage, "source": "intent_detector"}
+
+        return None
+
+    # ============================================================
+    # 🧱 분기 처리
+    # ============================================================
+    # off 토픽일 경우의 처리
+    def _handle_off_topic(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+        topic: TopicClassification,
+    ) -> Dict[str, Any]:
+        count = int(state.get("off_topic_count", 0)) + 1
+        state["off_topic_count"] = count
+
+        confidence = round(max(0.0, min(1.0, topic.confidence or 0.0)), 4)
+        reason = topic.reason or topic.category or "off_topic"
+
+        routing_result = {
+            "intent": "off_topic",
+            "classification": "off_topic",
             "confidence": confidence,
-            "detected_intent": detected_intent,
+            "reason": reason,
         }
-    )
-    state["routing_result"] = routing_result
+        state["routing_result"] = routing_result
+        state["user_intent"] = "off_topic"
+        state["classification"] = "off_topic"
 
-    # 3단계: Fallback 정책 적용 (off_topic인 경우)
-    fallback_result = check_fallback_policy(state, is_off_topic)
-    state = apply_fallback_result(state, fallback_result)
+        fallback = generate_off_topic_response(state, user_input) or {}
+        fallback_text = fallback.get("text") or "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요."
+        fallback_speaker = fallback.get("speaker") or "system"
 
-    if fallback_result.get("message"):
-        print(f"[ROUTER+] Fallback message: {fallback_result['message']}")
-        state.setdefault("agent_responses", [])
-        state["agent_responses"].append({
-            "speaker": "system",
-            # content -> text 로 변경 (agent_responses에 들어가는 키가 대부분 text)
-            "text": fallback_result["message"],
-            "emotion": "neutral"
-        })
+        scenario = state.get("scenario") or state.get("scenario_data")
+        character_refs: Dict[str, Any] = {}
+        if isinstance(scenario, dict):
+            scenario_refs = scenario.get("character_refs") or {}
+            if isinstance(scenario_refs, dict):
+                ref = scenario_refs.get(fallback_speaker)
+                if ref:
+                    character_refs[fallback_speaker] = ref
 
-    # 4단계: Loop 제어 적용
-    # loop_result : should_auto_advance, loop_count, message,reset 반환
-    loop_result = check_loop_detection(state, user_input, is_valid_input)
-    
-    state = apply_loop_result(state, loop_result)
+        temp = state.setdefault("temp_data", {})
+        temp["skip_parent_after_dialogue"] = True
+        temp.pop("force_story_resume", None)
 
-    if loop_result.get("message"):
-        print(f"[ROUTER+] Loop message: {loop_result['message']}")
-        state.setdefault("agent_responses", [])
-        state["agent_responses"].append({
-            "speaker": "system",
-            "text": loop_result["message"],
-            "emotion": "neutral"
-        })
+        if count >= 3:
+            state["off_topic_count"] = 0
+            fallback_text = "⚠️ 집중하세요. 시나리오로 복귀합니다."
+            fallback_speaker = "system"
+            temp["skip_parent_after_dialogue"] = False
+            temp["force_story_resume"] = True
+            routing_result["intent"] = "on_topic"
+            routing_result["classification"] = "on_topic"
+            routing_result["reason"] = "force_resume"
+            routing_result["confidence"] = 1.0
+            state["user_intent"] = "on_topic"
+            state["classification"] = "on_topic"
 
-    # 5단계: 다음 노드 결정
-    if loop_result.get("should_auto_advance"):
+        children_ctx = {
+            "stage_tag": "OFF_TOPIC",
+            "stage_type": "system_notice",
+            "speaker_pool": [fallback_speaker],
+            "beats": [
+                {
+                    "speaker": fallback_speaker,
+                    "text": fallback_text,
+                }
+            ],
+            "character_refs": character_refs,
+            "scenario_id": state.get("scenario_id"),
+            "fallback": {
+                "dialogues": [
+                    {
+                        "speaker": fallback_speaker,
+                        "text": fallback_text,
+                    }
+                ]
+            },
+        }
+        state["children_ctx"] = children_ctx
+
+        state["next_node"] = "children_agent"
+        log(
+            "router",
+            "off_topic_detected",
+            count=count,
+            reason=routing_result["reason"],
+            confidence=confidence,
+        )
+        return state
+
+
+    # on topic일 경우의 처리
+    def _handle_on_topic(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+        topic: TopicClassification,
+        precomputed_intent: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        state["off_topic_count"] = 0
+        state["classification"] = "on_topic"
+
+        normalized_input = (user_input or "").strip()
+        confidence = round(max(0.0, min(1.0, topic.confidence or 0.0)), 4)
+        routing_result = {
+            "intent": "on_topic",
+            "classification": "on_topic",
+            "confidence": confidence,
+        }
+        if topic.reason:
+            routing_result["reason"] = topic.reason
+        elif topic.category:
+            routing_result["reason"] = topic.category
+
+        state["routing_result"] = routing_result
+        state.pop("children_ctx", None)
+
+        temp = state.setdefault("temp_data", {})
+        temp.pop("skip_parent_after_dialogue", None)
+        temp.pop("force_story_resume", None)
+        temp.pop("intent", None)
+        temp.pop("sticky_intent", None)
+        temp.pop("intent_stage", None)
+
+        # 🚀 Phase 2 최적화: precomputed_intent 우선 사용 (병렬 실행 결과)
+        detected_intent = precomputed_intent if precomputed_intent is not None else self._detect_route_intent(state, normalized_input)
+        if detected_intent and isinstance(detected_intent, dict):
+            intent_key = str(detected_intent.get("intent") or "").strip()
+            if intent_key:
+                routing_result["intent"] = intent_key
+                routing_result["classification"] = intent_key
+                source = detected_intent.get("source")
+                routing_result["source"] = source or routing_result.get("source")
+                if source:
+                    routing_result["reason"] = source
+                state["user_intent"] = intent_key
+                temp["intent"] = intent_key
+                temp["sticky_intent"] = intent_key
+                stage_marker = detected_intent.get("stage")
+                if stage_marker:
+                    temp["intent_stage"] = stage_marker
+                log("router", "intent_resolved", intent=intent_key, source=routing_result.get("source"), stage_tag=stage_marker)
+            else:
+                state["user_intent"] = "on_topic"
+        else:
+            state["user_intent"] = "on_topic"
+
         state["next_node"] = "parent_agent"
-        print("[ROUTER+] Loop exceeded → auto advance to parent_agent")
-        
-    elif fallback_result.get("should_block"):
-        # ❌ 기존: state["next_node"] = "blocked"  (그래프에 노드가 없어 크래시)
-        # ✅ 차단 시에도 parent_agent로 진행하되, 시스템 경고 대사 추가
-        state["next_node"] = "parent_agent"
-        print("[ROUTER+] Fallback blocked → continue via parent_agent with system notice")
+        log("router", "on_topic_detected", confidence=confidence, reason=routing_result.get("reason"))
+        return state
 
-        state.setdefault("agent_responses", []).append({
-            "speaker": "system",
-            "content": fallback_result.get("message", "지금은 진행에 집중해야 합니다."),
-            "emotion": "neutral",
-        })
 
-        td = state.setdefault("temp_data", {})
-        td["fallback_blocked"] = True
-    else:
-        next_node = "parent_agent" if classification == "on_topic" else "children_agent"
-        state["next_node"] = next_node
-        print(f"[ROUTER+] Result: {classification} → {next_node}")
+    # ============================================================
+    # 🧾 상태 히스토리/캐시
+    # ============================================================
+    # 최근 대화 압축
+    def _summarize_recent_history(self, state: Dict[str, Any], limit: int = 4) -> str:
+        entries: list[str] = []
 
-    if "meta" in state and isinstance(state["meta"], dict):
-        state["meta"]["processed_by"] = "router+"
+        message_history = state.get("message_history") or []
+        if isinstance(message_history, list):
+            for record in message_history[-limit:]:
+                if not isinstance(record, dict):
+                    continue
+                speaker = record.get("speaker") or record.get("role") or "unknown"
+                text = record.get("text") or record.get("content") or ""
+                if text:
+                    entries.append(f"{speaker}: {text}")
 
-    return _finish(state, "completed")
+        user_inputs = state.get("user_inputs") or []
+        if isinstance(user_inputs, list):
+            for utterance in user_inputs[-limit:]:
+                if isinstance(utterance, str) and utterance.strip():
+                    entries.append(f"user: {utterance.strip()}")
+
+        trimmed = entries[-limit:]
+        return "\n".join(trimmed)
+
+
+    # 임베딩 시 캐시 이용
+    def _get_user_embedding(self, state: Dict[str, Any], text: str) -> Optional[Sequence[float]]:
+        cache = state.setdefault("_embedding_cache", {})
+        cached_text = cache.get("text")
+        cached_vector = cache.get("vector")
+        if cached_text == text and cached_vector:
+            return cached_vector
+        vector = self._embedding_client.embed(text) if text else []
+        cache["text"] = text
+        cache["vector"] = vector
+        return vector
+
+    # ============================================================
+    # Phase 4: 로그 수집
+    # ============================================================
+    def _log_execution(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float):
+        """Router Agent 실행 로그를 LogDB에 저장"""
+        try:
+            # Model output 추출
+            model_output = {
+                "next_node": result.get("next_node"),
+                "classification": result.get("classification", "unknown"),
+                "confidence": result.get("confidence", 0.0),
+                "category": result.get("category"),
+                "reason": result.get("reason"),
+            }
+
+            # 로그 저장 (비동기 처리는 추후 개선 가능)
+            log_agent(
+                agent_name="router",
+                state=state,
+                model_output=model_output,
+                start_time=start_time,
+                llm_model="gpt-4o-mini",  # Router가 사용하는 LLM 모델
+            )
+        except Exception as e:
+            # 로깅 실패는 무시 (메인 로직에 영향 없도록)
+            log("router", "training_log_failed", error=str(e))
+
+DEFAULT_AGENT = RouterAgent()
+
+
+def run_router_agent(state: Dict[str, Any], user_input: str) -> Dict[str, Any]:
+    return DEFAULT_AGENT.run(state, user_input)
+
+
+__all__ = ["RouterAgent", "run_router_agent"]

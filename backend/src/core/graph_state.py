@@ -65,6 +65,12 @@ class GraphState(TypedDict):
     mission_result: Optional[str]  # 'success', 'failure'
     system_flags: List[str]  # 시스템 플래그 ["rengoku_arrived", "mission_started"]
 
+    # RECRUIT 미션 관련
+    allies_recruited: Optional[List[str]]  # 설득 성공한 캐릭터 목록
+    recruit_attempts: Optional[Dict[str, int]]  # 캐릭터별 설득 시도 횟수
+    recruit_failures: Optional[List[str]]  # 설득 실패한 캐릭터 목록
+    recruit_order: Optional[List[str]]  # 설득 시도 순서
+
     # ============================================================
     # 엔딩
     # ============================================================
@@ -75,9 +81,11 @@ class GraphState(TypedDict):
     # ============================================================
     scenario_id: str  # 현재 시나리오 ID
     scenario_data: Optional[Dict[str, Any]]  # 로드된 전체 시나리오 JSON
+    scenario: Optional[Dict[str, Any]]  # parent_agent용 scenario alias
     current_stage: Optional[str]  # 현재 스테이지 ID (intro, fork, recruit_mission 등)
     stage_history: List[str]  # 진행한 스테이지 기록
     stage_states: Dict[str, Dict[str, Any]]  # 스테이지별 상태 저장
+    stage_turn: Optional[int]  # 현재 스테이지 내 턴 수 (scene["stage_turn"]의 복사본)
 
     # ============================================================
     # 메타데이터
@@ -129,7 +137,15 @@ class GraphState(TypedDict):
     # ============================================================
     has_more_dialogues: Optional[bool]  # 추가 대화 생성 필요 여부
     dialogue_batch_index: Optional[int]  # 현재 배치 인덱스
-    dialogues_generated_count: Optional[int]  # 총 생성된 대화 수
+    dialogues_generated_count: Optional[int]  # 총 생성된 대화 수 (세션 전체 누적)
+    stage_dialogue_counts: Optional[Dict[str, int]]  # 스테이지별 대화 수 {"INTRO": 12, "ROUTE_CHOICE": 5}
+
+    # ============================================================
+    # 이미지 관리 (Image Management)
+    # ============================================================
+    current_image: Optional[str]  # 현재 표시 중인 이미지 파일명
+    image_transition_history: Optional[List[Dict[str, Any]]]  # 이미지 전환 이력
+    event_flags: Optional[List[str]]  # 이벤트 플래그 (특정 이벤트 발생 시)
 
     # ============================================================
     # Agent 입력 (Parent → Children 등)
@@ -192,15 +208,23 @@ def create_initial_graph_state(
         mission_result=None,
         system_flags=[],
 
+        # RECRUIT 미션 관련
+        allies_recruited=[],
+        recruit_attempts={},
+        recruit_failures=[],
+        recruit_order=[],
+
         # 엔딩
         final_ending=None,
 
         # 시나리오 관리
         scenario_id=scenario_id,
         scenario_data=None,
+        scenario=None,
         current_stage=None,
         stage_history=[],
         stage_states={},
+        stage_turn=0,
 
         # 메타데이터
         meta={
@@ -332,7 +356,9 @@ class Dialogue:
     speaker: str
     content: str
     emotion: str = "neutral"
-    intensity: str = "normal"
+    emotion_intensity: str = "normal"
+    affinity_level: str = "medium"
+    order: int = 0
 
 
 @dataclass

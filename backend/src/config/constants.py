@@ -3,6 +3,8 @@
 모든 하드코딩된 값을 단일 출처에서 관리
 """
 
+import os
+
 # ===== 턴 및 루프 제한 =====
 DEFAULT_MAX_TURNS = 999
 DEFAULT_STAGE_MAX_TURNS = 10
@@ -38,9 +40,12 @@ AFFINITY_INCREMENT_POSITIVE = 50
 AFFINITY_INCREMENT_NEGATIVE = -30
 
 # ===== 시나리오 기본값 =====
-DEFAULT_SCENARIO_ID = "cutscene5_llm_driven"
-SCENARIOS_PATH = "data/scenarios/"
-CHARACTERS_PATH = "data/characters/"
+DEFAULT_SCENARIO_ID = os.getenv("DEFAULT_SCENARIO_ID")
+SCENARIOS_PATH = os.getenv("SCENARIOS_PATH", "data/scenarios/")
+CHARACTERS_PATH = os.getenv("CHARACTERS_PATH", "data/characters/")
+INTRO_STAGE_TAG = "상현_삼_등장"
+LEGACY_INTRO_STAGE_TAG = "INTRO"
+INTRO_STAGE_TAGS = {INTRO_STAGE_TAG, LEGACY_INTRO_STAGE_TAG}
 
 # ===== 시스템 메시지 =====
 SYSTEM_MESSAGE_BLOCKED = "⚠️  부적절한 입력이 감지되었습니다. 다시 입력해주세요."

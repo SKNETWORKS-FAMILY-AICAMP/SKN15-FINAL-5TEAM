@@ -32,7 +32,7 @@ class ScenarioLoader:
         시나리오 JSON 파일 로드
 
         Args:
-            scenario_file: 파일명 (예: "cutscene5_akaza_encounter.json")
+            scenario_file: 파일명 (예: "example_scene.json")
 
         Returns:
             로드된 시나리오 전체 데이터
@@ -452,7 +452,7 @@ if __name__ == "__main__":
     loader = ScenarioLoader()
 
     # 1. 시나리오 로드
-    scenario = loader.load_scenario("cutscene5_akaza_encounter.json")
+    scenario = loader.load_scenario("example_scene.json")
 
     if scenario:
         print(f"\n=== 시나리오 정보 ===")
