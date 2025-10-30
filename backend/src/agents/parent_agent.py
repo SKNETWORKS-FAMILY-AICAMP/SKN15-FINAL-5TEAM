@@ -624,13 +624,13 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             "current_stage": result.get("current_stage"),
         }
 
-        # 로그 저장
+        # 로그 저장 (result를 state로 전달 - children_ctx 포함)
         log_agent(
             agent_name="parent",
-            state=state,
+            state=result,  # 업데이트된 result 사용
             model_output=model_output,
             start_time=start_time,
-            llm_model="gpt-4o",  # Parent Agent가 사용하는 LLM (스테이지 핸들러에서 사용)
+            llm_model="gpt-4o-mini",  # Parent Agent uses default_model from settings (gpt-4o-mini)
         )
 
         return result

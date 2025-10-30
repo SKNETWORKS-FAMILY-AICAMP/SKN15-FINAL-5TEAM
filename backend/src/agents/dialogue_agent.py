@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from src.core.graph_state import AgentState, Dialogue
 from src.utils.llm_client import get_llm_client
 from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
 
 _PROMPTS = get_config_loader().get_prompts()
 _DIALOGUE_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("dialogue") or {})
@@ -125,6 +126,19 @@ class DialogueAgent:
         state.meta.processed_by = "dialogue_agent"
         state.meta.timestamp = datetime.now().isoformat()
         state.next_node = "wait_user_input"
+
+        # Phase 4: 로그 수집
+        log_agent(
+            agent_name="dialogue",
+            state=state,
+            model_output={
+                "validated_count": len(validated_dialogues),
+                "validation_results": validation_results,
+                "dialogues": [{"speaker": d.speaker, "text": d.text} for d in validated_dialogues]
+            },
+            start_time=start_time,
+            llm_model="gpt-4o-mini",  # Dialogue Agent uses gpt-4o-mini for validation
+        )
 
         print(f"[DIALOGUE] process() end", flush=True)
         return _finish(state, "completed")

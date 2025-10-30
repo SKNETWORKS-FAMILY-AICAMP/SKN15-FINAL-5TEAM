@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Dict, List, Optional
 
 from src.core import scene_dialogue_tools as dialogue_tools
 from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
@@ -487,7 +489,39 @@ class ChildrenAgent:
 DEFAULT_AGENT = ChildrenAgent()
 
 def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
-    return DEFAULT_AGENT.run(state)
+    # Phase 4: 로그 수집 시작
+    start_time = time.perf_counter()
+
+    try:
+        result = DEFAULT_AGENT.run(state)
+
+        # Phase 4: 로그 수집 (성공)
+        model_output = {
+            "agent_responses": result.get("agent_responses", []),
+            "has_more_dialogues": result.get("has_more_dialogues", False),
+            "next_node": result.get("next_node"),
+        }
+
+        log_agent(
+            agent_name="children",
+            state=state,
+            model_output=model_output,
+            start_time=start_time,
+            llm_model="gpt-4o-mini",  # Children Agent uses gpt-4o-mini (설정 기준)
+        )
+
+        return result
+    except Exception as e:
+        # Phase 4: 로그 수집 (에러)
+        log_agent(
+            agent_name="children",
+            state=state,
+            model_output={"error": str(e)},
+            start_time=start_time,
+            is_error=True,
+            error_message=str(e),
+        )
+        raise
 
 
 __all__ = ["ChildrenAgent", "run_children_agent"]

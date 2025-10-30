@@ -163,6 +163,9 @@ class TrainingLogger:
 
             # 이전 대사 (Children/Dialogue 에이전트용)
             "output": state.get("output", {}).get("dialogues", []),
+
+            # Parent Agent용: children_ctx (open_narrative 등에서 생성된 대사)
+            "children_ctx": state.get("children_ctx"),
         }
 
         # None 값 제거 (JSON 크기 최소화)
@@ -257,38 +260,68 @@ class TrainingLogger:
         Parent Agent 자동 라벨링
 
         성공 조건:
-        - agent_inputs가 비어있지 않음
-        - 현재 스테이지에 적합한 beats 생성
+        - open_narrative: dialogues 생성 여부 및 품질
+        - 일반 스테이지: agent_inputs가 비어있지 않음, beats 생성
         - 스테이지 전환 로직이 올바름
         """
         agent_inputs = model_output.get("agent_inputs", {})
         current_stage = state.get("current_stage", "")
+        stage_tag = model_output.get("stage_tag", "")
 
         score = 0.7
 
-        # 1. agent_inputs 유효성
-        if not agent_inputs or "children" not in agent_inputs:
-            return ("failure", "agent_inputs is empty or missing 'children'", 0.2)
+        # 1. open_narrative 스테이지 체크 (dialogues 직접 생성)
+        # open_narrative에서는 agent_inputs가 null이고 dialogues를 직접 생성함
+        if agent_inputs is None or (isinstance(agent_inputs, dict) and not agent_inputs):
+            # open_narrative 또는 특수 스테이지 처리
+            # state의 children_ctx에 fallback.dialogues가 있는지 확인
+            children_ctx = state.get("children_ctx", {})
 
-        children_ctx = agent_inputs.get("children", {})
-        beats = children_ctx.get("beats", [])
+            # 타입 안전 체크
+            if not isinstance(children_ctx, dict):
+                return ("failure", "Invalid children_ctx type", 0.2)
 
-        # 2. Beats 품질 체크
-        if not beats or len(beats) == 0:
-            score -= 0.3
-            reason = "No beats generated"
-        elif len(beats) >= 3:  # 적절한 beats 수 (3~5개)
-            score += 0.15
-            reason = f"Good beats count: {len(beats)}"
+            fallback = children_ctx.get("fallback", {})
+
+            # fallback이 dict인지 확인
+            if isinstance(fallback, dict):
+                dialogues = fallback.get("dialogues", [])
+            else:
+                dialogues = []
+
+            if dialogues and len(dialogues) > 0:
+                # open_narrative 성공: 대사 생성됨
+                score = 0.75
+                if len(dialogues) >= 3:
+                    score += 0.1
+                reason = f"Open narrative: generated {len(dialogues)} dialogues"
+            else:
+                # agent_inputs도 없고 dialogues도 없음 → 진짜 failure
+                return ("failure", f"No agent_inputs and no dialogues (ctx_type={type(children_ctx).__name__}, fallback_type={type(fallback).__name__})", 0.2)
         else:
-            reason = f"Low beats count: {len(beats)}"
+            # 2. 일반 스테이지: agent_inputs 유효성
+            if "children" not in agent_inputs:
+                return ("failure", "agent_inputs missing 'children' key", 0.2)
 
-        # 3. 스테이지 전환 체크
+            children_ctx = agent_inputs.get("children", {})
+            beats = children_ctx.get("beats", [])
+
+            # 3. Beats 품질 체크
+            if not beats or len(beats) == 0:
+                score -= 0.3
+                reason = "No beats generated"
+            elif len(beats) >= 3:  # 적절한 beats 수 (3~5개)
+                score += 0.15
+                reason = f"Good beats count: {len(beats)}"
+            else:
+                reason = f"Low beats count: {len(beats)}"
+
+        # 4. 스테이지 전환 체크
         next_stage = model_output.get("next_stage")
         if next_stage and next_stage != current_stage:
             score += 0.1  # 스테이지 전환 발생 (긍정적)
 
-        # 4. 점수 기반 outcome
+        # 5. 점수 기반 outcome
         score = max(0.0, min(1.0, score))
         if score >= 0.75:
             outcome = "success"
