@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
+
 interface SettingsSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -134,7 +136,7 @@ export default function SettingsSidebar({ isOpen, onClose }: SettingsSidebarProp
                           className="w-full h-full rounded-full object-cover border-2 border-purple-200"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.src = '/images/tanjiro.png';
+                            target.src = `${CDN_URL}/tanjiro.png`;
                           }}
                         />
                       </div>

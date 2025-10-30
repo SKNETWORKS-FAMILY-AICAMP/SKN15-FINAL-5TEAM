@@ -12,9 +12,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export interface ChatMessage {
   speaker: string
-  content: string
+  text: string  // 백엔드는 'text' 필드 사용
+  content?: string  // 하위 호환성
   emotion?: string
   timestamp?: string
+  fx?: string | null
+  image_index?: string
+  affinity_level?: string
+  emotion_intensity?: string
 }
 
 export interface ChatRequest {
@@ -33,6 +38,8 @@ export interface ChatResponse {
   is_ended: boolean
   has_more: boolean  // 더 생성할 대화가 있는지 여부 (배치 모드)
   system_message?: string
+  current_image?: string  // 현재 표시할 이미지 경로 (ImageManager 제공)
+  output?: Record<string, unknown>
 }
 
 export interface SessionInfo {

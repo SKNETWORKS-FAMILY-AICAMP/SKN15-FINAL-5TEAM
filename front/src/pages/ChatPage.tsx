@@ -83,7 +83,7 @@ export default function ChatPage() {
     );
   }
 
-  // Implemented scenario - Show 2-column layout
+  // Implemented scenario - ChatInterface handles full layout
   return (
     <div className="min-h-screen bg-gray-50">
       <ChatHeader
@@ -93,58 +93,9 @@ export default function ChatPage() {
         showBackButton={true}
       />
 
-      <main className="flex" style={{ height: 'calc(100vh - 64px)' }}>
-        {/* Left Column: Scenario Image */}
-        <div className="w-1/2 relative overflow-hidden bg-gradient-to-br from-purple-50 to-pink-50">
-          <div className="absolute inset-0 flex items-center justify-center p-8">
-            <div className="relative w-full h-full">
-              <img
-                src={scenario.image}
-                alt={scenario.title}
-                className="w-full h-full object-contain drop-shadow-2xl"
-              />
-
-              {/* Info Card - 이미지 위에 겹쳐서 표시 */}
-              <div className="absolute bottom-8 left-8 right-8 bg-white bg-opacity-95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 border border-purple-100">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center shadow-lg">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Info</h3>
-                    <p className="text-sm text-gray-600">시나리오 정보</p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">제목</span>
-                    <span className="text-sm font-semibold text-gray-900">{scenario.title}</span>
-                  </div>
-                  <div className="pt-2 border-t border-gray-200">
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      {scenario.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Decorative elements */}
-          <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-            <div className="absolute top-10 left-10 w-20 h-20 bg-purple-200 rounded-full opacity-20 blur-xl"></div>
-            <div className="absolute bottom-20 right-10 w-32 h-32 bg-pink-200 rounded-full opacity-20 blur-xl"></div>
-            <div className="absolute top-1/2 right-20 w-16 h-16 bg-blue-200 rounded-full opacity-20 blur-xl"></div>
-          </div>
-        </div>
-
-        {/* Right Column: Chat Interface */}
-        <div className="w-1/2 bg-white">
-          <ChatInterface characterId={characterId || 'ending'} />
-        </div>
+      <main style={{ height: 'calc(100vh - 64px)' }}>
+        {/* ChatInterface handles full layout (left background + right chat) */}
+        <ChatInterface characterId={characterId || 'ending'} />
       </main>
     </div>
   );

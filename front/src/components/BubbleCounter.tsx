@@ -5,9 +5,10 @@ import { getBubbleColor, getBubbleStatus } from '@/utils/bubbleUtils';
 
 interface BubbleCounterProps {
   showEmergencyRefill?: boolean;
+  compact?: boolean;
 }
 
-export default function BubbleCounter({ showEmergencyRefill = true }: BubbleCounterProps) {
+export default function BubbleCounter({ showEmergencyRefill = true, compact = false }: BubbleCounterProps) {
   const { currentBubbles, updateBubbles, openPaymentModal } = useApp();
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -41,6 +42,29 @@ export default function BubbleCounter({ showEmergencyRefill = true }: BubbleCoun
     return bubbles;
   };
 
+  // Compact 모드 (헤더용)
+  if (compact) {
+    return (
+      <div className="relative bg-purple-50 backdrop-blur-sm rounded-2xl p-3 shadow-sm border border-purple-200">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🫧</span>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-gray-600">버블</span>
+              <span className={`text-3xl font-bold ${getBubbleColor(currentBubbles)} ${isAnimating ? 'animate-bounce' : ''}`}>
+                {currentBubbles.toLocaleString()}
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              {getBubbleStatus(currentBubbles)}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 기본 모드 (전체 기능)
   return (
     <div className="relative bg-white bg-opacity-90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200">
       {/* 플로팅 버블들 */}

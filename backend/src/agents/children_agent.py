@@ -1,886 +1,527 @@
-# children_agent.py
-# - parent가 주입한 children_ctx를 표준화(stage_tag/stage_type/speaker_pool/beats)해서 사용
-# - scenario에서 복원 가능(list/dict stages + beats_i18n 지원)
-# - user 화자 허용 + 최소 1줄 보장
-# - 플레이스홀더 치환({user.name}, {{user}}, {player}, {rengoku} 등)
-# - LLM 실패 시 폴백
-
 from __future__ import annotations
-from typing import Dict, Any, List, Optional
-import logging, os, glob, json, random, hashlib, time
-import re
 
-logger = logging.getLogger("CHILDREN_LLM")
-if not logger.handlers:
-    _h = logging.StreamHandler()
-    _h.setFormatter(logging.Formatter("[CHILDREN_LLM] %(message)s"))
-logger.addHandler(_h)
-logger.setLevel(logging.INFO)
+import json
+import time
+from typing import Any, Dict, List, Optional
+
+from src.core import scene_dialogue_tools as dialogue_tools
+from src.utils.llm_client import get_llm_client
+from src.utils.logger import log
+from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
+
+_PROMPTS = get_config_loader().get_prompts()
+_CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
+_CHILDREN_DIALOGUE_PROMPT = (_CHILDREN_PROMPTS.get("dialogue_generation") or "").strip()
+_LLM_BEATS_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("llm_beats") or {})
+_LLM_BEATS_SYSTEM = (_LLM_BEATS_PROMPTS.get("system") or "").strip()
+_LLM_BEATS_USER = (_LLM_BEATS_PROMPTS.get("user") or "").strip()
+
+if not _CHILDREN_DIALOGUE_PROMPT:
+    raise ValueError("ChildrenAgent dialogue_generation prompt missing in configs/prompts.yaml (llm_prompts.children.dialogue_generation).")
+if not _LLM_BEATS_SYSTEM or not _LLM_BEATS_USER:
+    raise ValueError("LLM beats prompts missing in configs/prompts.yaml (llm_prompts.llm_beats.system/user).")
+
+# ============================================================
+# 🎭 ChildrenAgent — parent가 넘겨준 children_ctx로 실제 대사를 생성
+# ============================================================
 
-INOSUKE_MAX_ATTEMPTS = 3
-
-DEFAULT_CHAR_DIR = os.path.join("data", "character_data")
-_CHAR_DB: Optional[Dict[str, Any]] = None
-
-
-# ---------- 안전 접근 ----------
-def _state_get(state: Any, key: str, default=None):
-    try:
-        if isinstance(state, dict):
-            return state.get(key, default)
-        v = getattr(state, key, default)
-        return v if v is not None else default
-    except Exception:
-        return default
-
-
-def _nested_get(d: Any, *keys):
-    cur = d
-    for k in keys:
-        if isinstance(cur, dict) and k in cur:
-            cur = cur[k]
-        else:
-            return None
-    return cur
-
-
-# ---------- 시나리오/스테이지 ----------
-def _get_scenario(state: Any) -> Optional[Dict[str, Any]]:
-    for cand in (
-        _state_get(state, "scenario"),
-        _state_get(state, "scenario_data"),
-        _nested_get(state, "game", "scenario"),
-        _nested_get(state, "game", "scenario_data"),
-    ):
-        if isinstance(cand, dict):
-            return cand
-        if isinstance(cand, str) and os.path.exists(cand):
-            try:
-                with open(cand, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-    return None
-
-
-def _find_stage(scenario: Dict[str, Any], stage_tag: str) -> Optional[Dict[str, Any]]:
-    stages = scenario.get("stages")
-    cands: List[Dict[str, Any]] = []
-    if isinstance(stages, list):
-        cands = [s for s in stages if isinstance(s, dict)]
-    elif isinstance(stages, dict):
-        cands = [v for v in stages.values() if isinstance(v, dict)]
-    tag_norm = (stage_tag or "").strip().lower()
-    for st in cands:
-        for key in ("tag", "id", "name", "slug"):
-            v = st.get(key)
-            if isinstance(v, str) and v.strip().lower() == tag_norm:
-                return st
-    return None
-
-
-def _resolve_beats(
-    stage: Dict[str, Any], scenario: Dict[str, Any], locale: str = "ko"
-) -> List[str]:
-    # 우선 beats
-    beats = stage.get("beats")
-    if not beats:
-        # beats_i18n (스테이지 내부)
-        bi18n = stage.get("beats_i18n") or {}
-        if isinstance(bi18n, dict):
-            beats = bi18n.get(locale) or bi18n.get("default") or []
-    if isinstance(beats, list):
-        out = []
-        for b in beats:
-            if isinstance(b, dict) and "text" in b:
-                out.append(str(b["text"]))
-            else:
-                out.append(str(b))
-        return out
-    return []
-
-
-def _speaker_pool_for_stage(stage: Dict[str, Any]) -> List[str]:
-    for key in ("speaker_pool", "speakers", "characters", "actors"):
-        val = stage.get(key)
-        if isinstance(val, list) and val:
-            return val
-    return []
-
-
-def _get_current_stage(state) -> str:
-    return (_state_get(state, "current_stage", "") or "").strip()
-
-
-# ---------- 캐릭터 DB ----------
-def _load_character_db(char_dir: Optional[str]) -> Dict[str, Any]:
-    global _CHAR_DB
-    if _CHAR_DB is not None:
-        return _CHAR_DB
-    char_dir = char_dir or DEFAULT_CHAR_DIR
-    db: Dict[str, Any] = {}
-    for p in glob.glob(os.path.join(char_dir, "*.json")):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if (
-                isinstance(data, dict)
-                and "characters" in data
-                and isinstance(data["characters"], dict)
-            ):
-                data = data["characters"]
-            if isinstance(data, dict):
-                for k, v in data.items():
-                    if isinstance(v, dict):
-                        db[str(k).strip().lower()] = v
-        except Exception:
-            continue
-    _CHAR_DB = db
-    return db
-
-
-# ---------- 텍스트/화자 정리 ----------
-_SPEAKER_ALIASES = {
-    "탄지로": "tanjiro",
-    "tanjiro": "tanjiro",
-    "렌고쿠": "rengoku",
-    "rengoku": "rengoku",
-    "렌고쿠 쿄쥬로": "rengoku",
-    "아카자": "akaza",
-    "akaza": "akaza",
-    "이노스케": "inosuke",
-    "inosuke": "inosuke",
-    "젠이츠": "zenitsu",
-    "zenitsu": "zenitsu",
-    "사용자": "user",
-    "유저": "user",
-    "플레이어": "user",
-    "user": "user",
-}
-
-
-def _normalize_speaker(speaker: str) -> str:
-    s = (speaker or "").strip().lower()
-    return _SPEAKER_ALIASES.get(s, s)
-
-
-def _normalize_text(text: str) -> str:
-    if not text:
-        return text
-    text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"\s+([.,!?;:])", r"\1", text)
-    text = re.sub(r"([.,!?;:])([^\s.,!?;:])", r"\1 \2", text)
-    text = re.sub(r"([가-힣])([A-Za-z])", r"\1 \2", text)
-    return text
-
-
-def _apply_placeholders(text: str, state: dict) -> str:
-    player = (
-        (state.get("player") or {}).get("name")
-        or (state.get("user_profile") or {}).get("name")
-        or state.get("user_name")
-        or "당신"
-    )
-    # 모든 플레이스홀더 변형을 {user_name}으로 통일
-    text = (text or "").replace("{user.name}", player)
-    text = text.replace("{{user.name}}", player)
-    text = text.replace("{{user}}", player)
-    text = text.replace("{user}", player)
-    text = text.replace("{player}", player)
-    text = text.replace("{user_name}", player)
-    return text
-
-
-def _placeholder_variants(key: str) -> List[str]:
-    return [f"{{{key}}}", f"<{key}>", f"[{key}]", f"[[{key}]]", f"{{{{{key}}}}}"]
-
-
-def _display_name_of(key: str, db: Dict[str, Any]) -> str:
-    prof = db.get(key, {})
-    return prof.get("display_name") or prof.get("name") or key
-
-
-def _replace_placeholders(text: str, db: Dict[str, Any], state: dict) -> str:
-    if not text:
-        return text
-    out = text
-    # 캐릭터 이름 치환
-    for k in list(db.keys()) + ["user"]:
-        for p in _placeholder_variants(k):
-            out = out.replace(p, _display_name_of(k, db))
-    # 사용자 이름 치환
-    out = _apply_placeholders(out, state)
-    return _normalize_text(out)
-
-
-# ---------- 폴백 합성 ----------
-def _tone_bucket(score: Optional[int]) -> str:
-    if score is None:
-        return "neutral"
-    if score < 201:
-        return "distrust"
-    if score < 401:
-        return "wary"
-    if score < 601:
-        return "neutral"
-    if score < 801:
-        return "friendly"
-    return "intimate"
-
-
-def _seeded_choice(seq: List[str], seed_key: str, turn_index: int) -> str:
-    if not seq:
-        return ""
-    seed = int(hashlib.md5(f"{seed_key}:{turn_index}".encode()).hexdigest(), 16) % (
-        2**32
-    )
-    rnd = random.Random(seed)
-    return rnd.choice(seq)
-
-
-def _render_fallback_line(
-    speaker: str,
-    hint: str,
-    profile: Dict[str, Any],
-    turn_index: int,
-    state: dict,
-    db: dict,
-) -> str:
-    ticks = []
-    style = profile.get("style") or {}
-    tone = _tone_bucket((_state_get(state, "affinity", {}) or {}).get(speaker))
-    bucket = (
-        (style.get(tone) or style.get("neutral")) if isinstance(style, dict) else {}
-    )
-    ticks = bucket.get("ticks") or profile.get("ticks") or []
-    tick = _seeded_choice(ticks, speaker, turn_index) if isinstance(ticks, list) else ""
-    base = f"{tick} {hint}".strip()
-    return _replace_placeholders(base, db, state)
-
-
-# ---------- 컨텍스트 표준화 ----------
-def _normalize_children_ctx(
-    raw_ctx: Dict[str, Any], state: dict
-) -> Optional[Dict[str, Any]]:
-    if not isinstance(raw_ctx, dict):
-        return None
-    stage_tag = (
-        raw_ctx.get("stage_tag") or raw_ctx.get("tag") or _get_current_stage(state)
-    )
-    stage_type = raw_ctx.get("stage_type") or raw_ctx.get("type") or "scene"
-    speaker_pool = (
-        raw_ctx.get("speaker_pool")
-        or raw_ctx.get("speakers")
-        or raw_ctx.get("characters")
-        or []
-    )
-    beats = raw_ctx.get("beats")
-    if not beats:
-        bi18n = raw_ctx.get("beats_i18n") or {}
-        if isinstance(bi18n, dict):
-            loc = _state_get(state, "locale", "ko") or "ko"
-            beats = bi18n.get(loc) or bi18n.get("default") or []
-    if not stage_tag:
-        return None
-    return {
-        "stage_tag": stage_tag,
-        "stage_type": stage_type,
-        "speaker_pool": speaker_pool,
-        "beats": beats or [],
-        "turn_index": int(_state_get(state, "turn_index", 0) or 0),
-        "stage_turn_index": int(_state_get(state, "stage_turn", 0) or 0),
-        "vars": {},
-    }
-
-
-def _pickup_ctx(state: Any) -> Optional[Dict[str, Any]]:
-    # 1) agent_inputs.children 우선
-    ai = _state_get(state, "agent_inputs", {}) or {}
-    if isinstance(ai, dict) and isinstance(ai.get("children"), dict):
-        norm = _normalize_children_ctx(ai["children"], state)
-        if norm:
-            return norm
-    # 2) children_ctx 여러 위치 탐색
-    for raw in (
-        _state_get(state, "children_ctx"),
-        _nested_get(state, "temp_data", "children_ctx"),
-        _nested_get(state, "game", "children_ctx"),
-    ):
-        norm = _normalize_children_ctx(raw, state) if isinstance(raw, dict) else None
-        if norm:
-            return norm
-    # 3) 시나리오에서 복원
-    scenario = _get_scenario(state)
-    stag = _get_current_stage(state)
-    if scenario and stag:
-        st = _find_stage(scenario, stag)
-        if st:
-            beats = _resolve_beats(
-                st, scenario, _state_get(state, "locale", "ko") or "ko"
-            )
-            speakers = _speaker_pool_for_stage(st)
-            return {
-                "stage_tag": st.get("tag") or stag,
-                "stage_type": st.get("type") or "scene",
-                "speaker_pool": speakers,
-                "beats": beats,
-                "turn_index": int(_state_get(state, "turn_index", 0) or 0),
-                "stage_turn_index": int(_state_get(state, "stage_turn", 0) or 0),
-                "vars": {},
-            }
-    return None
-
-
-# ---------- 대사 생성 ----------
-def _generate_dialogues(
-    ctx: Dict[str, Any], state: dict, db: dict
-) -> tuple[List[Dict[str, str]], bool]:
-    """
-    Generate dialogues in batches of 3.
-    Returns: (dialogues, has_more)
-    """
-    from src.utils.llm_client import get_llm_client
-
-    speakers = ctx.get("speaker_pool") or []
-    # 🚫 system, user 차단 — ✅ _env는 허용 (FX용)
-    # USER는 실제 사용자 입력이므로 절대 생성하지 않음
-    blocked = {"system", "시스템", "user", "사용자", "유저", "플레이어"}
-    speakers = [
-        s
-        for s in speakers
-        if isinstance(s, str) and s.strip() and _normalize_speaker(s) not in blocked
-    ]
-    if not speakers:
-        return [], False
-
-    beats = ctx.get("beats") or []
-    stage_tag = ctx.get("stage_tag", "unknown")
-    stage_type = ctx.get("stage_type", "scene")
-    mission_ctx = ctx.get("mission") or {}
-
-    # 배치 처리 로직: 몇 번째 배치인지, 총 몇 개 생성해야 하는지 추적
-    batch_index = int(_state_get(state, "dialogue_batch_index", 0) or 0)
-    dialogues_generated_so_far = int(
-        _state_get(state, "dialogues_generated_count", 0) or 0
-    )
-
-    # 상황 요약 (beats가 dict면 goal 또는 text 추출)
-    situation_goals = []
-    if beats:
-        for b in beats:
-            if isinstance(b, dict):
-                # goal 필드 우선 (상황 설명)
-                goal = b.get("goal") or b.get("text", "")
-                if goal:
-                    situation_goals.append(goal)
-            else:
-                situation_goals.append(str(b))
-    situation = (
-        "\n".join(situation_goals) if situation_goals else "상황을 자유롭게 연출하세요"
-    )
-
-    # 캐릭터 설명
-    char_desc = []
-    for sp in speakers:
-        prof = _load_character_db(None).get(sp, {})
-        nm = prof.get("name") or sp
-        per = prof.get("personality", "")
-        char_desc.append(f"- {nm}: {per}")
-    character_list = "\n".join(char_desc)
-
-    # 최근 히스토리
-    hist = _state_get(state, "message_history", []) or []
-    rh = hist[-3:] if len(hist) > 3 else hist
-    history_text = ""
-    if rh:
-        lines = []
-        for m in rh:
-            if isinstance(m, dict) and m.get("speaker") and m.get("text"):
-                lines.append(f"{m['speaker']}: {m['text'][:50]}...")
-        if lines:
-            history_text = "\n이전 대화:\n" + "\n".join(lines)
-
-    # 프롬프트
-    user_input = (
-        _state_get(state, "last_user_msg") or _state_get(state, "user_input") or ""
-    )
-    turn_idx = int(_state_get(state, "turn_index", 0) or 0)
-
-    # 사용자 이름 가져오기
-    user_name = (
-        state.get("user_name") or (state.get("player") or {}).get("name") or "당신"
-    )
-
-    # 현재 턴에 해당하는 beat 정보 추출 (데이터 기반 우선 발화자 유도)
-    beats = ctx.get("beats", [])
-    stage_turn = ctx.get("stage_turn_index", 0)
-
-    proactive_guide = ""
-    lane_id_hint = ""
-    if isinstance(mission_ctx, dict):
-        lane_id_hint = (mission_ctx.get("lane_id") or "").lower()
-
-    if isinstance(beats, list) and 0 <= stage_turn < len(beats):
-        current_beat = beats[stage_turn]
-        if isinstance(current_beat, dict):
-            speaker_hint = current_beat.get("speaker_hint", [])
-            beat_goal = current_beat.get("goal", "")
-
-            # speaker_hint가 있으면 해당 캐릭터가 먼저 발화하도록 유도
-            if speaker_hint and beat_goal:
-                speakers_str = ", ".join(speaker_hint)
-                proactive_guide = f"""
-=== 🎬 이번 턴 우선 발화 (데이터 기반) ===
-**{speakers_str}**가 먼저 다음 상황을 전달해야 합니다:
-"{beat_goal}"
-
-→ 첫 1-2개 대사를 위 캐릭터들이 상황에 맞게 시작하세요.
-→ 그 후 다른 캐릭터들이 자연스럽게 반응하며 대화를 이어갑니다.
-"""
-    if lane_id_hint.startswith("inosuke"):
-        proactive_guide += "\n=== 필수 연출 ===\n- 제공된 system 안내 이후, **이노스케**가 강렬하게 등장하며 발화합니다.\n- 이노스케가 최소 한 번 이상 직설적 또는 도발적인 대사를 합니다.\n"
-    elif lane_id_hint.startswith("zenitsu"):
-        proactive_guide += "\n=== 필수 연출 ===\n- 첫 대사는 젠이츠가 잠든 상태.\n"
-
-    # 스테이지별 목표 대화 개수 설정
-    stage_upper = stage_tag.upper()
-
-    # 스테이지별 총 필요 대화 개수
-    total_dialogues_needed = {
-        "INTRO": 12,  # 4 + 4 + 4 = 3배치
-        "ROUTE_CHOICE": 8,
-        "INTERVENE": 8,
-        "RETURN_TO_FRONT": 8,  # 10 → 8 (4 + 4)
-        "RECKLESS_SACRIFICE": 8,
-    }.get(stage_upper, 8)  # 기본값도 8로 증가
-
-    if stage_type == "ending":
-        total_dialogues_needed = 4  # 엔딩 장면은 한 번의 배치로 마무리
-
-    # 배치 크기: 4개 (일관성 있게)
-    batch_size = 4  # 모든 배치에서 4개씩 생성
-
-    # 남은 대화 개수 계산
-    remaining_dialogues = total_dialogues_needed - dialogues_generated_so_far
-    current_batch_size = min(batch_size, remaining_dialogues)
-
-    # 더 생성할 대화가 있는지 확인
-    # 🔥 free_intent 스테이지는 항상 첫 배치 후 사용자 입력 대기
-    if stage_type in ("free_intent", "mission"):
-        has_more = False  # 사용자 입력을 기다려야 하므로 auto-continue 차단
-    else:
-        has_more = (
-            dialogues_generated_so_far + current_batch_size
-        ) < total_dialogues_needed
-    mission_intro = bool(mission_ctx.get("intro"))
-    if stage_upper == "RECRUIT" and mission_intro:
-        has_more = False
-
-    temp_data = (
-        state.get("temp_data")
-        if isinstance(state, dict)
-        else _state_get(state, "temp_data", {})
-    )
-    if (temp_data or {}).get("session_end") or state.get("final_ending"):
-        has_more = False  # 세션이 종료된 후에는 자동 진행 금지
-
-    # 배치별 상황 설명 (beats에서 현재 배치에 해당하는 부분만 선택)
-    if beats and batch_index < len(beats):
-        # 현재 배치에 해당하는 beat 선택
-        current_beats = (
-            beats[batch_index : batch_index + 1] if batch_index < len(beats) else []
-        )
-    else:
-        current_beats = beats
-
-    # narr 발화 제어: INTRO의 경우 첫 배치(batch_index=0)에서만 narr 허용
-    allow_narr_first = batch_index == 0 and dialogues_generated_so_far == 0
-    # akaza 발화 제어: INTRO의 경우 마지막 배치에서만 akaza 허용
-    allow_akaza_last = not has_more  # 마지막 배치일 때만
-
-    if stage_upper == "INTRO":
-        dialogue_rule = f"""**풍부한 연출**: 인트로 씬 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 배치 진행: {dialogues_generated_so_far + 1}~{dialogues_generated_so_far + current_batch_size}번째 대화 (전체 {total_dialogues_needed}개 중)
-   - narr는 {"맨 처음 1회만 허용" if allow_narr_first else "이번 배치에서 사용 금지 (이미 출력됨)"}
-   - akaza는 {"마지막 배치이므로 1회 등장 가능" if allow_akaza_last else "이번 배치에서 사용 금지 (마지막 배치에만 등장)"}
-   - tanjiro와 rengoku가 **교대로** 대화를 이끌어가며 상황을 설명
-   - **대화 교차**: 같은 캐릭터가 연속으로 2회 이상 말하지 않기 (예: [tanjiro]→[rengoku]→[tanjiro])
-   - **대화 마무리**: 마지막 대사는 반드시 NPC 캐릭터가 하며, {"사용자에게 질문하거나 다음 행동을 유도" if not has_more else "자연스럽게 상황 전개"}"""
-
-    elif stage_upper == "RECRUIT":
-        lane_id = lane_id_hint
-        step_index = mission_ctx.get("step_index", 0)
-        steps_total = mission_ctx.get("steps_total", 1)
-        inosuke_attempts = int(mission_ctx.get("attempts", 0) or 0)
-        max_inosuke_attempts = 3
-        if mission_intro:
-            dialogue_rule = f"""**동료 탐색 분기 준비**: 젠이츠와 이노스케의 위치를 확인하고 순서를 정하는 씬 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 탄지로가 두 동료의 냄새와 위치(앞칸 젠이츠 / 뒷칸 이노스케)를 명확히 설명
-   - 렌고쿠의 위기 상황과 시간 압박을 짚어주되, 아직 누구부터 갈지 결정하지 않는다
-   - **마지막 대사는 반드시 탄지로가 "젠이츠를 먼저 찾을까요, 이노스케를 먼저 찾을까요?"처럼 사용자에게 선택을 묻는 질문으로 끝낸다**
-   - 선택은 사용자 입력을 기다리고, 이 배치에서는 다음 행동으로 넘어가지 않는다"""
-        elif "zenitsu" in lane_id:
-            dialogue_rule = f"""**젠이츠 영입 진행**: 젠이츠 라인 {step_index + 1}/{steps_total} 단계 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 탄지로와 {{"젠이츠"}}가 중심이 되어, 젠이츠를 깨우고 전투에 참여시키기 위한 설득을 진행
-   - 긴박한 전황과 시간이 없다는 압박을 유지
-   - 마지막 대사는 탄지로 또는 젠이츠가 사용자에게 다음 행동(깨우기/설득 방법 등)을 요청하는 말로 마무리"""
-        elif "inosuke" in lane_id:
-            if step_index == 0:
-                dialogue_rule = f"""**이노스케 교섭 1단계**: 이노스케 라인 {step_index + 1}/{steps_total} 단계 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - system이 현재 설득 시도 횟수를 안내한 뒤, {{"이노스케"}}가 중심이 되어 관심을 끌고 전투 상황을 알린다
-   - 이노스케는 즉시 움직이지 않으려 하며, 야성적인 자존심을 드러낸다
-   - **이노스케가 최소 한 번은 거칠게 응답**하며 자신의 입장을 고집한다
-   - 탄지로는 짤막한 힌트만 던지고, 실제 설득은 반드시 {user_name}이 수행해야 한다
-   - 마지막 대사는 사용자에게 도발이나 자극을 통해 이노스케를 움직일 방법을 묻는 말로 마무리"""
-            else:
-                dialogue_rule = f"""**이노스케 교섭 2단계**: 이노스케 라인 {step_index + 1}/{steps_total} 단계 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - system이 \"설득 시도 {inosuke_attempts + 1}/{max_inosuke_attempts}회\"를 안내한다 (실패 횟수 {inosuke_attempts}회)
-   - 이노스케는 여전히 현장을 지키고 싶어하며, 추가적인 설득이 필요함을 강조
-   - 탄지로는 짤막한 격려만 전하고, **실제 설득/도발은 반드시 {user_name}이 담당**한다
-   - **사용자의 도발/설득 한마디가 결정적이어야 하며**, 이노스케가 조건부로 합류를 받아들이는 흐름을 만든다
-   - 마지막 대사는 이노스케가 합류 조건을 확인하거나, 사용자의 대답을 요구하는 말로 마무리"""
-        else:
-            dialogue_rule = f"""**동료 영입 진행**: 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 탄지로가 상황을 요약하고 동료 합류의 필요성을 강조
-   - 마지막 대사는 사용자에게 지금 해야 할 행동을 물어보며 끝낸다"""
-
-    elif stage_upper == "ROUTE_CHOICE":
-        dialogue_rule = f"""**선택 장면 연출**: 갈림길 선택 씬 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 배치 진행: {dialogues_generated_so_far + 1}~{dialogues_generated_so_far + current_batch_size}번째 대화 (전체 {total_dialogues_needed}개 중)
-   - narr는 {"맨 처음 1회만 허용" if allow_narr_first else "이번 배치에서 사용 금지 (이미 출력됨)"}
-   - tanjiro가 주도하되 **rengoku의 반응을 교차**하며 위기 상황과 선택지를 설명
-   - **대화 교차**: 같은 캐릭터가 연속으로 2회 이상 말하지 않기 (예: [narr]→[tanjiro]→[rengoku]→[tanjiro])
-   - **대화 마무리**: 마지막 대사는 반드시 tanjiro가 하며, {"사용자에게 선택을 요청" if not has_more else "자연스럽게 상황 전개"}"""
-
-    elif stage_upper == "INTERVENE":
-        dialogue_rule = f"""**전투 개입 연출**: 급박한 전투 씬 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 배치 진행: {dialogues_generated_so_far + 1}~{dialogues_generated_so_far + current_batch_size}번째 대화 (전체 {total_dialogues_needed}개 중)
-   - narr는 {"맨 처음 1회만 허용" if allow_narr_first else "이번 배치에서 사용 금지 (이미 출력됨)"}
-   - tanjiro, rengoku, akaza가 **번갈아가며** 격렬한 전투 상황 전개
-   - **대화 교차**: 같은 캐릭터가 연속으로 2회 이상 말하지 않기 (예: [narr]→[tanjiro]→[rengoku]→[akaza])
-   - **대화 마무리**: 마지막 대사는 반드시 tanjiro가 하며, {"사용자에게 개입 방법을 제안" if not has_more else "자연스럽게 전투 전개"}"""
-
-    elif stage_upper == "RETURN_TO_FRONT":
-        dialogue_rule = f"""**귀환 장면 연출**: 동료들과 함께 전장으로 돌아가는 씬 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 배치 진행: {dialogues_generated_so_far + 1}~{dialogues_generated_so_far + current_batch_size}번째 대화 (전체 {total_dialogues_needed}개 중)
-   - narr는 {"맨 처음 1회만 허용" if allow_narr_first else "이번 배치에서 사용 금지 (이미 출력됨)"}
-   - 모든 동료(tanjiro, zenitsu, inosuke)가 **골고루 교차**하며 등장
-   - 렌고쿠와 합류하는 감동적 장면 연출
-   - **대화 교차**: 같은 캐릭터가 연속으로 2회 이상 말하지 않기 (예: [narr]→[tanjiro]→[zenitsu]→[inosuke]→[rengoku])
-   - **대화 마무리**: 마지막 대사는 NPC 캐릭터가 하며, {"사용자에게 다음 행동을 유도" if not has_more else "자연스럽게 귀환 전개"}"""
-
-    elif stage_upper == "RECKLESS_SACRIFICE":
-        dialogue_rule = f"""**희생 장면 연출**: 무모한 선택의 결과를 보여주는 씬 - 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 배치 진행: {dialogues_generated_so_far + 1}~{dialogues_generated_so_far + current_batch_size}번째 대화 (전체 {total_dialogues_needed}개 중)
-   - narr는 {"맨 처음 1회만 허용" if allow_narr_first else "이번 배치에서 사용 금지 (이미 출력됨)"}
-   - tanjiro, rengoku, akaza가 **교대로** 반응하며 치명적 부상 과정 묘사
-   - 희생 분위기와 후회감 강조
-   - **대화 교차**: 같은 캐릭터가 연속으로 2회 이상 말하지 않기 (예: [narr]→[tanjiro]→[rengoku]→[akaza])
-   - **대화 마무리**: 마지막 대사는 NPC 캐릭터(narr 또는 tanjiro)가 하며, {"절망적 상황을 묘사" if not has_more else "자연스럽게 희생 장면 전개"}"""
-
-    else:
-        dialogue_rule = f"""**자유로운 연출**: 현재 배치에서 **정확히 {current_batch_size}개**의 대화를 생성
-   - 배치 진행: {dialogues_generated_so_far + 1}~{dialogues_generated_so_far + current_batch_size}번째 대화 (전체 {total_dialogues_needed}개 중)
-   - **대화 교차**: 같은 캐릭터가 연속으로 2회 이상 말하지 않기
-   - **대화 마무리**: 마지막 대사는 NPC 캐릭터가 하며, {"사용자가 응답할 수 있도록 유도" if not has_more else "자연스럽게 상황 전개"}"""
-
-    system_prompt = f"""당신은 귀멸의 칼날 스토리 게임의 **연출가이자 배우**입니다.
-주어진 상황 설명을 바탕으로 캐릭터들의 대사, 발화 순서, 대화 흐름을 자유롭게 연출하세요.
-
-=== 현재 상황 ===
-{situation}
-
-스테이지: {stage_tag} (타입: {stage_type})
-턴: {turn_idx}
-{history_text}
-{proactive_guide}
-
-=== 등장 캐릭터 ===
-{character_list}
-
-플레이어 이름: {user_name}
-
-=== 사용자 입력 ===
-"{user_input}"
-
-=== 연출 규칙 ===
-1. {dialogue_rule}
-2. **대화 교차 원칙** (매우 중요!):
-   - 같은 speaker가 연속으로 2회 이상 대사를 하지 않도록 주의
-   - 캐릭터 간 자연스럽게 대화를 주고받아야 함
-   - ✅ 좋은 예: [tanjiro] → [rengoku] → [tanjiro] → [narr] → [rengoku]
-   - ❌ 나쁜 예: [tanjiro] → [tanjiro] → [tanjiro] → [rengoku] → [rengoku]
-3. **대화 마무리 원칙** (필수!):
-   - 마지막 대사는 **반드시 NPC 캐릭터**(narr, tanjiro, rengoku 등)가 해야 함
-   - 마지막 대사는 사용자가 응답할 수 있도록 질문, 제안, 또는 행동 유도로 끝내기
-   - ✅ 좋은 예: [tanjiro]: "태민, 어떻게 할까요? 결정해주세요!"
-   - ❌ 나쁜 예: [narr]: "그렇게 긴박한 상황이 계속되었다." (응답 유도 없음)
-4. **캐릭터 연기**: 각 캐릭터의 성격과 말투를 살려 2~3문장으로 연기
-   - 아카자: 조롱적이고 냉혹하며 강자를 인정. "흥, 인간 주제에 재미있군."
-   - 렌고쿠: 단호하고 격려적이며 책임감 강함. "음! 훌륭하다!"
-   - 탄지로: 염려하고 관찰력 있으며 정서적 유도. "조심하세요!"
-5. **사용자 반영**: 사용자 입력에 맞춰 캐릭터들이 자연스럽게 반응
-6. **긴장감 유지**: 보스전이므로 긴박하고 생동감 있게
-7. **플레이어 호칭**: "{user_name}"으로 직접 호칭
-8. **speaker 키**: tanjiro, rengoku, akaza, zenitsu, inosuke 중 선택
-
-⚠️ 중요:
-- 절대 'user' speaker로 대사 생성 금지 (사용자가 직접 입력)
-- 상황 설명을 그대로 복사 금지, 자연스러운 대사로 재창조
-- 이전 대화와 중복 금지, 매번 새로운 전개
-- **같은 캐릭터가 연속으로 말하지 않도록 반드시 확인**
-- **마지막 대사는 반드시 NPC 캐릭터가 사용자에게 질문/제안으로 끝내기**
-"""
-
-    # 스테이지별 user_prompt 설정
-    if stage_upper == "INTRO":
-        narr_instruction = (
-            "- narr는 맨 처음 1회만"
-            if allow_narr_first
-            else "- narr는 사용 금지 (이미 출력됨)"
-        )
-        akaza_instruction = (
-            "- akaza는 마지막 상황에서 1회 등장"
-            if allow_akaza_last
-            else "- akaza는 사용 금지 (마지막 배치에만 등장)"
-        )
-        user_prompt = f'사용자 입력: "{user_input}"\n\n위 "현재 상황"의 각 단계를 **순서대로** 반영하여 **정확히 {current_batch_size}개**의 캐릭터 대사를 생성하세요.\n{narr_instruction}\n{akaza_instruction}\n- 나머지는 tanjiro, rengoku가 상황을 설명하며 대화\n- **같은 캐릭터가 연속으로 2회 이상 말하지 않기**\n- **마지막 대사는 NPC 캐릭터가 {"사용자에게 질문/제안으로 끝내기" if not has_more else "자연스럽게 상황 전개"}**\n\nJSON: {{"dialogues":[{{"speaker":"...","text":"..."}},{{"speaker":"...","text":"..."}},...]}}'
-
-    elif stage_upper == "ROUTE_CHOICE":
-        narr_instruction = (
-            "- narr는 맨 처음 1회만 (전투 직후 상황 묘사)"
-            if allow_narr_first
-            else "- narr는 사용 금지 (이미 출력됨)"
-        )
-        user_prompt = f'사용자 입력: "{user_input}"\n\n위 "현재 상황"을 **순서대로** 반영하여 **정확히 {current_batch_size}개**의 캐릭터 대사를 생성하세요.\n{narr_instruction}\n- tanjiro가 주도하며 렌고쿠의 위기와 선택지를 설명\n- **같은 캐릭터가 연속으로 2회 이상 말하지 않기**\n- **마지막 대사는 tanjiro가 {"사용자에게 선택을 요청하며 끝내기" if not has_more else "자연스럽게 상황 전개"}**\n\nJSON: {{"dialogues":[{{"speaker":"...","text":"..."}},{{"speaker":"...","text":"..."}},...]}}'
-
-    elif stage_upper == "INTERVENE":
-        narr_instruction = (
-            "- narr는 맨 처음 1회만 (전장 접근 장면)"
-            if allow_narr_first
-            else "- narr는 사용 금지 (이미 출력됨)"
-        )
-        user_prompt = f'사용자 입력: "{user_input}"\n\n위 "현재 상황"을 **순서대로** 반영하여 **정확히 {current_batch_size}개**의 캐릭터 대사를 생성하세요.\n{narr_instruction}\n- rengoku와 akaza의 격렬한 전투 묘사\n- tanjiro가 개입 방법을 제시하며 긴박함 강조\n- **같은 캐릭터가 연속으로 2회 이상 말하지 않기**\n- **마지막 대사는 tanjiro가 {"사용자에게 개입 방법을 제안하며 끝내기" if not has_more else "자연스럽게 전투 전개"}**\n\nJSON: {{"dialogues":[{{"speaker":"...","text":"..."}},{{"speaker":"...","text":"..."}},...]}}'
-
-    elif stage_upper == "RETURN_TO_FRONT":
-        narr_instruction = (
-            "- narr는 맨 처음 1회만 (전장 귀환 장면)"
-            if allow_narr_first
-            else "- narr는 사용 금지 (이미 출력됨)"
-        )
-        user_prompt = f'사용자 입력: "{user_input}"\n\n위 "현재 상황"을 **순서대로** 반영하여 **정확히 {current_batch_size}개**의 캐릭터 대사를 생성하세요.\n{narr_instruction}\n- 모든 동료(tanjiro, zenitsu, inosuke)가 골고루 등장\n- 렌고쿠와 합류하는 감동적 장면 연출\n- **같은 캐릭터가 연속으로 2회 이상 말하지 않기**\n- **마지막 대사는 NPC 캐릭터가 {"사용자에게 다음 행동을 유도하며 끝내기" if not has_more else "자연스럽게 귀환 전개"}**\n\nJSON: {{"dialogues":[{{"speaker":"...","text":"..."}},{{"speaker":"...","text":"..."}},...]}}'
-
-    elif stage_upper == "RECKLESS_SACRIFICE":
-        narr_instruction = (
-            "- narr는 맨 처음 1회만 (무모한 돌입 장면)"
-            if allow_narr_first
-            else "- narr는 사용 금지 (이미 출력됨)"
-        )
-        user_prompt = f'사용자 입력: "{user_input}"\n\n위 "현재 상황"을 **순서대로** 반영하여 **정확히 {current_batch_size}개**의 캐릭터 대사를 생성하세요.\n{narr_instruction}\n- 렌고쿠가 치명적 부상을 입는 과정 묘사\n- 희생 분위기와 후회감 강조\n- **같은 캐릭터가 연속으로 2회 이상 말하지 않기**\n- **마지막 대사는 NPC 캐릭터(narr 또는 tanjiro)가 {"절망적 상황을 묘사하며 끝내기" if not has_more else "자연스럽게 희생 장면 전개"}**\n\nJSON: {{"dialogues":[{{"speaker":"...","text":"..."}},{{"speaker":"...","text":"..."}},...]}}'
-
-    else:
-        user_prompt = f'사용자 입력: "{user_input}"\n위 상황을 반영하여 **정확히 {current_batch_size}개**의 캐릭터 대사를 생성하세요.\n- **같은 캐릭터가 연속으로 2회 이상 말하지 않기**\n- **마지막 대사는 NPC 캐릭터가 {"사용자에게 응답 유도하며 끝내기" if not has_more else "자연스럽게 상황 전개"}**\n\nJSON: {{"dialogues":[{{"speaker":"...","text":"..."}}]}}'
-
-    try:
-        llm = get_llm_client()
-        res = llm.call_json(
-            system_prompt=system_prompt, user_prompt=user_prompt, temperature=0.8
-        )
-        items = (res or {}).get("dialogues") or []
-    except Exception as e:
-        logger.warning(f"LLM error: {e}; fallback composing")
-        items = []
-
-    # 후처리 - LLM 생성 대사만 사용 (beats는 힌트로만 활용)
-    out: List[Dict[str, str]] = []
-
-    # narr가 이미 나왔는지 추적 (주요 스테이지에서 사용)
-    narr_already_output = False
-
-    # narr 필터링이 필요한 스테이지 목록
-    narr_filter_stages = [
-        "INTRO",
-        "ROUTE_CHOICE",
-        "INTERVENE",
-        "RETURN_TO_FRONT",
-        "RECKLESS_SACRIFICE",
-    ]
-
-    for it in items:
-        sp = _normalize_speaker(it.get("speaker", ""))
-        tx = _normalize_text(it.get("text", ""))
-        if not sp or not tx:
-            continue
-
-        # 주요 스테이지에서 narr 필터링 (첫 번째 배치에서만 허용)
-        if stage_upper in narr_filter_stages:
-            if sp == "narr":
-                # 첫 배치가 아니거나, 첫 배치 내에서 이미 narr가 출력되었으면 스킵
-                if not allow_narr_first or narr_already_output:
-                    logger.info(
-                        f"[{stage_upper}] Skipping narr - batch_index={batch_index}, already_output={narr_already_output}"
-                    )
-                    continue
-                narr_already_output = True
-
-        # akaza 필터링 (마지막 배치에서만 허용)
-        if stage_upper in narr_filter_stages:
-            if sp == "akaza":
-                if not allow_akaza_last:
-                    logger.info(
-                        f"[{stage_upper}] Skipping akaza - not last batch (batch_index={batch_index})"
-                    )
-                    continue
-
-        # 미등록 스피커는 speaker_pool로 보정 시도
-        if sp not in speakers and sp not in _load_character_db(None):
-            for cand in speakers:
-                prof = _load_character_db(None).get(cand, {})
-                if it.get("speaker") == prof.get("name"):
-                    sp = cand
-                    break
-        out.append(
-            {
-                "speaker": sp,
-                "text": _replace_placeholders(tx, _load_character_db(None), state),
-            }
-        )
-
-    # # USER 최소 1줄 보장
-    # pool_norm = [_normalize_speaker(s) for s in speakers]
-    # if "user" in pool_norm and not any(x["speaker"] == "user" for x in out):
-    #     uin = _state_get(state, "last_user_msg") or _state_get(state, "user_input") or ""
-    #     uline = f"내 생각은 이래. {uin}" if uin else "나는 동료들을 먼저 모으겠어."
-    #     out.insert(0, {"speaker": "user", "text": _replace_placeholders(_normalize_text(uline), _load_character_db(None), state)})
-
-    # LLM이 아무 것도 못 만들면 폴백
-    # if not out:
-    #     beats = ctx.get("beats") or ["상황을 간단히 설명한다."]
-    #     t = int(_state_get(state, "turn_index", 0) or 0)
-    #     for sp in pool_norm[:3]:
-    #         prof = _load_character_db(None).get(sp, {})
-    #         out.append({"speaker": sp, "text": _render_fallback_line(sp, beats[0], prof, t, state, _load_character_db(None))})
-
-    return out, has_more
-
-
-# ---------- 엔트리 ----------
 class ChildrenAgent:
-    def run(self, state: Any) -> Any:
-        start_time = time.perf_counter()
 
-        def _finish(result_state: Any, label: str) -> Any:
-            elapsed_ms = (time.perf_counter() - start_time) * 1000
-            logger.info(f"Elapsed {elapsed_ms:.2f} ms ({label})")
-            return result_state
+    # ============================================================
+    # 🛠️ 초기화
+    # ============================================================
+    def __init__(self):
+        """LLM 클라이언트 초기화"""
+        self._llm = get_llm_client()
 
-        # 캐릭터 DB 미리 로드 + user를 가상 캐릭터로 주입(치환용)
-        paths = _state_get(state, "paths", {}) or {}
-        char_dir = (paths or {}).get("character_dir")
-        db = _load_character_db(char_dir)
-        user_name = (
-            _state_get(state, "user_name")
-            or _nested_get(state, "user_profile", "display_name")
-            or _nested_get(state, "meta", "user_display_name")
-        )
-        if user_name:
-            db["user"] = {
-                "display_name": user_name,
-                "name": user_name,
-                "aliases": ["player", "주인공"],
-            }
+    # ============================================================
+    # 🚦 실행 엔트리 포인트
+    # ============================================================
+    def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        ChildrenAgent의 메인 엔트리 포인트.
+        ParentAgent → children_ctx를 넘겨주면,
+        여기서 실제 대사 리스트(agent_responses)를 생성한다.
+        """
+        ctx = self._extract_context(state)
 
-        # 컨텍스트 확보
-        ctx = _pickup_ctx(state)
+        # 컨텍스트가 없으면 빈 응답 처리
         if not ctx:
-            logger.warning("No context and cannot reconstruct; skipping")
-            return _finish(state, "no_context")
+            log("children", "Missing children_ctx; emitting empty response")
+            state["agent_responses"] = []
+            state["has_more_dialogues"] = False
+            state["next_node"] = "dialogue_agent"
+            return state
 
-        # 대사 생성 (배치 모드)
-        replies, has_more = _generate_dialogues(ctx, state, db)
-        if not replies:
-            logger.info("No dialogues generated.")
-            return _finish(state, "no_dialogues")
+        # ✅ 대사 생성 (LLM or fallback)
+        dialogues = self._build_dialogues(ctx, state)
 
-        mission_meta = ctx.get("mission") or {}
-        lane_id_meta = (mission_meta.get("lane_id") or "").lower()
-        if (
-            (ctx.get("stage_tag") or "").upper() == "RECRUIT"
-            and lane_id_meta.startswith("inosuke")
-        ):
-            attempts_meta = int(mission_meta.get("attempts", 0) or 0)
-            max_attempts_meta = int(
-                _state_get(state, "inosuke_max_attempts", INOSUKE_MAX_ATTEMPTS)
-                or INOSUKE_MAX_ATTEMPTS
-            )
-            if max_attempts_meta < 1:
-                max_attempts_meta = INOSUKE_MAX_ATTEMPTS
-            if attempts_meta < 0:
-                attempts_meta = 0
-            if attempts_meta > max_attempts_meta:
-                attempts_meta = max_attempts_meta
-            remaining = max(0, max_attempts_meta - attempts_meta)
-            status_line = (
-                f"이노스케 설득 남은 횟수 {remaining}/{max_attempts_meta} "
-                f"(실패 {attempts_meta}회)"
-            )
-            replies.insert(0, {"speaker": "system", "text": status_line})
+        # 생성된 대사 결과를 state에 저장
+        state["agent_responses"] = dialogues
+        state["has_more_dialogues"] = False
+        state["next_node"] = "dialogue_agent"
 
-        # 배치 진행 상태 업데이트
-        batch_index = int(_state_get(state, "dialogue_batch_index", 0) or 0)
-        dialogues_generated = int(
-            _state_get(state, "dialogues_generated_count", 0) or 0
+        return state
+
+    # ============================================================
+    # 🔧 내부 헬퍼
+    # ============================================================
+    def _extract_context(self, state: Dict[str, Any]) -> Dict[str, Any] | None:
+        """
+        children_ctx를 추출하는 함수.
+        - state.children_ctx를 직접 사용 (parent_agent가 업데이트하는 값)
+        - state.agent_inputs.children은 stale할 수 있으므로 사용하지 않음
+        """
+        # 🔧 수정: agent_inputs.children은 오래된 값일 수 있으므로 무시
+        # parent_agent가 업데이트한 state.children_ctx만 사용
+        ctx = state.get("children_ctx")
+
+        if ctx:
+            log("children", "✅ Using ctx from state.children_ctx")
+        else:
+            log("children", "⚠️ No children_ctx found in state")
+
+        return ctx if isinstance(ctx, dict) else None
+
+    def _render_text(self, state: Dict[str, Any], text: str) -> str:
+        """텍스트 내의 플레이어 이름, 변수 등을 실제 값으로 치환"""
+        user_name = (
+            state.get("user_name")
+            or (state.get("temp_data") or {}).get("user_name")
+            or "츠구코"  # 디폴트 이름 (없을 경우)
         )
 
-        # 새로 생성된 대화 개수 누적
-        new_count = dialogues_generated + len(replies)
+        replacements = {
+            "{user}": user_name,
+            "{user_name}": user_name,
+            "{{user}}": user_name,
+        }
 
-        # 상태 업데이트
-        if isinstance(state, dict):
-            state["dialogue_batch_index"] = batch_index + 1
-            state["dialogues_generated_count"] = new_count
-            state["has_more_dialogues"] = has_more
+        result = text
+        for token, value in replacements.items():
+            result = result.replace(token, value)
+        return result
+
+    # ============================================================
+    # 💬 대사 생성
+    # ============================================================
+    def _build_dialogues(self, ctx: Dict[str, Any], state: Dict[str, Any]) -> List[Dict[str, Any]]:
+
+        # -----------------------------
+        # 1️⃣ 컨텍스트 추출
+        # -----------------------------
+        character_refs = ctx.get("character_refs", {})  # 캐릭터 JSON 경로들
+        beats = ctx.get("beats") or []                  # 시나리오 내 상황 묘사 텍스트
+        stage_tag = ctx.get("stage_tag")                # 현재 스테이지명
+        stage_type = ctx.get("stage_type")              # 스테이지 타입
+        stage_objective = ctx.get("stage_objective")
+        intent_options = ctx.get("intent_options")
+        latest_user_input = ctx.get("latest_user_input")
+        recent_dialogues = ctx.get("recent_dialogues")
+        prefetch_entries = ctx.get("prefetch_dialogues") or []
+        prefetch_dialogues = self._render_dialogues(state, [dict(entry) for entry in prefetch_entries if isinstance(entry, dict)]) if prefetch_entries else []
+
+        def merge_with_prefetch(dialogues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            if not prefetch_dialogues:
+                return dialogues
+            # 사본을 만들어 원본 훼손 방지
+            merged = []
+            for item in prefetch_dialogues:
+                merged.append(dict(item))
+            for item in dialogues:
+                merged.append(item)
+            return merged
+
+        # ⚠️ beats가 비어있으면 에러 반환 (LLM hallucination 방지)
+        # 단, llm_beats=true인 경우는 LLM이 beats를 실시간 생성
+        llm_beats_enabled = ctx.get("llm_beats", False)
+
+        if not beats and not llm_beats_enabled:
+            fallback = (ctx.get("fallback") or {}).get("dialogues") or []
+            if fallback:
+                log("children", "⚙️ Using provided fallback dialogues (no beats)")
+                return merge_with_prefetch(self._render_dialogues(state, fallback))
+
+            log("children", "⚠️ No beats provided - cannot generate dialogue")
+            return merge_with_prefetch([{
+                "speaker": "system",
+                "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
+            }])
+
+        # 🔧 OFF_TOPIC이나 system_notice는 LLM 우회하고 fallback 직접 사용
+        if stage_type == "system_notice" or stage_tag == "OFF_TOPIC":
+            log("children", f"⚙️ Bypassing LLM for {stage_type or stage_tag} - using fallback directly")
+
+            # fallback에 dialogues가 있으면 우선 사용
+            fallback = ctx.get("fallback", {})
+            if isinstance(fallback, dict):
+                fallback_dialogues = fallback.get("dialogues", [])
+                if fallback_dialogues:
+                    log("children", f"✅ Using {len(fallback_dialogues)} fallback dialogues")
+                    return merge_with_prefetch(self._render_dialogues(state, fallback_dialogues))
+
+            # fallback이 없으면 beats 그대로 사용
+            log("children", f"✅ Using {len(beats)} beats as-is")
+            normalized = self._normalize_dialogues(beats)
+            return merge_with_prefetch(self._render_dialogues(state, normalized))
+
+        # 🔍 디버깅: 받은 beats 확인
+        if llm_beats_enabled:
+            log("children", f"🎭 LLM Beats mode enabled for stage={stage_tag}")
+
+            # 유저 입력이 있을 때만 beats를 LLM이 즉흥 생성
+            # 문제: 유저 입력 없이 자동으로 beats를 생성하면 캐릭터들이 알아서 대화 진행
+            # 해결: 유저 입력이 있을 때만 LLM beats 생성
+            if not beats:
+                latest_user_input = ctx.get("latest_user_input", "").strip()
+                user_input = state.get("user_input", "").strip()
+
+                # 유저 입력이 있을 때만 beats 생성
+                if latest_user_input or user_input:
+                    # context를 기반으로 beats 생성 프롬프트를 만듦
+                    beats = self._generate_beats_from_context(state, ctx)
+                    log("children", f"✨ Generated {len(beats)} beats via LLM based on user input")
+                else:
+                    # 유저 입력이 없으면 beats 생성하지 않음 (fallback으로 프롬프트 메시지 표시)
+                    log("children", "⚠️ LLM Beats mode: No user input detected, skipping auto-generation")
+                    # beats를 비워서 fallback 메시지 사용
         else:
-            try:
-                setattr(state, "dialogue_batch_index", batch_index + 1)
-                setattr(state, "dialogues_generated_count", new_count)
-                setattr(state, "has_more_dialogues", has_more)
-            except Exception:
-                pass
+            log("children", f"📋 Received {len(beats)} beats for stage={stage_tag}")
+            for i, beat in enumerate(beats[:3]):  # 첫 3개만
+                if isinstance(beat, dict):
+                    goal = beat.get("goal", "")[:60]
+                    log("children", f"  Beat[{i}]: {goal}...")
 
-        # 상태 반영
-        buf = _state_get(state, "agent_responses", []) or []
-        buf.extend(replies)
-        if isinstance(state, dict):
-            state["agent_responses"] = buf
-        else:
-            try:
-                setattr(state, "agent_responses", buf)
-            except Exception:
-                pass
+        # ✅ (추가) 시나리오 키 감지
+        scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
+        metadata = scenario_ref.get("metadata") if isinstance(scenario_ref, dict) else {}
+        tone_meta = metadata.get("tone") or {}
+        scenario_key = tone_meta.get("scenario_key")
 
-        # 히스토리 축적(최대 20)
-        hist = _state_get(state, "message_history", []) or []
-        hist.extend(replies)
-        if len(hist) > 20:
-            hist = hist[-20:]
-        if isinstance(state, dict):
-            state["message_history"] = hist
-        else:
-            try:
-                setattr(state, "message_history", hist)
-            except Exception:
-                pass
+        # -----------------------------
+        # 2️⃣ 캐릭터 톤 + 관계 로드
+        # -----------------------------
+        speaker_pool = ctx.get("speaker_pool", [])
+        context_summary = ctx.get("context_summary")
 
-        speakers = [r["speaker"] for r in replies]
-        logger.info(
-            f"✅ Generated {len(replies)} dialogues (batch {batch_index + 1}, has_more: {has_more}): {speakers}"
+        # 🔧 speaker_pool에 있는 캐릭터만 tone_profile 로드
+        filtered_character_refs = {}
+        for char in speaker_pool:
+            if char in character_refs:
+                filtered_character_refs[char] = character_refs[char]
+
+        tone_profiles = dialogue_tools.load_tone_profiles(filtered_character_refs, scenario_key)
+
+        # -----------------------------
+        # 3️⃣ LLM 프롬프트 생성
+        # -----------------------------
+        stage_turn = int(state.get("stage_turn", 0) or 0)
+        llm_prompt = dialogue_tools.compose_llm_prompt(
+            stage_tag=stage_tag,
+            beats=beats,
+            tone_profiles=tone_profiles,
+            speaker_pool=speaker_pool,
+            context_summary=context_summary,
+            stage_turn=stage_turn,
+            stage_type=stage_type or "",
+            stage_objective=stage_objective,
+            intent_options=intent_options if isinstance(intent_options, dict) else None,
+            latest_user_input=latest_user_input if isinstance(latest_user_input, str) else None,
+            recent_dialogues=recent_dialogues if isinstance(recent_dialogues, list) else None,
         )
-        return _finish(state, "completed")
 
 
+        # -----------------------------
+        # 4️⃣ LLM 호출 시도
+        # -----------------------------
+        try:
+            # Phase 2 개선: yaml 기반 설정 + 개선된 기본값
+            system_prompt = _CHILDREN_DIALOGUE_PROMPT
+            primary_temperature = self._llm.get_agent_setting("children", "temperature", 0.8)  # 0.65 → 0.8
+            retry_temperature = self._llm.get_agent_setting("children", "retry_temperature", 1.0)  # 기본값 1.0
+            max_tokens = self._llm.get_agent_setting("children", "max_tokens", 2000)
+
+            # Phase 2 개선: Temperature 상향 (0.65 → 0.8)
+            # - 더 창의적이고 다양한 대사 생성
+            # - 캐릭터별 개성이 더 잘 드러남
+            # - 예측 가능한 패턴 감소
+            response = self._llm.call_json(
+                system_prompt=system_prompt,
+                user_prompt=llm_prompt,
+                temperature=primary_temperature,
+                max_tokens=max_tokens,
+                agent="children",
+            )
+            log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:500]}")
+
+            dialogue_payload = None
+            if isinstance(response, dict):
+                dialogue_payload = response.get("dialogues")
+
+            # 1차 응답 검증
+            if not isinstance(dialogue_payload, list) or not dialogue_payload:
+                log("children", "⚠️ LLM response invalid or empty → retrying once")
+                # Phase 2 개선: Retry Temperature 상향 (0.9 → 1.0)
+                # - 첫 시도 실패 시 완전히 다른 접근 시도
+                # - 동일한 실패 패턴 반복 방지
+                # - 최대 다양성으로 성공 가능성 향상
+                retry_resp = self._llm.call_json(
+                    system_prompt=system_prompt,
+                    user_prompt=llm_prompt,
+                    temperature=retry_temperature,
+                    max_tokens=max_tokens,
+                    agent="children",
+                )
+                log("children", f"LLM retry response: {json.dumps(retry_resp, ensure_ascii=False)[:500]}")
+
+                if isinstance(retry_resp, dict):
+                    dialogue_payload = retry_resp.get("dialogues")
+
+            if isinstance(dialogue_payload, list) and dialogue_payload:
+                dialogues = self._normalize_dialogues(dialogue_payload)
+                if dialogues:
+                    log("children", f"✅ Generated {len(dialogues)} tone-aware dialogues.")
+                    return merge_with_prefetch(self._render_dialogues(state, dialogues))
+
+            log("children", f"⚠️ LLM invalid response → {type(response)} {response}")
+        except Exception as exc:
+            log("children", f"❌ LLM call failed: {exc}")
+
+        # -----------------------------
+        # 5️⃣ Fallback: beats 그대로 사용
+        # -----------------------------
+        log("children", "⚙️ Using beats fallback (no LLM response).")
+
+        ctx.setdefault("fallback_count", 0)
+        ctx["fallback_count"] += 1
+        if ctx["fallback_count"] > 3:
+            log("children", "❌ Too many fallback calls → forcing stage advance")
+            state["stage_turn"] = int(state.get("stage_turn", 0) or 0) + 1
+            state.setdefault("temp_data", {})["force_story_resume"] = True
+
+        # beats가 비어있으면 에러 메시지 반환
+        if not beats:
+            log("children", "⚠️ No beats available for fallback")
+            return merge_with_prefetch([{
+                "speaker": "system",
+                "text": "시나리오를 불러오는 중 문제가 발생했습니다. 다시 시도해주세요."
+            }])
+
+        fallback_dialogues = self._normalize_dialogues(beats)
+        fallback = (ctx.get("fallback") or {}).get("dialogues") or []
+        if fallback:
+            log("children", "⚙️ Using provided fallback dialogues for this stage")
+            fallback_dialogues = self._normalize_dialogues(fallback)
+        return merge_with_prefetch(self._render_dialogues(state, fallback_dialogues))
+
+    def _render_dialogues(self, state: Dict[str, Any], entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        rendered: List[Dict[str, Any]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            text = entry.get("text")
+            if isinstance(text, str):
+                entry["text"] = self._render_text(state, text)
+            rendered.append(entry)
+        return rendered
+
+    def _extract_intro_narration(self, beats: List[Any]) -> List[Dict[str, Any]]:
+        for beat in beats:
+            if not isinstance(beat, dict):
+                continue
+            text = beat.get("text") or beat.get("line") or beat.get("goal")
+            if not text:
+                continue
+            speaker = beat.get("speaker")
+            hints = beat.get("speaker_hint") or []
+            fx = beat.get("fx")
+            if (speaker and speaker.lower() == "narr") or any(
+                isinstance(h, str) and h.lower() == "narr" for h in hints
+            ):
+                dialogue = {"speaker": "narr", "text": text}
+                if fx:
+                    dialogue["fx"] = fx
+                return [dialogue]
+        return []
+
+    def _normalize_text(self, text: Optional[str]) -> str:
+        return (text or "").strip().lower()
+
+    def _normalize_dialogues(self, entries: List[Any]) -> List[Dict[str, Any]]:
+        normalized: List[Dict[str, Any]] = []
+        for entry in entries:
+            if isinstance(entry, dict):
+                text = (
+                    entry.get("text")
+                    or entry.get("line")
+                    or entry.get("goal")
+                    or entry.get("description")
+                )
+                speaker = entry.get("speaker")
+                if not speaker:
+                    hints = entry.get("speaker_hint")
+                    if isinstance(hints, list) and hints:
+                        speaker = hints[0]
+
+                # 🔥 goal에서 따옴표 안의 대사 추출 (더 자연스러운 대사를 위해)
+                if not entry.get("text") and text:
+                    text = self._extract_dialogue_from_goal(text, speaker or "narr")
+
+                normalized.append(
+                    {
+                        "speaker": (speaker or "narr"),
+                        "text": text or json.dumps(entry, ensure_ascii=False),
+                        "fx": entry.get("fx"),
+                    }
+                )
+            else:
+                normalized.append({"speaker": "narr", "text": str(entry)})
+        return normalized
+
+    def _generate_beats_from_context(
+        self,
+        state: Dict[str, Any],
+        ctx: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        llm_beats=true일 때 context를 기반으로 LLM이 beats를 실시간 생성
+        """
+        stage_tag = ctx.get("stage_tag", "unknown")
+        speaker_pool = ctx.get("speaker_pool", [])
+        latest_user_input = ctx.get("latest_user_input", "")
+        recent_dialogues = ctx.get("recent_dialogues", [])
+
+        # 시나리오 context 추출
+        scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
+        stage_context = ""
+
+        # 현재 스테이지의 context 찾기
+        stages = scenario_ref.get("stages", [])
+        for stage in stages:
+            if stage.get("tag") == stage_tag:
+                stage_context = stage.get("context", "")
+                break
+
+        if not stage_context:
+            stage_context = f"현재 {stage_tag} 장면이 진행 중입니다."
+
+        # LLM 프롬프트 구성
+        system_prompt = _LLM_BEATS_SYSTEM
+
+        recent_history_str = "\n".join(recent_dialogues[-4:]) if recent_dialogues else "(없음)"
+
+        user_prompt = _LLM_BEATS_USER.format(
+            stage_context=stage_context,
+            recent_history=recent_history_str,
+            latest_user_input=latest_user_input if latest_user_input else "(없음)",
+            speaker_pool=", ".join(speaker_pool),
+        )
+
+        try:
+            response = self._llm.call_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.7,
+                max_tokens=1000,
+            )
+
+            if isinstance(response, list) and response:
+                log("children", f"✅ Generated {len(response)} beats via LLM")
+                return response
+            elif isinstance(response, dict) and response.get("beats"):
+                beats = response["beats"]
+                if isinstance(beats, list):
+                    return beats
+
+            log("children", "⚠️ LLM beats generation returned invalid format")
+            return self._create_fallback_beats(stage_context, speaker_pool)
+
+        except Exception as exc:
+            log("children", f"❌ LLM beats generation failed: {exc}")
+            return self._create_fallback_beats(stage_context, speaker_pool)
+
+    def _create_fallback_beats(self, context: str, speaker_pool: list) -> List[Dict[str, Any]]:
+        """LLM beats 생성 실패 시 기본 beats 반환"""
+        fallback_speaker = speaker_pool[0] if speaker_pool else "narr"
+
+        return [
+            {
+                "goal": context,
+                "speaker_hint": ["narr"],
+            },
+            {
+                "goal": "상황을 파악하고 다음 행동을 결정한다.",
+                "speaker_hint": [fallback_speaker],
+            },
+        ]
+
+    def _extract_dialogue_from_goal(self, goal: str, speaker: str) -> str:
+        """
+        goal 텍스트에서 따옴표 안의 대사를 추출하여 자연스럽게 만듦
+        예: "탄지로가 말한다. '이노스케! 지금은 싸움이 아니야!'"
+            → "이노스케! 지금은 싸움이 아니야! 우리가 지금 해야 할 일은 렌고쿠 님을 돕는 거야!"
+        """
+        import re
+
+        # 따옴표 안의 대사 찾기 (', ", 「」 모두 지원)
+        quotes_pattern = r"['\"\「]([^'\"」]+)['\"\」]"
+        matches = re.findall(quotes_pattern, goal)
+
+        if matches:
+            # 대사를 찾았으면 그것을 반환 (여러 개면 합침)
+            dialogue = " ".join(matches)
+
+            # narr(내레이션)인 경우 goal 전체 사용 (상황 묘사)
+            if speaker == "narr":
+                # 【 】 안의 상황 태그 제거
+                cleaned = re.sub(r"【[^】]+】\s*", "", goal)
+                return cleaned.strip()
+
+            return dialogue.strip()
+
+        # 대사를 못 찾았으면 goal 그대로 반환
+        return goal
+
+# ============================================================
+# 🚀 모듈 수준 헬퍼
+# ============================================================
 DEFAULT_AGENT = ChildrenAgent()
 
+def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
+    # Phase 4: 로그 수집 시작
+    start_time = time.perf_counter()
 
-def run_children_agent(state: Any) -> Any:
-    return DEFAULT_AGENT.run(state)
+    try:
+        result = DEFAULT_AGENT.run(state)
+
+        # Phase 4: 로그 수집 (성공)
+        model_output = {
+            "agent_responses": result.get("agent_responses", []),
+            "has_more_dialogues": result.get("has_more_dialogues", False),
+            "next_node": result.get("next_node"),
+        }
+
+        log_agent(
+            agent_name="children",
+            state=state,
+            model_output=model_output,
+            start_time=start_time,
+            llm_model="gpt-4o-mini",  # Children Agent uses gpt-4o-mini (설정 기준)
+        )
+
+        return result
+    except Exception as e:
+        # Phase 4: 로그 수집 (에러)
+        log_agent(
+            agent_name="children",
+            state=state,
+            model_output={"error": str(e)},
+            start_time=start_time,
+            is_error=True,
+            error_message=str(e),
+        )
+        raise
+
+
+__all__ = ["ChildrenAgent", "run_children_agent"]

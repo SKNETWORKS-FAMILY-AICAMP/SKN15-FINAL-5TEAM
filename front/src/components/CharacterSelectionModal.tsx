@@ -1,5 +1,6 @@
-
 import { useState } from 'react';
+
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
 interface Character {
   id: string;
@@ -37,37 +38,37 @@ export default function CharacterSelectionModal({
       id: 'tanjiro',
       name: '탄지로',
       description: '물의 호흡을 사용하는 귀살대원',
-      profileImage: '/images/프로필_탄지로.png'
+      profileImage: `${CDN_URL}/프로필_탄지로.png`
     },
     {
       id: 'zenitsu',
       name: '젠이츠',
       description: '번개의 호흡을 사용하는 동료',
-      profileImage: '/images/프로필_젠이츠.png'
+      profileImage: `${CDN_URL}/프로필_젠이츠.png`
     },
     {
       id: 'nezuko',
       name: '네즈코',
       description: '탄지로의 여동생',
-      profileImage: '/images/프로필_네즈코.png'
+      profileImage: `${CDN_URL}/프로필_네즈코.png`
     },
     {
       id: 'inosuke',
       name: '이노스케',
       description: '야생의 호흡을 사용하는 멧돼지',
-      profileImage: '/images/프로필_이노스케.png'
+      profileImage: `${CDN_URL}/프로필_이노스케.png`
     },
     {
       id: 'giyu',
       name: '기유',
       description: '물의 기둥, 조용하지만 강한 검사',
-      profileImage: '/images/프로필_기유.png'
+      profileImage: `${CDN_URL}/프로필_기유.png`
     },
     {
       id: 'akaza',
       name: '아카자',
       description: '상현 삼, 강력한 상급 귀신',
-      profileImage: '/images/프로필_아카자.png'
+      profileImage: `${CDN_URL}/프로필_아카자.png`
     }
   ];
 
@@ -76,13 +77,13 @@ export default function CharacterSelectionModal({
       id: 'friend1',
       name: '캐릭터1',
       description: 'Supporting line text lorem ipsum dolor sit amet, consectetur.',
-      profileImage: '/images/프로필_탄지로.png'
+      profileImage: `${CDN_URL}/프로필_탄지로.png`
     },
     {
       id: 'friend2',
       name: '친구2',
       description: 'Supporting line text lorem ipsum dolor sit amet, consectetur.',
-      profileImage: '/images/프로필_네즈코.png'
+      profileImage: `${CDN_URL}/프로필_네즈코.png`
     }
   ];
 
@@ -152,7 +153,7 @@ export default function CharacterSelectionModal({
                       alt={character.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/프로필_탄지로.png';
+                        (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
                       }}
                     />
                   </div>
@@ -192,7 +193,7 @@ export default function CharacterSelectionModal({
                       alt={friend.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/images/프로필_탄지로.png';
+                        (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
                       }}
                     />
                   </div>

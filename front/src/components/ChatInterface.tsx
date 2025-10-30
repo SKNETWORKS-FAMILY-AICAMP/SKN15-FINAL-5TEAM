@@ -1,7 +1,13 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import CharacterSelectionModal from './CharacterSelectionModal';
+import BubbleCounter from './BubbleCounter';
+import AffinityPanel from './AffinityPanel';
 import { sendChatMessage, ChatResponse } from '@/services/api';
+import { useBackgroundImage } from '@/hooks/useBackgroundImage';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
+
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
 interface Message {
   id: number;
@@ -10,6 +16,7 @@ interface Message {
   timestamp: Date;
   characterId?: string; // 메시지를 보낸 캐릭터 ID
   isSystemMessage?: boolean; // 시스템/에이전트 메시지 여부
+  imageIndex?: string; // 이 메시지가 표시될 때 변경할 배경 이미지 인덱스
 }
 
 interface ChatInterfaceProps {
@@ -17,6 +24,14 @@ interface ChatInterfaceProps {
   onMessageSent?: () => void;
   characterId?: string;
 }
+
+const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
+
+const SCENARIO_ID_MAP: Record<string, string> = {
+  train: 'cutscene5_llm_driven',
+  ending: 'cutscene5_llm_driven',
+  cutscene5_llm_driven: 'cutscene5_llm_driven',
+};
 
 export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending' }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -37,58 +52,423 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const shouldCancelAutoRequest = useRef(false); // 사용자 중단 플래그
   const messageIdCounter = useRef(0); // 고유한 메시지 ID 생성용 카운터
   const isAddingMessages = useRef(false); // 메시지 추가 중 플래그 (중복 방지)
+  const [affinityScores, setAffinityScores] = useState<Record<string, number>>({}); // 친밀도
+  const [isTransitioning, setIsTransitioning] = useState(false); // 컷신 전환 효과
+  const [isEnded, setIsEnded] = useState(false); // Phase 4: 시나리오 종료 여부
+  const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
+  const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
+  const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
 
-  const quickResponses = ['입력해주세요!', '좋아요!', '그래요!'];
+  // Skip 기능을 위한 ref
+  const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
+  const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
+  const shouldSkip = useRef(false); // Skip 플래그
 
-  // 캐릭터별 프로필 이미지 매핑 (백엔드 화자 ID -> 프로필 이미지)
+  // 가장 최근 메시지 ID 계산 (모든 메시지 포함 - 시스템/나레이션/사용자/AI 모두)
+  // 단, 첫 메시지는 확대하지 않음 (겹침 방지)
+  const latestMessageId = useMemo(() => {
+    // 메시지가 2개 이상일 때만 마지막 메시지 확대
+    if (messages.length > 1) {
+      return messages[messages.length - 1].id;
+    }
+    return null;
+  }, [messages]);
+
+  // 배경 이미지 관리 (무한열차 시나리오)
+  const {
+    currentBackground,
+    backgroundImageUrl,
+    setBackgroundById,
+    setBackgroundByIndex,
+    preloadImages
+  } = useBackgroundImage('mugen_train');
+
+  // 소리 효과 관리 (몰입감 향상)
+  const {
+    playMessageSound,
+    playSystemSound,
+    playTypingStartSound,
+    unlockAudio
+  } = useSoundEffects();
+
+  const backendScenarioId = useMemo(() => {
+    if (!characterId) {
+      return 'cutscene5_llm_driven';
+    }
+    return SCENARIO_ID_MAP[characterId] || characterId;
+  }, [characterId]);
+
+  // 배경 이미지 프리로드 (성능 최적화)
+  useEffect(() => {
+    preloadImages();
+  }, [preloadImages]);
+
+  // 백엔드 이미지 파일명 → 프론트엔드 인덱스 매핑
+  const backendImageToIndex: Record<string, number> = {
+    'default.png': 1,
+    'cutscene_01_derail.png': 1,           // 무한열차 탈선
+    'cutscene_02_battle_begins.png': 3,    // 전투 시작 (아카자 등장)
+    'cutscene_03_fight_akaza.png': 6,      // 아카자와의 전투
+    'cutscene_04_rengoku_sacrifice.png': 13, // 렌고쿠의 희생
+    'cutscene_05_aftermath.png': 18,       // 전투 이후
+  };
+
+  // 백엔드 응답에서 받은 current_image를 처리하여 배경 변경 (페이드 효과 포함)
+  const handleBackgroundChange = (currentImage: string | null) => {
+    if (!currentImage) return;
+
+    console.log(`🖼️ handleBackgroundChange called with: "${currentImage}"`);
+
+    // 전환 효과 시작
+    setIsTransitioning(true);
+
+    // 500ms 후에 배경 변경
+    setTimeout(() => {
+      // 1. 숫자인 경우 인덱스로 처리
+      const indexNum = parseInt(currentImage, 10);
+      if (!isNaN(indexNum) && indexNum >= 1 && indexNum <= 21) {
+        console.log(`  → Setting background by index: ${indexNum}`);
+        setBackgroundByIndex(indexNum);
+      }
+      // 2. 백엔드 이미지 파일명인 경우 매핑된 인덱스로 처리
+      else if (backendImageToIndex[currentImage]) {
+        const mappedIndex = backendImageToIndex[currentImage];
+        console.log(`  → Mapped backend image "${currentImage}" to index: ${mappedIndex}`);
+        setBackgroundByIndex(mappedIndex);
+      }
+      // 3. ID로 처리 (예: "derailed_train", "battle_scene_01" 등)
+      else {
+        console.log(`  → Setting background by ID: ${currentImage}`);
+        setBackgroundById(currentImage);
+      }
+
+      // 전환 효과 종료
+      setIsTransitioning(false);
+    }, 500);
+  };
+
+  // 캐릭터별 프로필 이미지 매핑 (패턴 기반 매칭)
   const getCharacterProfile = (charId: string) => {
-    const profileMap: Record<string, string> = {
-      'tanjiro': '/images/프로필_탄지로.png',
-      'tanjirou': '/images/프로필_탄지로.png',
-      'rengoku': '/images/프로필_렌고쿠.png',
-      'zenitsu': '/images/프로필_젠이츠.png',
-      'inosuke': '/images/프로필_이노스케.png',
-      'nezuko': '/images/프로필_네즈코.png',
-      'giyu': '/images/프로필_기유.png',
-      'shinobu': '/images/프로필_시노부.png',
-      'akaza': '/images/프로필_아카자.png',
-      'system': '/images/프로필_시스템.png',
-      'narr': '/images/프로필_시스템.png',
-      'ending': '/images/프로필_네즈코.png',
-    };
-    return profileMap[charId.toLowerCase()] || '/images/프로필_탄지로.png';
+    const lowerCharId = charId.toLowerCase();
+
+    // 1. 주요 캐릭터 패턴 매칭 (정확한 이름이 아니어도 포함되면 매칭)
+    if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
+      return `${CDN_URL}/프로필_탄지로.png`;
+    }
+    if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
+      return `${CDN_URL}/프로필_렌고쿠.png`;
+    }
+    if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
+      return `${CDN_URL}/프로필_젠이츠.png`;
+    }
+    if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
+      return `${CDN_URL}/프로필_이노스케.png`;
+    }
+    if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
+      return `${CDN_URL}/프로필_네즈코.png`;
+    }
+    if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
+      return `${CDN_URL}/프로필_기유.png`;
+    }
+    if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
+      return `${CDN_URL}/프로필_시노부.png`;
+    }
+    if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
+      return `${CDN_URL}/프로필_아카자.png`;
+    }
+    if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
+      return `${CDN_URL}/엔무.jpg`;
+    }
+
+    // 2. 시스템/특수 캐릭터
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return `${CDN_URL}/기본이미지.png`;
+    }
+    if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
+      return `${CDN_URL}/기본이미지.png`;
+    }
+
+    // 3. 역무원/차장 관련
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('역무원') || lowerCharId.includes('차장') ||
+        lowerCharId.includes('station')) {
+      return `${CDN_URL}/역무원.jpg`;
+    }
+
+    // 4. 여성 캐릭터 관련 (woman을 man보다 먼저 체크 - 충돌 방지)
+    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
+        lowerCharId.includes('female') || lowerCharId.includes('girl')) {
+      return `${CDN_URL}/일반인_여성.png`;
+    }
+
+    // 5. 남성 캐릭터 관련
+    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
+        lowerCharId.includes('male') || lowerCharId.includes('boy')) {
+      return `${CDN_URL}/일반인_남성.png`;
+    }
+
+    // 6. 승객 관련 (passenger, 승객 포함) - 기본 남성으로
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('승객')) {
+      return `${CDN_URL}/일반인_남성.png`;
+    }
+
+    // 7. NPC 관련 - 기본 남성으로
+    if (lowerCharId.includes('npc') || lowerCharId.includes('일반인')) {
+      return `${CDN_URL}/일반인_남성.png`;
+    }
+
+    // 8. 기본 이미지로 폴백
+    return `${CDN_URL}/기본이미지.png`;
   };
 
-  // 캐릭터별 화자 이름 매핑 (백엔드 화자 ID -> 한글 이름)
+  // 캐릭터별 화자 이름 매핑 (패턴 기반 매칭)
   const getCharacterName = (charId: string) => {
-    const nameMap: Record<string, string> = {
-      'tanjiro': '탄지로',
-      'tanjirou': '탄지로',
-      'rengoku': '렌고쿠',
-      'zenitsu': '젠이츠',
-      'inosuke': '이노스케',
-      'nezuko': '네즈코',
-      'giyu': '기유',
-      'shinobu': '시노부',
-      'akaza': '아카자',
-      'system': '시스템',
-      'narr': '시스템', // 내레이터를 시스템으로 통합
-      'ending': '네즈코',
-    };
-    return nameMap[charId.toLowerCase()] || charId;
+    const lowerCharId = charId.toLowerCase();
+
+    // 1. 주요 캐릭터 패턴 매칭 (이름이 포함되면 매칭)
+    if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
+      return '탄지로';
+    }
+    if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
+      return '렌고쿠';
+    }
+    if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
+      return '젠이츠';
+    }
+    if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
+      return '이노스케';
+    }
+    if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
+      return '네즈코';
+    }
+    if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
+      return '기유';
+    }
+    if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
+      return '시노부';
+    }
+    if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
+      return '아카자';
+    }
+    if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
+      return '엔무';
+    }
+
+    // 2. 시스템/특수 캐릭터
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return '츠구코';
+    }
+    if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
+      return '내레이터';
+    }
+
+    // 3. 역무원/차장 관련
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('차장')) {
+      return '차장';
+    }
+    if (lowerCharId.includes('station') || lowerCharId.includes('역무원')) {
+      return '역무원';
+    }
+
+    // 4. 승객 관련
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('승객')) {
+      return '승객';
+    }
+
+    // 5. 일반 NPC 관련
+    if (lowerCharId.includes('npc') || lowerCharId.includes('일반인')) {
+      return '일반인';
+    }
+
+    // 6. 여성/남성 관련 (woman을 man보다 먼저 체크)
+    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
+        lowerCharId.includes('female') || lowerCharId.includes('girl')) {
+      return '승객';
+    }
+    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
+        lowerCharId.includes('male') || lowerCharId.includes('boy')) {
+      return '승객';
+    }
+
+    // 7. ID 그대로 반환
+    return charId;
   };
 
-  // 로딩 메시지 목록 (상황별로 다양하게)
+  // 캐릭터별 글로우 색상 매핑 (패턴 기반 매칭)
+  const getCharacterGlowColor = (charId: string) => {
+    const lowerCharId = charId.toLowerCase();
+
+    // 1. 주요 캐릭터 패턴 매칭 (이름이 포함되면 매칭)
+    if (lowerCharId.includes('tanjiro') || lowerCharId.includes('tanjirou') || lowerCharId.includes('탄지로')) {
+      return {
+        primary: '#EF4444',
+        shadow: 'rgba(239, 68, 68, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('rengoku') || lowerCharId.includes('렌고쿠')) {
+      return {
+        primary: '#F59E0B',
+        shadow: 'rgba(245, 158, 11, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('zenitsu') || lowerCharId.includes('젠이츠')) {
+      return {
+        primary: '#FBBF24',
+        shadow: 'rgba(251, 191, 36, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(251, 191, 36, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('inosuke') || lowerCharId.includes('이노스케')) {
+      return {
+        primary: '#10B981',
+        shadow: 'rgba(16, 185, 129, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('nezuko') || lowerCharId.includes('네즈코')) {
+      return {
+        primary: '#EC4899',
+        shadow: 'rgba(236, 72, 153, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(236, 72, 153, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('giyu') || lowerCharId.includes('기유')) {
+      return {
+        primary: '#3B82F6',
+        shadow: 'rgba(59, 130, 246, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('shinobu') || lowerCharId.includes('시노부')) {
+      return {
+        primary: '#8B5CF6',
+        shadow: 'rgba(139, 92, 246, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('akaza') || lowerCharId.includes('아카자')) {
+      return {
+        primary: '#A855F7',
+        shadow: 'rgba(168, 85, 247, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.03))'
+      };
+    }
+    if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
+      return {
+        primary: '#7C3AED',
+        shadow: 'rgba(124, 58, 237, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(124, 58, 237, 0.03))'
+      };
+    }
+
+    // 2. 시스템/특수 캐릭터
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return {
+        primary: '#F97316',
+        shadow: 'rgba(249, 115, 22, 0.6)',
+        bg: 'linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(249, 115, 22, 0.03))'
+      };
+    }
+
+    // 3. 역무원/차장 관련 - 중립 회색
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('station') ||
+        lowerCharId.includes('역무원') || lowerCharId.includes('차장')) {
+      return {
+        primary: '#6B7280',
+        shadow: 'rgba(107, 114, 128, 0.5)',
+        bg: 'linear-gradient(135deg, rgba(107, 114, 128, 0.06), rgba(107, 114, 128, 0.02))'
+      };
+    }
+
+    // 4. 승객, NPC, 일반인 관련 - 밝은 회색 (woman을 man보다 먼저 체크)
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('npc') ||
+        lowerCharId.includes('woman') || lowerCharId.includes('man') ||
+        lowerCharId.includes('승객') || lowerCharId.includes('일반인') ||
+        lowerCharId.includes('male') || lowerCharId.includes('female') ||
+        lowerCharId.includes('남자') || lowerCharId.includes('여자') ||
+        lowerCharId.includes('남성') || lowerCharId.includes('여성') ||
+        lowerCharId.includes('boy') || lowerCharId.includes('girl')) {
+      return {
+        primary: '#9CA3AF',
+        shadow: 'rgba(156, 163, 175, 0.4)',
+        bg: 'linear-gradient(135deg, rgba(156, 163, 175, 0.05), rgba(156, 163, 175, 0.02))'
+      };
+    }
+
+    // 5. 기본 색상으로 폴백
+    return {
+      primary: '#6B7280',
+      shadow: 'rgba(107, 114, 128, 0.4)',
+      bg: 'linear-gradient(135deg, rgba(107, 114, 128, 0.05), rgba(107, 114, 128, 0.02))'
+    };
+  };
+
+  // 캐릭터별 대사 생성 로딩 메시지 (각 캐릭터당 3개씩)
   const getRandomLoadingMessage = () => {
     const loadingMessages = [
-      '탄지로가 심각한 표정을 지으며 생각하고 있어요...',
-      '렌고쿠가 무언가를 결정하려 하고 있어요...',
-      '아카자가 주변을 살피고 있어요...',
-      '긴장감이 흐르고 있어요...',
-      '동료들이 상황을 파악하고 있어요...',
-      '잠시 후 대화가 이어집니다...',
+      // 탄지로 (3개) - 후각에 특화
+      '탄지로가 냄새를 맡는 중입니다...',
+      '탄지로가 상황의 냄새를 분석하고 있어요...',
+      '탄지로가 주변의 기운을 감지하고 있어요...',
+
+      // 아카자 (3개) - 투지/전투에 특화
+      '아카자가 투지를 감지하는 중입니다...',
+      '아카자가 상대의 강함을 측정하고 있어요...',
+      '아카자가 전투 의지를 불태우고 있어요...',
+
+      // 렌고쿠 (3개) - 열정/결의에 특화
+      '렌고쿠가 마음을 불태우고 있습니다...',
+      '렌고쿠가 굳은 결의를 다지고 있어요...',
+      '렌고쿠가 동료를 지키기 위해 고민하고 있어요...',
+
+      // 젠이츠 (3개) - 공포/용기에 특화
+      '젠이츠가 떨면서도 용기를 내고 있어요...',
+      '젠이츠가 위험을 감지하고 경계하고 있어요...',
+      '젠이츠가 번개같은 판단을 하려 하고 있어요...',
+
+      // 이노스케 (3개) - 야성/직감에 특화
+      '이노스케가 야생의 직감으로 상황을 파악하고 있어요...',
+      '이노스케가 돌격할 기회를 엿보고 있어요...',
+      '이노스케가 멧돼지처럼 코를 벌름거리며 냄새를 맡고 있어요...',
     ];
     return loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+  };
+
+  // INTRO 스테이지 판별 함수 (빠른 출력 적용용)
+  const isIntroStage = (stage?: string): boolean => {
+    if (!stage) return false;
+    const stageUpper = stage.toUpperCase();
+    // Backend constants의 INTRO_STAGE_TAGS와 동기화: "상현_삼_등장", "INTRO"
+    return stageUpper === 'INTRO' || stageUpper === '상현_삼_등장';
+  };
+
+  // 대화 내용 요약 생성 (엔딩 리워드용)
+  const generateConversationSummary = (): string => {
+    const userMessages = messages.filter(m => m.isUser);
+    const aiMessages = messages.filter(m => !m.isUser && !m.isSystemMessage);
+    const characterCounts: Record<string, number> = {};
+
+    aiMessages.forEach(m => {
+      const charId = m.characterId || 'unknown';
+      characterCounts[charId] = (characterCounts[charId] || 0) + 1;
+    });
+
+    const topCharacters = Object.entries(characterCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([charId]) => getCharacterName(charId));
+
+    const totalMessages = userMessages.length + aiMessages.length;
+
+    return `무한열차 시나리오를 클리어하셨습니다!\n\n` +
+           `총 대화 수: ${totalMessages}회\n` +
+           `사용자 입력: ${userMessages.length}회\n` +
+           `주요 대화 상대: ${topCharacters.join(', ')}\n\n` +
+           `당신은 동료들과 함께 위기를 극복하고,\n` +
+           `무한열차의 비밀을 밝혀냈습니다.\n\n` +
+           `지금까지의 여정을 기념하는\n` +
+           `특별한 이미지를 생성하고 있습니다...`;
   };
 
   // 음성 재생 함수
@@ -112,18 +492,52 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     scrollToBottom();
   }, [messages, isTyping]); // 메시지 변경 또는 타이핑 상태 변경 시 스크롤
 
-  // 타이핑 효과와 함께 메시지를 표시하는 함수 (50ms per character)
+  // 타이핑 효과와 함께 메시지를 표시하는 함수 (INTRO: 1ms, 일반: 10ms)
   const addMessageWithTypingEffect = async (message: Message): Promise<void> => {
     return new Promise((resolve) => {
+      // 이 메시지에 배경 이미지 변경 요청이 있으면 먼저 처리
+      if (message.imageIndex) {
+        const imageIndex = parseInt(message.imageIndex);
+        console.log(`🖼️ [Frontend] Changing background to image ${imageIndex} for message: ${message.text.substring(0, 30)}...`);
+        setBackgroundByIndex(imageIndex);
+      }
+
+      // 소리 효과 재생 (몰입감 향상)
+      if (!message.isUser) {
+        if (message.isSystemMessage) {
+          playSystemSound(); // 시스템 메시지: 낮은 톤
+        } else {
+          playMessageSound(); // 일반 AI 메시지: 부드러운 핑
+        }
+      }
+
       // 빈 메시지로 시작 (타이핑 시작)
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
 
-      // 타이핑 효과: 50ms마다 한 글자씩 추가
+      // INTRO 스테이지 판별하여 타이핑 속도 결정 (하드코딩에 가깝게 빠르게)
+      const typingSpeed = isIntroStage(currentStage) ? 1 : TYPING_INTERVAL_MS;
+      if (isIntroStage(currentStage)) {
+        console.log(`⚡ [INTRO] Fast typing enabled (${typingSpeed}ms) for stage: ${currentStage}`);
+      }
+
+      // 타이핑 효과: typingSpeed마다 한 글자씩 추가
       const chars = message.text.split('');
       let currentIndex = 0;
 
       const typingInterval = setInterval(() => {
+        // Skip 플래그 체크
+        if (shouldSkip.current) {
+          // 즉시 전체 텍스트 표시
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId ? { ...msg, text: message.text } : msg
+          ));
+          clearInterval(typingInterval);
+          typingIntervalRef.current = null;
+          resolve();
+          return;
+        }
+
         currentIndex++;
         const typedText = chars.slice(0, currentIndex).join('');
 
@@ -133,9 +547,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
         if (currentIndex >= chars.length) {
           clearInterval(typingInterval);
+          typingIntervalRef.current = null;
           resolve();
         }
-      }, 50); // 50ms per character
+      }, typingSpeed);
+
+      // interval을 ref에 저장
+      typingIntervalRef.current = typingInterval;
     });
   };
 
@@ -154,33 +572,46 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
     // 🔥 플래그 리셋: 이전 요청에서 true로 남아있을 수 있음
     shouldCancelAutoRequest.current = false;
+    shouldSkip.current = false; // Skip 플래그 리셋
+
+    // 남은 메시지들을 ref에 저장 (Skip 기능용)
+    pendingMessagesRef.current = [...newMessages];
 
     isAddingMessages.current = true;
     setIsTyping(true);
 
-    console.log(`📝 Adding ${newMessages.length} messages sequentially...`);
+    try {
+      console.log(`📝 Adding ${newMessages.length} messages sequentially...`);
 
-    for (let i = 0; i < newMessages.length; i++) {
-      // 사용자가 중단을 요청했는지 확인
-      if (shouldCancelAutoRequest.current) {
-        console.log('⚠️ User cancelled, stopping message display');
-        break;
+      for (let i = 0; i < newMessages.length; i++) {
+        // 사용자가 중단을 요청했는지 확인
+        if (shouldCancelAutoRequest.current) {
+          console.log('⚠️ User cancelled, stopping message display');
+          break;
+        }
+
+        console.log(`  → Message ${i + 1}/${newMessages.length}: ${newMessages[i].characterId} - ${newMessages[i].text.substring(0, 30)}...`);
+
+        // 남은 메시지 업데이트
+        pendingMessagesRef.current = newMessages.slice(i + 1);
+
+        // 타이핑 효과로 메시지 표시
+        await addMessageWithTypingEffect(newMessages[i]);
+
+        // 마지막 메시지가 아니면 50ms 대기 (빠른 흐름) - Phase 1 개선: 800ms → 50ms (16배 빠르게)
+        if (i < newMessages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 50)); // 0.05 seconds
+        }
       }
 
-      console.log(`  → Message ${i + 1}/${newMessages.length}: ${newMessages[i].characterId} - ${newMessages[i].text.substring(0, 30)}...`);
-
-      // 타이핑 효과로 메시지 표시
-      await addMessageWithTypingEffect(newMessages[i]);
-
-      // 마지막 메시지가 아니면 2.5초 대기
-      if (i < newMessages.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2500)); // 2.5 seconds
-      }
+      console.log('✅ Finished adding messages');
+    } finally {
+      // 🔥 에러가 발생해도 반드시 타이핑 상태를 해제
+      setIsTyping(false);
+      isAddingMessages.current = false;
+      pendingMessagesRef.current = []; // pending messages 초기화
+      shouldSkip.current = false; // Skip 플래그 리셋
     }
-
-    setIsTyping(false);
-    isAddingMessages.current = false;
-    console.log('✅ Finished adding messages');
   };
 
   // 자동 요청 함수 (has_more가 true일 때 호출)
@@ -206,24 +637,31 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       // 자동 요청 시에는 "__AUTO_CONTINUE__"를 user_input으로 전송
       const response: ChatResponse = await sendChatMessage(
-        characterId,
+        backendScenarioId,
         '__AUTO_CONTINUE__',
         currentSessionId,
-        '츠고쿠'
+        '츠구코'
       );
 
       setLoadingMessage(null);
 
-      console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}`);
+      console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
+
+      // Update affinity_scores and current_stage from response
+      // Note: background changes are now handled per-dialogue via imageIndex
+      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
+      setAffinityScores(response.affinity_scores || {});
+      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
       // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
       const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
         id: generateMessageId(),
-        text: dialogue.content,
+        text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
         isUser: false,
         timestamp: new Date(),
         characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr'
+        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
       }));
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -231,11 +669,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       // has_more가 true이면 계속 자동 요청
       if (response.has_more && !shouldCancelAutoRequest.current) {
-        console.log('🔄 has_more is true, scheduling next auto-request in 2.5s...');
-        // 2.5초 후 다음 배치 요청
+        console.log('🔄 has_more is true, scheduling next auto-request in 1s...');
+        // 1초 후 다음 배치 요청
         autoRequestTimerRef.current = window.setTimeout(() => {
           handleAutoRequest(response.session_id, 0); // 성공 시 재시도 카운트 리셋
-        }, 2500);
+        }, 1000);
       } else {
         console.log(`✅ Auto-request complete. has_more: ${response.has_more}, cancelled: ${shouldCancelAutoRequest.current}`);
         setIsAutoRequesting(false);
@@ -259,25 +697,32 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       try {
         // 첫 메시지로 대화 시작 (시나리오 초기화)
         const response: ChatResponse = await sendChatMessage(
-          characterId,
+          backendScenarioId,
           '시작',  // Initial trigger message
           undefined,
-          '츠고쿠'
+          '츠구코'
         );
 
         // 세션 ID 저장
         setSessionId(response.session_id);
 
-        console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}`);
+        console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
+
+        // Update affinity_scores and current_stage from response
+        // Note: background changes are now handled per-dialogue via imageIndex
+        // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
+        setAffinityScores(response.affinity_scores || {});
+        setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
         // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
         const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
           id: generateMessageId(),
-          text: dialogue.content,
+          text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
           isUser: false,
           timestamp: new Date(),
           characterId: dialogue.speaker,
-          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr'
+          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
         }));
 
         // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -542,8 +987,46 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   }, [characterId]);
   */
 
+  // Skip 버튼 핸들러 - 대화 출력 중 즉시 완료
+  const handleSkip = () => {
+    console.log('⏩ Skip button clicked');
+
+    // Skip 플래그 설정
+    shouldSkip.current = true;
+
+    // 현재 타이핑 interval이 있으면 즉시 완료 처리
+    if (typingIntervalRef.current) {
+      console.log('  → Stopping current typing animation');
+    }
+
+    // 남은 메시지들이 있으면 즉시 모두 표시
+    if (pendingMessagesRef.current.length > 0) {
+      console.log(`  → Adding ${pendingMessagesRef.current.length} pending messages immediately`);
+      const remainingMessages = [...pendingMessagesRef.current];
+      pendingMessagesRef.current = [];
+
+      // 남은 메시지들을 즉시 추가 (타이핑 효과 없이)
+      setMessages(prev => [...prev, ...remainingMessages]);
+
+      // 타이핑 상태 해제
+      setIsTyping(false);
+      isAddingMessages.current = false;
+    }
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+
+    // 🔊 오디오 활성화 (브라우저 자동재생 정책 우회) - 비차단 방식
+    unlockAudio().catch(err => console.warn('Audio unlock failed:', err));
+
+    // 🔥 디버깅: 현재 상태 출력
+    console.log('🔍 [DEBUG] sendMessage called:', {
+      isLoading,
+      isTyping,
+      isAutoRequesting,
+      text: text.substring(0, 20)
+    });
 
     // 🔥 자동 요청 중일 때는 사용자 입력 차단
     if (isAutoRequesting) {
@@ -579,10 +1062,10 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
     try {
       const response: ChatResponse = await sendChatMessage(
-        characterId,
+        backendScenarioId,
         text,
         sessionId,
-        '츠고쿠'
+        '츠구코'
       );
 
       // Update session ID if it changed
@@ -590,41 +1073,73 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         setSessionId(response.session_id);
       }
 
+      // Update affinity_scores and current_stage from response
+      // Note: background changes are now handled per-dialogue via imageIndex
+      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
+      setAffinityScores(response.affinity_scores || {});
+      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
+
       // Add backend responses to messages sequentially (고유 ID 사용)
       const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
         id: generateMessageId(),
-        text: dialogue.content,
+        text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
         isUser: false,
         timestamp: new Date(),
         characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr'
+        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
       }));
+
+      const hasSystemMessageInBackend = backendMessages.some(
+        (message) => message.isSystemMessage && message.text.trim().length > 0
+      );
+      const systemDialogue = response.dialogues.find(
+        (dialogue) =>
+          dialogue.speaker &&
+          dialogue.speaker.toLowerCase() === 'system' &&
+          (dialogue.text || dialogue.content)
+      );
+      const fallbackSystemMessage =
+        response.system_message ||
+        systemDialogue?.text ||
+        systemDialogue?.content ||
+        '';
 
       // 시스템 메시지와 종료 메시지를 백엔드 메시지에 추가
       const allMessages = [...backendMessages];
+      let extraMessageOffset = 1;
+
+      const pushSystemMessage = (text: string) => {
+        allMessages.push({
+          id: Date.now() + backendMessages.length + extraMessageOffset,
+          text,
+          isUser: false,
+          timestamp: new Date(),
+          characterId: 'system',
+          isSystemMessage: true
+        });
+        extraMessageOffset += 1;
+      };
 
       // Show system message if provided
       if (response.system_message) {
-        allMessages.push({
-          id: Date.now() + backendMessages.length + 1,
-          text: response.system_message,
-          isUser: false,
-          timestamp: new Date(),
-          characterId: 'system',
-          isSystemMessage: true
-        });
+        pushSystemMessage(response.system_message);
+      } else if (!hasSystemMessageInBackend && fallbackSystemMessage) {
+        pushSystemMessage(fallbackSystemMessage);
       }
 
-      // Check if chat has ended
+      // Check if chat has ended - Phase 4 개선 + 엔딩 리워드
       if (response.is_ended) {
-        allMessages.push({
-          id: Date.now() + backendMessages.length + 2,
-          text: '🎬 시나리오가 종료되었습니다. 새로운 시나리오를 시작하려면 페이지를 새로고침 해주세요.',
-          isUser: false,
-          timestamp: new Date(),
-          characterId: 'system',
-          isSystemMessage: true
-        });
+        pushSystemMessage('🎬 시나리오가 종료되었습니다.');
+        setIsEnded(true); // Phase 4: 엔딩 상태 설정
+        setBackgroundByIndex(21); // Phase 4: 엔딩 이미지 표시 (무한열차 마지막 이미지)
+
+        // 엔딩 리워드: 대화 요약 생성 및 모달 표시
+        setTimeout(() => {
+          const summary = generateConversationSummary();
+          setEndingSummary(summary);
+          setShowEndingReward(true);
+        }, 2000); // 2초 후 리워드 모달 표시
       }
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)
@@ -774,9 +1289,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           const newMessage: Message = {
             id: Date.now() + index,
             text: scene.text,
-            isUser: scene.characterId === 'user',
+            isUser: false,  // 시나리오 메시지는 모두 NPC (characterId='user'는 플레이어 캐릭터 NPC)
             timestamp: new Date(),
-            characterId: scene.characterId === 'user' ? undefined : scene.characterId,
+            characterId: scene.characterId,  // 'user' characterId도 NPC 캐릭터로 처리
             isSystemMessage: scene.isSystemMessage || false
           };
           setMessages(prev => [...prev, newMessage]);
@@ -915,42 +1430,71 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   };
 
   return (
-    <div className="w-full h-full bg-white flex flex-col">
-      {/* 채팅 헤더 */}
-      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 bg-white">
-        <div className="flex items-center space-x-2 sm:space-x-3 flex-1">
-          <div className="flex items-center space-x-2">
-            <span className="text-lg sm:text-xl font-roboto text-text-primary">
-              🗡️ Kime Chat
-            </span>
-          </div>
-        </div>
+    <div className="w-full h-full flex flex-col md:flex-row bg-gray-100">
+      {/* 왼쪽: 컷신 이미지 영역 (50%) */}
+      <div className="relative w-full md:w-1/2 h-[40vh] md:h-full overflow-hidden">
+        {/* 컷신 배경 이미지 */}
+        <div
+          className={`w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-500 ${
+            isTransitioning ? 'opacity-0' : 'opacity-100'
+          }`}
+          style={{
+            backgroundImage: backgroundImageUrl
+              ? `url(${backgroundImageUrl})`
+              : 'url(/images/무한열차.jpeg)'  // 초기 로딩: 무한열차 카드 이미지
+          }}
+        />
 
-        {/* 참여중인 캐릭터들 표시 */}
-        <div className="flex items-center space-x-1">
-          {invitedCharacters.map((charId, index) => (
-            <div key={charId} className="relative">
-              <img
-                src={getCharacterProfile(charId)}
-                alt={getCharacterName(charId)}
-                className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
-                style={{ marginLeft: index > 0 ? '-8px' : '0' }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/images/프로필_탄지로.png';
-                }}
-              />
-            </div>
-          ))}
-          {invitedCharacters.length > 1 && (
-            <span className="text-xs text-gray-500 ml-2">
-              {invitedCharacters.length}명 참여중
-            </span>
-          )}
+        {/* 하단 패널: 친밀도 (가로로 넓게) + 버블 (오른쪽) */}
+        <div className="absolute bottom-4 left-4 right-4 z-10 flex gap-3 items-end">
+          {/* 친밀도 패널 - 버블 옆까지 가로로 확장 */}
+          <div className="flex-1">
+            <AffinityPanel affinityScores={affinityScores} />
+          </div>
+
+          {/* 버블 카운터 */}
+          <div className="flex-shrink-0">
+            <BubbleCounter compact />
+          </div>
         </div>
       </div>
 
-      {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* 오른쪽: 채팅 영역 (50%) */}
+      <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-white">
+        {/* 채팅 헤더 - 높이 축소 */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 bg-white shrink-0 gap-4">
+          {/* 중앙: Kime Chat */}
+          <div className="flex items-center flex-1 justify-center">
+            <span className="text-base font-roboto text-text-primary">
+              🗡️ Kime Chat
+            </span>
+          </div>
+
+          {/* 오른쪽: 참여중인 캐릭터들 */}
+          <div className="flex items-center space-x-1">
+            {invitedCharacters.map((charId, index) => (
+              <div key={charId} className="relative">
+                <img
+                  src={getCharacterProfile(charId)}
+                  alt={getCharacterName(charId)}
+                  className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                  style={{ marginLeft: index > 0 ? '-6px' : '0' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
+                  }}
+                />
+              </div>
+            ))}
+            {invitedCharacters.length > 1 && (
+              <span className="text-xs text-gray-500 ml-2">
+                {invitedCharacters.length}명
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 메시지 영역 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Backend error banner */}
         {backendError && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -967,17 +1511,39 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         )}
 
         {/* 메시지들 */}
-        {messages.map((message) => {
-          // 시스템 메시지 렌더링
+        {messages.map((message, index) => {
+          const isLatestMessage = message.id === latestMessageId;
+          const isFirstMessage = index === 0;
+
+          // 시스템 메시지 렌더링 (경고 메시지는 꺾쇄까마귀 + 붉은색)
           if (message.isSystemMessage) {
+            // 경고 메시지 판별 (오류, 경고, 제한 등의 키워드 포함 시)
+            const isWarning = /경고|오류|금지|제한|불가|실패|차단|거부/.test(message.text);
+
             return (
-              <div key={message.id} className="flex justify-center mb-4">
+              <div key={message.id} className={`flex justify-center ${isFirstMessage ? 'mb-8' : 'mb-32'} animate-slide-in-fade`}>
+                <div
+                  style={{
+                    transform: isLatestMessage ? 'scale(1.35)' : 'scale(1)',
+                    transformOrigin: 'center',
+                    transition: 'transform 0.5s ease'
+                  }}
+                >
                 <div className="max-w-lg">
-                  <div className="bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 border border-purple-200 rounded-xl px-4 py-3 shadow-sm">
-                    <p className="text-center text-sm text-gray-700 leading-relaxed italic">
+                  <div className={`rounded-xl px-4 py-3 shadow-lg border-2 ${
+                    isWarning
+                      ? 'bg-gradient-to-r from-red-50 via-red-100 to-red-50 border-red-300'
+                      : 'bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 border-purple-200'
+                  }`}>
+                    <p className={`text-center text-sm leading-relaxed font-medium ${
+                      isWarning ? 'text-red-700' : 'text-gray-700 italic'
+                    }`}>
+                      {isWarning && <span className="font-bold">⚠️ 꺾쇄까마귀: </span>}
                       {message.text}
                     </p>
-                    <div className="text-xs text-center text-gray-400 mt-1">
+                    <div className={`text-xs text-center mt-1 ${
+                      isWarning ? 'text-red-400' : 'text-gray-400'
+                    }`}>
                       {message.timestamp.toLocaleTimeString('ko-KR', {
                         hour: '2-digit',
                         minute: '2-digit'
@@ -985,15 +1551,34 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
             );
           }
 
           // 일반 메시지 렌더링
+          const glowColors = getCharacterGlowColor(message.characterId || characterId);
+
           return (
-            <div key={message.id} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+            <div
+              key={message.id}
+              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isFirstMessage ? 'mb-8' : 'mb-32'} ${!message.isUser ? 'animate-slide-in-fade' : ''}`}
+            >
+              <div
+                style={{
+                  transform: isLatestMessage ? 'scale(1.35)' : 'scale(1)',
+                  transformOrigin: message.isUser ? 'right center' : 'left center',
+                  transition: 'transform 0.5s ease'
+                }}
+                className="flex"
+              >
               {!message.isUser && (
-                <div className="w-16 h-16 rounded-full mr-3 flex-shrink-0">
+                <div
+                  className={`w-16 h-16 rounded-full mr-3 flex-shrink-0 transition-all duration-500`}
+                  style={isLatestMessage && !message.isUser ? {
+                    boxShadow: `0 0 20px ${glowColors.shadow}, 0 0 40px ${glowColors.shadow.replace('0.6', '0.3')}, 0 0 60px ${glowColors.shadow.replace('0.6', '0.15')}`
+                  } : {}}
+                >
                   <img
                     src={getCharacterProfile(message.characterId || characterId)}
                     alt="Character"
@@ -1004,18 +1589,30 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   />
                 </div>
               )}
-              <div className="flex flex-col max-w-xs lg:max-w-md">
+              <div className={`flex flex-col transition-all duration-500 ${
+                message.isUser
+                  ? 'max-w-md lg:max-w-lg'
+                  : 'max-w-xs lg:max-w-md'
+              }`}>
                 {/* 화자 표시 */}
                 <div className={`text-xs mb-1 ${message.isUser ? 'text-right text-gray-500' : 'text-left text-gray-500'}`}>
                   {message.isUser ? '사용자' : getCharacterName(message.characterId || characterId)}
                 </div>
 
                 <div className="flex items-start">
-                  <div className={`px-4 py-3 rounded-2xl flex-1 ${
-                    message.isUser
-                      ? 'bg-purple-500 text-white rounded-br-md'
-                      : 'bg-white text-gray-800 border border-gray-200 rounded-bl-md shadow-sm'
-                  }`}>
+                  <div
+                    className={`px-4 py-3 rounded-2xl flex-1 transition-all duration-500 ${
+                      message.isUser
+                        ? `bg-purple-500 text-white rounded-br-md ${isLatestMessage ? 'shadow-lg' : ''}`
+                        : `text-gray-800 border border-gray-200 rounded-bl-md ${isLatestMessage ? '' : 'bg-white shadow-sm'}`
+                    }`}
+                    style={!message.isUser && isLatestMessage ? {
+                      background: `${glowColors.bg}, white`,
+                      boxShadow: `0 4px 20px ${glowColors.shadow.replace('0.6', '0.25')}, 0 8px 40px ${glowColors.shadow.replace('0.6', '0.15')}`
+                    } : message.isUser && isLatestMessage ? {
+                      boxShadow: '0 4px 30px rgba(147, 51, 234, 0.4), 0 8px 50px rgba(147, 51, 234, 0.2)'
+                    } : {}}
+                  >
                     <p className="text-sm leading-relaxed">{message.text}</p>
                     <div className={`text-xs mt-1 ${message.isUser ? 'text-purple-100' : 'text-gray-400'}`}>
                       {message.timestamp.toLocaleTimeString('ko-KR', {
@@ -1048,6 +1645,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   </div>
                 </div>
               )}
+              </div> {/* scale wrapper 닫기 */}
             </div>
           );
         })}
@@ -1077,68 +1675,154 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           </div>
         )}
 
-        {/* 스크롤을 위한 마커 */}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 빠른 응답 버튼들 */}
-      <div className="px-4 py-3">
-        <div className="flex flex-wrap gap-2 justify-center">
-          {quickResponses.map((response, index) => (
-            <button
-              key={index}
-              onClick={() => sendMessage(response)}
-              disabled={isLoading || isTyping || isAutoRequesting}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm hover:bg-gray-200 transition-colors whitespace-nowrap border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {response}
-            </button>
-          ))}
+          {/* 스크롤을 위한 마커 */}
+          <div ref={messagesEndRef} />
         </div>
-      </div>
 
-      {/* 메시지 입력 영역 */}
-      <div className="p-4 border-t border-gray-200 bg-white">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={handleAddClick}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-          </button>
-          <button
-            onClick={handleMicClick}
-            className="p-2 hover:bg-purple-100 rounded-full transition-colors text-purple-500 hover:text-purple-600"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-            </svg>
-          </button>
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
-              placeholder={isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요..."}
-              disabled={isLoading || isTyping || isAutoRequesting}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            />
+        {/* 메시지 입력 영역 */}
+        <div className="p-4 border-t border-gray-200 bg-white shrink-0">
+          <div className="flex items-center space-x-3">
             <button
-              onClick={() => inputMessage.trim() && !isLoading && !isTyping && !isAutoRequesting && sendMessage(inputMessage)}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting}
+              onClick={handleAddClick}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
             >
-              {isLoading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500"></div>
-              ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
-              )}
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
             </button>
+            <button
+              onClick={handleMicClick}
+              className="p-2 hover:bg-purple-100 rounded-full transition-colors text-purple-500 hover:text-purple-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            </button>
+            {/* ⏩ Skip 버튼 - 타이핑 중일 때만 표시 */}
+            {isTyping && !isAutoRequesting && (
+              <button
+                onClick={handleSkip}
+                className="p-2 hover:bg-blue-100 rounded-full transition-colors text-blue-500 hover:text-blue-600 animate-pulse"
+                title="대화 건너뛰기 (Skip)"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+            {/* 🔧 긴급 리셋 버튼 */}
+            {(isLoading || isTyping || isAutoRequesting) && (
+              <button
+                onClick={() => {
+                  console.log('🔧 [RESET] Emergency reset triggered');
+                  setIsAutoRequesting(false);
+                  setIsTyping(false);
+                  setIsLoading(false);
+                  setLoadingMessage(null);
+                  shouldCancelAutoRequest.current = true;
+                  if (autoRequestTimerRef.current) {
+                    clearTimeout(autoRequestTimerRef.current);
+                    autoRequestTimerRef.current = null;
+                  }
+                  isAddingMessages.current = false;
+                }}
+                className="p-2 hover:bg-red-100 rounded-full transition-colors text-red-500 hover:text-red-600"
+                title="입력 활성화 (긴급 리셋)"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    console.log('🔍 [ENTER KEY] Enter pressed!', {
+                      inputMessage: inputMessage.substring(0, 20),
+                      hasInput: !!inputMessage.trim(),
+                      isLoading,
+                      isTyping,
+                      isAutoRequesting
+                    });
+
+                    if (!inputMessage.trim()) return;
+                    if (isLoading || isTyping || isAutoRequesting) {
+                      console.log('⚠️ [ENTER] Blocked by state checks');
+                      return;
+                    }
+
+                    console.log('✅ [ENTER] Calling sendMessage');
+                    sendMessage(inputMessage);
+                  }
+                }}
+                onFocus={() => {
+                  // 🔧 안전장치: 입력창 포커스 시 상태 리셋
+                  console.log('🔍 [DEBUG] Input focused, current states:', {
+                    isLoading,
+                    isTyping,
+                    isAutoRequesting
+                  });
+                  if (isAutoRequesting || isTyping) {
+                    console.log('🔧 [FIX] Resetting stuck states');
+                    setIsAutoRequesting(false);
+                    setIsTyping(false);
+                    setLoadingMessage(null);
+                    shouldCancelAutoRequest.current = true;
+                  }
+                }}
+                placeholder={isEnded ? "시나리오가 종료되었습니다" : (isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요...")}
+                disabled={isLoading || isTyping || isAutoRequesting || isEnded}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={() => {
+                  console.log('🔍 [BUTTON CLICK] Send button clicked!', {
+                    inputMessage: inputMessage.substring(0, 20),
+                    hasInput: !!inputMessage.trim(),
+                    isLoading,
+                    isTyping,
+                    isAutoRequesting
+                  });
+
+                  if (!inputMessage.trim()) {
+                    console.log('⚠️ [BUTTON] No input message');
+                    return;
+                  }
+
+                  if (isLoading) {
+                    console.log('⚠️ [BUTTON] Blocked: isLoading=true');
+                    return;
+                  }
+
+                  if (isTyping) {
+                    console.log('⚠️ [BUTTON] Blocked: isTyping=true');
+                    return;
+                  }
+
+                  if (isAutoRequesting) {
+                    console.log('⚠️ [BUTTON] Blocked: isAutoRequesting=true');
+                    return;
+                  }
+
+                  console.log('✅ [BUTTON] All checks passed, calling sendMessage');
+                  sendMessage(inputMessage);
+                }}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting || isEnded}
+              >
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-500"></div>
+                ) : (
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1151,6 +1835,62 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         onSelectFriend={handleFriendSelect}
         invitedCharacters={invitedCharacters}
       />
+
+      {/* 엔딩 리워드 모달 */}
+      {showEndingReward && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[10000]">
+          <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-3xl p-8 mx-4 max-w-2xl w-full shadow-2xl border-4 border-yellow-400">
+            {/* 헤더 */}
+            <div className="text-center mb-6">
+              <h2 className="text-3xl font-bold text-yellow-400 mb-2">🎉 시나리오 클리어! 🎉</h2>
+              <p className="text-purple-200 text-sm">숨겨진 엔딩 보상을 획득했습니다</p>
+            </div>
+
+            {/* 대화 요약 */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border-2 border-purple-400">
+              <h3 className="text-xl font-bold text-yellow-300 mb-4">📜 여정의 기록</h3>
+              <p className="text-white whitespace-pre-line leading-relaxed">
+                {endingSummary}
+              </p>
+            </div>
+
+            {/* 이미지 플레이스홀더 */}
+            <div className="bg-gradient-to-br from-purple-600/30 to-indigo-600/30 rounded-xl p-8 mb-6 border-2 border-purple-400 flex flex-col items-center justify-center min-h-[200px]">
+              <div className="animate-pulse mb-4">
+                <svg className="w-16 h-16 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-yellow-300 text-center font-medium">
+                🎨 귀멸의 칼날 스타일 이미지 생성 준비 중...
+              </p>
+              <p className="text-purple-300 text-sm text-center mt-2">
+                백엔드 이미지 생성 API 연동 예정
+              </p>
+            </div>
+
+            {/* 버튼 영역 */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEndingReward(false)}
+                className="flex-1 py-3 px-6 bg-white/20 text-white rounded-xl font-medium hover:bg-white/30 transition-all border-2 border-white/40"
+              >
+                계속 보기
+              </button>
+              <button
+                onClick={() => {
+                  setShowEndingReward(false);
+                  // 홈으로 돌아가기 (페이지 새로고침)
+                  window.location.reload();
+                }}
+                className="flex-1 py-3 px-6 bg-gradient-to-r from-yellow-400 to-yellow-500 text-purple-900 rounded-xl font-bold text-lg hover:from-yellow-300 hover:to-yellow-400 transition-all transform hover:scale-105 shadow-lg"
+              >
+                🏠 홈으로
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* STT 음성 입력 모달 */}
       {showVoiceModal && (
