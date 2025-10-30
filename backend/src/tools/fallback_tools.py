@@ -550,6 +550,22 @@ class FallbackManager:
             return ""
         return "\n".join([f"{i+1}. {c.get('text','')}" for i, c in enumerate(choices)])
 
+    def reset_off_topic_count(self, state: Dict[str, Any]) -> None:
+        """
+        on-topic 판정 시 off-topic 카운트를 리셋
+
+        Args:
+            state: 현재 상태 딕셔너리
+        """
+        temp = state.setdefault("temp_data", {})
+        previous_count = temp.get("offtopic_count", 0)
+        temp["offtopic_count"] = 0
+
+        if previous_count > 0:
+            log("fallback", f"✅ Off-topic count reset: {previous_count} → 0 (on-topic detected)")
+        else:
+            log("fallback", "✅ Off-topic count reset (already at 0)")
+
 
 # ============================================================
 # 🌐 싱글톤 인스턴스 & 모듈 레벨 함수
@@ -645,10 +661,13 @@ def apply_fallback_result(state: Dict[str, Any], fallback_result: Dict[str, Any]
 
 
 def reset_fallback_count(state: Dict[str, Any]) -> None:
-    """Fallback 카운트 리셋"""
-    temp = state.setdefault("temp_data", {})
-    temp["offtopic_count"] = 0
-    log("fallback", "Off-topic count reset")
+    """
+    Fallback 카운트 리셋 (on-topic 복귀 시 호출)
+
+    이 함수는 router_agent.py의 _handle_on_topic에서 호출되어
+    on-topic 판정이 나올 때마다 off-topic 누적 count를 자동 초기화합니다.
+    """
+    fallback_manager.reset_off_topic_count(state)
 
 
 __all__ = [
