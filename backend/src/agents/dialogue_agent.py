@@ -371,9 +371,18 @@ def run_dialogue_agent(state: AgentState) -> AgentState:
         if "dialogues" not in state["output"]:
             state["output"]["dialogues"] = []
 
+        # 🔧 기존 dialogues 보존 (pre-transition response 등)
+        existing_dialogues = state["output"]["dialogues"]
+        if not isinstance(existing_dialogues, list):
+            existing_dialogues = []
+
         # 🔥 배치 모드 지원: has_more_dialogues가 True면 agent_responses 전체를 사용
         # (children_agent가 이미 배치 크기만큼만 생성함)
-        state["output"]["dialogues"] = agent_responses.copy()
+        # 기존 dialogues + 새 agent_responses
+        state["output"]["dialogues"] = existing_dialogues + agent_responses.copy()
+
+        if existing_dialogues:
+            print(f"[DIALOGUE] Preserved {len(existing_dialogues)} existing dialogue(s)")
         print(f"[DIALOGUE] Updated output with {len(agent_responses)} new dialogues")
 
         # agent_responses 초기화 (다음 배치를 위해)

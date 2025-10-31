@@ -179,6 +179,12 @@ class ChildrenAgent:
     # ============================================================
     def _build_dialogues(self, ctx: Dict[str, Any], state: Dict[str, Any]) -> List[Dict[str, Any]]:
 
+        # 🎯 Brief response mode 체크 (Pre-transition user response)
+        brief_mode = state.get("brief_response_mode", False)
+        if brief_mode:
+            log("children", "🎯 Brief response mode: generating short response to user input")
+            return self._generate_brief_user_response(ctx, state)
+
         # -----------------------------
         # 1️⃣ 컨텍스트 추출
         # -----------------------------
@@ -524,6 +530,11 @@ class ChildrenAgent:
         if not stage_context:
             stage_context = f"현재 {stage_tag} 장면이 진행 중입니다."
 
+        # 🔄 이전 스테이지 요약 가져오기 (맥락 연결용)
+        previous_stage_summary = state.get("story_summary", "")
+        if not previous_stage_summary:
+            previous_stage_summary = "(이전 장면 없음)"
+
         # LLM 프롬프트 구성
         system_prompt = _LLM_BEATS_SYSTEM
 
@@ -534,6 +545,7 @@ class ChildrenAgent:
             recent_history=recent_history_str,
             latest_user_input=latest_user_input if latest_user_input else "(없음)",
             speaker_pool=", ".join(speaker_pool),
+            previous_stage_summary=previous_stage_summary,
         )
 
         try:
@@ -544,20 +556,116 @@ class ChildrenAgent:
                 max_tokens=1000,
             )
 
+            # 🔧 Double-encoded JSON 처리
+            # LLM이 JSON 문자열로 반환하는 경우 (이중 인코딩) 파싱
+            if isinstance(response, str):
+                try:
+                    import json
+                    response = json.loads(response)
+                    log("children", "🔧 Parsed double-encoded JSON response")
+                except json.JSONDecodeError:
+                    log("children", "⚠️ Response is string but not valid JSON")
+                    return self._create_fallback_beats(stage_context, speaker_pool)
+
+            # 📋 Case 1: 직접 list 반환 (예: [{"goal": "..."}, ...])
             if isinstance(response, list) and response:
-                log("children", f"✅ Generated {len(response)} beats via LLM")
-                return response
-            elif isinstance(response, dict) and response.get("beats"):
-                beats = response["beats"]
+                # ✅ 각 beat 검증
+                validated_beats = self._validate_beats(response, stage_context, speaker_pool)
+                if validated_beats:
+                    log("children", f"✅ Generated {len(validated_beats)} beats via LLM")
+                    return validated_beats
+                else:
+                    log("children", "⚠️ All beats failed validation")
+                    return self._create_fallback_beats(stage_context, speaker_pool)
+
+            # 📋 Case 2: dict 반환
+            elif isinstance(response, dict):
+                # Case 2-1: {"beats": [...]} 형태
+                beats = response.get("beats")
+
+                # beats가 문자열인 경우 (이중 인코딩)
+                if isinstance(beats, str):
+                    try:
+                        import json
+                        beats = json.loads(beats)
+                        log("children", "🔧 Parsed double-encoded beats field")
+                    except json.JSONDecodeError:
+                        log("children", "⚠️ beats field is string but not valid JSON")
+                        return self._create_fallback_beats(stage_context, speaker_pool)
+
+                # beats가 list인 경우
                 if isinstance(beats, list):
-                    return beats
+                    validated_beats = self._validate_beats(beats, stage_context, speaker_pool)
+                    if validated_beats:
+                        log("children", f"✅ Generated {len(validated_beats)} beats via LLM")
+                        return validated_beats
+
+                # Case 2-2: 단일 beat dict (예: {"goal": "...", "speaker_hint": [...]})
+                if "goal" in response:
+                    log("children", "🔧 Single beat dict detected, converting to list")
+                    validated_beats = self._validate_beats([response], stage_context, speaker_pool)
+                    if validated_beats:
+                        log("children", f"✅ Generated {len(validated_beats)} beats via LLM (single dict)")
+                        return validated_beats
 
             log("children", "⚠️ LLM beats generation returned invalid format")
             return self._create_fallback_beats(stage_context, speaker_pool)
 
         except Exception as exc:
             log("children", f"❌ LLM beats generation failed: {exc}")
+            import traceback
+            log("children", f"Traceback: {traceback.format_exc()}")
             return self._create_fallback_beats(stage_context, speaker_pool)
+
+    def _validate_beats(
+        self,
+        beats: List[Any],
+        stage_context: str,
+        speaker_pool: List[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Beats 리스트 검증 및 정리
+
+        Args:
+            beats: 검증할 beats 리스트
+            stage_context: 현재 스테이지 컨텍스트 (fallback용)
+            speaker_pool: 사용 가능한 speaker 리스트 (fallback용)
+
+        Returns:
+            검증된 beats 리스트 (빈 리스트면 모두 실패)
+        """
+        validated = []
+
+        for i, beat in enumerate(beats):
+            # beat가 dict가 아니면 스킵
+            if not isinstance(beat, dict):
+                log("children", f"⚠️ Beat[{i}] is not dict: {type(beat)}")
+                continue
+
+            # "goal" 키가 없으면 스킵
+            if "goal" not in beat:
+                log("children", f"⚠️ Beat[{i}] missing 'goal' key: {beat}")
+                continue
+
+            # goal이 빈 문자열이면 스킵
+            goal = beat.get("goal", "").strip()
+            if not goal:
+                log("children", f"⚠️ Beat[{i}] has empty 'goal'")
+                continue
+
+            # speaker_hint가 없으면 기본값 설정
+            if "speaker_hint" not in beat:
+                beat["speaker_hint"] = ["narr"]
+                log("children", f"🔧 Beat[{i}] missing 'speaker_hint', defaulting to ['narr']")
+
+            # speaker_hint가 리스트가 아니면 변환
+            if not isinstance(beat["speaker_hint"], list):
+                beat["speaker_hint"] = [str(beat["speaker_hint"])]
+                log("children", f"🔧 Beat[{i}] speaker_hint not list, converting")
+
+            validated.append(beat)
+
+        return validated
 
     def _create_fallback_beats(self, context: str, speaker_pool: list) -> List[Dict[str, Any]]:
         """LLM beats 생성 실패 시 기본 beats 반환"""
@@ -600,6 +708,126 @@ class ChildrenAgent:
 
         # 대사를 못 찾았으면 goal 그대로 반환
         return goal
+
+    # ============================================================
+    # 🎯 Brief User Response (Pre-Transition)
+    # ============================================================
+    def _generate_brief_user_response(
+        self,
+        ctx: Dict[str, Any],
+        state: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """
+        유저 입력에 대한 짧은 응답 생성 (1~2줄)
+
+        Stage 전환 직전에 유저 발화를 무시하지 않기 위한 서브플로우
+
+        Returns:
+            짧은 응답 대사 리스트 (최대 2개)
+        """
+        user_input = state.get("user_input", "").strip()
+        if not user_input:
+            log("children", "⚠️ Brief mode but no user input")
+            return []
+
+        speaker_pool = ctx.get("speaker_pool", [])
+        character_refs = ctx.get("character_refs", {})
+
+        # speaker_pool에서 가장 적절한 응답자 선택
+        responder = self._select_responder_for_user_input(user_input, speaker_pool, character_refs)
+
+        log("children", f"🎯 Selected responder: {responder} for user input: '{user_input[:30]}...'")
+
+        # Tone profile 로드
+        scenario_ref = state.get("scenario") or state.get("scenario_data") or {}
+        metadata = scenario_ref.get("metadata") if isinstance(scenario_ref, dict) else {}
+        tone_meta = metadata.get("tone") or {}
+        scenario_key = tone_meta.get("scenario_key")
+
+        tone_profiles = {}
+        if responder and responder in character_refs:
+            from src.core.scene_dialogue_tools import load_tone_profiles
+            tone_profiles = load_tone_profiles({responder: character_refs[responder]}, scenario_key)
+
+        tone_profile = tone_profiles.get(responder, {}) if tone_profiles else {}
+        tone_data = tone_profile.get("tone", {})
+
+        # Tone 정보 추출
+        if isinstance(tone_data, dict):
+            mid_tone = tone_data.get("mid", {})
+            tone_style = mid_tone.get("style", "자연스러운 말투")
+        else:
+            tone_style = str(tone_data) if tone_data else "자연스러운 말투"
+
+        # 간단한 응답 프롬프트
+        system_prompt = f"""당신은 '{responder}' 캐릭터입니다.
+말투: {tone_style}
+
+유저의 발화에 1~2문장으로 짧고 자연스럽게 반응하세요.
+JSON 형식으로 응답하세요."""
+
+        user_prompt = f"""유저: "{user_input}"
+
+위 유저 발화에 {responder} 캐릭터로서 짧게 반응하세요.
+
+출력 형식:
+{{"speaker": "{responder}", "text": "응답 내용"}}"""
+
+        try:
+            response = self._llm.call_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.7,
+                max_tokens=150,
+            )
+
+            # 응답 검증
+            if isinstance(response, dict) and "speaker" in response and "text" in response:
+                log("children", f"✅ Generated brief response from {response.get('speaker')}")
+                return [response]
+            else:
+                log("children", f"⚠️ Invalid brief response format: {response}")
+                return []
+
+        except Exception as e:
+            log("children", f"❌ Brief response generation failed: {e}")
+            return []
+
+    def _select_responder_for_user_input(
+        self,
+        user_input: str,
+        speaker_pool: List[str],
+        character_refs: Dict[str, str],
+    ) -> str:
+        """
+        유저 입력에 가장 적절한 응답자 선택
+
+        간단한 휴리스틱:
+        1. 유저가 특정 캐릭터 이름 언급하면 그 캐릭터
+        2. 없으면 speaker_pool 첫 번째 (narr 제외)
+        """
+        # 캐릭터 이름 매핑 (일반적인 호칭)
+        name_mapping = {
+            "렌고쿠": "rengoku",
+            "탄지로": "tanjiro",
+            "젠이츠": "zenitsu",
+            "이노스케": "inosuke",
+            "네즈코": "nezuko",
+            "아카자": "akaza",
+        }
+
+        # 유저가 캐릭터 이름 언급했는지 체크
+        for name, char_id in name_mapping.items():
+            if name in user_input and char_id in speaker_pool:
+                return char_id
+
+        # speaker_pool에서 narr 제외한 첫 번째 캐릭터
+        for speaker in speaker_pool:
+            if speaker != "narr":
+                return speaker
+
+        # narr밖에 없으면 narr 반환
+        return speaker_pool[0] if speaker_pool else "narr"
 
 # ============================================================
 # 🚀 모듈 수준 헬퍼

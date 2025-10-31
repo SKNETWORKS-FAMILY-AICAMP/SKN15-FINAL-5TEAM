@@ -320,6 +320,11 @@ class RouterAgent:
         temp["skip_parent_after_dialogue"] = True
         temp.pop("force_story_resume", None)
 
+        # 🧹 Off-topic 응답 전 기존 output 클리어 (이전 대사는 이미 전송됨)
+        if "output" in state:
+            state["output"] = {}
+        log("router", "🧹 Cleared previous output for off-topic response")
+
         if count >= 3:
             state["off_topic_count"] = 0
             fallback_text = "⚠️ 집중하세요. 시나리오로 복귀합니다."
