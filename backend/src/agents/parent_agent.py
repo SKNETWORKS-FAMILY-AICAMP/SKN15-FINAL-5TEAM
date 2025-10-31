@@ -633,6 +633,30 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             llm_model="gpt-4o-mini",  # Parent Agent uses default_model from settings (gpt-4o-mini)
         )
 
+        # 📊 Performance Metric 저장: Parent Agent 실행 시간
+        try:
+            from src.database.session_manager import HybridSessionManager
+            from src.database.db_manager import DatabaseManager
+
+            execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+            session_id = result.get("session_id")
+
+            if session_id:
+                db = DatabaseManager()
+                session_manager = HybridSessionManager(db_manager=db)
+                session_manager.save_performance_metric(
+                    metric_name="parent_agent_execution_time",
+                    metric_value=execution_time_ms,
+                    session_id=session_id,
+                    metadata={
+                        "stage_tag": result.get("stage_tag"),
+                        "current_stage": result.get("current_stage"),
+                        "next_node": result.get("next_node")
+                    }
+                )
+        except Exception as e:
+            log("parent", "performance_metric_save_failed", error=str(e))
+
         return result
 
     except Exception as e:

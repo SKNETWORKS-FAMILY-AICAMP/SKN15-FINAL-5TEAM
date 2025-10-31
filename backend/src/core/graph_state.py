@@ -98,6 +98,12 @@ class GraphState(TypedDict):
     message_history: List[Dict[str, Any]]  # 최근 메시지 목록
 
     # ============================================================
+    # 장기기억 (Long-term Memory)
+    # ============================================================
+    conversation_summary: Optional[str]  # 대화 요약 (10턴마다 자동 생성)
+    summary_turn_count: int  # 요약에 포함된 마지막 턴 번호
+
+    # ============================================================
     # 라우팅 결과
     # ============================================================
     routing_result: Optional[Dict[str, Any]]  # Router Agent의 분류 결과
@@ -236,6 +242,10 @@ def create_initial_graph_state(
 
         # 메시지 히스토리
         message_history=[],
+
+        # 장기기억
+        conversation_summary=None,
+        summary_turn_count=0,
 
         # 라우팅 결과
         routing_result=None,

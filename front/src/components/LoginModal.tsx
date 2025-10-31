@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { setTokens, setUserData, TokenData, UserData } from '@/utils/authUtils';
 
 export default function LoginModal() {
   const { isLoginModalOpen, closeLoginModal, login } = useApp();
@@ -10,35 +11,87 @@ export default function LoginModal() {
 
   if (!isLoginModalOpen) return null;
 
-  const handleSocialLogin = (provider: string) => {
+  const handleSocialLogin = async (provider: string) => {
     console.log(`${provider} 로그인 시도`);
-    login('user@example.com');
-    closeLoginModal();
+
+    try {
+      let authUrl: string;
+
+      if (provider === 'Google') {
+        // Google OAuth URL 가져오기
+        const response = await fetch('http://localhost:8000/api/auth/google');
+        const data = await response.json();
+        authUrl = data.auth_url;
+      } else if (provider === 'Kakao') {
+        // Kakao OAuth URL 가져오기
+        const response = await fetch('http://localhost:8000/api/auth/kakao');
+        const data = await response.json();
+        authUrl = data.auth_url;
+      } else {
+        console.error('지원하지 않는 소셜 로그인 제공자:', provider);
+        return;
+      }
+
+      // OAuth 로그인 페이지로 리다이렉트
+      window.location.href = authUrl;
+    } catch (err) {
+      console.error(`${provider} 로그인 오류:`, err);
+      setError(`${provider} 로그인에 실패했습니다. 나중에 다시 시도해주세요.`);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
 
-    // 간단한 로그인 검증
-    const validAccounts = [
-      { username: 'tanjiro', password: '123' },
-      { username: 'zenitsu', password: '123' },
-      { username: 'inosuke', password: '123' },
-      { username: 'giyu', password: '123' },
-      { username: 'rengoku', password: '123' },
-      { username: 'tengen', password: '123' }
-    ];
+    try {
+      // API 로그인 요청
+      const response = await fetch('http://localhost:8000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
 
-    const account = validAccounts.find(acc => acc.username === username && acc.password === password);
+      const data = await response.json();
 
-    if (account) {
-      login(`${username}@kimechat.com`);
-      closeLoginModal();
-      setError('');
-      setUsername('');
-      setPassword('');
-    } else {
-      setError('사용자명 또는 비밀번호가 올바르지 않습니다.');
+      if (data.success) {
+        // JWT 토큰 저장
+        if (data.access_token && data.refresh_token) {
+          const tokens: TokenData = {
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+            token_type: data.token_type || 'bearer',
+          };
+          setTokens(tokens);
+
+          // 사용자 정보 저장
+          const userData: UserData = {
+            user_id: data.user_id,
+            username: data.username,
+            display_name: data.display_name,
+            email: data.email,
+          };
+          setUserData(userData);
+        }
+
+        // 로그인 성공
+        login(`${username}@kimechat.com`);
+        closeLoginModal();
+        setError('');
+        setUsername('');
+        setPassword('');
+      } else {
+        // 로그인 실패
+        setError(data.message || '사용자명 또는 비밀번호가 올바르지 않습니다.');
+      }
+    } catch (err) {
+      console.error('로그인 오류:', err);
+      setError('서버 연결에 실패했습니다. 나중에 다시 시도해주세요.');
     }
   };
 
@@ -112,14 +165,17 @@ export default function LoginModal() {
 
             {/* Social login buttons */}
             <div className="space-y-3">
-              {/* Kakao - disabled */}
-              <div className="flex items-center justify-between p-3 bg-gray-100 rounded-lg opacity-50">
+              {/* Kakao */}
+              <button
+                onClick={() => handleSocialLogin('Kakao')}
+                className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
                 <div className="flex items-center space-x-3">
                   <div className="w-6 h-6 bg-yellow-400 rounded"></div>
-                  <span className="text-gray-500">카카오</span>
+                  <span>카카오</span>
                 </div>
-                <span className="text-red-500 text-sm">삭제</span>
-              </div>
+                <span className="text-gray-400 text-sm">0</span>
+              </button>
 
               {/* Google */}
               <button

@@ -201,25 +201,29 @@ aws sts get-caller-identity
   - `kime-vpc-private-ap-northeast-2a` (10.0.128.0/24)
   - `kime-vpc-private-ap-northeast-2c` (10.0.129.0/24)
 
-### 2.2 보안 그룹 생성 (기본 틀)
+### 2.2 보안 그룹 생성 (효율적인 3개 구조)
 
-#### 2.2.1 ALB 보안 그룹
+**📌 중요**: 실무적으로 5개는 과도합니다. **3개 구조**가 관리 효율성과 보안의 최적 균형입니다.
+
+#### 2.2.1 Public 보안 그룹 (kime-alb-sg)
+**용도**: ALB + Frontend EC2 (Public 계층)
+
 ```bash
-# CLI로 생성 (또는 Console에서)
+# CLI로 생성
 aws ec2 create-security-group \
   --group-name kime-alb-sg \
-  --description "Security group for Application Load Balancer" \
+  --description "Security group for ALB and Frontend EC2" \
   --vpc-id vpc-XXXXXXXX  # 위에서 생성된 VPC ID로 교체
 
 # 인바운드 규칙 추가
-# HTTP (80)
+# HTTP (80) - 외부 접속
 aws ec2 authorize-security-group-ingress \
-  --group-id sg-XXXXXXXX \  # 생성된 보안 그룹 ID
+  --group-id sg-XXXXXXXX \
   --protocol tcp \
   --port 80 \
   --cidr 0.0.0.0/0
 
-# HTTPS (443)
+# HTTPS (443) - 외부 접속
 aws ec2 authorize-security-group-ingress \
   --group-id sg-XXXXXXXX \
   --protocol tcp \
@@ -230,21 +234,18 @@ aws ec2 authorize-security-group-ingress \
 **또는 AWS Console에서**:
 1. EC2 → 보안 그룹 → "보안 그룹 생성"
 2. 보안 그룹 이름: `kime-alb-sg`
-3. 설명: `Security group for Application Load Balancer`
+3. 설명: `Security group for ALB and Frontend EC2`
 4. VPC: `kime-vpc` 선택
 5. 인바운드 규칙 추가:
-   - 유형: HTTP, 소스: 0.0.0.0/0
-   - 유형: HTTPS, 소스: 0.0.0.0/0
+   - 유형: HTTP (80), 소스: 0.0.0.0/0
+   - 유형: HTTPS (443), 소스: 0.0.0.0/0
+   - 유형: SSH (22), 소스: 내 IP (선택사항, 개발용)
 6. "보안 그룹 생성" 클릭
 
-#### 2.2.2 EC2 보안 그룹 (Frontend/Backend)
-```bash
-# Frontend EC2 보안 그룹
-aws ec2 create-security-group \
-  --group-name kime-frontend-sg \
-  --description "Security group for Frontend EC2" \
-  --vpc-id vpc-XXXXXXXX
+#### 2.2.2 App 보안 그룹 (kime-backend-sg)
+**용도**: Backend EC2 (Application 계층)
 
+```bash
 # Backend EC2 보안 그룹
 aws ec2 create-security-group \
   --group-name kime-backend-sg \
@@ -253,51 +254,36 @@ aws ec2 create-security-group \
 ```
 
 **Console에서**:
-1. `kime-frontend-sg` 생성:
-   - VPC: `kime-vpc`
-   - 인바운드 규칙:
-     - 유형: HTTP (80), 소스: `kime-alb-sg` 보안 그룹
-     - 유형: SSH (22), 소스: "내 IP" (개발 중에만)
+- 이름: `kime-backend-sg`
+- 설명: `Security group for Backend EC2`
+- VPC: `kime-vpc`
+- 인바운드 규칙:
+  - 유형: Custom TCP (8000), 소스: `kime-alb-sg` 보안 그룹
+  - 유형: SSH (22), 소스: Bastion SG 또는 내 IP (선택사항)
 
-2. `kime-backend-sg` 생성:
-   - VPC: `kime-vpc`
-   - 인바운드 규칙:
-     - 유형: Custom TCP (8000), 소스: `kime-alb-sg` 보안 그룹
-     - 유형: SSH (22), 소스: "내 IP"
+#### 2.2.3 Data 보안 그룹 (kime-rds-sg)
+**용도**: RDS + Redis (Database 계층)
 
-#### 2.2.3 RDS 보안 그룹
 ```bash
 aws ec2 create-security-group \
   --group-name kime-rds-sg \
-  --description "Security group for RDS PostgreSQL" \
+  --description "Security group for RDS and Redis" \
   --vpc-id vpc-XXXXXXXX
 ```
 
 **Console에서**:
 - 이름: `kime-rds-sg`
+- 설명: `Security group for RDS and Redis`
 - VPC: `kime-vpc`
 - 인바운드 규칙:
   - 유형: PostgreSQL (5432), 소스: `kime-backend-sg` 보안 그룹
-
-#### 2.2.4 Redis 보안 그룹
-```bash
-aws ec2 create-security-group \
-  --group-name kime-redis-sg \
-  --description "Security group for ElastiCache Redis" \
-  --vpc-id vpc-XXXXXXXX
-```
-
-**Console에서**:
-- 이름: `kime-redis-sg`
-- VPC: `kime-vpc`
-- 인바운드 규칙:
-  - 유형: Custom TCP (6379), 소스: `kime-backend-sg` 보안 그룹
+  - 유형: Custom TCP (6379), 소스: `kime-backend-sg` 보안 그룹 (Redis)
 
 **✅ Phase 2 완료 체크리스트**:
 - [ ] VPC 생성 (`kime-vpc`, 10.0.0.0/16)
 - [ ] 서브넷 4개 생성 (퍼블릭 2, 프라이빗 2)
 - [ ] NAT Gateway 생성
-- [ ] 보안 그룹 5개 생성 (ALB, Frontend, Backend, RDS, Redis)
+- [ ] 보안 그룹 3개 생성 (kime-alb-sg, kime-backend-sg, kime-rds-sg)
 
 ---
 
@@ -452,7 +438,7 @@ RDS_DBNAME=kime_statedb
    - 서브넷 그룹: `kime-redis-subnet-group` 선택
 
 5. **보안**
-   - 보안 그룹: `kime-redis-sg` 선택
+   - 보안 그룹: `kime-rds-sg` 선택 (RDS와 동일한 Data 계층)
    - 전송 중 암호화: **활성화**
    - 저장 중 암호화: **활성화**
    - AUTH 토큰: 설정 (강력한 토큰 생성)
@@ -551,7 +537,7 @@ REDIS_AUTH_TOKEN=K1m3Ch@t_R3d1s_T0k3n!2025  # 실제 토큰으로 교체
    - 서브넷: **프라이빗 서브넷 선택** (`kime-vpc-private-ap-northeast-2a`)
    - 퍼블릭 IP 자동 할당: **비활성화**
    - 방화벽(보안 그룹): "기존 보안 그룹 선택"
-     - `kime-backend-sg` 선택
+     - `kime-backend-sg` 선택 (Application 계층)
 
 7. **스토리지 구성**
    - 볼륨 1: **30 GiB** gp3
@@ -622,7 +608,7 @@ Backend와 유사하지만 차이점:
 2. **인스턴스 유형**: **t3.small** (1 vCPU, 2 GiB RAM)
 3. **서브넷**: **퍼블릭 서브넷** (`kime-vpc-public-ap-northeast-2a`)
 4. **퍼블릭 IP 자동 할당**: **활성화**
-5. **보안 그룹**: `kime-frontend-sg`
+5. **보안 그룹**: `kime-alb-sg` (Public 계층, ALB와 공유)
 6. **사용자 데이터**:
 
 ```bash
@@ -1027,43 +1013,34 @@ ALB_DNS=kime-alb-1234567890.ap-northeast-2.elb.amazonaws.com
 - All traffic to 0.0.0.0/0
 ```
 
-#### Frontend 보안 그룹 (`kime-frontend-sg`)
+#### ALB/Frontend 보안 그룹 (`kime-alb-sg`) - Public 계층
 ```
 인바운드:
-- HTTP (80) from kime-alb-sg
-- SSH (22) from 내 IP (임시, 나중에 삭제)
+- HTTP (80) from 0.0.0.0/0 (외부 접속)
+- HTTPS (443) from 0.0.0.0/0 (외부 접속)
+- SSH (22) from 내 IP (Frontend EC2 접속용, 임시)
 
 아웃바운드:
 - All traffic to 0.0.0.0/0
 ```
 
-#### Backend 보안 그룹 (`kime-backend-sg`)
+#### Backend 보안 그룹 (`kime-backend-sg`) - App 계층
 ```
 인바운드:
-- Custom TCP (8000) from kime-alb-sg
-- SSH (22) from kime-bastion-sg
-- PostgreSQL (5432) from kime-rds-sg (역방향 확인)
-- Redis (6379) from kime-redis-sg (역방향 확인)
+- Custom TCP (8000) from kime-alb-sg (ALB에서 API 요청)
+- SSH (22) from kime-bastion-sg (관리용)
 
 아웃바운드:
 - All traffic to 0.0.0.0/0
 ```
 
-#### RDS 보안 그룹 (`kime-rds-sg`)
+#### RDS/Redis 보안 그룹 (`kime-rds-sg`) - Data 계층
 ```
 인바운드:
-- PostgreSQL (5432) from kime-backend-sg
-- PostgreSQL (5432) from kime-bastion-sg
-
-아웃바운드:
-- (기본값 유지)
-```
-
-#### Redis 보안 그룹 (`kime-redis-sg`)
-```
-인바운드:
-- Custom TCP (6379) from kime-backend-sg
-- Custom TCP (6379) from kime-bastion-sg
+- PostgreSQL (5432) from kime-backend-sg (RDS 접속)
+- PostgreSQL (5432) from kime-bastion-sg (RDS 관리)
+- Custom TCP (6379) from kime-backend-sg (Redis 접속)
+- Custom TCP (6379) from kime-bastion-sg (Redis 관리)
 
 아웃바운드:
 - (기본값 유지)
@@ -1145,9 +1122,11 @@ aws iam add-role-to-instance-profile \
 
 ```bash
 # Frontend/Backend 보안 그룹에서 SSH 규칙 삭제
-# EC2 → 보안 그룹 → kime-frontend-sg → 인바운드 규칙 편집
-# SSH (22) from 0.0.0.0/0 → 삭제
-# SSH (22) from kime-bastion-sg → 추가
+# EC2 → 보안 그룹 → kime-alb-sg → 인바운드 규칙 편집
+# SSH (22) from 내 IP → 삭제 (임시 규칙 제거)
+
+# EC2 → 보안 그룹 → kime-backend-sg → 인바운드 규칙 편집
+# SSH (22)는 kime-bastion-sg만 허용 (이미 설정되어 있음)
 ```
 
 **✅ Phase 8 완료 체크리스트**:
