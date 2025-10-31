@@ -3,12 +3,14 @@
 # ============================================================
 from __future__ import annotations
 import importlib
+import time
 from typing import Any, Dict, Optional, List
 
 # ============================================================
 # ⚙️ SceneTools Import
 # ============================================================
 from src.tools import scene_tools
+from src.tools.training_logger import log_agent
 
 # 🎯 Stage 핸들러 관련
 from .stage_handlers import (
@@ -621,7 +623,37 @@ class ParentAgent:
 DEFAULT_AGENT = ParentAgent()
 
 def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
-    return DEFAULT_AGENT.run(state)
+    start_time = time.perf_counter()
+
+    try:
+        result = DEFAULT_AGENT.run(state)
+
+        model_output = {
+            "agent_inputs": result.get("agent_inputs"),
+            "next_stage": result.get("next_stage"),
+            "stage_tag": result.get("stage_tag"),
+            "current_stage": result.get("current_stage"),
+        }
+
+        log_agent(
+            agent_name="parent",
+            state=result,
+            model_output=model_output,
+            start_time=start_time,
+            llm_model="gpt-4o-mini",
+        )
+
+        return result
+    except Exception as exc:
+        log_agent(
+            agent_name="parent",
+            state=state,
+            model_output={"error": str(exc)},
+            start_time=start_time,
+            is_error=True,
+            error_message=str(exc),
+        )
+        raise
 
 def parent_after_dialogue(state: Dict[str, Any]) -> Dict[str, Any]:
     return DEFAULT_AGENT.after_dialogue(state)

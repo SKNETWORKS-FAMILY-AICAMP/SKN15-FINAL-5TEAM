@@ -45,7 +45,7 @@ class OpenNarrativeHandler:
         context = stage.get("context", "")
         speaker_pool = stage.get("speaker_pool", ["narr", "tanjiro"])
         next_stage = stage.get("next")
-        max_turns = stage.get("max_turns", 5)  # 기본 5턴
+        max_turns = stage.get("max_turns", 3)  # 기본 3턴
 
         # 2. 상태 초기화
         self._initialize_narrative_state(state)
