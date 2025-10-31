@@ -139,6 +139,7 @@ class LLMClient:
         self.enable_caching = enable_caching
         self.cache: Dict[str, str] = {}  # 프롬프트 해시 -> 응답 캐시
         self.call_count = 0  # LLM 호출 횟수
+        self.verbose_logging = os.getenv("LLM_VERBOSE_LOGGING", "false").lower() == "true"
 
     def _get_cache_key(self, system_prompt: str, user_prompt: str, temperature: float, model: str) -> str:
         """캐시 키 생성"""
@@ -266,14 +267,15 @@ class LLMClient:
                 self.cache[cache_key] = result
 
             duration_ms = (call_finished - call_started) * 1000.0
-            log(
-                "llm",
-                "Call completed",
-                agent=agent or "default",
-                model=target_model,
-                duration_ms=f"{duration_ms:.2f}",
-            )
-            log("llm_output", result)
+            if self.verbose_logging:
+                log(
+                    "llm",
+                    "Call completed",
+                    agent=agent or "default",
+                    model=target_model,
+                    duration_ms=f"{duration_ms:.2f}",
+                )
+                log("llm_output", result)
 
             return result
 

@@ -45,7 +45,8 @@ class OpenNarrativeHandler:
         context = stage.get("context", "")
         speaker_pool = stage.get("speaker_pool", ["narr", "tanjiro"])
         next_stage = stage.get("next")
-        max_turns = stage.get("max_turns", 1)  # 기본 5턴
+        min_turns = stage.get("min_turns", 2)  # 시나리오에서 설정, 기본 2턴
+        max_turns = stage.get("max_turns", 5)  # 시나리오에서 설정, 기본 5턴
 
         # 2. 상태 초기화
         self._initialize_narrative_state(state)
@@ -56,17 +57,20 @@ class OpenNarrativeHandler:
 
         # 4. 유저 입력 가져오기
         user_input = state.get("user_input", "").strip()
+        has_user_input = bool(user_input and user_input != "__AUTO_CONTINUE__")
 
-        # 5. 턴 수 기반 자동 전환 체크 (비활성화)
-        # 문제: 유저 입력과 관계없이 max_turns 도달 시 자동 진행하여 캐릭터들이 알아서 대화 진행
-        # 해결: max_turns 체크를 제거하고, 유저가 직접 스테이지를 진행하도록 함
+        log("open_narrative", f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")
+
+        # 5. Stage 완료 조건
         stage_complete = False
 
-        # max_turns 경고만 출력 (자동 진행 안 함)
-        if turn_count >= max_turns or stage_turn >= max_turns:
-            log("open_narrative", f"⚠️  Turn limit reached: {turn_count}/{max_turns} (auto-advance disabled)")
-
-        # 자동 진행 로직 제거됨 - 유저가 명시적으로 다음 스테이지로 가는 입력을 해야 진행
+        if stage_turn >= max_turns:
+            stage_complete = True
+            log("open_narrative", f"⚠️ Max turns reached ({stage_turn}/{max_turns}), force advancing")
+        elif stage_turn >= min_turns and has_user_input:
+            # min_turns 도달 + 유저 입력 → 자동 전환
+            stage_complete = True
+            log("open_narrative", f"✅ Min turns reached ({stage_turn}/{min_turns}) with user input, auto-advancing")
 
         # 6. 유저 입력이 없으면 프롬프트 제공
         if not user_input:

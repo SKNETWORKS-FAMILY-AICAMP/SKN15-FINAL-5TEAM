@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
@@ -10,6 +12,7 @@ from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
@@ -53,7 +56,7 @@ class RouterAgent:
                     "mbti가 뭐야?"
                 ],
             },
-            threshold=0.6,
+            threshold=0.4,
             embedding_client=self._embedding_client,
         )
 
@@ -62,6 +65,7 @@ class RouterAgent:
     # ============================================================
     # 전체 실행 함수, 임베딩 -> LLM 순으로 분류, 입력이 없는 경우 off 토픽
     def run(self, state: Dict[str, Any], user_input: str) -> Dict[str, Any]:
+        start_time = time.perf_counter()
         normalized = (user_input or "").strip()
         state["user_input"] = normalized
 
@@ -72,21 +76,35 @@ class RouterAgent:
                 category="empty",
                 reason="empty_input",
             )
-            return self._handle_off_topic(state, normalized, empty_topic)
+            result = self._handle_off_topic(state, normalized, empty_topic)
+            self._log_execution(state, result, start_time)
+            return result
 
         embedding = self._get_user_embedding(state, normalized)
         embedding_topic = self._classify_with_embedding(normalized, embedding=embedding)
         if embedding_topic:
-            return (
+            result = (
                 self._handle_off_topic(state, normalized, embedding_topic)
                 if embedding_topic.is_off_topic
                 else self._handle_on_topic(state, normalized, embedding_topic)
             )
+            self._log_execution(state, result, start_time)
+            return result
 
-        topic = self._classify_with_llm(state, normalized)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            topic_future = executor.submit(self._classify_with_llm, state, normalized)
+            intent_future = executor.submit(self._detect_route_intent, state, normalized)
+
+            topic = topic_future.result()
+            detected_intent = intent_future.result() if not topic.is_off_topic else None
+
         if topic.is_off_topic:
-            return self._handle_off_topic(state, normalized, topic)
-        return self._handle_on_topic(state, normalized, topic)
+            result = self._handle_off_topic(state, normalized, topic)
+        else:
+            result = self._handle_on_topic(state, normalized, topic, precomputed_intent=detected_intent)
+
+        self._log_execution(state, result, start_time)
+        return result
 
     # ============================================================
     # 🔍 분류 헬퍼
@@ -114,6 +132,10 @@ class RouterAgent:
             label=match.label,
             score=f"{confidence:.4f}",
             is_off_topic=is_off_topic,
+        )
+        print(
+            f"[ROUTER] Embedding match → label={match.label}, score={confidence:.4f}, off_topic={is_off_topic}",
+            flush=True,
         )
 
         return TopicClassification(
@@ -189,6 +211,10 @@ class RouterAgent:
             classification=classification,
             confidence=f"{confidence:.4f}",
             reason=reason or "n/a",
+        )
+        print(
+            f"[ROUTER] LLM classification → result={classification}, confidence={confidence:.4f}",
+            flush=True,
         )
 
         return TopicClassification(
@@ -378,6 +404,8 @@ class RouterAgent:
         state: Dict[str, Any],
         user_input: str,
         topic: TopicClassification,
+        *,
+        precomputed_intent: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         state["off_topic_count"] = 0
         state["classification"] = "on_topic"
@@ -407,7 +435,9 @@ class RouterAgent:
         temp.pop("sticky_intent", None)
         temp.pop("intent_stage", None)
 
-        detected_intent = self._detect_route_intent(state, normalized_input)
+        detected_intent = precomputed_intent
+        if not detected_intent:
+            detected_intent = self._detect_route_intent(state, normalized_input)
         if detected_intent and isinstance(detected_intent, dict):
             intent_key = str(detected_intent.get("intent") or "").strip()
             if intent_key:
@@ -472,6 +502,30 @@ class RouterAgent:
         cache["text"] = text
         cache["vector"] = vector
         return vector
+
+    # ============================================================
+    # 📊 Training Logger 연동
+    # ============================================================
+    def _log_execution(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float) -> None:
+        try:
+            routing_result = result.get("routing_result") or {}
+            model_output = {
+                "next_node": result.get("next_node"),
+                "classification": routing_result.get("classification", result.get("classification", "unknown")),
+                "confidence": routing_result.get("confidence", result.get("confidence", 0.0)),
+                "reason": routing_result.get("reason"),
+                "intent": routing_result.get("intent"),
+            }
+
+            log_agent(
+                agent_name="router",
+                state=state,
+                model_output=model_output,
+                start_time=start_time,
+                llm_model="gpt-4o-mini",
+            )
+        except Exception as exc:
+            log("router", "training_log_failed", error=str(exc))
 
 DEFAULT_AGENT = RouterAgent()
 
