@@ -283,6 +283,10 @@ async def chat(request: Request):
             state["dialogue_batch_index"] = 0
             # state["dialogues_generated_count"]는 리셋하지 않음 (누적)
 
+            # 🧹 새 유저 입력 시 이전 output 클리어 (이미 전송됨)
+            state["output"] = {}
+            state["agent_responses"] = []
+
         # 스테이지별 대화 카운터 및 이미지 관련 필드 초기화
         state.setdefault("stage_dialogue_counts", {})
         state.setdefault("dialogues_generated_count", 0)

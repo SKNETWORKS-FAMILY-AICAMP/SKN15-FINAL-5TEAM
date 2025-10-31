@@ -254,6 +254,7 @@ class FallbackManager:
         - speaker_pool에서만 캐릭터 선택 (akaza, narr, enmu 제외)
         - pool이 비어있으면 "narr" 사용
         - tone_profile (tone, emotion, relationships)을 children_agent와 동일하게 로드
+        - world_context를 세계관 정보로 활용
         """
         try:
             # 🔹 Speaker 선택 (speaker_pool 전용)
@@ -261,6 +262,9 @@ class FallbackManager:
 
             # 🔹 tone_profile 로드 (children_agent와 동일한 방식)
             tone_profile = self._load_tone_profile(state, char)
+
+            # 🌍 world_context 로드
+            world_context = self._load_world_context(state)
 
             # 🔹 프롬프트 템플릿 선택
             sys_tmpl = self._prompts["urgent_off_topic_base"] if blocking else self._prompts["off_topic_base"]
@@ -299,12 +303,18 @@ class FallbackManager:
             relationships = tone_profile.get("relationships", {})
             relationships_section = self._format_relationships(relationships) if relationships else ""
 
+            # 🌍 world_context 섹션 포맷팅
+            world_context_section = ""
+            if world_context:
+                world_context_section = f"\n\n### 세계관\n{world_context}"
+
             sys = sys_tmpl.format(
                 name=char,
                 atmosphere_display=atmosphere_display,
                 tone=tone_style,
                 emotion=emotion,
-                relationships_section=relationships_section
+                relationships_section=relationships_section,
+                world_context_section=world_context_section
             )
             usr = usr_tmpl.format(
                 user_input=user_input,
@@ -366,6 +376,38 @@ class FallbackManager:
         except Exception as e:
             log("fallback", f"⚠️ Exception loading tone_profile for {char}: {e}, using defaults")
             return self._get_default_tone_profile()
+
+    def _load_world_context(self, state: Dict[str, Any]) -> Optional[str]:
+        """
+        세계관 정보 로드
+
+        Returns:
+            world_context 문자열 (없으면 None)
+        """
+        try:
+            from src.utils.world_loader import WorldLoader
+
+            # 🔹 scenario에서 world_id 가져오기
+            scenario = state.get("scenario_data", {}) or state.get("scenario", {})
+            world_id = scenario.get("world_id")
+
+            if not world_id:
+                log("fallback", "⚠️ No world_id in scenario")
+                return None
+
+            # 🔹 WorldLoader로 world_context 로드
+            world_context = WorldLoader.get_world_context(world_id)
+
+            if world_context:
+                log("fallback", f"🌍 Loaded world context: {world_id}")
+                return world_context
+            else:
+                log("fallback", f"⚠️ Empty world_context for {world_id}")
+                return None
+
+        except Exception as e:
+            log("fallback", f"⚠️ Failed to load world_context: {e}")
+            return None
 
     def _get_default_tone_profile(self) -> Dict[str, Any]:
         """tone_profile 로드 실패 시 기본값"""

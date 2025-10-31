@@ -52,11 +52,20 @@ class StoryOrchestrator:
         story_summary = state.get("story_summary", "")
         world_state = state.get("world_state", {})
 
+        # 🌍 world_context 로드
+        world_context = self._load_world_context(state)
+
+        # 🎭 tone_profiles 로드
+        tone_profiles = self._load_tone_profiles(state, speaker_pool)
+
         # 최근 대화 히스토리 추출
         recent_history = self._extract_recent_history(state, limit=4)
 
         # LLM 프롬프트 구성
-        system_prompt = self._build_system_prompt()
+        system_prompt = self._build_system_prompt(
+            world_context=world_context,
+            tone_profiles=tone_profiles,
+        )
         user_prompt = self._build_user_prompt(
             context=context,
             story_summary=story_summary,
@@ -98,9 +107,35 @@ class StoryOrchestrator:
             log("story_orchestrator", f"❌ LLM call failed: {exc}")
             return self._create_fallback_response(context, speaker_pool)
 
-    def _build_system_prompt(self) -> str:
-        """Open Narrative용 시스템 프롬프트"""
-        return self._system_prompt_template
+    def _build_system_prompt(
+        self,
+        world_context: Optional[str] = None,
+        tone_profiles: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Open Narrative용 시스템 프롬프트 생성
+
+        Args:
+            world_context: 세계관 정보
+            tone_profiles: 캐릭터별 tone_profile 딕셔너리
+
+        Returns:
+            포맷팅된 시스템 프롬프트
+        """
+        # 🌍 world_context 섹션
+        world_context_section = ""
+        if world_context:
+            world_context_section = f"\n\n### 세계관\n{world_context}"
+
+        # 🎭 tone_profiles 섹션
+        tone_profiles_section = ""
+        if tone_profiles:
+            tone_profiles_section = self._format_tone_profiles(tone_profiles)
+
+        return self._system_prompt_template.format(
+            world_context_section=world_context_section,
+            tone_profiles_section=tone_profiles_section,
+        )
 
     def _build_user_prompt(
         self,
@@ -123,6 +158,129 @@ class StoryOrchestrator:
             turn_count=f"{turn_count + 1}",
             speaker_pool=speakers_str,
         )
+
+    def _load_world_context(self, state: Dict[str, Any]) -> Optional[str]:
+        """
+        세계관 정보 로드
+
+        Returns:
+            world_context 문자열 (없으면 None)
+        """
+        try:
+            from src.utils.world_loader import WorldLoader
+
+            # scenario에서 world_id 가져오기
+            scenario = state.get("scenario_data", {}) or state.get("scenario", {})
+            world_id = scenario.get("world_id")
+
+            if not world_id:
+                log("story_orchestrator", "⚠️ No world_id in scenario")
+                return None
+
+            # WorldLoader로 world_context 로드
+            world_context = WorldLoader.get_world_context(world_id)
+
+            if world_context:
+                log("story_orchestrator", f"🌍 Loaded world context: {world_id}")
+                return world_context
+            else:
+                log("story_orchestrator", f"⚠️ Empty world_context for {world_id}")
+                return None
+
+        except Exception as e:
+            log("story_orchestrator", f"⚠️ Failed to load world_context: {e}")
+            return None
+
+    def _load_tone_profiles(
+        self,
+        state: Dict[str, Any],
+        speaker_pool: List[str],
+    ) -> Dict[str, Any]:
+        """
+        speaker_pool에 있는 캐릭터들의 tone_profiles 로드
+
+        Returns:
+            { "char_id": { "tone": {...}, "relationships": {...} }, ... }
+        """
+        try:
+            from src.core.scene_dialogue_tools import load_tone_profiles
+
+            # scenario에서 character_refs 가져오기
+            scenario = state.get("scenario_data", {}) or state.get("scenario", {})
+            character_refs = scenario.get("character_refs", {})
+
+            # speaker_pool에 해당하는 character_refs만 필터링
+            filtered_refs = {}
+            for char in speaker_pool:
+                if char in character_refs:
+                    filtered_refs[char] = character_refs[char]
+
+            if not filtered_refs:
+                log("story_orchestrator", "⚠️ No character_refs found for speaker_pool")
+                return {}
+
+            # scenario_key 추출
+            metadata = scenario.get("metadata", {})
+            tone_meta = metadata.get("tone", {})
+            scenario_key = tone_meta.get("scenario_key")
+
+            # load_tone_profiles 호출
+            tone_profiles = load_tone_profiles(filtered_refs, scenario_key)
+
+            if tone_profiles:
+                log("story_orchestrator", f"🎭 Loaded tone profiles for {len(tone_profiles)} characters")
+                return tone_profiles
+            else:
+                log("story_orchestrator", "⚠️ Failed to load tone profiles")
+                return {}
+
+        except Exception as e:
+            log("story_orchestrator", f"⚠️ Exception loading tone profiles: {e}")
+            return {}
+
+    def _format_tone_profiles(self, tone_profiles: Dict[str, Any]) -> str:
+        """
+        tone_profiles를 프롬프트용 문자열로 포맷팅
+
+        Args:
+            tone_profiles: { "char_id": { "tone": {...}, "relationships": {...} }, ... }
+
+        Returns:
+            포맷팅된 문자열
+        """
+        if not tone_profiles:
+            return ""
+
+        lines = ["\n\n### 등장인물 및 말투"]
+
+        for char_id, profile in tone_profiles.items():
+            lines.append(f"\n**{char_id}**")
+
+            # tone 정보
+            tone_data = profile.get("tone", {})
+            if isinstance(tone_data, dict):
+                mid_tone = tone_data.get("mid", {})
+                style = mid_tone.get("style", "")
+                emotion = mid_tone.get("emotion", "")
+                if style:
+                    lines.append(f"- 말투: {style}")
+                if emotion:
+                    lines.append(f"- 감정: {emotion}")
+            elif tone_data:
+                lines.append(f"- 말투: {tone_data}")
+
+            # relationships 정보
+            relationships = profile.get("relationships", {})
+            if relationships:
+                lines.append("- 관계:")
+                for target, info in relationships.items():
+                    if isinstance(info, dict):
+                        description = info.get("description", "")
+                        rel_type = info.get("type", "")
+                        if description:
+                            lines.append(f"  * {target} ({rel_type}): {description}")
+
+        return "\n".join(lines)
 
     def _extract_recent_history(self, state: Dict[str, Any], limit: int = 4) -> str:
         """최근 대화 히스토리를 문자열로 추출"""

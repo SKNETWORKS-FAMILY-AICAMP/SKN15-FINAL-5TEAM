@@ -165,6 +165,9 @@ class ParentAgent:
                     immediate_advance = True
 
             if immediate_advance:
+                # 🎯 Pre-transition user response subflow
+                state = self._handle_pre_transition_response(state)
+
                 st.set_current_stage(state, next_stage)
                 st.reset_stage_turn(state)
                 state["current_stage"] = next_stage
@@ -586,6 +589,88 @@ class ParentAgent:
         if fx:
             payload["fx"] = fx
         return payload
+
+    # ============================================================
+    # 🎯 Pre-Transition User Response Subflow
+    # ============================================================
+    def _handle_pre_transition_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Stage 전환 직전 유저 입력에 대한 짧은 응답 생성
+
+        조건:
+        - 유저 입력이 있음
+        - 의미 있는 길이 (2자 이상)
+        - 전환 명령어가 아님
+
+        Returns:
+            응답이 추가된 state
+        """
+        user_input = state.get("user_input", "").strip()
+
+        # 전환 명령어 체크 (유저가 명시적으로 다음으로 가고 싶어하는 경우)
+        transition_commands = ["다음", "계속", "넘어가", "이동", "스킵", "skip", "next"]
+        if user_input.lower() in transition_commands:
+            log("parent", "🔄 User requested stage transition, skipping response")
+            return state
+
+        # 유저 입력이 의미 있는 경우만 응답 생성
+        if not user_input or len(user_input) < 2:
+            return state
+
+        log("parent", f"🎯 Pre-transition: Generating brief response to '{user_input[:30]}...'")
+
+        try:
+            # ChildrenAgent를 짧은 응답 모드로 호출
+            response_state = self._generate_brief_response(state)
+
+            # 기존 output에 응답 추가
+            output = state.get("output", {})
+            if not isinstance(output, dict):
+                output = {}
+
+            existing_dialogues = output.get("dialogues", [])
+            if not isinstance(existing_dialogues, list):
+                existing_dialogues = []
+
+            # ChildrenAgent.run()은 agent_responses에 결과 저장
+            new_dialogues = response_state.get("agent_responses", [])
+            if not new_dialogues:
+                # Fallback: output.dialogues도 확인
+                new_dialogues = response_state.get("output", {}).get("dialogues", [])
+
+            if isinstance(new_dialogues, list) and new_dialogues:
+                output["dialogues"] = existing_dialogues + new_dialogues
+                state["output"] = output
+                log("parent", f"✅ Added {len(new_dialogues)} pre-transition response(s)")
+
+                # 🧹 응답 생성 완료했으므로 user_input 클리어 (다음 스테이지에서 재사용 방지)
+                state["user_input"] = ""
+                log("parent", "🧹 Cleared user_input after successful response")
+
+        except Exception as e:
+            log("parent", f"⚠️ Failed to generate pre-transition response: {e}")
+            import traceback
+            log("parent", f"Traceback: {traceback.format_exc()}")
+
+        return state
+
+    def _generate_brief_response(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        유저 입력에 대한 짧은 응답만 생성 (1~2줄)
+
+        ChildrenAgent를 호출하되, "brief_response_mode" 활성화
+        """
+        from src.agents.children_agent import run_children_agent
+
+        # brief_response 플래그 설정
+        state_copy = dict(state)
+        state_copy["brief_response_mode"] = True
+        state_copy["max_response_dialogues"] = 2  # 최대 2개 대사만
+
+        # ChildrenAgent 호출
+        result = run_children_agent(state_copy)
+
+        return result
 
     # ============================================================
     # 🧩 엔딩 판정
