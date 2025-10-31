@@ -895,6 +895,8 @@
         "narr"
       ],
       "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 5,
       "next": "HEROES_ARRIVE"
     },
     {
@@ -910,6 +912,8 @@
         "narr"
       ],
       "atmosphere": 3,
+      "min_turns": 1,
+      "max_turns": 3,
       "next": "RENGOKU_TRAIN_DIALOGUE"
     },
     {
@@ -925,6 +929,8 @@
         "narr"
       ],
       "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
       "next": "ENMU_APPEAR"
     },
     {
@@ -942,18 +948,37 @@
         "narr"
       ],
       "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
       "next": "ENMU_DREAM_WAR"
     },
     {
       "tag": "ENMU_DREAM_WAR",
       "type": "scene",
-      "context": "{user}는 꿈속에서 과거와 마주한다. 엔무: '영원한 행복을 버리지 마라...' 네즈코의 혈귀술이 꿈을 태운다.",
+      "context": "{user}는 꿈속에서 과거와 마주한다. 엔무: '영원한 행복을 버리지 마라...'",
       "llm_beats": true,
       "speaker_pool": [
         "enmu",
         "narr"
       ],
       "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 4,
+      "next": "ENMU_REAL_BATTLE"
+    },
+    {
+      "tag": "ENMU_DREAM_WAKEUP",
+      "type": "scene",
+      "context": "꿈속을 헤메던 {user}, 네즈코의 혈귀술이 꿈을 태워서 꿈에서 깬다",
+      "llm_beats": true,
+      "speaker_pool": [
+        "enmu",
+        "narr",
+        "nezuko"
+      ],
+      "atmosphere": 3,
+      "min_turns": 1,
+      "max_turns": 2,
       "next": "ENMU_REAL_BATTLE"
     },
     {

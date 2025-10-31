@@ -88,6 +88,15 @@ class SessionManager:
 
 
 SESSION_MANAGER = SessionManager()
+IMAGE_MANAGER_CACHE: Dict[str, ImageManager] = {}
+
+
+IMAGE_DEBUG = False
+
+
+def image_debug(message: str) -> None:
+    if IMAGE_DEBUG:
+        print(message)
 
 # ------------------------------------------------------------
 # ✅ Workflow 싱글톤 (LangGraph 파이프라인)
@@ -298,8 +307,6 @@ async def chat(request: Request):
         workflow_start = time.perf_counter()
         result_state = workflow_instance.invoke(state)
         workflow_end = time.perf_counter()
-        workflow_duration_ms = (workflow_end - workflow_start) * 1000.0
-        print(f"⏱️ Workflow execution time: {workflow_duration_ms:.2f} ms")
 
         turn_count = result_state.get("turn_count", 0) + 1
         result_state["turn_count"] = turn_count
@@ -331,7 +338,7 @@ async def chat(request: Request):
         # ImageManager를 사용하여 각 대화별로 이미지 결정
         current_image = result_state.get("current_image")  # 이전 이미지
         scenario_id_for_image = result_state.get("scenario_id", scenario_id)
-        print(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
+        image_debug(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
 
         scenario_reference = (
             result_state.get("scenario")
@@ -373,8 +380,8 @@ async def chat(request: Request):
 
             image_config_path = resolve_path(image_config_candidate)
             abs_path = image_config_path or image_config_candidate
-            print(f"🔍 Checking image config path: {abs_path}")
-            print(f"🔍 File exists: {os.path.exists(image_config_path or '')}")
+            image_debug(f"🔍 Checking image config path: {abs_path}")
+            image_debug(f"🔍 File exists: {os.path.exists(image_config_path or '')}")
 
             if scenario_id_for_image not in globals().get("image_managers", {}):
                 if image_config_path and os.path.exists(image_config_path):
@@ -386,26 +393,26 @@ async def chat(request: Request):
 
                     globals()["image_managers"][scenario_id_for_image] = ImageManager(
                         config_path=image_config_path,
-                        debug=True,
+                        debug=IMAGE_DEBUG,
                         use_llm=use_llm,
                         llm_metadata_path=metadata_path,
                     )
                     status_label = "enabled" if use_llm else "disabled"
-                    print(
+                    image_debug(
                         f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM {status_label})"
                     )
                 else:
-                    print(f"⚠️ Image config not found at: {abs_path}")
+                    image_debug(f"⚠️ Image config not found at: {abs_path}")
 
             # ImageManager가 있으면 각 대화별로 이미지 분석
             image_manager = (
                 globals().get("image_managers", {}).get(scenario_id_for_image)
             )
-            print(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
-            print(
+            image_debug(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
+            image_debug(
                 f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}"
             )
-            print(f"🔍 DEBUG: image_manager={image_manager}")
+            image_debug(f"🔍 DEBUG: image_manager={image_manager}")
             if image_manager:
                 # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
                 all_dialogues = result_state.get("output", {}).get("dialogues", [])
@@ -418,7 +425,7 @@ async def chat(request: Request):
                     all_dialogues[0]["image_index"] = "1"
                     previous_image = "1"
                     current_image = "1"
-                    print(f"🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
+                    image_debug("🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
 
                 for i, dialogue in enumerate(all_dialogues):
                     # 첫 대화는 이미 처리했으므로 스킵
@@ -435,17 +442,20 @@ async def chat(request: Request):
                         dialogue["image_index"] = new_image
                         previous_image = new_image
                         current_image = new_image
-                        print(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
+                        image_debug(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
 
                 # 최종 current_image를 세션에 저장
                 result_state["current_image"] = current_image
-                print(f"✅ Final image state: {current_image}")
+                image_debug(f"✅ Final image state: {current_image}")
             else:
-                print(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
+                image_debug(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
 
         # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
         total_duration_ms = (time.perf_counter() - request_start) * 1000.0
-        print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
+        total_duration_s = total_duration_ms / 1000.0
+        print(
+            f"⏱️ 총 처리 시간(입력→응답): {total_duration_ms:.2f} ms ({total_duration_s:.2f} s)"
+        )
 
         return JSONResponse(
             {

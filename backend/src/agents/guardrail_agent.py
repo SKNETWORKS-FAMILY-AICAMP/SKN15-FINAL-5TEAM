@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional, Sequence
 from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
 from src.utils.logger import log
 from src.utils.spellcheck import SpellChecker, get_spell_checker
+from src.tools.training_logger import log_agent
 
 # ============================================================
 # 🔥 Guardrail Agent — 모든 input을 한 번 검증하는 단계
@@ -28,21 +29,30 @@ class GuardrailAgent:
         self._spell_checker: SpellChecker = get_spell_checker()
 
     def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        start_time = time.perf_counter()
         user_input = (state.get("user_input") or "").strip()
 
         if user_input.startswith("__AUTO_CONTINUE__"):
-            return self._pass(state)
+            result = self._pass(state)
+            self._log_guardrail(state, result, start_time)
+            return result
 
         if self._is_currently_blocked(state):
-            return self._enforce_block(state)
+            result = self._enforce_block(state)
+            self._log_guardrail(state, result, start_time)
+            return result
 
         user_input = self._run_spellcheck(state, user_input)
         user_embedding = self._get_user_embedding(state, user_input)
 
         if self._contains_prohibited(state, user_input, embedding=user_embedding):
-            return self._handle_prohibited(state)
+            result = self._handle_prohibited(state)
+            self._log_guardrail(state, result, start_time)
+            return result
 
-        return self._pass(state)
+        result = self._pass(state)
+        self._log_guardrail(state, result, start_time)
+        return result
 
     # ============================================================
     # 🛠️ 에이전트 헬퍼 함수들
@@ -199,6 +209,28 @@ class GuardrailAgent:
         state["next_node"] = "dialogue_agent"
         temp = self._ensure_temp(state)
         temp.setdefault("skip_parent_after_dialogue", False)
+
+    # ============================================================
+    # 📊 Training Logger 연동
+    # ============================================================
+    def _log_guardrail(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float) -> None:
+        try:
+            guardrail_result = result.get("guardrail_result", {"status": "passed"})
+
+            log_agent(
+                agent_name="guardrail",
+                state=state,
+                model_output={
+                    "status": guardrail_result.get("status", "passed"),
+                    "reason": guardrail_result.get("reason", ""),
+                    "system_blocked": result.get("system_blocked", False),
+                    "warning_count": result.get("prohibited_warning_count", 0),
+                },
+                start_time=start_time,
+                llm_model="text-embedding-3-small",
+            )
+        except Exception as exc:
+            log("guardrail", f"Logging failed: {exc}")
 
 
 DEFAULT_AGENT = GuardrailAgent()

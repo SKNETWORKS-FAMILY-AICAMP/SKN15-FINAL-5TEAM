@@ -1,10 +1,12 @@
 from datetime import datetime
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.core.graph_state import AgentState, Dialogue
 from src.utils.llm_client import get_llm_client
 from src.utils.config_loader import get_config_loader
+from src.tools.training_logger import log_agent
+from src.utils.logger import log
 
 _PROMPTS = get_config_loader().get_prompts()
 _DIALOGUE_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("dialogue") or {})
@@ -23,7 +25,7 @@ class DialogueAgent:
     # ============================================================
     # 🛠️ 초기화
     # ============================================================
-    def __init__(self, use_llm: bool = True, enable_multi_conversation: bool = False):
+    def __init__(self, use_llm: bool = False, enable_multi_conversation: bool = False):
         """Dialogue Agent 초기화"""
         self.use_llm = use_llm
         self.enable_multi_conversation = enable_multi_conversation
@@ -80,22 +82,20 @@ class DialogueAgent:
         print(f"[DIALOGUE] Dialogues sorted by order: {[d.order for d in state.output.dialogues]}", flush=True)
 
         # 각 대사 검증
-        validated_dialogues = []
-        validation_results = []
-
-        print(f"[DIALOGUE] Starting validation loop", flush=True)
-        for dialogue in state.output.dialogues:
-            print(f"[DIALOGUE] Validating dialogue from {dialogue.speaker} (order: {dialogue.order})", flush=True)
-            validation_result = self._validate_dialogue(dialogue, state)
-            validation_results.append(validation_result)
-
-            # 검증 통과 시 그대로 사용, 실패 시 수정
-            if validation_result["passed"]:
-                validated_dialogues.append(dialogue)
-            else:
-                # 자동 수정 시도
-                corrected = self._correct_dialogue(dialogue, state, validation_result)
-                validated_dialogues.append(corrected if corrected else dialogue)
+        validated_dialogues = list(state.output.dialogues)
+        print("[DIALOGUE] Starting validation loop", flush=True)
+        raw_dialogues = [
+            {
+                "speaker": dialogue.speaker,
+                "text": dialogue.content,
+                "emotion": dialogue.emotion,
+                "emotion_intensity": dialogue.emotion_intensity,
+                "affinity_level": dialogue.affinity_level,
+                "order": dialogue.order,
+            }
+            for dialogue in validated_dialogues
+        ]
+        validation_results = self.validate_batch(raw_dialogues, state)
 
         print(f"[DIALOGUE] Validation complete", flush=True)
 
@@ -126,6 +126,18 @@ class DialogueAgent:
         state.meta.timestamp = datetime.now().isoformat()
         state.next_node = "wait_user_input"
 
+        log_agent(
+            agent_name="dialogue",
+            state=state,
+            model_output={
+                "validated_count": len(validated_dialogues),
+                "validation_results": validation_results,
+                "dialogues": [{"speaker": d.speaker, "text": d.text} for d in validated_dialogues],
+            },
+            start_time=start_time,
+            llm_model="gpt-4o-mini",
+        )
+
         print(f"[DIALOGUE] process() end", flush=True)
         return _finish(state, "completed")
 
@@ -134,19 +146,7 @@ class DialogueAgent:
     # ============================================================
     def _validate_dialogue(self, dialogue: Dialogue, state: AgentState) -> Dict:
         """대사 검증"""
-        print(f"[DIALOGUE] _validate_dialogue: use_llm={self.use_llm}", flush=True)
-
-        if self.use_llm:
-            print(f"[DIALOGUE] Calling _validate_with_llm", flush=True)
-            result = self._validate_with_llm(dialogue, state)
-            if result:
-                return result
-
-        # LLM 실패 시 규칙 기반 검증
-        print(f"[DIALOGUE] Calling _validate_with_rules", flush=True)
-        result = self._validate_with_rules(dialogue, state)
-        print(f"[DIALOGUE] _validate_with_rules returned", flush=True)
-        return result
+        return self._validate_with_rules(dialogue, state)
 
     def _validate_with_llm(self, dialogue: Dialogue, state: AgentState) -> Optional[Dict]:
         """LLM을 이용한 대사 검증"""
@@ -260,62 +260,60 @@ class DialogueAgent:
             "suggestions": "기본 규칙 기반 검증 통과" if passed else "대사 수정 필요"
         }
 
-    # ============================================================
-    # ✏️ 대사 자동 수정
-    # ============================================================
-    def _correct_dialogue(self, dialogue: Dialogue, state: AgentState,
-                         validation_result: Dict) -> Optional[Dialogue]:
-        """대사 자동 수정"""
-        if not self.use_llm:
-            return None
+    def validate_batch(self, raw_dialogues: List[Dict[str, Any]], state: AgentState) -> List[Dict[str, Any]]:
+        """
+        dict 기반 대사 리스트를 rule-based 검증한다.
+        """
+        results: List[Dict[str, Any]] = []
+        for idx, raw in enumerate(raw_dialogues or []):
+            if not isinstance(raw, dict):
+                continue
 
-        try:
-            issues = validation_result.get("issues", [])
-            suggestions = validation_result.get("suggestions") or "대사를 상황에 맞게 다듬어 주세요."
-
-            issues_block = "\n".join(f"- {issue}" for issue in issues) if issues else "- 자연스럽게 다듬어 주세요."
-            system_prompt = _DIALOGUE_CORRECTION_TEMPLATE.format(
-                speaker=dialogue.speaker,
-                issues_block=issues_block,
-                suggestions=suggestions,
+            dialogue = Dialogue(
+                speaker=raw.get("speaker") or raw.get("character") or "unknown",
+                content=raw.get("text") or raw.get("content") or "",
+                emotion=raw.get("emotion") or "neutral",
+                emotion_intensity=raw.get("emotion_intensity") or raw.get("tone", "normal"),
+                affinity_level=str(raw.get("affinity_level") or raw.get("affinity", "medium")),
+                order=raw.get("order", idx),
             )
 
-            character_info = self._get_character_info(dialogue.speaker)
+            validation_result = self._validate_dialogue(dialogue, state)
+            scores = validation_result.get("scores", {})
+            total_score = float(validation_result.get("total_score", 0.0))
+            passed = bool(validation_result.get("passed", False))
 
-            user_prompt = f"""원본 대사: "{dialogue.content}"
-캐릭터 성격: {character_info.get('personality', '')}
-감정: {dialogue.emotion}
-씬: {state.scene.current_scene}
+            score_summary = ", ".join(
+                f"{metric}={scores.get(metric, 0)}" for metric in self.validation_criteria.keys()
+            )
+            print(
+                f"[DIALOGUE] Score summary → speaker={dialogue.speaker}, total={total_score:.2f}, passed={passed} [{score_summary}]",
+                flush=True,
+            )
 
-수정된 대사만 출력하세요 (따옴표 없이):"""
-
-            correction_temperature = self.llm_client.get_agent_setting(
+            log(
                 "dialogue",
-                "correction_temperature",
-                self.llm_client.get_agent_setting("dialogue", "temperature", 0.7),
-            )
-            correction_max_tokens = self.llm_client.get_agent_setting("dialogue", "correction_max_tokens", 100)
-
-            corrected_content = self.llm_client.call(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=correction_temperature,
-                max_tokens=correction_max_tokens,
-                agent="dialogue",
-            )
-
-            # 새 Dialogue 객체 생성
-            return Dialogue(
+                "validation_scores",
                 speaker=dialogue.speaker,
-                content=corrected_content.strip().strip('"').strip("'"),
-                emotion=dialogue.emotion,
-                emotion_intensity=dialogue.emotion_intensity,
-                affinity_level=dialogue.affinity_level
+                total_score=f"{total_score:.2f}",
+                passed=passed,
+                **{f"{metric}_score": scores.get(metric, 0) for metric in self.validation_criteria.keys()},
             )
 
-        except Exception as e:
-            print(f"대사 수정 실패: {str(e)}")
-            return None
+            results.append(
+                {
+                    "order": dialogue.order,
+                    "speaker": dialogue.speaker,
+                    "scores": scores,
+                    "total_score": total_score,
+                    "passed": passed,
+                    "issues": validation_result.get("issues", []),
+                    "suggestions": validation_result.get("suggestions"),
+                }
+            )
+
+        return results
+
 
     # ============================================================
     # 📚 캐릭터 정보/멀티 대화 유틸
@@ -349,23 +347,23 @@ class DialogueAgent:
         # 기능 비활성화
         return
 
+DEFAULT_VALIDATION_AGENT = DialogueAgent(use_llm=False)
+
 # ============================================================
 # 🚀 모듈 수준 엔트리 포인트
 # ============================================================
 def run_dialogue_agent(state: AgentState) -> AgentState:
-    """
-    Dialogue Agent 실행 함수 (Simplified for Blueprint 5)
-    GraphState dict 구조에 맞춰 간소화
-    """
-    print(f"[DIALOGUE] Formatting output...")
+    """GraphState 기반 Dialogue Agent 실행"""
+    start_time = time.perf_counter()
+    print("[DIALOGUE] Formatting output...")
 
-    # agent_responses가 비어있으면 대화 생성 없음
-    agent_responses = state.get("agent_responses", [])
-    if not agent_responses:
-        print(f"[DIALOGUE] No agent_responses, skipping output update")
-    else:
-        # agent_responses를 output.dialogues로 복사
-        if "output" not in state:
+    agent_responses = state.get("agent_responses", []) or []
+    validation_results: List[Dict[str, Any]] = []
+
+    if agent_responses:
+        validation_results = DEFAULT_VALIDATION_AGENT.validate_batch(agent_responses, state)
+
+        if "output" not in state or not isinstance(state["output"], dict):
             state["output"] = {}
 
         if "dialogues" not in state["output"]:
@@ -387,21 +385,47 @@ def run_dialogue_agent(state: AgentState) -> AgentState:
 
         # agent_responses 초기화 (다음 배치를 위해)
         state["agent_responses"] = []
+    else:
+        print("[DIALOGUE] No agent_responses, skipping output update")
+
+    # 검증 결과를 메타에 저장 (선택사항)
+    meta = state.get("meta") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    diagnostics = meta.get("dialogue_agent") or {}
+    diagnostics["validation_results"] = validation_results
+    diagnostics["validated_count"] = len(validation_results)
+    meta["dialogue_agent"] = diagnostics
+    state["meta"] = meta
 
     # 엔딩 상태 확인
     current_stage = state.get("current_stage") or ""
     final_ending = state.get("final_ending")
 
     if final_ending or (current_stage and "ending" in current_stage.lower()):
-        # 엔딩에 도달한 경우에만 종료
         state["next_node"] = "END"
         print(f"[DIALOGUE] Ending reached: {current_stage}")
     else:
-        # 대화 계속 진행 - Router로 돌아가서 다음 사용자 입력 대기
         state["next_node"] = "router"
-        print(f"[DIALOGUE] Continuing conversation...")
+        print("[DIALOGUE] Continuing conversation...")
 
-    print(f"[DIALOGUE] Output formatted. Dialogues: {len(state['output'].get('dialogues', []))}")
+    print(f"[DIALOGUE] Output formatted. Dialogues: {len(state.get('output', {}).get('dialogues', []))}")
+
+    try:
+        log_agent(
+            agent_name="dialogue",
+            state=state,
+            model_output={
+                "validated_count": len(validation_results),
+                "validation_results": validation_results,
+                "dialogues": state.get("output", {}).get("dialogues", []),
+            },
+            start_time=start_time,
+            llm_model="rule-based",
+        )
+    except Exception as exc:
+        print(f"[DIALOGUE] Logging failed: {exc}")
+
     return state
 
 # 테스트

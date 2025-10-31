@@ -65,7 +65,7 @@ class SceneHandler:
         max_turns = int(
             constraints.get("max_turns")
             or stage.get("max_turns")
-            or min_turns
+            or 3
         )
 
         log("scene", f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")
@@ -73,19 +73,32 @@ class SceneHandler:
         temp = state_tools.get_temp_data(state)
         forced = temp.pop(f"{stage_tag}_complete", False)
 
-        complete = forced or stage_turn >= max_turns
-        if not complete and stage_turn >= min_turns and constraints.get("auto_advance"):
-            complete = True
+        # 유저 입력 확인
+        user_input = state.get("user_input", "").strip()
+        has_user_input = bool(user_input and user_input != "__AUTO_CONTINUE__")
 
-        # 인트로 스테이지는 첫 입력("시작")에는 beats를 보여주고, 두 번째 입력부터 다음 스테이지로 진행
+        # Stage 완료 조건
+        complete = False
+
+        if forced:
+            complete = True
+            log("scene", "✅ Stage forced complete")
+        elif stage_turn >= max_turns:
+            complete = True
+            log("scene", f"⚠️ Max turns reached ({stage_turn}/{max_turns}), force advancing")
+        elif stage_turn >= min_turns and has_user_input:
+            # min_turns 도달 + 유저 입력 → 자동 전환
+            complete = True
+            log("scene", f"✅ Min turns reached ({stage_turn}/{min_turns}) with user input, auto-advancing")
+
+        # 인트로 스테이지 특수 처리 (첫 입력에는 beats 표시, 두 번째 입력부터 진행)
         intro_stage_aliases = {tag.upper() for tag in INTRO_STAGE_TAGS}
         if not complete and stage_tag.upper() in intro_stage_aliases:
-            user_input = state.get("user_input", "")
-            log("scene", f"🔍 INTRO check: turn={stage_turn}, user_input='{user_input}'")
+            log("scene", f"🔍 INTRO check: turn={stage_turn}, has_input={has_user_input}")
 
             # turn=0: 첫 입력 (보통 "시작") → INTRO beats 표시
             # turn>=1: 두 번째 입력 → ROUTE_CHOICE로 진행
-            if user_input and user_input != "__AUTO_CONTINUE__":
+            if has_user_input:
                 if stage_turn >= 1:
                     complete = True
                     log("scene", "✅ INTRO stage auto-advancing after second user input", turn=stage_turn)
