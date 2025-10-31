@@ -69,6 +69,7 @@ def compose_llm_prompt(
     intent_options: Optional[Dict[str, Any]] = None,
     latest_user_input: Optional[str] = None,
     recent_dialogues: Optional[List[str]] = None,
+    conversation_summary: Optional[str] = None,  # 🧠 장기기억 요약
 ) -> str:
     """
     tone_profiles + beats + 관계 정보를 포함한 LLM 프롬프트
@@ -157,6 +158,17 @@ def compose_llm_prompt(
     {context_summary}
     """
 
+    # 🧠 장기기억 블록 추가
+    long_term_memory_block = ""
+    if conversation_summary:
+        long_term_memory_block = f"""
+    [장기기억 - 이전 대화 요약]
+    {conversation_summary}
+
+    ⚠️ 위의 장기기억 요약은 오래된 대화의 핵심 내용입니다.
+    이 정보를 참고하여 캐릭터 관계, 중요한 사건, 친밀도 변화 등을 이해하세요.
+    """
+
     user_input_block = ""
     if latest_user_input:
         user_input_block = f"""
@@ -206,6 +218,8 @@ def compose_llm_prompt(
     {intent_block}
 
     {summary_block}
+
+    {long_term_memory_block}
 
     {first_encounter_text}
     {intro_narr_reminder}

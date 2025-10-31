@@ -9,6 +9,7 @@ from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
+from src.database.session_manager import HybridSessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
@@ -34,6 +35,15 @@ class ChildrenAgent:
     def __init__(self):
         """LLM 클라이언트 초기화"""
         self._llm = get_llm_client()
+        self._session_manager: Optional[HybridSessionManager] = None
+
+        # Initialize session manager for error logging
+        try:
+            from src.database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            self._session_manager = HybridSessionManager(db_manager=db)
+        except Exception as e:
+            log("children", "session_manager_init_failed", error=str(e))
 
     # ============================================================
     # 🚦 실행 엔트리 포인트
@@ -229,6 +239,7 @@ class ChildrenAgent:
             intent_options=intent_options if isinstance(intent_options, dict) else None,
             latest_user_input=latest_user_input if isinstance(latest_user_input, str) else None,
             recent_dialogues=recent_dialogues if isinstance(recent_dialogues, list) else None,
+            conversation_summary=state.get("conversation_summary"),  # 🧠 장기기억
         )
 
 
@@ -287,6 +298,25 @@ class ChildrenAgent:
             log("children", f"⚠️ LLM invalid response → {type(response)} {response}")
         except Exception as exc:
             log("children", f"❌ LLM call failed: {exc}")
+
+            # 🚨 LLM 호출 실패 에러 로깅
+            if self._session_manager:
+                try:
+                    session_id = state.get("session_id")
+                    if session_id:
+                        self._session_manager.save_error_log(
+                            error_type="children_llm_call_failed",
+                            error_message=str(exc),
+                            session_id=session_id,
+                            metadata={
+                                "agent": "children",
+                                "stage_tag": ctx.get("stage_tag"),
+                                "stage_type": ctx.get("stage_type"),
+                                "speaker_pool": ctx.get("speaker_pool")
+                            }
+                        )
+                except Exception as e:
+                    log("children", "error_log_save_failed", error=str(e))
 
         # -----------------------------
         # 5️⃣ Fallback: beats 그대로 사용
@@ -439,6 +469,26 @@ class ChildrenAgent:
 
         except Exception as exc:
             log("children", f"❌ LLM beats generation failed: {exc}")
+
+            # 🚨 LLM beats 생성 실패 에러 로깅
+            if self._session_manager:
+                try:
+                    session_id = state.get("session_id")
+                    if session_id:
+                        self._session_manager.save_error_log(
+                            error_type="children_llm_beats_failed",
+                            error_message=str(exc),
+                            session_id=session_id,
+                            metadata={
+                                "agent": "children",
+                                "operation": "llm_beats_generation",
+                                "stage_tag": stage_tag,
+                                "speaker_pool": speaker_pool
+                            }
+                        )
+                except Exception as e:
+                    log("children", "error_log_save_failed", error=str(e))
+
             return self._create_fallback_beats(stage_context, speaker_pool)
 
     def _create_fallback_beats(self, context: str, speaker_pool: list) -> List[Dict[str, Any]]:
@@ -509,6 +559,30 @@ def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             start_time=start_time,
             llm_model="gpt-4o-mini",  # Children Agent uses gpt-4o-mini (설정 기준)
         )
+
+        # 📊 Performance Metric 저장: Children Agent 실행 시간
+        try:
+            from src.database.session_manager import HybridSessionManager
+            from src.database.db_manager import DatabaseManager
+
+            execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+            session_id = state.get("session_id")
+
+            if session_id:
+                db = DatabaseManager()
+                session_manager = HybridSessionManager(db_manager=db)
+                session_manager.save_performance_metric(
+                    metric_name="children_agent_execution_time",
+                    metric_value=execution_time_ms,
+                    session_id=session_id,
+                    metadata={
+                        "dialogue_count": len(result.get("agent_responses", [])),
+                        "has_more": result.get("has_more_dialogues", False),
+                        "next_node": result.get("next_node")
+                    }
+                )
+        except Exception as e:
+            log("children", "performance_metric_save_failed", error=str(e))
 
         return result
     except Exception as e:

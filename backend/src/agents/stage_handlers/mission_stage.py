@@ -686,6 +686,53 @@ class MissionHandler:
             "remaining": remaining,
         }
 
+        # 🎮 미션 기록 자동 저장 (DB)
+        try:
+            from src.database.db_manager import DatabaseManager
+
+            # API server에서 사용하는 db_manager 인스턴스 가져오기
+            # 또는 새로운 인스턴스 생성
+            db_manager = DatabaseManager(
+                host='127.0.0.1',
+                port=5433,
+                dbname='kimedb',
+                user='kime',
+                password='dev123',
+                min_conn=1,
+                max_conn=2
+            )
+
+            session_id = state.get("session_id")
+            turn_count = state.get("turn_count", 0)
+
+            if session_id:
+                # 미션 기록 저장
+                db_manager.save_mission_record(
+                    session_id=session_id,
+                    mission_type="recruit",
+                    target_character=character,
+                    attempt_count=attempts,
+                    success=success
+                )
+                log("mission", f"🎮 Mission record saved: {character} ({'SUCCESS' if success else 'FAIL'}, attempt {attempts})")
+
+                # 🎉 게임 이벤트 저장: 캐릭터 합류 성공
+                if success:
+                    db_manager.save_game_event(
+                        session_id=session_id,
+                        turn_number=turn_count,
+                        event_type="character_recruited",
+                        event_data={
+                            "character": character,
+                            "character_display": self.CHARACTER_NAMES_KR.get(character, character),
+                            "mission_type": "recruit",
+                            "attempts": attempts
+                        }
+                    )
+                    log("mission", f"🎉 Game event saved: character_recruited ({character})")
+        except Exception as e:
+            log("mission", f"⚠️ Failed to save mission/game records: {e}", level=40)
+
         log(
             "mission",
             f"[RESULT] {character} → {'SUCCESS' if success else 'FAIL'}",

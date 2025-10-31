@@ -13,6 +13,7 @@ from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
+from src.database.session_manager import HybridSessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
@@ -45,6 +46,7 @@ class RouterAgent:
     def __init__(self) -> None:
         self._llm_client: LLMClient = get_llm_client()
         self._embedding_client: EmbeddingClient = get_embedding_client()
+        self._session_manager: Optional[HybridSessionManager] = None
         self._topic_matcher = EmbeddingMatcher(
             {
                 # 임시 키워드 분류
@@ -59,6 +61,14 @@ class RouterAgent:
             threshold=0.6,
             embedding_client=self._embedding_client,
         )
+
+        # Initialize session manager for error logging
+        try:
+            from src.database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            self._session_manager = HybridSessionManager(db_manager=db)
+        except Exception as e:
+            log("router", "session_manager_init_failed", error=str(e))
 
     # ============================================================
     # 🚦 분류 엔트리 포인트
@@ -184,6 +194,26 @@ class RouterAgent:
             )
         except Exception as exc:
             log("router", "LLM topic classification failed", error=str(exc))
+
+            # 🚨 LLM 호출 실패 에러 로깅
+            if self._session_manager:
+                try:
+                    session_id = state.get("session_id")
+                    if session_id:
+                        self._session_manager.save_error_log(
+                            error_type="router_llm_call_failed",
+                            error_message=str(exc),
+                            session_id=session_id,
+                            metadata={
+                                "agent": "router",
+                                "scenario_id": scenario_id,
+                                "current_stage": current_stage,
+                                "user_input": text[:100] if text else None
+                            }
+                        )
+                except Exception as e:
+                    log("router", "error_log_save_failed", error=str(e))
+
             return TopicClassification(
                 is_off_topic=True,
                 confidence=0.6,
@@ -506,6 +536,25 @@ class RouterAgent:
                 start_time=start_time,
                 llm_model="gpt-4o-mini",  # Router가 사용하는 LLM 모델
             )
+
+            # 📊 Performance Metric 저장: Router Agent 실행 시간
+            if self._session_manager:
+                try:
+                    execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+                    session_id = state.get("session_id")
+                    if session_id:
+                        self._session_manager.save_performance_metric(
+                            metric_name="router_agent_execution_time",
+                            metric_value=execution_time_ms,
+                            session_id=session_id,
+                            metadata={
+                                "classification": result.get("classification"),
+                                "next_node": result.get("next_node")
+                            }
+                        )
+                except Exception as e:
+                    log("router", "performance_metric_save_failed", error=str(e))
+
         except Exception as e:
             # 로깅 실패는 무시 (메인 로직에 영향 없도록)
             log("router", "training_log_failed", error=str(e))

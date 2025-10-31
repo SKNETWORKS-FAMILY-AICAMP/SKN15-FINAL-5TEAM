@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { isAuthenticated, getUserData, clearTokens } from '@/utils/authUtils';
 
 interface AppContextType {
   isSidebarOpen: boolean;
@@ -50,6 +51,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [userEmail, setUserEmail] = useState('');
   const [currentBubbles, setCurrentBubbles] = useState(847);
 
+  // 초기 로딩 시 토큰 기반 로그인 상태 확인
+  useEffect(() => {
+    if (isAuthenticated()) {
+      const userData = getUserData();
+      if (userData) {
+        setIsLoggedIn(true);
+        setUserEmail(userData.email || `${userData.username}@kimechat.com`);
+      }
+    }
+  }, []);
+
   const openSidebar = () => setIsSidebarOpen(true);
   const closeSidebar = () => setIsSidebarOpen(false);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -68,6 +80,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setUserEmail(email);
   };
   const logout = () => {
+    clearTokens(); // JWT 토큰 삭제
     setIsLoggedIn(false);
     setUserEmail('');
   };

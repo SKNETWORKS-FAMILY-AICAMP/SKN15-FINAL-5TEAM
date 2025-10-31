@@ -15,6 +15,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from typing import Dict
+from fastapi import Depends
 from dotenv import load_dotenv
 
 # ------------------------------------------------------------
@@ -40,7 +42,29 @@ from src.core.scenes_repo import ScenesRepo
 # ------------------------------------------------------------
 # ✅ Database 모듈 로드 (PostgreSQL + Redis)
 # ------------------------------------------------------------
-from src.database.session_manager import create_hybrid_session_manager_from_env
+from src.database.session_manager import HybridSessionManager
+from src.database.db_manager import DatabaseManager
+from src.database.cache_manager import create_cache_manager_from_env
+
+# ------------------------------------------------------------
+# ✅ Conversation Summarizer 로드 (대화 요약 자동화)
+# ------------------------------------------------------------
+from src.utils.conversation_summarizer import update_conversation_summary
+
+# ------------------------------------------------------------
+# ✅ Authentication 모듈 로드
+# ------------------------------------------------------------
+from src.auth.dependencies import require_auth, optional_auth
+
+# ------------------------------------------------------------
+# ✅ Rate Limiting 모듈 로드
+# ------------------------------------------------------------
+from src.middleware import setup_rate_limiting, limiter, AUTH_RATE_LIMIT
+
+# ------------------------------------------------------------
+# ✅ Monitoring API 로드
+# ------------------------------------------------------------
+from src.api.monitoring_api import router as monitoring_router
 
 # ------------------------------------------------------------
 # ✅ FastAPI 인스턴스 생성
@@ -50,6 +74,9 @@ app = FastAPI(
     description="Backend API for KIME Chat Agent using LangGraph",
     version="1.0.0",
 )
+
+# Rate Limiting 설정
+setup_rate_limiting(app)
 
 # ------------------------------------------------------------
 # ✅ CORS 설정 (프론트엔드에서 API 호출 가능하게 허용)
@@ -65,6 +92,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ------------------------------------------------------------
+# ✅ API 라우터 등록
+# ------------------------------------------------------------
+app.include_router(monitoring_router)
 
 
 # ------------------------------------------------------------
@@ -111,6 +143,7 @@ class SessionManagerAdapter:
         """
         turn_count = state.get("turn_count", 0)
         scenario_id = state.get("scenario_id", "unknown")
+        user_id = state.get("user_id")  # 인증된 사용자 ID (없으면 None)
         user_name = state.get("user_name")
         current_stage = state.get("current_stage")
         final_ending = state.get("final_ending")
@@ -120,12 +153,15 @@ class SessionManagerAdapter:
         session_meta = {
             "session_id": session_id,
             "scenario_id": scenario_id,
+            "user_id": user_id,  # ✅ 추가: 사용자 ID
             "user_name": user_name,
             "current_stage": current_stage,
             "turn_count": turn_count,
             "stage_turn": state.get("stage_turn", 0),
             "final_ending": final_ending,
-            "is_active": is_active
+            "is_active": is_active,
+            "conversation_summary": state.get("conversation_summary", ""),  # 🧠 장기기억
+            "summary_turn_count": state.get("summary_turn_count", 0)  # 🧠 장기기억
         }
         self._hybrid.db.save_session(session_meta)
 
@@ -136,8 +172,64 @@ class SessionManagerAdapter:
         cache_key = self._make_cache_key(session_id)
         self._hybrid.cache.set_session(cache_key, state)
 
-        # 4. 선택적: 대화, 친밀도 등 정규화 데이터 저장
-        # (필요시 나중에 추가)
+        # 4. 대화 및 사용자 입력 저장 (정규화 데이터)
+        # 4-1. 사용자 입력 저장
+        user_input = state.get("user_input")
+        if user_input and not user_input.startswith("__AUTO_CONTINUE__"):
+            try:
+                self._hybrid.db.save_user_input(session_id, turn_count, user_input)
+                print(f"💬 User input saved: turn={turn_count}")
+            except Exception as e:
+                print(f"⚠️ Failed to save user input: {e}")
+
+        # 4-2. 대화 저장
+        # state에서 messages 또는 output의 dialogues 추출
+        dialogues_to_save = []
+
+        # messages 필드에서 대화 추출 (일반적인 경우)
+        messages = state.get("messages", [])
+        if messages and isinstance(messages, list):
+            # 마지막 메시지가 현재 턴의 대화
+            last_message = messages[-1] if messages else None
+            if last_message and isinstance(last_message, dict):
+                dialogues_data = last_message.get("dialogues", [])
+                if dialogues_data:
+                    dialogues_to_save = dialogues_data
+
+        # output 필드에서 대화 추출 (fallback)
+        if not dialogues_to_save:
+            output = state.get("output", {})
+            if isinstance(output, dict) and "dialogues" in output:
+                dialogues_to_save = output.get("dialogues", [])
+
+        # 대화가 있으면 저장
+        if dialogues_to_save:
+            try:
+                # Dialogue 객체를 dict로 변환
+                dialogues_dict = []
+                for dialogue in dialogues_to_save:
+                    if hasattr(dialogue, '__dict__'):
+                        # Pydantic 모델이나 클래스 객체
+                        d = dialogue.__dict__
+                    elif isinstance(dialogue, dict):
+                        d = dialogue
+                    else:
+                        continue
+
+                    dialogues_dict.append({
+                        "speaker": d.get("speaker", "unknown"),
+                        "content": d.get("content") or d.get("text", ""),
+                        "emotion": d.get("emotion"),
+                        "emotion_intensity": d.get("emotion_intensity")
+                    })
+
+                if dialogues_dict:
+                    self._hybrid.db.save_dialogues(session_id, turn_count, dialogues_dict)
+                    print(f"💬 Dialogues saved: {len(dialogues_dict)} dialogues, turn={turn_count}")
+            except Exception as e:
+                print(f"⚠️ Failed to save dialogues: {e}")
+                import traceback
+                traceback.print_exc()
 
     def get(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -175,10 +267,72 @@ class SessionManagerAdapter:
         snapshot = self._hybrid.load_latest_snapshot(session_id)
         return snapshot is not None
 
+    def save_log(self, log_level: str, log_message: str, session_id: str = None, metadata: Dict[str, Any] = None) -> None:
+        """
+        일반 로그 저장 (logdb.logs 테이블)
+        """
+        # HybridSessionManager 시그니처에 맞게 파라미터 매핑
+        success = self._hybrid.save_log(
+            log_level=log_level,
+            message=log_message,  # log_message -> message
+            session_id=session_id,
+            stage_name=None,
+            agent_name=None,
+            context_data=metadata,  # metadata -> context_data
+            duration_ms=None
+        )
+        if not success:
+            raise Exception(f"Failed to save log to database")
+
+    def save_error_log(self, error_type: str, error_message: str, session_id: str = None, metadata: Dict[str, Any] = None) -> None:
+        """
+        에러 로그 저장 (logdb.error_logs 테이블)
+        """
+        # HybridSessionManager 시그니처에 맞게 파라미터 매핑
+        success = self._hybrid.save_error_log(
+            error_type=error_type,
+            error_message=error_message,
+            stack_trace=None,
+            session_id=session_id,
+            context_data=metadata  # metadata -> context_data
+        )
+        if not success:
+            raise Exception(f"Failed to save error log to database")
+
+    def save_performance_metric(self, metric_name: str, metric_value: float, session_id: str = None, metadata: Dict[str, Any] = None) -> None:
+        """
+        성능 메트릭 저장 (logdb.performance_metrics 테이블)
+        """
+        # HybridSessionManager 시그니처에 맞게 파라미터 매핑
+        success = self._hybrid.save_performance_metric(
+            metric_name=metric_name,
+            metric_value=metric_value,
+            metric_unit="ms",
+            tags=metadata  # metadata -> tags
+        )
+        if not success:
+            raise Exception(f"Failed to save performance metric to database")
+
 
 # HybridSessionManager 초기화
 try:
-    _hybrid_manager = create_hybrid_session_manager_from_env()
+    # DatabaseManager를 명시적으로 포트 5433으로 생성
+    db_manager = DatabaseManager(
+        host='127.0.0.1',
+        port=5433,  # 명시적으로 5433 지정
+        dbname='kimedb',
+        user='kime',
+        password='dev123',
+        min_conn=2,
+        max_conn=10
+    )
+    print(f"✅ DatabaseManager 생성: 127.0.0.1:5433")
+
+    # CacheManager 생성
+    cache_manager = create_cache_manager_from_env()
+
+    # HybridSessionManager 생성
+    _hybrid_manager = HybridSessionManager(db_manager, cache_manager)
     SESSION_MANAGER = SessionManagerAdapter(_hybrid_manager)
     print("✅ Database-backed SessionManager initialized")
 except Exception as e:
@@ -303,6 +457,53 @@ class SessionInfoResponse(BaseModel):
 
 
 # ============================================================
+# 🔐 인증 관련 데이터 모델
+# ============================================================
+
+
+class LoginRequest(BaseModel):
+    """로그인 요청"""
+
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    """회원가입 요청"""
+
+    username: str
+    password: str
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+
+
+class AuthResponse(BaseModel):
+    """인증 응답"""
+
+    success: bool
+    message: str
+    user_id: Optional[str] = None
+    username: Optional[str] = None
+    display_name: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+
+
+class TokenRefreshRequest(BaseModel):
+    """토큰 갱신 요청"""
+
+    refresh_token: str
+
+
+class TokenRefreshResponse(BaseModel):
+    """토큰 갱신 응답"""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
+# ============================================================
 # 🧠 API 엔드포인트 구현부
 # ============================================================
 
@@ -313,14 +514,527 @@ async def root():
     return {"status": "running", "service": "KIME Chat API", "version": "1.0.0"}
 
 
+# ============================================================
+# 🔐 인증 API 엔드포인트
+# ============================================================
+
+
+@app.post("/api/auth/register", response_model=AuthResponse)
+@limiter.limit(AUTH_RATE_LIMIT)
+async def register(req: RegisterRequest, request: Request):
+    """
+    회원가입 엔드포인트
+
+    Args:
+        req: RegisterRequest (username, password, email, display_name)
+
+    Returns:
+        AuthResponse (success, message, user_id, username, display_name)
+    """
+    import bcrypt
+
+    try:
+        # 사용자명 중복 체크
+        existing_user = _hybrid_manager.db.get_user_by_username(req.username)
+        if existing_user:
+            return AuthResponse(
+                success=False,
+                message="이미 존재하는 사용자명입니다."
+            )
+
+        # 이메일 중복 체크 (이메일이 제공된 경우)
+        if req.email:
+            existing_email = _hybrid_manager.db.get_user_by_email(req.email)
+            if existing_email:
+                return AuthResponse(
+                    success=False,
+                    message="이미 존재하는 이메일입니다."
+                )
+
+        # 비밀번호 해시 생성
+        password_hash = bcrypt.hashpw(
+            req.password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
+
+        # 사용자 생성
+        user_id = _hybrid_manager.db.create_user(
+            username=req.username,
+            password_hash=password_hash,
+            email=req.email,
+            display_name=req.display_name or req.username
+        )
+
+        if user_id:
+            # JWT 토큰 생성
+            from src.auth.jwt_utils import create_access_token, create_refresh_token
+
+            token_data = {
+                "user_id": user_id,
+                "username": req.username,
+                "display_name": req.display_name or req.username
+            }
+            access_token = create_access_token(data=token_data)
+            refresh_token = create_refresh_token(data={"user_id": user_id})
+
+            return AuthResponse(
+                success=True,
+                message="회원가입이 완료되었습니다.",
+                user_id=user_id,
+                username=req.username,
+                display_name=req.display_name or req.username,
+                access_token=access_token,
+                refresh_token=refresh_token
+            )
+        else:
+            return AuthResponse(
+                success=False,
+                message="회원가입 중 오류가 발생했습니다."
+            )
+
+    except Exception as e:
+        print(f"❌ Error in register endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return AuthResponse(
+            success=False,
+            message=f"서버 오류: {str(e)}"
+        )
+
+
+@app.post("/api/auth/login", response_model=AuthResponse)
+@limiter.limit(AUTH_RATE_LIMIT)
+async def login(req: LoginRequest, request: Request):
+    """
+    로그인 엔드포인트
+
+    Args:
+        req: LoginRequest (username, password)
+
+    Returns:
+        AuthResponse (success, message, user_id, username, display_name)
+    """
+    try:
+        # 사용자 인증
+        user = _hybrid_manager.db.verify_user_password(
+            username=req.username,
+            password=req.password
+        )
+
+        if user:
+            # JWT 토큰 생성
+            from src.auth.jwt_utils import create_access_token, create_refresh_token
+
+            user_id = str(user["user_id"])
+            token_data = {
+                "user_id": user_id,
+                "username": user["username"],
+                "display_name": user.get("display_name") or user["username"]
+            }
+            access_token = create_access_token(data=token_data)
+            refresh_token = create_refresh_token(data={"user_id": user_id})
+
+            return AuthResponse(
+                success=True,
+                message="로그인 성공",
+                user_id=user_id,
+                username=user["username"],
+                display_name=user.get("display_name") or user["username"],
+                access_token=access_token,
+                refresh_token=refresh_token
+            )
+        else:
+            return AuthResponse(
+                success=False,
+                message="사용자명 또는 비밀번호가 올바르지 않습니다."
+            )
+
+    except Exception as e:
+        print(f"❌ Error in login endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return AuthResponse(
+            success=False,
+            message=f"서버 오류: {str(e)}"
+        )
+
+
+@app.post("/api/auth/refresh", response_model=TokenRefreshResponse)
+async def refresh_token(request: TokenRefreshRequest):
+    """
+    토큰 갱신 엔드포인트
+
+    Args:
+        request: TokenRefreshRequest (refresh_token)
+
+    Returns:
+        TokenRefreshResponse (new access_token)
+    """
+    from src.auth.jwt_utils import refresh_access_token
+
+    try:
+        new_access_token = refresh_access_token(request.refresh_token)
+        return TokenRefreshResponse(access_token=new_access_token)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Error in refresh endpoint: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰 갱신에 실패했습니다",
+        )
+
+
+@app.get("/api/auth/me")
+async def get_me(user: Dict = Depends(require_auth)):
+    """
+    현재 사용자 정보 조회 (보호된 라우트 예제)
+
+    Args:
+        user: 인증된 사용자 정보 (JWT 토큰에서 추출)
+
+    Returns:
+        사용자 정보
+    """
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "display_name": user.get("display_name")
+    }
+
+
+# ============================================================
+# OAuth 2.0 소셜 로그인 엔드포인트 (Google, Kakao)
+# ============================================================
+
+@app.get("/api/auth/google")
+async def google_login():
+    """
+    Google OAuth 로그인 URL 생성
+
+    Returns:
+        {"auth_url": str} - Google OAuth 로그인 페이지 URL
+    """
+    from src.auth.oauth_google import get_google_oauth_url
+
+    try:
+        auth_url, state = get_google_oauth_url()
+        if not auth_url:
+            raise HTTPException(
+                status_code=500,
+                detail="Google OAuth URL 생성 실패"
+            )
+        return {"auth_url": auth_url, "state": state}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+@app.get("/api/auth/google/callback")
+async def google_callback(code: str, state: Optional[str] = None):
+    """
+    Google OAuth 콜백 처리
+
+    Args:
+        code: Authorization code from Google
+        state: State parameter for CSRF protection
+
+    Returns:
+        AuthResponse with JWT tokens
+    """
+    from src.auth.oauth_google import verify_google_token, create_or_get_google_user
+    from src.auth.jwt_utils import create_access_token, create_refresh_token
+
+    try:
+        # Google 토큰 검증 및 사용자 정보 가져오기
+        google_user_info = verify_google_token(code)
+        if not google_user_info:
+            raise HTTPException(
+                status_code=401,
+                detail="Google 인증 실패"
+            )
+
+        # DB에 사용자 생성 또는 가져오기
+        user = create_or_get_google_user(_hybrid_manager.db, google_user_info)
+        if not user:
+            raise HTTPException(
+                status_code=500,
+                detail="사용자 생성/조회 실패"
+            )
+
+        # JWT 토큰 생성
+        user_id = str(user['user_id'])
+        token_data = {
+            "user_id": user_id,
+            "username": user["username"],
+            "display_name": user.get("display_name", user["username"]),
+        }
+        access_token = create_access_token(data=token_data)
+        refresh_token = create_refresh_token(data={"user_id": user_id})
+
+        return AuthResponse(
+            success=True,
+            message="Google 로그인 성공",
+            user_id=user_id,
+            username=user["username"],
+            display_name=user.get("display_name"),
+            email=user.get("email"),
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer"
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Google callback error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Google 로그인 처리 중 오류가 발생했습니다"
+        )
+
+
+@app.get("/api/auth/kakao")
+async def kakao_login():
+    """
+    Kakao OAuth 로그인 URL 생성
+
+    Returns:
+        {"auth_url": str} - Kakao OAuth 로그인 페이지 URL
+    """
+    from src.auth.oauth_kakao import get_kakao_oauth_url
+
+    try:
+        auth_url = get_kakao_oauth_url()
+        if not auth_url:
+            raise HTTPException(
+                status_code=500,
+                detail="Kakao OAuth URL 생성 실패"
+            )
+        return {"auth_url": auth_url}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+@app.get("/api/auth/kakao/callback")
+async def kakao_callback(code: str):
+    """
+    Kakao OAuth 콜백 처리
+
+    Args:
+        code: Authorization code from Kakao
+
+    Returns:
+        AuthResponse with JWT tokens
+    """
+    from src.auth.oauth_kakao import verify_kakao_token, create_or_get_kakao_user
+    from src.auth.jwt_utils import create_access_token, create_refresh_token
+
+    try:
+        # Kakao 토큰 검증 및 사용자 정보 가져오기
+        kakao_user_info = verify_kakao_token(code)
+        if not kakao_user_info:
+            raise HTTPException(
+                status_code=401,
+                detail="Kakao 인증 실패"
+            )
+
+        # DB에 사용자 생성 또는 가져오기
+        user = create_or_get_kakao_user(_hybrid_manager.db, kakao_user_info)
+        if not user:
+            raise HTTPException(
+                status_code=500,
+                detail="사용자 생성/조회 실패"
+            )
+
+        # JWT 토큰 생성
+        user_id = str(user['user_id'])
+        token_data = {
+            "user_id": user_id,
+            "username": user["username"],
+            "display_name": user.get("display_name", user["username"]),
+        }
+        access_token = create_access_token(data=token_data)
+        refresh_token = create_refresh_token(data={"user_id": user_id})
+
+        return AuthResponse(
+            success=True,
+            message="Kakao 로그인 성공",
+            user_id=user_id,
+            username=user["username"],
+            display_name=user.get("display_name"),
+            email=user.get("email"),
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer"
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Kakao callback error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Kakao 로그인 처리 중 오류가 발생했습니다"
+        )
+
+
+# ============================================================
+# 비밀번호 재설정 엔드포인트
+# ============================================================
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
+@app.post("/api/auth/password-reset/request")
+async def request_password_reset(req: PasswordResetRequest):
+    """
+    비밀번호 재설정 요청 - 이메일로 재설정 링크 전송
+
+    Args:
+        req: PasswordResetRequest (email)
+
+    Returns:
+        성공 메시지
+    """
+    import secrets
+    from datetime import datetime, timedelta
+    from src.utils.email_sender import send_email, generate_password_reset_email
+
+    try:
+        # 이메일로 사용자 찾기
+        user = _hybrid_manager.db.get_user_by_username(req.email)
+        if not user:
+            # 보안상 사용자가 없어도 성공 응답 (이메일 존재 여부 노출 방지)
+            return {"success": True, "message": "비밀번호 재설정 이메일이 전송되었습니다."}
+
+        user_id = str(user['user_id'])
+
+        # 재설정 토큰 생성 (보안 랜덤 문자열)
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(hours=1)  # 1시간 유효
+
+        # DB에 토큰 저장
+        token_id = _hybrid_manager.db.create_password_reset_token(
+            user_id, reset_token, expires_at.isoformat()
+        )
+
+        if not token_id:
+            raise HTTPException(status_code=500, detail="토큰 생성 실패")
+
+        # 재설정 링크 생성
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        reset_link = f"{frontend_url}/reset-password?token={reset_token}"
+
+        # 이메일 전송
+        html_content, text_content = generate_password_reset_email(
+            reset_link,
+            user.get("display_name", user["username"])
+        )
+
+        email_sent = await send_email(
+            to_email=user.get("email", req.email),
+            subject="[KIME Chat] 비밀번호 재설정 요청",
+            html_content=html_content,
+            text_content=text_content
+        )
+
+        if not email_sent:
+            # 이메일 전송 실패해도 클라이언트에는 성공 응답 (보안)
+            logger.warning(f"Failed to send password reset email to {req.email}")
+
+        return {
+            "success": True,
+            "message": "비밀번호 재설정 이메일이 전송되었습니다. 이메일을 확인해주세요."
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Password reset request error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="비밀번호 재설정 요청 처리 중 오류가 발생했습니다"
+        )
+
+
+@app.post("/api/auth/password-reset/confirm")
+async def confirm_password_reset(req: PasswordResetConfirm):
+    """
+    비밀번호 재설정 확인 - 새 비밀번호 설정
+
+    Args:
+        req: PasswordResetConfirm (token, new_password)
+
+    Returns:
+        성공 메시지
+    """
+    import bcrypt
+
+    try:
+        # 토큰 검증
+        token_data = _hybrid_manager.db.get_password_reset_token(req.token)
+        if not token_data:
+            raise HTTPException(
+                status_code=400,
+                detail="유효하지 않거나 만료된 토큰입니다"
+            )
+
+        user_id = token_data["user_id"]
+
+        # 새 비밀번호 해싱
+        new_password_hash = bcrypt.hashpw(
+            req.new_password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
+
+        # 비밀번호 업데이트
+        if not _hybrid_manager.db.update_user_password(user_id, new_password_hash):
+            raise HTTPException(status_code=500, detail="비밀번호 업데이트 실패")
+
+        # 토큰 사용 처리
+        _hybrid_manager.db.mark_password_reset_token_as_used(req.token)
+
+        return {
+            "success": True,
+            "message": "비밀번호가 성공적으로 변경되었습니다"
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"❌ Password reset confirm error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="비밀번호 재설정 처리 중 오류가 발생했습니다"
+        )
+
+
 @app.post("/api/chat")
-async def chat(request: Request):
+async def chat(
+    request: Request,
+    current_user: Optional[Dict] = Depends(optional_auth)  # ✅ 선택적 인증 추가
+):
     """
     메인 채팅 엔드포인트
     1. 세션 생성 or 복원
     2. 시나리오 로드
     3. LangGraph 실행
     4. 결과를 반환
+
+    Args:
+        request: HTTP 요청 객체
+        current_user: 인증된 사용자 정보 (선택적, JWT 토큰 있으면 추출)
     """
     try:
         request_start = time.perf_counter()
@@ -331,13 +1045,62 @@ async def chat(request: Request):
         scenario_id = data.get("scenario_id")
         user_name = data.get("user_name") or "여행자"
 
+        # ✅ 인증된 사용자 정보 추출
+        user_id = current_user.get('user_id') if current_user else None
+        if current_user:
+            print(f"🔐 Authenticated user: {current_user.get('username')} (ID: {user_id})")
+            # 📝 General Log: 인증 사용자
+            print(f"🐛 DEBUG: About to call save_log for authenticated user")
+            try:
+                SESSION_MANAGER.save_log(
+                    log_level="info",
+                    log_message=f"Authenticated user: {current_user.get('username')}",
+                    session_id=None,  # 아직 session_id 없음
+                    metadata={"user_id": user_id, "username": current_user.get('username')}
+                )
+                print(f"✅ DEBUG: save_log succeeded!")
+            except Exception as e:
+                print(f"⚠️ Failed to save user auth log: {e}")
+        else:
+            print(f"👤 Anonymous user: {user_name}")
+            # 📝 General Log: 익명 사용자
+            try:
+                SESSION_MANAGER.save_log(
+                    log_level="info",
+                    log_message=f"Anonymous user: {user_name}",
+                    session_id=None,
+                    metadata={"user_name": user_name}
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to save anonymous user log: {e}")
+
         print(f"📥 Request received: session_id={session_id}, input='{user_input}'")
 
         if not session_id:
             session_id = str(uuid.uuid4())
             print(f"🆕 Creating new session: {session_id}")
+            # 📝 General Log: 새 세션 생성
+            try:
+                SESSION_MANAGER.save_log(
+                    log_level="info",
+                    log_message="New session created",
+                    session_id=session_id,
+                    metadata={"user_id": user_id, "scenario_id": scenario_id}
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to save session creation log: {e}")
         else:
             print(f"🔁 Reusing session: {session_id}")
+            # 📝 General Log: 세션 재사용
+            try:
+                SESSION_MANAGER.save_log(
+                    log_level="info",
+                    log_message="Session reused",
+                    session_id=session_id,
+                    metadata={"user_id": user_id}
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to save session reuse log: {e}")
 
         state = SESSION_MANAGER.load_or_create(session_id)
         is_new_session = "messages" not in state
@@ -362,6 +1125,59 @@ async def chat(request: Request):
             state["scenario"] = scenario_data
             state["scenario_id"] = resolved_id
             state["user_name"] = user_name
+            state["user_id"] = user_id  # ✅ 추가: 사용자 ID 저장
+
+            # 🧠 사용자 장기 기억 로드 (인증된 사용자만)
+            if user_id:
+                try:
+                    memory_context = db_manager.get_user_memory_context(user_id)
+                    if memory_context:
+                        state["user_memory_context"] = memory_context
+
+                        # 로드된 기억 개수 출력
+                        rel_count = len(memory_context.get("relationships", []) or [])
+                        pref_count = len(memory_context.get("preferences", []) or [])
+                        story_count = len(memory_context.get("story_progress", []) or [])
+                        fact_count = len(memory_context.get("facts", []) or [])
+
+                        print(f"🧠 User memories loaded for {current_user.get('username')}:")
+                        print(f"   - Relationships: {rel_count}")
+                        print(f"   - Preferences: {pref_count}")
+                        print(f"   - Story progress: {story_count}")
+                        print(f"   - Facts: {fact_count}")
+
+                        # 📝 General Log: 메모리 로딩 성공
+                        try:
+                            SESSION_MANAGER.save_log(
+                                log_level="info",
+                                log_message=f"User memories loaded: {rel_count + pref_count + story_count + fact_count} total",
+                                session_id=session_id,
+                                metadata={
+                                    "user_id": user_id,
+                                    "username": current_user.get('username'),
+                                    "relationships": rel_count,
+                                    "preferences": pref_count,
+                                    "story_progress": story_count,
+                                    "facts": fact_count
+                                }
+                            )
+                        except Exception as log_err:
+                            print(f"⚠️ Failed to save memory load log: {log_err}")
+                    else:
+                        print(f"🧠 No memories found for user {user_id}")
+
+                        # 📝 General Log: 메모리 없음
+                        try:
+                            SESSION_MANAGER.save_log(
+                                log_level="info",
+                                log_message="No user memories found",
+                                session_id=session_id,
+                                metadata={"user_id": user_id}
+                            )
+                        except Exception as log_err:
+                            print(f"⚠️ Failed to save no-memory log: {log_err}")
+                except Exception as e:
+                    print(f"⚠️ Failed to load user memories: {e}")
 
             metadata = scenario_data.get("metadata", {}) if isinstance(scenario_data, dict) else {}
             initial_stage = metadata.get("default_stage")
@@ -410,14 +1226,220 @@ async def chat(request: Request):
         print(f"🤖 Processing: session={session_id}, input='{user_input}'")
         workflow_instance = get_workflow()
         workflow_start = time.perf_counter()
-        result_state = workflow_instance.invoke(state)
+
+        try:
+            result_state = workflow_instance.invoke(state)
+        except Exception as e:
+            # 🚨 Workflow 실행 실패 에러 로깅
+            try:
+                SESSION_MANAGER.save_error_log(
+                    error_type="workflow_execution_failed",
+                    error_message=str(e),
+                    session_id=session_id,
+                    metadata={
+                        "stage": state.get("current_stage"),
+                        "turn_count": state.get("turn_count"),
+                        "user_input": user_input[:100] if user_input else None
+                    }
+                )
+            except:
+                pass  # 에러 로깅 실패해도 원래 에러는 발생시켜야 함
+            raise
+
         workflow_end = time.perf_counter()
         workflow_duration_ms = (workflow_end - workflow_start) * 1000.0
+
+        # 📊 Performance Metric 저장: Workflow 실행 시간
+        try:
+            SESSION_MANAGER.save_performance_metric(
+                metric_name="workflow_execution_time",
+                metric_value=workflow_duration_ms,
+                session_id=session_id,
+                metadata={
+                    "stage": result_state.get("current_stage"),
+                    "turn_count": result_state.get("turn_count")
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to save performance metric: {e}")
+
+        # 🧠 장기기억: 대화 요약 생성 (10턴마다)
+        from src.utils.conversation_summarizer import update_conversation_summary
+        message_history = result_state.get("message_history", [])
+        if message_history:
+            summary_result = await update_conversation_summary(result_state, message_history)
+            if summary_result:
+                result_state["conversation_summary"] = summary_result["summary"]
+                result_state["summary_turn_count"] = summary_result["summary_turn_count"]
+
+                # 🧠 자동 Memory 추출 (인증된 사용자만)
+                if user_id and summary_result.get("summary"):
+                    try:
+                        from src.utils.memory_extractor import extract_and_save_memories
+
+                        saved_count = await extract_and_save_memories(
+                            user_id=user_id,
+                            session_id=session_id,
+                            conversation_summary=summary_result["summary"],
+                            db_manager=db_manager
+                        )
+
+                        if saved_count > 0:
+                            print(f"🧠 Extracted and saved {saved_count} memories from conversation summary")
+
+                            # 📝 General Log: 메모리 추출 성공
+                            try:
+                                SESSION_MANAGER.save_log(
+                                    log_level="info",
+                                    log_message=f"Extracted {saved_count} memories from conversation",
+                                    session_id=session_id,
+                                    metadata={
+                                        "user_id": user_id,
+                                        "memory_count": saved_count,
+                                        "turn_count": result_state.get("summary_turn_count")
+                                    }
+                                )
+                            except Exception as log_err:
+                                print(f"⚠️ Failed to save memory extraction log: {log_err}")
+                        else:
+                            print(f"🧠 No new memories extracted from summary")
+                    except Exception as e:
+                        print(f"⚠️ Failed to extract memories: {e}")
+                        # 🚨 Memory 추출 실패 에러 로깅
+                        try:
+                            SESSION_MANAGER.save_error_log(
+                                error_type="memory_extraction_failed",
+                                error_message=str(e),
+                                session_id=session_id,
+                                metadata={"user_id": user_id}
+                            )
+                        except:
+                            pass
+
         print(f"⏱️ Workflow execution time: {workflow_duration_ms:.2f} ms")
 
         turn_count = result_state.get("turn_count", 0) + 1
         result_state["turn_count"] = turn_count
+
+        # ✅ user_id 보존: 워크플로우가 반환한 state에 user_id가 없으면 복원
+        if "user_id" not in result_state or result_state.get("user_id") is None:
+            if user_id:
+                result_state["user_id"] = user_id
+                print(f"🔧 Restored user_id to result_state: {user_id}")
+
+        # 🎮 게임 이벤트 자동 추적 (1): 친밀도 변경 감지
+        try:
+            old_affinity = state.get("affinity_scores", {})
+            new_affinity = result_state.get("affinity_scores", {})
+
+            for character, new_score in new_affinity.items():
+                old_score = old_affinity.get(character, 0)
+                if old_score != new_score:
+                    change_amount = new_score - old_score
+                    db_manager.save_affinity(
+                        session_id=session_id,
+                        turn_number=turn_count,
+                        character_name=character,
+                        affinity_score=new_score,
+                        change_amount=change_amount
+                    )
+                    print(f"💞 Affinity tracked: {character} ({old_score} → {new_score}, {change_amount:+d})")
+
+                    # 📝 General Log: 친밀도 변경
+                    try:
+                        SESSION_MANAGER.save_log(
+                            log_level="info",
+                            log_message=f"Affinity changed: {character} {old_score}→{new_score}",
+                            session_id=session_id,
+                            metadata={
+                                "character": character,
+                                "old_score": old_score,
+                                "new_score": new_score,
+                                "change": change_amount,
+                                "turn_count": turn_count
+                            }
+                        )
+                    except Exception as log_err:
+                        print(f"⚠️ Failed to save affinity log: {log_err}")
+        except Exception as e:
+            print(f"⚠️ Failed to track affinity changes: {e}")
+            # 🚨 Affinity 추적 실패 에러 로깅
+            try:
+                SESSION_MANAGER.save_error_log(
+                    error_type="affinity_tracking_failed",
+                    error_message=str(e),
+                    session_id=session_id,
+                    metadata={"affinity_scores": new_affinity}
+                )
+            except:
+                pass
+
+        # 🎮 게임 이벤트 자동 추적 (2): 스테이지 변경 감지
+        try:
+            old_stage = state.get("current_stage")
+            new_stage = result_state.get("current_stage")
+
+            if old_stage != new_stage and new_stage:
+                # 이전 스테이지 종료
+                if old_stage:
+                    db_manager.update_stage_exit(session_id, old_stage)
+                    print(f"🚪 Stage exited: {old_stage}")
+
+                # 새 스테이지 진입
+                stage_history = result_state.get("stage_history", [])
+                stage_order = len(stage_history) + 1
+                db_manager.save_stage_entry(session_id, new_stage, stage_order)
+                print(f"🚪 Stage entered: {new_stage} (order: {stage_order})")
+
+                # 📝 General Log: 스테이지 전환
+                try:
+                    SESSION_MANAGER.save_log(
+                        log_level="info",
+                        log_message=f"Stage changed: {old_stage}→{new_stage}",
+                        session_id=session_id,
+                        metadata={
+                            "old_stage": old_stage,
+                            "new_stage": new_stage,
+                            "stage_order": stage_order,
+                            "turn_count": turn_count
+                        }
+                    )
+                except Exception as log_err:
+                    print(f"⚠️ Failed to save stage transition log: {log_err}")
+        except Exception as e:
+            print(f"⚠️ Failed to track stage progression: {e}")
+            # 🚨 Stage 추적 실패 에러 로깅
+            try:
+                SESSION_MANAGER.save_error_log(
+                    error_type="stage_tracking_failed",
+                    error_message=str(e),
+                    session_id=session_id,
+                    metadata={
+                        "old_stage": old_stage,
+                        "new_stage": new_stage
+                    }
+                )
+            except:
+                pass
+
+        # 📊 세션 저장 성능 측정
+        session_save_start = time.perf_counter()
         SESSION_MANAGER.save(session_id, result_state)
+        session_save_duration_ms = (time.perf_counter() - session_save_start) * 1000.0
+
+        # 📊 Performance Metric 저장: 세션 저장 시간
+        try:
+            SESSION_MANAGER.save_performance_metric(
+                metric_name="session_save_time",
+                metric_value=session_save_duration_ms,
+                session_id=session_id,
+                metadata={
+                    "stage": result_state.get("current_stage"),
+                    "turn_count": turn_count
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to save performance metric: {e}")
 
         print(
             f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}"
@@ -441,6 +1463,87 @@ async def chat(request: Request):
                     speaker = "unknown"
                     content = str(dialogue)
                 print(f"🧠 LLM Output[{idx}] ({speaker}): {content}")
+
+        # ========================================
+        # 🆕 1. 자동 대화 저장 (dialogues 테이블)
+        # ========================================
+        try:
+            if agent_responses and len(agent_responses) > 0:
+                turn_number = result_state.get("turn_count", 1)
+
+                # 대화 목록 생성
+                dialogues_to_save = []
+
+                # 사용자 입력
+                dialogues_to_save.append({
+                    "speaker": "user",
+                    "content": user_input
+                })
+
+                # 에이전트 응답들
+                for response in agent_responses:
+                    if isinstance(response, dict):
+                        dialogues_to_save.append({
+                            "speaker": response.get("speaker") or response.get("character") or "agent",
+                            "content": response.get("content") or response.get("text") or "",
+                            "emotion": response.get("emotion"),
+                            "emotion_intensity": response.get("emotion_intensity")
+                        })
+
+                # DB에 저장
+                db_manager.save_dialogues(
+                    session_id=session_id,
+                    turn_number=turn_number,
+                    dialogues=dialogues_to_save
+                )
+
+                print(f"💬 Auto-saved {len(dialogues_to_save)} dialogues for turn {turn_number}")
+
+        except Exception as e:
+            print(f"⚠️ Failed to save dialogues: {e}")
+            # 대화 저장 실패해도 응답은 계속 반환
+
+        # ========================================
+        # 🆕 2. 자동 대화 요약 (10턴마다)
+        # ========================================
+        try:
+            turn_count = result_state.get("turn_count", 0)
+            last_summary_turn = result_state.get("summary_turn_count", 0)
+
+            # 10턴 이상 진행되었고, 마지막 요약 이후 10턴 이상 지났으면 요약 생성
+            # (turn_count가 홀수로 증가하는 경우를 고려)
+            should_summarize = (
+                turn_count >= 10 and
+                (turn_count - last_summary_turn) >= 10
+            )
+
+            if should_summarize:
+                print(f"🧠 Auto-generating conversation summary at turn {turn_count}...")
+
+                # message_history가 있으면 요약 생성
+                if "message_history" in result_state:
+                    summary_result = await update_conversation_summary(
+                        state=result_state,
+                        message_history=result_state["message_history"]
+                    )
+
+                    if summary_result and summary_result.get("summary"):
+                        # 세션에 요약 저장
+                        db_manager.update_session(
+                            session_id=session_id,
+                            updates={
+                                "conversation_summary": summary_result["summary"],
+                                "summary_turn_count": summary_result["summary_turn_count"]
+                            }
+                        )
+
+                        print(f"✅ Summary auto-generated: {len(summary_result['summary'])} characters")
+                    else:
+                        print(f"⚠️ No summary generated")
+
+        except Exception as e:
+            print(f"⚠️ Failed to generate summary: {e}")
+            # 요약 생성 실패해도 응답은 계속 반환
 
         # ImageManager를 사용하여 각 대화별로 이미지 결정
         current_image = result_state.get("current_image")  # 이전 이미지
