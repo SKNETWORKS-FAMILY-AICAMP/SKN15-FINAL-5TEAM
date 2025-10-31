@@ -65,7 +65,7 @@ class SceneHandler:
         max_turns = int(
             constraints.get("max_turns")
             or stage.get("max_turns")
-            or min_turns
+            or 3
         )
 
         log("scene", f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")

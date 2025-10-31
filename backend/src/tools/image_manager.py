@@ -44,7 +44,7 @@ class ImageManager:
     }
     """
 
-    def __init__(self, config_path: str, debug: bool = True,
+    def __init__(self, config_path: str, debug: bool = False,
                  use_llm: bool = True, llm_metadata_path: Optional[str] = None):
         """
         Args:
@@ -71,6 +71,10 @@ class ImageManager:
             self._load_image_metadata()
             self._init_llm_client()
 
+    def _debug_print(self, message: str) -> None:
+        if self.debug:
+            print(message)
+
     def _load_config(self):
         """JSON 설정 파일 로드"""
         try:
@@ -82,14 +86,14 @@ class ImageManager:
                 # 우선순위 기준으로 정렬 (높은 순서대로)
                 self.mappings.sort(key=lambda m: m.get('priority', 0), reverse=True)
 
-                print(f"✅ ImageManager loaded: {len(self.mappings)} mappings from {self.config_path}")
-                if self.debug:
-                    print(f"   Default image: {self.default_image}")
-                    print(f"   Priority range: {self.mappings[0].get('priority', 0)} ~ {self.mappings[-1].get('priority', 0)}")
+                self._debug_print(f"✅ ImageManager loaded: {len(self.mappings)} mappings from {self.config_path}")
+                self._debug_print(f"   Default image: {self.default_image}")
+                if self.mappings:
+                    self._debug_print(f"   Priority range: {self.mappings[0].get('priority', 0)} ~ {self.mappings[-1].get('priority', 0)}")
         except FileNotFoundError:
-            print(f"⚠️ Image config not found: {self.config_path}, using defaults")
+            self._debug_print(f"⚠️ Image config not found: {self.config_path}, using defaults")
         except json.JSONDecodeError as e:
-            print(f"❌ Error parsing image config: {e}")
+            self._debug_print(f"❌ Error parsing image config: {e}")
 
     def get_current_image(self, state: Dict[str, Any]) -> str:
         """
@@ -127,54 +131,46 @@ class ImageManager:
 
         event_flags = state.get('event_flags', [])
 
-        if self.debug:
-            print(f"🔍 [ImageManager] Matching image:")
-            print(f"   Stage: {current_stage}")
-            print(f"   Turn: {turn_count}")
-            print(f"   Dialogue (total): {total_dialogue_count}")
-            print(f"   Dialogue (stage): {stage_dialogue_count}")
-            print(f"   Flags: {event_flags}")
-            print(f"   Checking {len(self.mappings)} mappings...")
+        self._debug_print("🔍 [ImageManager] Matching image:")
+        self._debug_print(f"   Stage: {current_stage}")
+        self._debug_print(f"   Turn: {turn_count}")
+        self._debug_print(f"   Dialogue (total): {total_dialogue_count}")
+        self._debug_print(f"   Dialogue (stage): {stage_dialogue_count}")
+        self._debug_print(f"   Flags: {event_flags}")
+        self._debug_print(f"   Checking {len(self.mappings)} mappings...")
 
         # 우선순위 순으로 매핑 검사
         for idx, mapping in enumerate(self.mappings):
             priority = mapping.get('priority', 0)
 
-            if self.debug:
-                print(f"\n   [{idx+1}/{len(self.mappings)}] Priority {priority}: {mapping.get('description', 'N/A')}")
+            self._debug_print(f"\n   [{idx+1}/{len(self.mappings)}] Priority {priority}: {mapping.get('description', 'N/A')}")
 
             # 모든 조건 체크
             if not self._matches_stage(mapping, current_stage):
-                if self.debug:
-                    print(f"      ❌ Stage mismatch (expected: {mapping.get('stage')})")
+                self._debug_print(f"      ❌ Stage mismatch (expected: {mapping.get('stage')})")
                 continue
 
             if not self._matches_turn(mapping, turn_count):
-                if self.debug:
-                    print(f"      ❌ Turn mismatch (expected: {mapping.get('turn')})")
+                self._debug_print(f"      ❌ Turn mismatch (expected: {mapping.get('turn')})")
                 continue
 
             if not self._matches_dialogue_count(mapping, dialogue_count):
-                if self.debug:
-                    print(f"      ❌ Dialogue count mismatch (expected: {mapping.get('dialogue_count')})")
+                self._debug_print(f"      ❌ Dialogue count mismatch (expected: {mapping.get('dialogue_count')})")
                 continue
 
             if not self._matches_flags(mapping, event_flags):
-                if self.debug:
-                    print(f"      ❌ Flags mismatch (expected: {mapping.get('flags')})")
+                self._debug_print(f"      ❌ Flags mismatch (expected: {mapping.get('flags')})")
                 continue
 
             # 모든 조건 만족!
             selected_image = mapping['image']
-            if self.debug:
-                print(f"      ✅ ALL CONDITIONS MET!")
-                print(f"      → Selected image: {selected_image}")
+            self._debug_print("      ✅ ALL CONDITIONS MET!")
+            self._debug_print(f"      → Selected image: {selected_image}")
 
             return selected_image
 
         # 모든 매핑이 실패하면 None 반환 (기존 이미지 유지)
-        if self.debug:
-            print(f"\n   ⚠️ No matching mapping found, keeping current image")
+        self._debug_print("\n   ⚠️ No matching mapping found, keeping current image")
 
         return None
 
@@ -252,21 +248,21 @@ class ImageManager:
             with open(self.llm_metadata_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 self.image_metadata = data.get('images', [])
-                print(f"✅ Image metadata loaded: {len(self.image_metadata)} images from {self.llm_metadata_path}")
+                self._debug_print(f"✅ Image metadata loaded: {len(self.image_metadata)} images from {self.llm_metadata_path}")
         except FileNotFoundError:
-            print(f"⚠️ Image metadata not found: {self.llm_metadata_path}")
+            self._debug_print(f"⚠️ Image metadata not found: {self.llm_metadata_path}")
             self.use_llm = False
         except json.JSONDecodeError as e:
-            print(f"❌ Error parsing image metadata: {e}")
+            self._debug_print(f"❌ Error parsing image metadata: {e}")
             self.use_llm = False
 
     def _init_llm_client(self):
         """LLM 클라이언트 초기화 (이미지 선택 전용 모델)"""
         try:
             self.llm_client = LLMClient()
-            print(f"✅ LLM client initialized for image selection: {self.llm_client.model}")
+            self._debug_print(f"✅ LLM client initialized for image selection: {self.llm_client.model}")
         except Exception as e:
-            print(f"⚠️ Failed to initialize LLM client: {e}")
+            self._debug_print(f"⚠️ Failed to initialize LLM client: {e}")
             self.use_llm = False
 
     def _get_recent_dialogues(self, state: Dict[str, Any], limit: int = 15,
@@ -318,8 +314,7 @@ class ImageManager:
 
             # 대화가 없으면 LLM 분석 스킵
             if not recent_dialogues:
-                if self.debug:
-                    print(f"🤖 [LLM] No dialogues to analyze, skipping LLM selection")
+                self._debug_print("🤖 [LLM] No dialogues to analyze, skipping LLM selection")
                 return None
 
             # 대화를 텍스트로 포맷
@@ -345,7 +340,7 @@ class ImageManager:
 
             if self.debug:
                 appeared_chars = [char for char, appeared in character_appeared.items() if appeared]
-                print(f"🤖 [LLM] Characters appeared in dialogue: {appeared_chars if appeared_chars else 'None'}")
+                self._debug_print(f"🤖 [LLM] Characters appeared in dialogue: {appeared_chars if appeared_chars else 'None'}")
 
             # 등장하지 않은 캐릭터의 이미지 필터링
             filtered_metadata = []
@@ -357,16 +352,15 @@ class ImageManager:
                 if 'akaza' in img_tags or '아카자' in img_keywords:
                     if character_appeared['akaza']:
                         filtered_metadata.append(img)
-                    elif self.debug:
-                        print(f"🤖 [LLM] Filtering out image {img['index']} (Akaza not appeared yet)")
+                    else:
+                        self._debug_print(f"🤖 [LLM] Filtering out image {img['index']} (Akaza not appeared yet)")
                 else:
                     # 아카자 관련이 아닌 이미지는 모두 포함
                     filtered_metadata.append(img)
 
             # 필터링 후 선택 가능한 이미지가 없으면 None 반환
             if not filtered_metadata:
-                if self.debug:
-                    print(f"🤖 [LLM] No available images after filtering")
+                self._debug_print("🤖 [LLM] No available images after filtering")
                 return None
 
             # 이미지 목록을 텍스트로 포맷 (필터링된 목록 사용)
@@ -405,8 +399,7 @@ JSON 형식으로 응답하세요:
   "reason": "선택 이유 (간단히)"
 }}"""
 
-            if self.debug:
-                print(f"\n🤖 [LLM] Analyzing {len(recent_dialogues)} dialogues for image selection...")
+            self._debug_print(f"\n🤖 [LLM] Analyzing {len(recent_dialogues)} dialogues for image selection...")
 
             # LLM 호출
             response = self.llm_client.call_json(
@@ -422,18 +415,15 @@ JSON 형식으로 응답하세요:
             reason = response.get('reason', 'N/A')
 
             if selected_index:
-                if self.debug:
-                    print(f"🤖 [LLM] Selected image: {selected_index}")
-                    print(f"    Reason: {reason}")
+                self._debug_print(f"🤖 [LLM] Selected image: {selected_index}")
+                self._debug_print(f"    Reason: {reason}")
                 return str(selected_index)
             else:
-                if self.debug:
-                    print(f"⚠️ [LLM] No image selected in response")
+                self._debug_print("⚠️ [LLM] No image selected in response")
                 return None
 
         except Exception as e:
-            if self.debug:
-                print(f"⚠️ [LLM] Image selection failed: {e}")
+            self._debug_print(f"⚠️ [LLM] Image selection failed: {e}")
             return None
 
     def get_image_for_dialogue_at_index(self, state: Dict[str, Any], up_to_index: int) -> Optional[str]:
