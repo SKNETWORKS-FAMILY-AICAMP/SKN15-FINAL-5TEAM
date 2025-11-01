@@ -540,6 +540,41 @@ class DatabaseManager:
             logger.error(f"Failed to load dialogues: {e}")
             return []
 
+    def get_session_dialogues(
+        self,
+        session_id: str,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """세션의 모든 대화 조회 (시간순 정렬)"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    if limit:
+                        cur.execute("""
+                            SELECT
+                                turn_number, speaker, content,
+                                emotion, emotion_intensity, order_index,
+                                timestamp
+                            FROM statedb.dialogues
+                            WHERE session_id = %s
+                            ORDER BY turn_number ASC, order_index ASC
+                            LIMIT %s
+                        """, (session_id, limit))
+                    else:
+                        cur.execute("""
+                            SELECT
+                                turn_number, speaker, content,
+                                emotion, emotion_intensity, order_index,
+                                timestamp
+                            FROM statedb.dialogues
+                            WHERE session_id = %s
+                            ORDER BY turn_number ASC, order_index ASC
+                        """, (session_id,))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to get session dialogues: {e}")
+            return []
+
     # ========================================
     # StateDB: Affinity Records
     # ========================================

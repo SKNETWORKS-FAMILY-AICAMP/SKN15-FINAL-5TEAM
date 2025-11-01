@@ -1520,11 +1520,44 @@ async def chat(
             if should_summarize:
                 print(f"🧠 Auto-generating conversation summary at turn {turn_count}...")
 
-                # message_history가 있으면 요약 생성
-                if "message_history" in result_state:
+                # dialogues 테이블에서 대화 내역 조회
+                dialogues = db_manager.get_session_dialogues(session_id)
+
+                if dialogues and len(dialogues) > 0:
+                    # 대화를 message_history 형식으로 변환
+                    message_history = []
+                    current_turn_data = {}
+
+                    for dlg in dialogues:
+                        turn = dlg["turn_number"]
+                        speaker = dlg["speaker"]
+                        content = dlg["content"]
+
+                        # 새로운 턴 시작
+                        if turn not in [msg.get("turn") for msg in message_history]:
+                            current_turn_data = {
+                                "turn": turn,
+                                "user_input": "",
+                                "agent_responses": []
+                            }
+                            message_history.append(current_turn_data)
+                        else:
+                            # 기존 턴 찾기
+                            current_turn_data = next(msg for msg in message_history if msg.get("turn") == turn)
+
+                        # 데이터 추가
+                        if speaker == "user":
+                            current_turn_data["user_input"] = content
+                        else:
+                            current_turn_data["agent_responses"].append({
+                                "speaker": speaker,
+                                "text": content
+                            })
+
+                    # 요약 생성
                     summary_result = await update_conversation_summary(
                         state=result_state,
-                        message_history=result_state["message_history"]
+                        message_history=message_history
                     )
 
                     if summary_result and summary_result.get("summary"):
@@ -1540,6 +1573,8 @@ async def chat(
                         print(f"✅ Summary auto-generated: {len(summary_result['summary'])} characters")
                     else:
                         print(f"⚠️ No summary generated")
+                else:
+                    print(f"⚠️ No dialogues found for summarization")
 
         except Exception as e:
             print(f"⚠️ Failed to generate summary: {e}")
