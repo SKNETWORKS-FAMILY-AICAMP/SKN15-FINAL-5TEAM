@@ -66,6 +66,12 @@ export interface LastSessionInfo {
   conversationSummary?: string
 }
 
+export interface UserInfo {
+  user_id: string
+  username: string
+  display_name: string
+}
+
 // ============================================================
 // API Client
 // ============================================================
@@ -165,6 +171,19 @@ class ApiClient {
     } catch (error) {
       console.error('Error getting last session:', error)
       return null
+    }
+  }
+
+  /**
+   * Get current user information (with JWT authentication)
+   */
+  async getCurrentUser(): Promise<UserInfo> {
+    try {
+      const response = await authenticatedApiClient.get('/api/auth/me')
+      return response.data
+    } catch (error) {
+      console.error('Error getting current user:', error)
+      throw error
     }
   }
 }
