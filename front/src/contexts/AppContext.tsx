@@ -70,9 +70,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           setIsLoggedIn(true);
           setUserEmail(userInfo.display_name || userInfo.username);
 
-          // TODO (Issue #6): Fetch bubble count from backend
-          // Backend needs to implement bubble/credits system first
-          // For now, bubbles remain at 0 (frontend-only feature)
+          // Load user credits (bubble count)
+          try {
+            const credits = await apiClient.getUserCredits();
+            setCurrentBubbles(credits.bubble_count);
+          } catch (error) {
+            console.error('Failed to load credits:', error);
+            setCurrentBubbles(0);
+          }
         } catch (error) {
           // Token is invalid or expired, clear it
           console.error('Token validation failed:', error);

@@ -72,6 +72,13 @@ export interface UserInfo {
   display_name: string
 }
 
+export interface UserCredits {
+  bubble_count: number
+  total_purchased: number
+  total_consumed: number
+  last_updated?: string
+}
+
 // ============================================================
 // API Client
 // ============================================================
@@ -225,6 +232,35 @@ class ApiClient {
       return data
     } catch (error) {
       console.error('Error confirming password reset:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user credits (bubble count)
+   */
+  async getUserCredits(): Promise<UserCredits> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/credits')
+      return response.data
+    } catch (error) {
+      console.error('Error getting user credits:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Consume user credits
+   */
+  async consumeCredits(amount: number, description: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authenticatedApiClient.post('/api/users/me/credits/consume', {
+        amount,
+        description
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error consuming credits:', error)
       throw error
     }
   }
