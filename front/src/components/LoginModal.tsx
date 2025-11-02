@@ -6,7 +6,7 @@ import { setTokens, setUserData, TokenData, UserData } from '@/utils/authUtils';
 type AuthMode = 'login' | 'register';
 
 export default function LoginModal() {
-  const { isLoginModalOpen, closeLoginModal, login } = useApp();
+  const { isLoginModalOpen, closeLoginModal, login, openPasswordResetModal } = useApp();
   const [mode, setMode] = useState<AuthMode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -336,6 +336,19 @@ export default function LoginModal() {
                     로그인
                   </button>
                 </form>
+
+                {/* Forgot Password Link */}
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => {
+                      closeLoginModal()
+                      openPasswordResetModal()
+                    }}
+                    className="text-sm text-purple-600 hover:text-purple-700 hover:underline"
+                  >
+                    비밀번호를 잊으셨나요?
+                  </button>
+                </div>
 
                 {/* Account info */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
