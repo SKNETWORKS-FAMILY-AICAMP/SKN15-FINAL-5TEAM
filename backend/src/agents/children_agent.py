@@ -40,8 +40,10 @@ class ChildrenAgent:
         # Initialize session manager for error logging
         try:
             from src.database.db_manager import DatabaseManager
+            from src.database.cache_manager import CacheManager
             db = DatabaseManager()
-            self._session_manager = HybridSessionManager(db_manager=db)
+            cache_manager = CacheManager()
+            self._session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
         except Exception as e:
             log("children", "session_manager_init_failed", error=str(e))
 
@@ -569,8 +571,10 @@ def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             session_id = state.get("session_id")
 
             if session_id:
+                from src.database.cache_manager import CacheManager
                 db = DatabaseManager()
-                session_manager = HybridSessionManager(db_manager=db)
+                cache_manager = CacheManager()
+                session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
                 session_manager.save_performance_metric(
                     metric_name="children_agent_execution_time",
                     metric_value=execution_time_ms,
