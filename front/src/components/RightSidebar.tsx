@@ -1,14 +1,85 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'
+import { apiClient, UserProgression } from '@/services/api'
 
 interface RightSidebarProps {
-  isOpen: boolean;
-  onToggle: () => void;
-  currentUser?: string;
+  isOpen: boolean
+  onToggle: () => void
+  currentUser?: string
+}
+
+// Helper function to map equipment status to Korean text
+const getEquipmentStatusKo = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    excellent: '완벽',
+    good: '양호',
+    fair: '보통',
+    poor: '나쁨',
+    broken: '파손',
+    pristine: '새것',
+    worn: '착용중',
+    equipped: '장착',
+    damaged: '손상',
+    torn: '찢김',
+    waiting: '대기중',
+    active: '활동중',
+    resting: '휴식',
+    absent: '부재중'
+  }
+  return statusMap[status] || status
+}
+
+// Helper function to get equipment status color
+const getEquipmentStatusColor = (status: string): string => {
+  const colorMap: Record<string, string> = {
+    excellent: 'text-blue-600',
+    good: 'text-green-600',
+    fair: 'text-yellow-600',
+    poor: 'text-orange-600',
+    broken: 'text-red-600',
+    pristine: 'text-blue-600',
+    worn: 'text-green-600',
+    equipped: 'text-green-600',
+    damaged: 'text-orange-600',
+    torn: 'text-red-600',
+    waiting: 'text-blue-600',
+    active: 'text-green-600',
+    resting: 'text-yellow-600',
+    absent: 'text-gray-600'
+  }
+  return colorMap[status] || 'text-gray-600'
 }
 
 export default function RightSidebar({ isOpen, onToggle, currentUser }: RightSidebarProps) {
-  const [selectedTab, setSelectedTab] = useState('info');
+  const [selectedTab, setSelectedTab] = useState('info')
+  const [progression, setProgression] = useState<UserProgression | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load progression data when sidebar opens and user is logged in
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      const loadProgression = async () => {
+        setLoading(true)
+        setError(null)
+        try {
+          const data = await apiClient.getUserProgression()
+          setProgression(data)
+        } catch (err) {
+          console.error('Failed to load progression:', err)
+          setError('진행도 데이터를 불러올 수 없습니다')
+        } finally {
+          setLoading(false)
+        }
+      }
+      loadProgression()
+    }
+  }, [isOpen, currentUser])
+
+  // Calculate XP progress percentage
+  const xpProgressPercent = progression
+    ? Math.min(100, (progression.experience_points / (progression.next_rank_xp || 1)) * 100)
+    : 0
 
   return (
     <>
@@ -86,7 +157,28 @@ export default function RightSidebar({ isOpen, onToggle, currentUser }: RightSid
 
           {/* 탭 컨텐츠 */}
           <div className="flex-1 overflow-y-auto p-4">
-            {selectedTab === 'info' && (
+            {loading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-3"></div>
+                  <p className="text-gray-600">데이터 로딩 중...</p>
+                </div>
+              </div>
+            )}
+
+            {error && !loading && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                <p className="text-red-600">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-2 text-sm text-red-700 underline"
+                >
+                  다시 시도
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && selectedTab === 'info' && (
               <div className="space-y-4">
                 <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-800 mb-2">👤 현재 사용자</h3>
@@ -95,158 +187,186 @@ export default function RightSidebar({ isOpen, onToggle, currentUser }: RightSid
                   </p>
                 </div>
 
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">🎖️ 계급 정보</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>계급:</span>
-                      <span className="font-medium">귀살대 대원</span>
+                {progression && (
+                  <>
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2 flex items-center space-x-2">
+                        <span>🎖️ 계급 정보</span>
+                        <span className="text-lg">{progression.rank_icon}</span>
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>계급:</span>
+                          <span className="font-medium">{progression.rank_name_ko}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>레벨:</span>
+                          <span className="font-medium">Lv. {progression.level}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>경험치:</span>
+                          <span className="font-medium">
+                            {progression.experience_points.toLocaleString()}/{progression.next_rank_xp?.toLocaleString() || '∞'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                          <div
+                            className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                            style={{ width: `${xpProgressPercent}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-500 text-center mt-1">
+                          {xpProgressPercent.toFixed(1)}% 달성
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>경험치:</span>
-                      <span className="font-medium">150/500</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: '30%' }}></div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">⚔️ 장비 상태</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>일륜도:</span>
-                      <span className="text-green-600 font-medium">양호</span>
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2">⚔️ 장비 상태</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>일륜도:</span>
+                          <span className={`${getEquipmentStatusColor(progression.sword_status)} font-medium`}>
+                            {getEquipmentStatusKo(progression.sword_status)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>귀살대 복장:</span>
+                          <span className={`${getEquipmentStatusColor(progression.uniform_status)} font-medium`}>
+                            {getEquipmentStatusKo(progression.uniform_status)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>까마귀:</span>
+                          <span className={`${getEquipmentStatusColor(progression.crow_status)} font-medium`}>
+                            {getEquipmentStatusKo(progression.crow_status)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>귀살대 복장:</span>
-                      <span className="text-green-600 font-medium">착용중</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>까마귀:</span>
-                      <span className="text-blue-600 font-medium">대기중</span>
-                    </div>
+                  </>
+                )}
+
+                {!progression && !loading && currentUser && (
+                  <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-600">
+                    진행도 데이터를 사용할 수 없습니다
                   </div>
-                </div>
+                )}
               </div>
             )}
 
-            {selectedTab === 'stats' && (
+            {!loading && !error && selectedTab === 'stats' && (
               <div className="space-y-4">
-                <div className="bg-yellow-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">📊 채팅 통계</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>총 메시지:</span>
-                      <span className="font-medium">47개</span>
+                {progression ? (
+                  <>
+                    <div className="bg-yellow-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2">📊 채팅 통계</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>총 메시지:</span>
+                          <span className="font-medium">{progression.total_messages.toLocaleString()}개</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>총 세션:</span>
+                          <span className="font-medium">{progression.total_sessions.toLocaleString()}회</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>플레이 시간:</span>
+                          <span className="font-medium">
+                            {Math.floor(progression.total_play_minutes / 60)}시간 {progression.total_play_minutes % 60}분
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>오늘 메시지:</span>
-                      <span className="font-medium">12개</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>연속 대화일:</span>
-                      <span className="font-medium">3일</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">🏆 업적</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <span>🥉</span>
-                      <span>첫 대화 달성</span>
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2">🏆 완료 현황</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>시나리오 완료:</span>
+                          <span className="font-medium">{progression.scenarios_completed}개</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>획득 업적:</span>
+                          <span className="font-medium">{progression.achievements_count}개</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span>💬</span>
-                      <span>활발한 대화꾼</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-gray-400">
-                      <span>🔒</span>
-                      <span>백전백승 (잠김)</span>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-red-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">👹 도깨비 토벌 기록</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>토벌 수:</span>
-                      <span className="font-medium">23마리</span>
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-800 mb-2">📈 진행도 요약</h3>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>레벨 진행도</span>
+                            <span className="font-medium">Lv. {progression.level}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full"
+                              style={{ width: `${Math.min(100, (progression.level / 99) * 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>다음 계급까지</span>
+                            <span className="font-medium">{xpProgressPercent.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full"
+                              style={{ width: `${xpProgressPercent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>최고 연승:</span>
-                      <span className="font-medium">7연승</span>
-                    </div>
+                  </>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-600">
+                    통계 데이터를 사용할 수 없습니다
                   </div>
-                </div>
+                )}
               </div>
             )}
 
             {selectedTab === 'help' && (
               <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">🔧 사용법</h3>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <p>• 왼쪽 상단 버튼으로 메뉴를 열 수 있습니다</p>
-                    <p>• 로그인 후 채팅을 시작할 수 있습니다</p>
-                    <p>• 빠른 응답 버튼을 활용해보세요</p>
-                    <p>• 다양한 호흡법을 배워보세요</p>
-                  </div>
-                </div>
-
                 <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">🎮 단축키</h3>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex justify-between">
-                      <span>Enter:</span>
-                      <span>메시지 전송</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Esc:</span>
-                      <span>모달 닫기</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Ctrl + L:</span>
-                      <span>로그인</span>
-                    </div>
-                  </div>
+                  <h3 className="font-semibold text-gray-800 mb-2">🎮 게임 방법</h3>
+                  <ul className="text-sm text-gray-600 space-y-2">
+                    <li>• 시나리오를 선택하여 캐릭터와 대화하세요</li>
+                    <li>• 메시지를 보내면 경험치를 획득합니다</li>
+                    <li>• 경험치가 쌓이면 레벨이 올라갑니다</li>
+                    <li>• 일정 경험치에 도달하면 계급이 상승합니다</li>
+                  </ul>
                 </div>
 
                 <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">💡 팁</h3>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <p>• 탄지로와 친해지려면 자주 대화하세요</p>
-                    <p>• 호흡법을 배우면 더 강해집니다</p>
-                    <p>• 도깨비 정보를 숙지하세요</p>
-                    <p>• 동료 귀살대와 협력하세요</p>
-                  </div>
+                  <h3 className="font-semibold text-gray-800 mb-2">🎖️ 계급 시스템</h3>
+                  <ul className="text-sm text-gray-600 space-y-2">
+                    <li>🌱 견습생 (Lv. 1-5)</li>
+                    <li>⚔️ 귀살대 대원 (Lv. 6-15)</li>
+                    <li>🏅 정예 대원 (Lv. 16-30)</li>
+                    <li>🌟 주 후보 (Lv. 31-50)</li>
+                    <li>💎 주 (柱) (Lv. 51-99)</li>
+                  </ul>
                 </div>
 
-                <div className="bg-red-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">⚠️ 주의사항</h3>
-                  <div className="space-y-2 text-sm text-red-600">
-                    <p>• 밤에는 도깨비를 조심하세요</p>
-                    <p>• 햇빛이 없는 곳은 위험합니다</p>
-                    <p>• 무잔을 만나면 즉시 도망치세요</p>
-                  </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-2">💡 팁</h3>
+                  <ul className="text-sm text-gray-600 space-y-2">
+                    <li>• 매일 대화하여 꾸준히 경험치를 쌓으세요</li>
+                    <li>• 다양한 시나리오를 완료하면 업적을 획득합니다</li>
+                    <li>• 리더보드에서 다른 사용자와 순위를 비교하세요</li>
+                  </ul>
                 </div>
               </div>
             )}
           </div>
-
-          {/* 푸터 */}
-          <div className="p-4 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500 text-center">
-              Kimetsu Chat v1.0<br />
-              📞 문의: demon.slayer@kimetsu.jp
-            </p>
-          </div>
         </div>
       </div>
     </>
-  );
+  )
 }
