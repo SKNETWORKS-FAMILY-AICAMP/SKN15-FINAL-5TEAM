@@ -936,6 +936,212 @@ async def get_leaderboard(limit: int = 100):
 
 
 # ============================================================
+# Scenario Management 엔드포인트 (시나리오 관리)
+# ============================================================
+
+@app.get("/api/scenarios")
+async def get_scenarios():
+    """모든 시나리오 조회 (공개 API)
+
+    Returns:
+        List of scenario cards with statistics
+        [
+            {
+                "scenario_id": str,
+                "title": str,
+                "description": str,
+                "image_url": str,
+                "tags": List[str],
+                "card_size": str,
+                "route_path": str,
+                "likes": int,
+                "comments": int,
+                "views": int
+            },
+            ...
+        ]
+    """
+    scenarios = _hybrid_manager.db.get_all_scenarios(include_inactive=False)
+    return scenarios
+
+
+@app.get("/api/scenarios/{scenario_id}")
+async def get_scenario(scenario_id: str):
+    """특정 시나리오 조회 (공개 API)
+
+    Args:
+        scenario_id: 시나리오 ID
+
+    Returns:
+        Scenario details with statistics
+    """
+    scenario = _hybrid_manager.db.get_scenario_by_id(scenario_id)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    return scenario
+
+
+@app.post("/api/scenarios/{scenario_id}/view")
+async def record_scenario_view(
+    scenario_id: str,
+    request: Request,
+    user: Dict = Depends(optional_auth)
+):
+    """시나리오 조회 기록 (조회수 증가)
+
+    Args:
+        scenario_id: 시나리오 ID
+        user: 사용자 정보 (선택, 인증된 경우)
+
+    Returns:
+        {"success": bool}
+    """
+    # Get user_id if authenticated, otherwise None
+    user_id = user.get("user_id") if user else None
+
+    # Get client IP and user agent
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    success = _hybrid_manager.db.record_scenario_view(
+        scenario_id=scenario_id,
+        user_id=user_id,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to record view")
+
+    return {"success": True}
+
+
+@app.get("/api/users/me/scenarios")
+async def get_user_scenarios(user: Dict = Depends(require_auth)):
+    """사용자별 시나리오 조회 (진행도 포함)
+
+    인증 필요. 사용자의 진행도 정보가 포함된 시나리오 리스트 반환.
+
+    Returns:
+        [
+            {
+                "scenario_id": str,
+                "title": str,
+                "description": str,
+                "image_url": str,
+                "tags": List[str],
+                "card_size": str,
+                "route_path": str,
+                "likes": int,
+                "comments": int,
+                "views": int,
+                "is_liked": bool,
+                "has_started": bool,
+                "has_completed": bool,
+                "completion_percentage": int,
+                "last_played_at": str
+            },
+            ...
+        ]
+    """
+    scenarios = _hybrid_manager.db.get_scenarios_with_user_progress(user["user_id"])
+    return scenarios
+
+
+@app.post("/api/users/me/scenarios/{scenario_id}/like")
+async def toggle_scenario_like(scenario_id: str, user: Dict = Depends(require_auth)):
+    """시나리오 좋아요 토글 (좋아요/취소)
+
+    Args:
+        scenario_id: 시나리오 ID
+
+    Returns:
+        {
+            "liked": bool,
+            "total_likes": int
+        }
+    """
+    try:
+        result = _hybrid_manager.db.toggle_scenario_like(user["user_id"], scenario_id)
+        return result
+    except Exception as e:
+        print(f"❌ Error toggling like: {e}")
+        raise HTTPException(status_code=500, detail="Failed to toggle like")
+
+
+@app.get("/api/users/me/scenarios/{scenario_id}/progress")
+async def get_scenario_progress(scenario_id: str, user: Dict = Depends(require_auth)):
+    """사용자의 특정 시나리오 진행도 조회
+
+    Args:
+        scenario_id: 시나리오 ID
+
+    Returns:
+        {
+            "user_id": str,
+            "scenario_id": str,
+            "has_started": bool,
+            "has_completed": bool,
+            "completion_percentage": int,
+            "last_session_id": str,
+            "last_played_at": str,
+            "total_messages": int,
+            "total_play_time": int,
+            "is_liked": bool
+        }
+    """
+    progress = _hybrid_manager.db.get_user_scenario_progress(user["user_id"], scenario_id)
+    if not progress:
+        # Return default progress if not found
+        return {
+            "user_id": user["user_id"],
+            "scenario_id": scenario_id,
+            "has_started": False,
+            "has_completed": False,
+            "completion_percentage": 0,
+            "total_messages": 0,
+            "total_play_time": 0,
+            "is_liked": False
+        }
+    return progress
+
+
+@app.put("/api/users/me/scenarios/{scenario_id}/progress")
+async def update_scenario_progress(
+    scenario_id: str,
+    progress_data: Dict,
+    user: Dict = Depends(require_auth)
+):
+    """사용자의 시나리오 진행도 업데이트
+
+    Args:
+        scenario_id: 시나리오 ID
+        progress_data: 업데이트할 진행도 데이터
+            {
+                "has_started": bool (optional),
+                "has_completed": bool (optional),
+                "completion_percentage": int (optional),
+                "last_session_id": str (optional),
+                "total_messages": int (optional),
+                "total_play_time": int (optional)
+            }
+
+    Returns:
+        {"success": bool}
+    """
+    success = _hybrid_manager.db.update_user_scenario_progress(
+        user["user_id"],
+        scenario_id,
+        progress_data
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update progress")
+
+    return {"success": True}
+
+
+# ============================================================
 # OAuth 2.0 소셜 로그인 엔드포인트 (Google, Kakao)
 # ============================================================
 
