@@ -1023,18 +1023,25 @@ async def confirm_password_reset(req: PasswordResetConfirm):
 @app.post("/api/chat")
 async def chat(
     request: Request,
-    current_user: Optional[Dict] = Depends(optional_auth)  # ✅ 선택적 인증 추가
+    current_user: Dict = Depends(require_auth)  # 🔐 필수 인증으로 변경 (로그인 필수!)
 ):
     """
-    메인 채팅 엔드포인트
-    1. 세션 생성 or 복원
-    2. 시나리오 로드
-    3. LangGraph 실행
-    4. 결과를 반환
+    메인 채팅 엔드포인트 (🔐 로그인 필수)
+    1. JWT 토큰 검증 (로그인하지 않으면 401 에러)
+    2. 세션 생성 or 복원
+    3. 시나리오 로드
+    4. LangGraph 실행
+    5. 결과를 반환
 
     Args:
         request: HTTP 요청 객체
-        current_user: 인증된 사용자 정보 (선택적, JWT 토큰 있으면 추출)
+        current_user: 인증된 사용자 정보 (필수, JWT 토큰에서 추출)
+
+    Returns:
+        ChatResponse: 에이전트 응답
+
+    Raises:
+        HTTPException 401: 인증되지 않은 사용자
     """
     try:
         request_start = time.perf_counter()
@@ -1045,34 +1052,21 @@ async def chat(
         scenario_id = data.get("scenario_id")
         user_name = data.get("user_name") or "여행자"
 
-        # ✅ 인증된 사용자 정보 추출
-        user_id = current_user.get('user_id') if current_user else None
-        if current_user:
-            print(f"🔐 Authenticated user: {current_user.get('username')} (ID: {user_id})")
-            # 📝 General Log: 인증 사용자
-            print(f"🐛 DEBUG: About to call save_log for authenticated user")
-            try:
-                SESSION_MANAGER.save_log(
-                    log_level="info",
-                    log_message=f"Authenticated user: {current_user.get('username')}",
-                    session_id=None,  # 아직 session_id 없음
-                    metadata={"user_id": user_id, "username": current_user.get('username')}
-                )
-                print(f"✅ DEBUG: save_log succeeded!")
-            except Exception as e:
-                print(f"⚠️ Failed to save user auth log: {e}")
-        else:
-            print(f"👤 Anonymous user: {user_name}")
-            # 📝 General Log: 익명 사용자
-            try:
-                SESSION_MANAGER.save_log(
-                    log_level="info",
-                    log_message=f"Anonymous user: {user_name}",
-                    session_id=None,
-                    metadata={"user_name": user_name}
-                )
-            except Exception as e:
-                print(f"⚠️ Failed to save anonymous user log: {e}")
+        # 🔐 인증된 사용자 정보 추출 (필수)
+        user_id = current_user.get('user_id')
+        username = current_user.get('username', 'Unknown')
+        print(f"🔐 Authenticated user: {username} (ID: {user_id})")
+
+        # 📝 General Log: 인증 사용자
+        try:
+            SESSION_MANAGER.save_log(
+                log_level="info",
+                log_message=f"Authenticated user: {username}",
+                session_id=None,  # 아직 session_id 없음
+                metadata={"user_id": user_id, "username": username}
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to save user auth log: {e}")
 
         print(f"📥 Request received: session_id={session_id}, input='{user_input}'")
 
