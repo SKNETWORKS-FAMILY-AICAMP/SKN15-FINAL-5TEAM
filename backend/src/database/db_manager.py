@@ -1619,6 +1619,240 @@ class DatabaseManager:
         results = self.execute_query(query, (amount, amount, user_id, amount, transaction_type, description))
         return len(results) > 0
 
+    # ============================================================
+    # User Progression Methods (사용자 진행도)
+    # ============================================================
+
+    def get_user_progression(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 진행도 조회 (rank, level, XP, stats, equipment 포함)
+
+        Args:
+            user_id: 사용자 UUID
+
+        Returns:
+            사용자 진행도 전체 정보 딕셔너리 또는 None
+            {
+                'user_id': str,
+                'rank_code': str,
+                'rank_name_ko': str,
+                'rank_icon': str,
+                'experience_points': int,
+                'level': int,
+                'next_rank_xp': int,
+                'total_messages': int,
+                'total_sessions': int,
+                'total_play_minutes': int,
+                'scenarios_completed': int,
+                'achievements_count': int,
+                'sword_status': str,
+                'uniform_status': str,
+                'crow_status': str
+            }
+        """
+        query = """
+        SELECT * FROM statedb.v_user_progression_summary
+        WHERE user_id = %s
+        """
+        results = self.execute_query(query, (user_id,))
+        return results[0] if results else None
+
+    def get_user_equipment(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 장비 상태 조회
+
+        Args:
+            user_id: 사용자 UUID
+
+        Returns:
+            장비 상태 딕셔너리 또는 None
+            {
+                'sword_status': str,
+                'uniform_status': str,
+                'crow_status': str,
+                'sword_type': str,
+                'uniform_color': str,
+                'crow_name': str
+            }
+        """
+        query = """
+        SELECT sword_status, uniform_status, crow_status,
+               sword_type, uniform_color, crow_name
+        FROM statedb.user_equipment
+        WHERE user_id = %s
+        """
+        results = self.execute_query(query, (user_id,))
+        return results[0] if results else None
+
+    def award_experience(self, user_id: str, xp_amount: int, xp_type: str, description: str = None, metadata: Dict = None) -> Optional[Dict[str, Any]]:
+        """경험치 지급 및 레벨업 처리
+
+        Args:
+            user_id: 사용자 UUID
+            xp_amount: 지급할 경험치
+            xp_type: 경험치 타입 ('message', 'session_complete', 'scenario_complete', 'achievement', 'daily_bonus', 'event')
+            description: 설명 (선택)
+            metadata: 추가 메타데이터 (선택, JSONB)
+
+        Returns:
+            업데이트된 progression 정보 또는 None
+            {
+                'user_id': str,
+                'experience_points': int,
+                'level': int,
+                'level_before': int,
+                'level_after': int,
+                'did_level_up': bool
+            }
+        """
+        import json
+        metadata_json = json.dumps(metadata) if metadata else None
+
+        query = """
+        WITH current_state AS (
+            SELECT user_id, experience_points, level
+            FROM statedb.user_progression
+            WHERE user_id = %s
+        ),
+        updated AS (
+            UPDATE statedb.user_progression
+            SET experience_points = experience_points + %s,
+                level = FLOOR(SQRT(GREATEST(experience_points + %s, 0)) / 10) + 1,
+                updated_at = NOW()
+            WHERE user_id = %s
+            RETURNING user_id, experience_points, level
+        ),
+        transaction_record AS (
+            INSERT INTO statedb.xp_transactions
+                (user_id, xp_amount, xp_type, xp_balance_after, level_before, level_after, did_level_up, description, metadata)
+            SELECT
+                u.user_id,
+                %s,
+                %s,
+                u.experience_points,
+                c.level,
+                u.level,
+                (u.level > c.level),
+                %s,
+                %s::jsonb
+            FROM updated u
+            CROSS JOIN current_state c
+            RETURNING user_id, experience_points AS xp_balance_after, level_before, level_after, did_level_up
+        )
+        SELECT * FROM transaction_record
+        """
+        results = self.execute_query(
+            query,
+            (user_id, xp_amount, xp_amount, user_id, xp_amount, xp_type, description, metadata_json)
+        )
+        return results[0] if results else None
+
+    def increment_user_stat(self, user_id: str, stat_name: str, increment_by: int = 1) -> bool:
+        """사용자 통계 증가
+
+        Args:
+            user_id: 사용자 UUID
+            stat_name: 통계 컬럼명 ('total_messages', 'total_sessions', 'total_play_minutes', 'scenarios_completed', 'achievements_count')
+            increment_by: 증가량 (기본 1)
+
+        Returns:
+            성공 여부
+        """
+        valid_stats = ['total_messages', 'total_sessions', 'total_play_minutes', 'scenarios_completed', 'achievements_count']
+        if stat_name not in valid_stats:
+            raise ValueError(f"Invalid stat name: {stat_name}. Must be one of {valid_stats}")
+
+        query = f"""
+        UPDATE statedb.user_progression
+        SET {stat_name} = {stat_name} + %s,
+            updated_at = NOW()
+        WHERE user_id = %s
+        """
+        self.execute_query(query, (increment_by, user_id))
+        return True
+
+    def update_user_equipment(self, user_id: str, equipment_updates: Dict[str, str]) -> bool:
+        """사용자 장비 상태 업데이트
+
+        Args:
+            user_id: 사용자 UUID
+            equipment_updates: 업데이트할 장비 딕셔너리
+                예: {'sword_status': 'excellent', 'uniform_status': 'equipped'}
+
+        Returns:
+            성공 여부
+        """
+        valid_fields = ['sword_status', 'uniform_status', 'crow_status', 'sword_type', 'uniform_color', 'crow_name']
+
+        # 유효한 필드만 필터링
+        updates = {k: v for k, v in equipment_updates.items() if k in valid_fields}
+
+        if not updates:
+            return False
+
+        # SET 절 동적 생성
+        set_clause = ', '.join([f"{k} = %s" for k in updates.keys()])
+        values = list(updates.values()) + [user_id]
+
+        query = f"""
+        UPDATE statedb.user_equipment
+        SET {set_clause}, updated_at = NOW()
+        WHERE user_id = %s
+        """
+        self.execute_query(query, values)
+        return True
+
+    def get_xp_transactions(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """사용자 경험치 거래 내역 조회
+
+        Args:
+            user_id: 사용자 UUID
+            limit: 조회 개수 (기본 50)
+            offset: 오프셋 (페이지네이션)
+
+        Returns:
+            거래 내역 리스트
+        """
+        query = """
+        SELECT transaction_id, user_id, xp_amount, xp_type, xp_balance_after,
+               level_before, level_after, did_level_up, description, metadata, created_at
+        FROM statedb.xp_transactions
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s
+        """
+        return self.execute_query(query, (user_id, limit, offset))
+
+    def get_rank_leaderboard(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """경험치 기준 리더보드 조회
+
+        Args:
+            limit: 조회 개수 (기본 100)
+
+        Returns:
+            상위 사용자 리스트 (순위 포함)
+        """
+        query = """
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY up.experience_points DESC, up.level DESC) AS rank,
+            u.user_id,
+            u.username,
+            u.display_name,
+            up.rank_code,
+            rd.rank_name_ko,
+            rd.icon_emoji AS rank_icon,
+            up.experience_points,
+            up.level,
+            up.total_messages,
+            up.scenarios_completed
+        FROM statedb.user_progression up
+        LEFT JOIN statedb.users u ON up.user_id = u.user_id
+        LEFT JOIN statedb.rank_definitions rd ON
+            up.experience_points >= rd.min_xp AND
+            up.level BETWEEN rd.level_range_start AND rd.level_range_end
+        ORDER BY up.experience_points DESC, up.level DESC
+        LIMIT %s
+        """
+        return self.execute_query(query, (limit,))
+
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼
 def create_database_manager_from_env() -> DatabaseManager:
