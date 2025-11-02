@@ -65,8 +65,10 @@ class RouterAgent:
         # Initialize session manager for error logging
         try:
             from src.database.db_manager import DatabaseManager
+            from src.database.cache_manager import CacheManager
             db = DatabaseManager()
-            self._session_manager = HybridSessionManager(db_manager=db)
+            cache_manager = CacheManager()
+            self._session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
         except Exception as e:
             log("router", "session_manager_init_failed", error=str(e))
 
