@@ -410,15 +410,16 @@ const handleLoginSuccess = (response: any) => {
 - [x] JWT 토큰 검증 (이미 구현됨)
 - [x] 401 에러 반환 (토큰 없으면)
 
-### 프론트엔드 (📝 구현 필요)
+### 프론트엔드 (✅ 완료)
 
-- [ ] `apiClient.ts`에 JWT 토큰 자동 추가 로직 확인/추가
-- [ ] `AppContext.tsx`에서 인증 상태 관리
-- [ ] `App.tsx` 또는 `Chat.tsx`에서 인증 체크
-- [ ] 로그인 안 되었으면 LoginModal 표시
-- [ ] 로그인 성공 시 JWT 토큰 + 사용자 정보 저장
-- [ ] 채팅 API 호출 시 JWT 토큰 포함
-- [ ] 401 에러 처리 (로그아웃 + 리다이렉트)
+- [x] `apiClient.ts`에 JWT 토큰 자동 추가 로직 확인/추가 (기존 구현 활용)
+- [x] `AppContext.tsx`에서 인증 상태 관리 (기존 구현 활용)
+- [x] `services/api.ts`를 `apiClient`로 변경하여 JWT 자동 포함
+- [x] `ChatPage.tsx`에서 인증 체크 및 로그인 가드 구현
+- [x] 로그인 안 되었으면 LoginModal 표시 (자동 + 수동)
+- [x] 로그인 성공 시 JWT 토큰 + 사용자 정보 저장 (기존 구현 활용)
+- [x] 채팅 API 호출 시 JWT 토큰 자동 포함 (apiClient 활용)
+- [x] 401 에러 처리 (로그아웃 + 리다이렉트) (기존 구현 활용)
 
 ---
 
@@ -542,8 +543,206 @@ apiClient.interceptors.response.use(
 ## 다음 단계
 
 1. ✅ 백엔드 인증 필수화 완료
-2. 📝 프론트엔드 구현 (이 가이드 참고)
-3. 🧪 테스트 (3가지 시나리오)
+2. ✅ 프론트엔드 구현 완료
+3. 🧪 테스트 (3가지 시나리오) - 사용자 테스트 필요
 4. 🚀 배포
 
 **최종 목표**: 로그인한 사용자만 안전하게 채팅할 수 있는 시스템 완성! 🔐
+
+---
+
+## 📝 실제 구현 내역 (2025-11-02)
+
+### 구현 완료 항목
+
+#### 1. 백엔드 (✅ 이전 세션에서 완료)
+- [backend/api_server.py](../backend/api_server.py:1026) - `/api/chat` 엔드포인트에 `require_auth` 적용
+- 익명 사용자 처리 로직 제거
+- JWT 토큰 없으면 401 Unauthorized 반환
+
+#### 2. 프론트엔드 - API 레이어 (✅ 완료)
+
+**파일**: [front/src/services/api.ts](../front/src/services/api.ts)
+
+**변경 사항**:
+1. `import authenticatedApiClient from '@/utils/apiClient'` 추가
+2. 모든 API 메서드를 `fetch()` → `authenticatedApiClient` (axios) 로 변경:
+   - `sendMessage()`: JWT 토큰 자동 포함
+   - `getSession()`: JWT 토큰 자동 포함
+   - `deleteSession()`: JWT 토큰 자동 포함
+   - `listScenarios()`: JWT 토큰 자동 포함
+   - `healthCheck()`: 인증 없음 (공개 엔드포인트)
+
+**Before**:
+```typescript
+async sendMessage(request: ChatRequest): Promise<ChatResponse> {
+  const response = await fetch(`${this.baseURL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  return response.json()
+}
+```
+
+**After**:
+```typescript
+async sendMessage(request: ChatRequest): Promise<ChatResponse> {
+  // JWT token automatically added by authenticatedApiClient interceptor
+  const response = await authenticatedApiClient.post('/api/chat', request)
+  return response.data
+}
+```
+
+#### 3. 프론트엔드 - 페이지 가드 (✅ 완료)
+
+**파일**: [front/src/pages/ChatPage.tsx](../front/src/pages/ChatPage.tsx)
+
+**변경 사항**:
+1. `LoginModal` import 추가
+2. `useApp()` 훅에서 `isLoggedIn`, `openLoginModal` 가져오기
+3. `useEffect`로 인증 상태 체크 - 미인증 시 자동으로 로그인 모달 표시
+4. 인증되지 않은 사용자에게 Lock Screen 표시:
+   - 🔐 아이콘 + "로그인이 필요합니다" 메시지
+   - "로그인하기" 버튼
+   - LoginModal 자동 표시
+5. 인증된 사용자만 ChatInterface 접근 가능
+
+**Before**:
+```typescript
+export default function ChatPage() {
+  return (
+    <div>
+      <ChatInterface characterId={characterId || 'ending'} />
+    </div>
+  );
+}
+```
+
+**After**:
+```typescript
+export default function ChatPage() {
+  const { isLoggedIn, openLoginModal } = useApp();
+
+  // Auto-show login modal if not authenticated
+  useEffect(() => {
+    if (!isLoggedIn) {
+      openLoginModal();
+    }
+  }, [isLoggedIn, openLoginModal]);
+
+  // Show lock screen for unauthenticated users
+  if (!isLoggedIn) {
+    return (
+      <div>
+        <div className="lock-screen">
+          <h1>🔐 로그인이 필요합니다</h1>
+          <button onClick={openLoginModal}>로그인하기</button>
+        </div>
+        <LoginModal />
+      </div>
+    );
+  }
+
+  // Only show chat interface for authenticated users
+  return (
+    <div>
+      <ChatInterface characterId={characterId || 'ending'} />
+      <LoginModal />
+    </div>
+  );
+}
+```
+
+### 기존 인프라 활용
+
+프론트엔드는 이미 훌륭한 인증 인프라가 구현되어 있어서 활용:
+
+1. **[front/src/utils/apiClient.ts](../front/src/utils/apiClient.ts)** (기존 구현)
+   - Request Interceptor: 모든 요청에 JWT 토큰 자동 추가
+   - Response Interceptor: 401 에러 시 토큰 갱신 시도
+   - 토큰 만료 감지 및 자동 갱신
+   - 401 에러 시 자동 로그아웃 + 리다이렉트
+
+2. **[front/src/contexts/AppContext.tsx](../front/src/contexts/AppContext.tsx)** (기존 구현)
+   - `isLoggedIn` 상태 관리
+   - `login()` / `logout()` 함수
+   - localStorage 기반 토큰 복원
+   - 모달 상태 관리 (`openLoginModal`, `closeLoginModal`)
+
+3. **[front/src/components/LoginModal.tsx](../front/src/components/LoginModal.tsx)** (기존 구현)
+   - 로그인 UI 및 폼
+   - JWT 토큰 저장 (`setTokens`, `setUserData`)
+   - 소셜 로그인 (Google, Kakao)
+   - 이메일 로그인
+
+4. **[front/src/utils/authUtils.ts](../front/src/utils/authUtils.ts)** (기존 구현)
+   - `getAccessToken()`, `getRefreshToken()`
+   - `setTokens()`, `clearTokens()`
+   - `getUserData()`, `setUserData()`
+   - `isAuthenticated()`, `isTokenExpired()`
+
+---
+
+## ✅ 구현 완료 요약
+
+### 인증 흐름 (End-to-End)
+
+```
+1. 사용자가 채팅 페이지 접속 (/chat/ending)
+   ↓
+2. ChatPage.tsx에서 isLoggedIn 체크
+   ↓
+3-a. 미인증 → Lock Screen 표시 + LoginModal 자동 오픈
+   ↓
+   사용자가 로그인 (tanjiro / 123)
+   ↓
+   JWT 토큰 localStorage에 저장
+   ↓
+   AppContext의 isLoggedIn = true
+   ↓
+   ChatInterface 표시
+
+3-b. 이미 인증됨 → ChatInterface 바로 표시
+   ↓
+4. 사용자가 메시지 입력 ("안녕")
+   ↓
+5. sendChatMessage() 호출 (services/api.ts)
+   ↓
+6. authenticatedApiClient.post('/api/chat', ...)
+   ↓
+7. Request Interceptor가 JWT 토큰 자동 추가
+   ↓
+8. 백엔드 require_auth가 JWT 검증
+   ↓
+9-a. 유효한 토큰 → 응답 반환
+9-b. 유효하지 않은 토큰 → 401 Unauthorized
+   ↓
+10. Response Interceptor가 401 감지
+   ↓
+11. 토큰 갱신 시도 (refresh token 사용)
+   ↓
+12-a. 갱신 성공 → 원래 요청 재시도
+12-b. 갱신 실패 → 자동 로그아웃 + 홈으로 리다이렉트
+```
+
+### 테스트 계정
+
+```
+tanjiro / 123
+zenitsu / 123
+inosuke / 123
+giyu / 123
+rengoku / 123
+tengen / 123
+```
+
+---
+
+## 🎉 최종 결과
+
+**백엔드**: ✅ 완료 (JWT 필수 인증)
+**프론트엔드**: ✅ 완료 (인증 가드 + JWT 자동 관리)
+**통합**: ✅ 완료 (End-to-End 인증 흐름)
+
+**사용자는 이제 로그인해야만 채팅할 수 있습니다!** 🔐

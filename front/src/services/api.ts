@@ -3,6 +3,8 @@
  * Handles all backend communication for KIME Chat
  */
 
+import authenticatedApiClient from '@/utils/apiClient'
+
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -66,27 +68,13 @@ class ApiClient {
   }
 
   /**
-   * Send chat message and get response
+   * Send chat message and get response (with JWT authentication)
    */
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(
-          errorData.detail || `HTTP error! status: ${response.status}`
-        )
-      }
-
-      const data: ChatResponse = await response.json()
-      return data
+      // Use authenticated API client (automatically adds JWT token)
+      const response = await authenticatedApiClient.post('/api/chat', request)
+      return response.data
     } catch (error) {
       console.error('Error sending message:', error)
       throw error
@@ -94,26 +82,12 @@ class ApiClient {
   }
 
   /**
-   * Get session information
+   * Get session information (with JWT authentication)
    */
   async getSession(sessionId: string): Promise<SessionInfo> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/session/${sessionId}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const data: SessionInfo = await response.json()
-      return data
+      const response = await authenticatedApiClient.get(`/api/session/${sessionId}`)
+      return response.data
     } catch (error) {
       console.error('Error getting session:', error)
       throw error
@@ -121,23 +95,11 @@ class ApiClient {
   }
 
   /**
-   * Delete a session
+   * Delete a session (with JWT authentication)
    */
   async deleteSession(sessionId: string): Promise<void> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/session/${sessionId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      await authenticatedApiClient.delete(`/api/session/${sessionId}`)
     } catch (error) {
       console.error('Error deleting session:', error)
       throw error
@@ -145,23 +107,12 @@ class ApiClient {
   }
 
   /**
-   * List available scenarios
+   * List available scenarios (with JWT authentication)
    */
   async listScenarios(): Promise<ScenarioInfo[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/scenarios`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const data: { scenarios: ScenarioInfo[] } = await response.json()
-      return data.scenarios
+      const response = await authenticatedApiClient.get('/api/scenarios')
+      return response.data.scenarios
     } catch (error) {
       console.error('Error listing scenarios:', error)
       throw error
@@ -169,15 +120,12 @@ class ApiClient {
   }
 
   /**
-   * Health check
+   * Health check (no authentication required)
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/`, {
-        method: 'GET',
-      })
-
-      return response.ok
+      const response = await authenticatedApiClient.get('/')
+      return response.status === 200
     } catch (error) {
       console.error('Health check failed:', error)
       return false
