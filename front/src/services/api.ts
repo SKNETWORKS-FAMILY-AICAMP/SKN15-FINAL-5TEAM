@@ -204,6 +204,30 @@ class ApiClient {
       throw error
     }
   }
+
+  /**
+   * Confirm password reset with token (no authentication required)
+   */
+  async confirmPasswordReset(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/auth/password-reset/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, new_password: newPassword })
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        // Handle HTTP errors (400, 500, etc.)
+        throw new Error(data.detail || '비밀번호 재설정에 실패했습니다.')
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error confirming password reset:', error)
+      throw error
+    }
+  }
 }
 
 // ============================================================
