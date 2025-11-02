@@ -133,6 +133,43 @@ export interface LeaderboardEntry {
   scenarios_completed: number
 }
 
+// Scenario interfaces
+export interface ScenarioCard {
+  scenario_id: string
+  title: string
+  description: string
+  image_url: string
+  thumbnail_url?: string
+  tags: string[]
+  card_size: 'large' | 'normal'
+  route_path: string
+  display_order: number
+  is_active: boolean
+  likes: number
+  comments: number
+  views: number
+  total_completions?: number
+  // User-specific fields (if authenticated)
+  is_liked?: boolean
+  has_started?: boolean
+  has_completed?: boolean
+  completion_percentage?: number
+  last_played_at?: string
+}
+
+export interface ScenarioProgress {
+  user_id: string
+  scenario_id: string
+  has_started: boolean
+  has_completed: boolean
+  completion_percentage: number
+  last_session_id?: string
+  last_played_at?: string
+  total_messages: number
+  total_play_time: number
+  is_liked: boolean
+}
+
 // ============================================================
 // API Client
 // ============================================================
@@ -420,6 +457,114 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error('Error getting leaderboard:', error)
+      throw error
+    }
+  }
+
+  // ============================================================
+  // Scenario Management Methods
+  // ============================================================
+
+  /**
+   * Get all scenarios (public API, no JWT required)
+   */
+  async getScenarios(): Promise<ScenarioCard[]> {
+    try {
+      const response = await axios.get(`${this.baseUrl}/api/scenarios`)
+      return response.data
+    } catch (error) {
+      console.error('Error getting scenarios:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get specific scenario by ID (public API)
+   */
+  async getScenario(scenarioId: string): Promise<ScenarioCard> {
+    try {
+      const response = await axios.get(`${this.baseUrl}/api/scenarios/${scenarioId}`)
+      return response.data
+    } catch (error) {
+      console.error(`Error getting scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Record scenario view (public API, auth optional)
+   */
+  async recordScenarioView(scenarioId: string): Promise<{ success: boolean }> {
+    try {
+      // Try with auth first if user is logged in
+      const response = await authenticatedApiClient.post(`/api/scenarios/${scenarioId}/view`)
+      return response.data
+    } catch (error) {
+      // Fallback to public API if not authenticated
+      try {
+        const response = await axios.post(`${this.baseUrl}/api/scenarios/${scenarioId}/view`)
+        return response.data
+      } catch (fallbackError) {
+        console.error(`Error recording view for scenario ${scenarioId}:`, fallbackError)
+        throw fallbackError
+      }
+    }
+  }
+
+  /**
+   * Get scenarios with user progress (requires JWT)
+   */
+  async getUserScenarios(): Promise<ScenarioCard[]> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/scenarios')
+      return response.data
+    } catch (error) {
+      console.error('Error getting user scenarios:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Toggle like for scenario (requires JWT)
+   */
+  async toggleScenarioLike(scenarioId: string): Promise<{ liked: boolean, total_likes: number }> {
+    try {
+      const response = await authenticatedApiClient.post(`/api/users/me/scenarios/${scenarioId}/like`)
+      return response.data
+    } catch (error) {
+      console.error(`Error toggling like for scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user progress for specific scenario (requires JWT)
+   */
+  async getScenarioProgress(scenarioId: string): Promise<ScenarioProgress> {
+    try {
+      const response = await authenticatedApiClient.get(`/api/users/me/scenarios/${scenarioId}/progress`)
+      return response.data
+    } catch (error) {
+      console.error(`Error getting progress for scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Update user progress for scenario (requires JWT)
+   */
+  async updateScenarioProgress(
+    scenarioId: string,
+    progressData: Partial<ScenarioProgress>
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await authenticatedApiClient.put(
+        `/api/users/me/scenarios/${scenarioId}/progress`,
+        progressData
+      )
+      return response.data
+    } catch (error) {
+      console.error(`Error updating progress for scenario ${scenarioId}:`, error)
       throw error
     }
   }
