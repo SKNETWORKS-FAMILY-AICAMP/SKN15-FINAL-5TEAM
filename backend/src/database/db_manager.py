@@ -1909,6 +1909,309 @@ class DatabaseManager:
         """
         return self.execute_query(query, (limit,))
 
+    # ============================================================
+    # Scenario Management Methods (시나리오 관리)
+    # ============================================================
+
+    def get_all_scenarios(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """모든 시나리오 조회 (통계 포함)
+
+        Args:
+            include_inactive: 비활성 시나리오도 포함 여부
+
+        Returns:
+            시나리오 리스트 (통계 포함)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    if include_inactive:
+                        cur.execute("SELECT * FROM statedb.v_scenario_cards ORDER BY display_order")
+                    else:
+                        cur.execute("""
+                            SELECT * FROM statedb.v_scenario_cards
+                            WHERE is_active = true
+                            ORDER BY display_order
+                        """)
+                    results = cur.fetchall()
+                    return [dict(row) for row in results] if results else []
+        except Exception as e:
+            logger.error(f"Failed to get scenarios: {e}")
+            return []
+
+    def get_scenario_by_id(self, scenario_id: str) -> Optional[Dict[str, Any]]:
+        """ID로 시나리오 조회
+
+        Args:
+            scenario_id: 시나리오 ID
+
+        Returns:
+            시나리오 정보 (통계 포함) 또는 None
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.v_scenario_cards
+                        WHERE scenario_id = %s
+                    """, (scenario_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get scenario {scenario_id}: {e}")
+            return None
+
+    def get_scenario_statistics(self, scenario_id: str) -> Optional[Dict[str, Any]]:
+        """시나리오 통계 조회
+
+        Args:
+            scenario_id: 시나리오 ID
+
+        Returns:
+            통계 정보 또는 None
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.scenario_statistics
+                        WHERE scenario_id = %s
+                    """, (scenario_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get statistics for scenario {scenario_id}: {e}")
+            return None
+
+    def record_scenario_view(self, scenario_id: str, user_id: Optional[str] = None,
+                            ip_address: Optional[str] = None, user_agent: Optional[str] = None) -> bool:
+        """시나리오 조회 기록 (조회수 증가)
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID (선택, 익명 가능)
+            ip_address: IP 주소 (선택)
+            user_agent: User Agent (선택)
+
+        Returns:
+            성공 여부
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO statedb.scenario_views (scenario_id, user_id, ip_address, user_agent)
+                        VALUES (%s, %s, %s, %s)
+                    """, (scenario_id, user_id, ip_address, user_agent))
+                    # Trigger will auto-increment scenario_statistics.total_views
+            return True
+        except Exception as e:
+            logger.error(f"Failed to record view for scenario {scenario_id}: {e}")
+            return False
+
+    def get_user_scenario_progress(self, user_id: str, scenario_id: str) -> Optional[Dict[str, Any]]:
+        """사용자의 특정 시나리오 진행도 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+
+        Returns:
+            진행도 정보 또는 None
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.user_scenario_progress
+                        WHERE user_id = %s AND scenario_id = %s
+                    """, (user_id, scenario_id))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get progress for user {user_id}, scenario {scenario_id}: {e}")
+            return None
+
+    def get_all_user_scenario_progress(self, user_id: str) -> List[Dict[str, Any]]:
+        """사용자의 모든 시나리오 진행도 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            진행도 리스트
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.user_scenario_progress
+                        WHERE user_id = %s
+                        ORDER BY last_played_at DESC NULLS LAST
+                    """, (user_id,))
+                    results = cur.fetchall()
+                    return [dict(row) for row in results] if results else []
+        except Exception as e:
+            logger.error(f"Failed to get all progress for user {user_id}: {e}")
+            return []
+
+    def toggle_scenario_like(self, user_id: str, scenario_id: str) -> Dict[str, Any]:
+        """시나리오 좋아요 토글 (좋아요/취소)
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+
+        Returns:
+            {"liked": bool, "total_likes": int}
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # Check if progress record exists
+                    cur.execute("""
+                        SELECT is_liked FROM statedb.user_scenario_progress
+                        WHERE user_id = %s AND scenario_id = %s
+                    """, (user_id, scenario_id))
+                    result = cur.fetchone()
+
+                    if result:
+                        # Toggle existing like status
+                        new_liked_status = not result['is_liked']
+                        cur.execute("""
+                            UPDATE statedb.user_scenario_progress
+                            SET is_liked = %s,
+                                liked_at = CASE WHEN %s THEN NOW() ELSE NULL END,
+                                updated_at = NOW()
+                            WHERE user_id = %s AND scenario_id = %s
+                        """, (new_liked_status, new_liked_status, user_id, scenario_id))
+                    else:
+                        # Create new progress record with like
+                        cur.execute("""
+                            INSERT INTO statedb.user_scenario_progress
+                            (user_id, scenario_id, is_liked, liked_at)
+                            VALUES (%s, %s, true, NOW())
+                        """, (user_id, scenario_id))
+                        new_liked_status = True
+
+                    # Trigger will auto-update scenario_statistics.total_likes
+
+                    # Get updated total likes
+                    cur.execute("""
+                        SELECT total_likes FROM statedb.scenario_statistics
+                        WHERE scenario_id = %s
+                    """, (scenario_id,))
+                    stats = cur.fetchone()
+                    total_likes = stats['total_likes'] if stats else 0
+
+                    return {
+                        "liked": new_liked_status,
+                        "total_likes": total_likes
+                    }
+        except Exception as e:
+            logger.error(f"Failed to toggle like for scenario {scenario_id}, user {user_id}: {e}")
+            raise
+
+    def update_user_scenario_progress(self, user_id: str, scenario_id: str,
+                                     progress_data: Dict[str, Any]) -> bool:
+        """사용자 시나리오 진행도 업데이트
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+            progress_data: 업데이트할 데이터
+                {
+                    "has_started": bool,
+                    "has_completed": bool,
+                    "completion_percentage": int,
+                    "last_session_id": str,
+                    "total_messages": int,
+                    "total_play_time": int
+                }
+
+        Returns:
+            성공 여부
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Build update query dynamically
+                    update_fields = []
+                    values = []
+
+                    for field in ['has_started', 'has_completed', 'completion_percentage',
+                                 'last_session_id', 'total_messages', 'total_play_time']:
+                        if field in progress_data:
+                            update_fields.append(f"{field} = %s")
+                            values.append(progress_data[field])
+
+                    if not update_fields:
+                        return True  # Nothing to update
+
+                    update_fields.append("last_played_at = NOW()")
+                    update_fields.append("updated_at = NOW()")
+
+                    values.extend([user_id, scenario_id])
+
+                    query = f"""
+                        INSERT INTO statedb.user_scenario_progress (user_id, scenario_id, {', '.join([f.split('=')[0].strip() for f in update_fields])})
+                        VALUES (%s, %s, {', '.join(['%s'] * len(update_fields))})
+                        ON CONFLICT (user_id, scenario_id)
+                        DO UPDATE SET {', '.join(update_fields)}
+                    """
+
+                    cur.execute(query, [user_id, scenario_id] + [progress_data.get(f.split('=')[0].strip(), None) for f in update_fields if '=' in f][:len(update_fields)-2] + values[-2:])
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update progress for user {user_id}, scenario {scenario_id}: {e}")
+            return False
+
+    def get_scenarios_with_user_progress(self, user_id: str) -> List[Dict[str, Any]]:
+        """사용자별 진행도가 포함된 시나리오 리스트 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            시나리오 리스트 (통계 + 사용자 진행도 포함)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT
+                            s.scenario_id,
+                            s.title,
+                            s.description,
+                            s.image_url,
+                            s.thumbnail_url,
+                            s.tags,
+                            s.card_size,
+                            s.route_path,
+                            s.display_order,
+                            s.is_active,
+                            COALESCE(ss.total_likes, 0) as likes,
+                            COALESCE(ss.total_comments, 0) as comments,
+                            COALESCE(ss.total_views, 0) as views,
+                            COALESCE(ss.total_completions, 0) as total_completions,
+                            COALESCE(usp.is_liked, false) as is_liked,
+                            COALESCE(usp.has_started, false) as has_started,
+                            COALESCE(usp.has_completed, false) as has_completed,
+                            COALESCE(usp.completion_percentage, 0) as completion_percentage,
+                            usp.last_played_at
+                        FROM statedb.scenarios s
+                        LEFT JOIN statedb.scenario_statistics ss ON s.scenario_id = ss.scenario_id
+                        LEFT JOIN statedb.user_scenario_progress usp ON s.scenario_id = usp.scenario_id AND usp.user_id = %s
+                        WHERE s.is_active = true
+                        ORDER BY s.display_order
+                    """, (user_id,))
+                    results = cur.fetchall()
+                    return [dict(row) for row in results] if results else []
+        except Exception as e:
+            logger.error(f"Failed to get scenarios with user progress for {user_id}: {e}")
+            return []
+
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼
 def create_database_manager_from_env() -> DatabaseManager:
