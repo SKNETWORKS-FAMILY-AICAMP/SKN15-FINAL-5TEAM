@@ -257,7 +257,6 @@ DROP TRIGGER IF EXISTS trg_update_scenario_likes ON statedb.user_scenario_progre
 CREATE TRIGGER trg_update_scenario_likes
     AFTER INSERT OR UPDATE OF is_liked ON statedb.user_scenario_progress
     FOR EACH ROW
-    WHEN (NEW.is_liked IS DISTINCT FROM OLD.is_liked OR OLD IS NULL)
     EXECUTE FUNCTION statedb.update_scenario_like_count();
 
 

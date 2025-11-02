@@ -10,13 +10,17 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.database.db_manager import DatabaseManager
-import yaml
 
-# Load database config
-def load_config():
-    config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'settings.yaml')
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+# Get database config from environment variables or use defaults
+def get_db_config():
+    """Get DB config from environment variables or use defaults"""
+    return {
+        'host': os.getenv('DB_HOST', 'localhost'),
+        'port': int(os.getenv('DB_PORT', '5432')),
+        'dbname': os.getenv('DB_NAME', 'kimedb'),
+        'user': os.getenv('DB_USER', 'kime'),
+        'password': os.getenv('DB_PASSWORD', 'dev123')
+    }
 
 def print_header(text):
     print("\n" + "=" * 70)
@@ -263,16 +267,15 @@ def main():
     print("     Scenario Database Seeding Script")
     print("🌱" * 35)
 
-    # Load config and create DB manager
+    # Get DB config and create DB manager
     try:
-        config = load_config()
-        db_config = config['database']
+        db_config = get_db_config()
 
-        print(f"\n📡 Connecting to database: {db_config['host']}:{db_config['port']}")
+        print(f"\n📡 Connecting to database: {db_config['host']}:{db_config['port']}/{db_config['dbname']}")
         db = DatabaseManager(
             host=db_config['host'],
             port=db_config['port'],
-            database=db_config['database'],
+            dbname=db_config['dbname'],
             user=db_config['user'],
             password=db_config['password']
         )
