@@ -186,6 +186,24 @@ class ApiClient {
       throw error
     }
   }
+
+  /**
+   * Request password reset (no authentication required)
+   */
+  async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/auth/password-reset/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      })
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Error requesting password reset:', error)
+      throw error
+    }
+  }
 }
 
 // ============================================================

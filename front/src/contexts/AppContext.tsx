@@ -8,6 +8,7 @@ interface AppContextType {
   isMyAccountModalOpen: boolean;
   isLoginModalOpen: boolean;
   isPaymentModalOpen: boolean;
+  isPasswordResetModalOpen: boolean;
   isLoggedIn: boolean;
   userEmail: string;
   currentBubbles: number;
@@ -26,6 +27,8 @@ interface AppContextType {
   closeLoginModal: () => void;
   openPaymentModal: () => void;
   closePaymentModal: () => void;
+  openPasswordResetModal: () => void;
+  closePasswordResetModal: () => void;
   login: (email: string) => void;
   logout: () => void;
 }
@@ -47,6 +50,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isMyAccountModalOpen, setIsMyAccountModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [currentBubbles, setCurrentBubbles] = useState(847);
@@ -75,6 +79,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const closeLoginModal = () => setIsLoginModalOpen(false);
   const openPaymentModal = () => setIsPaymentModalOpen(true);
   const closePaymentModal = () => setIsPaymentModalOpen(false);
+  const openPasswordResetModal = () => setIsPasswordResetModalOpen(true);
+  const closePasswordResetModal = () => setIsPasswordResetModalOpen(false);
   const login = (email: string) => {
     setIsLoggedIn(true);
     setUserEmail(email);
@@ -104,6 +110,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         isMyAccountModalOpen,
         isLoginModalOpen,
         isPaymentModalOpen,
+        isPasswordResetModalOpen,
         isLoggedIn,
         userEmail,
         currentBubbles,
@@ -120,6 +127,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         closeLoginModal,
         openPaymentModal,
         closePaymentModal,
+        openPasswordResetModal,
+        closePasswordResetModal,
         login,
         logout,
         updateBubbles,
