@@ -727,6 +727,209 @@ async def consume_user_credits(req: ConsumeCreditsRequest, user: Dict = Depends(
 
 
 # ============================================================
+# 사용자 Progression 엔드포인트 (레벨, 경험치, 장비)
+# ============================================================
+
+@app.get("/api/users/me/progression")
+async def get_user_progression(user: Dict = Depends(require_auth)):
+    """현재 사용자의 진행도 조회 (rank, level, XP, stats, equipment)
+
+    Returns:
+        {
+            "user_id": str,
+            "rank_code": str,
+            "rank_name_ko": str,
+            "rank_icon": str,
+            "experience_points": int,
+            "level": int,
+            "next_rank_xp": int,
+            "total_messages": int,
+            "total_sessions": int,
+            "total_play_minutes": int,
+            "scenarios_completed": int,
+            "achievements_count": int,
+            "sword_status": str,
+            "uniform_status": str,
+            "crow_status": str
+        }
+    """
+    progression = _hybrid_manager.db.get_user_progression(user["user_id"])
+    if not progression:
+        raise HTTPException(status_code=404, detail="Progression data not found")
+    return progression
+
+
+@app.get("/api/users/me/equipment")
+async def get_user_equipment(user: Dict = Depends(require_auth)):
+    """현재 사용자의 장비 상태 조회
+
+    Returns:
+        {
+            "sword_status": str,
+            "uniform_status": str,
+            "crow_status": str,
+            "sword_type": str,
+            "uniform_color": str,
+            "crow_name": str
+        }
+    """
+    equipment = _hybrid_manager.db.get_user_equipment(user["user_id"])
+    if not equipment:
+        # 기본값 반환
+        return {
+            "sword_status": "good",
+            "uniform_status": "worn",
+            "crow_status": "waiting",
+            "sword_type": None,
+            "uniform_color": None,
+            "crow_name": None
+        }
+    return equipment
+
+
+class AwardXPRequest(BaseModel):
+    xp_amount: int
+    xp_type: str  # 'message', 'session_complete', 'scenario_complete', 'achievement', 'daily_bonus', 'event'
+    description: str = None
+    metadata: Dict = None
+
+
+@app.post("/api/users/me/progression/award-xp")
+async def award_user_experience(req: AwardXPRequest, user: Dict = Depends(require_auth)):
+    """사용자에게 경험치 지급 (내부 API - 메시지 전송 시 자동 호출)
+
+    Request Body:
+        {
+            "xp_amount": 10,
+            "xp_type": "message",
+            "description": "메시지 전송",
+            "metadata": {"message_id": "..."}
+        }
+
+    Returns:
+        {
+            "user_id": str,
+            "experience_points": int,
+            "level": int,
+            "level_before": int,
+            "level_after": int,
+            "did_level_up": bool
+        }
+    """
+    valid_xp_types = ['message', 'session_complete', 'scenario_complete', 'achievement', 'daily_bonus', 'event']
+    if req.xp_type not in valid_xp_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid xp_type. Must be one of {valid_xp_types}"
+        )
+
+    result = _hybrid_manager.db.award_experience(
+        user["user_id"],
+        req.xp_amount,
+        req.xp_type,
+        req.description,
+        req.metadata
+    )
+
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to award XP")
+
+    return result
+
+
+class UpdateEquipmentRequest(BaseModel):
+    equipment_updates: Dict[str, str]
+
+
+@app.put("/api/users/me/equipment")
+async def update_user_equipment(req: UpdateEquipmentRequest, user: Dict = Depends(require_auth)):
+    """사용자 장비 상태 업데이트
+
+    Request Body:
+        {
+            "equipment_updates": {
+                "sword_status": "excellent",
+                "uniform_status": "equipped"
+            }
+        }
+
+    Returns:
+        {"success": true}
+    """
+    success = _hybrid_manager.db.update_user_equipment(user["user_id"], req.equipment_updates)
+    if not success:
+        raise HTTPException(status_code=400, detail="No valid equipment fields to update")
+    return {"success": True}
+
+
+@app.get("/api/users/me/xp-transactions")
+async def get_user_xp_transactions(
+    user: Dict = Depends(require_auth),
+    limit: int = 50,
+    offset: int = 0
+):
+    """사용자 경험치 거래 내역 조회 (페이지네이션)
+
+    Query Parameters:
+        limit: 조회 개수 (기본 50, 최대 100)
+        offset: 오프셋 (페이지네이션)
+
+    Returns:
+        [
+            {
+                "transaction_id": str,
+                "xp_amount": int,
+                "xp_type": str,
+                "xp_balance_after": int,
+                "level_before": int,
+                "level_after": int,
+                "did_level_up": bool,
+                "description": str,
+                "created_at": str
+            },
+            ...
+        ]
+    """
+    if limit > 100:
+        limit = 100
+
+    transactions = _hybrid_manager.db.get_xp_transactions(user["user_id"], limit, offset)
+    return transactions
+
+
+@app.get("/api/leaderboard")
+async def get_leaderboard(limit: int = 100):
+    """경험치 기준 리더보드 조회 (공개 API)
+
+    Query Parameters:
+        limit: 조회 개수 (기본 100, 최대 500)
+
+    Returns:
+        [
+            {
+                "rank": int,
+                "user_id": str,
+                "username": str,
+                "display_name": str,
+                "rank_code": str,
+                "rank_name_ko": str,
+                "rank_icon": str,
+                "experience_points": int,
+                "level": int,
+                "total_messages": int,
+                "scenarios_completed": int
+            },
+            ...
+        ]
+    """
+    if limit > 500:
+        limit = 500
+
+    leaderboard = _hybrid_manager.db.get_rank_leaderboard(limit)
+    return leaderboard
+
+
+# ============================================================
 # OAuth 2.0 소셜 로그인 엔드포인트 (Google, Kakao)
 # ============================================================
 
