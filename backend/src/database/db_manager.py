@@ -1623,6 +1623,56 @@ class DatabaseManager:
     # User Progression Methods (사용자 진행도)
     # ============================================================
 
+    def initialize_user_progression(self, user_id: str) -> bool:
+        """신규 사용자 진행도 초기화
+
+        새로운 사용자가 등록될 때 호출되어 progression 관련 3개 테이블에
+        초기 레코드를 생성합니다.
+
+        Args:
+            user_id: 사용자 UUID
+
+        Returns:
+            bool: 초기화 성공 여부
+
+        Raises:
+            Exception: DB 오류 시 예외 발생
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # 1. user_progression_ranks 초기화 (trainee, level 1, 0 XP)
+                    cur.execute("""
+                        INSERT INTO statedb.user_progression_ranks (user_id, rank_code, level, experience_points)
+                        VALUES (%s, 'trainee', 1, 0)
+                    """, (user_id,))
+
+                    # 2. user_progression_stats 초기화 (모든 카운터 0)
+                    cur.execute("""
+                        INSERT INTO statedb.user_progression_stats (
+                            user_id, total_messages, total_sessions, total_play_minutes,
+                            scenarios_completed, achievements_count
+                        )
+                        VALUES (%s, 0, 0, 0, 0, 0)
+                    """, (user_id,))
+
+                    # 3. user_progression_equipment 초기화 (모두 'waiting' 상태)
+                    cur.execute("""
+                        INSERT INTO statedb.user_progression_equipment (
+                            user_id, sword_status, uniform_status, crow_status
+                        )
+                        VALUES (%s, 'waiting', 'waiting', 'waiting')
+                    """, (user_id,))
+
+            print(f"✅ User progression initialized for user_id: {user_id}")
+            return True
+
+        except Exception as e:
+            print(f"❌ Failed to initialize progression for user {user_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
     def get_user_progression(self, user_id: str) -> Optional[Dict[str, Any]]:
         """사용자 진행도 조회 (rank, level, XP, stats, equipment 포함)
 
@@ -1649,12 +1699,18 @@ class DatabaseManager:
                 'crow_status': str
             }
         """
-        query = """
-        SELECT * FROM statedb.v_user_progression_summary
-        WHERE user_id = %s
-        """
-        results = self.execute_query(query, (user_id,))
-        return results[0] if results else None
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.v_user_progression_summary
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get user progression for {user_id}: {e}")
+            return None
 
     def get_user_equipment(self, user_id: str) -> Optional[Dict[str, Any]]:
         """사용자 장비 상태 조회

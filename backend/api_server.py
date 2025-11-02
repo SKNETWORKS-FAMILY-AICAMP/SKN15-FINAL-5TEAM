@@ -566,6 +566,12 @@ async def register(req: RegisterRequest, request: Request):
         )
 
         if user_id:
+            # 진행도 초기화 (ranks, stats, equipment)
+            try:
+                _hybrid_manager.db.initialize_user_progression(user_id)
+            except Exception as e:
+                print(f"⚠️  Warning: Failed to initialize progression for user {user_id}: {e}")
+                # 진행도 초기화 실패해도 계정은 생성됨 (나중에 수동 초기화 가능)
             # JWT 토큰 생성
             from src.auth.jwt_utils import create_access_token, create_refresh_token
 
