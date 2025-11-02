@@ -87,6 +87,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:5173",
+        # AWS ALB 엔드포인트 추가 (프로덕션)
+        "http://kime-alb-1043119388.ap-northeast-2.elb.amazonaws.com",
     ],  # 허용할 프론트엔드 도메인
     allow_credentials=True,
     allow_methods=["*"],

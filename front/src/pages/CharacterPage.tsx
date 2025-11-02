@@ -1,8 +1,10 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ChatHeader from '@/components/ChatHeader';
 import { useApp } from '@/contexts/AppContext';
-import scenariosData from '@/data/scenarios.json';
+import { apiClient, ScenarioCard } from '@/services/api';
+
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
 interface Character {
   name: string;
@@ -12,38 +14,147 @@ interface Character {
   color: string;
 }
 
-interface ScenarioData {
-  id: string;
-  title: string;
-  emoji: string;
-  description: string;
-  detailDescription: string;
-  image: string;
-  implemented: boolean;
-  type: string;
-  tags: string[];
-  category: string;
-  mood: string[];
-  likes: number;
-  comments: number;
-  views: number;
-  characters?: Character[];
-}
-
 export default function CharacterPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn } = useApp();
   const navigate = useNavigate();
   const [scenarioExpanded, setScenarioExpanded] = useState(false);
   const [charactersExpanded, setCharactersExpanded] = useState(true);
+
+  // API state management
+  const [scenario, setScenario] = useState<ScenarioCard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(false);
 
-  // Load scenario data dynamically from JSON
-  const scenarios = scenariosData as Record<string, ScenarioData>;
-  const scenario = characterId ? scenarios[characterId] : null;
+  // Mock characters data (keep for fallback)
+  const mockCharacters: Character[] = [
+    {
+      name: '탄지로',
+      image: `${CDN_URL}/프로필_탄지로.png`,
+      greeting: '안녕하세요! 함께 평화로운 시간을 보내세요.',
+      status: '대화 가능',
+      color: 'bg-orange-100'
+    },
+    {
+      name: '렌고쿠',
+      image: `${CDN_URL}/프로필_렌고쿠.png`,
+      greeting: '불같은 열정으로 함께하겠습니다!',
+      status: '대화 가능',
+      color: 'bg-red-100'
+    },
+    {
+      name: '젠이츠',
+      image: `${CDN_URL}/프로필_젠이츠.png`,
+      greeting: '우와! 정말 즐거운 시간이 될 것 같아요!',
+      status: '대화 가능',
+      color: 'bg-yellow-100'
+    },
+    {
+      name: '이노스케',
+      image: `${CDN_URL}/프로필_이노스케.png`,
+      greeting: '이야! 재미있는 모험을 시작해보자구!',
+      status: '대화 가능',
+      color: 'bg-green-100'
+    }
+  ];
 
-  // Fallback for unknown scenarios
-  if (!scenario) {
+  // Load scenario from API
+  useEffect(() => {
+    const loadScenario = async () => {
+      if (!characterId) {
+        setError('시나리오 ID가 필요합니다.');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const data = await apiClient.getScenario(characterId);
+        setScenario(data);
+        setIsLiked(data.is_liked || false);
+      } catch (err) {
+        console.error('Failed to load scenario:', err);
+        setError('시나리오를 불러올 수 없습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadScenario();
+  }, [characterId]);
+
+  // Record scenario view
+  useEffect(() => {
+    if (scenario && characterId) {
+      apiClient.recordScenarioView(characterId).catch(err => {
+        console.error('Failed to record view:', err);
+      });
+    }
+  }, [scenario, characterId]);
+
+  const handleStartChat = () => {
+    if (scenario) {
+      navigate(`/chat/${scenario.scenario_id}`);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    if (!scenario) return;
+
+    // Optimistic UI update
+    const wasLiked = isLiked;
+    setIsLiked(!wasLiked);
+    setScenario(prev => prev ? {
+      ...prev,
+      likes: wasLiked ? prev.likes - 1 : prev.likes + 1
+    } : null);
+
+    try {
+      await apiClient.toggleScenarioLike(scenario.scenario_id);
+    } catch (error) {
+      // Revert on error
+      setIsLiked(wasLiked);
+      setScenario(prev => prev ? {
+        ...prev,
+        likes: wasLiked ? prev.likes + 1 : prev.likes - 1
+      } : null);
+      console.error('Failed to toggle like:', error);
+      alert('좋아요 처리에 실패했습니다.');
+    }
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <ChatHeader
+          onToggleSidebar={toggleSidebar}
+          onOpenSettings={openSettings}
+          title="로딩 중..."
+          showBackButton={true}
+        />
+        <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
+          <div className="relative z-10 flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">시나리오를 불러오는 중...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Error or not found state
+  if (error || !scenario) {
     return (
       <div className="min-h-screen bg-gray-50">
         <ChatHeader
@@ -57,7 +168,7 @@ export default function CharacterPage() {
             <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
               <div className="text-6xl mb-6">❓</div>
               <h1 className="text-3xl font-bold mb-4 text-gray-800">존재하지 않는 시나리오</h1>
-              <p className="text-gray-600 mb-6">요청하신 시나리오를 찾을 수 없습니다.</p>
+              <p className="text-gray-600 mb-6">{error || '요청하신 시나리오를 찾을 수 없습니다.'}</p>
               <Link
                 to="/"
                 className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -70,18 +181,6 @@ export default function CharacterPage() {
       </div>
     );
   }
-
-  const handleStartChat = () => {
-    if (scenario.implemented) {
-      navigate(`/chat/${scenario.id}`);
-    } else {
-      alert('백엔드 API 연결 후 채팅 기능이 활성화됩니다!');
-    }
-  };
-
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -100,7 +199,7 @@ export default function CharacterPage() {
               {/* 왼쪽: 이미지 */}
               <div className="relative h-96 md:h-auto">
                 <img
-                  src={scenario.image}
+                  src={scenario.image_url}
                   alt={scenario.title}
                   className="w-full h-full object-cover"
                 />
@@ -128,7 +227,7 @@ export default function CharacterPage() {
                         key={index}
                         className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium"
                       >
-                        {tag}
+                        {tag.startsWith('#') ? tag : `#${tag}`}
                       </span>
                     ))}
                   </div>
@@ -147,7 +246,7 @@ export default function CharacterPage() {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
-                      <span className="font-medium">{scenario.likes + (isLiked ? 1 : 0)}</span>
+                      <span className="font-medium">{scenario.likes}</span>
                       <span>좋아요</span>
                     </button>
 
@@ -205,14 +304,13 @@ export default function CharacterPage() {
                   </div>
                   <h2 className="text-xl font-bold text-gray-900">카테고리</h2>
                 </div>
-                <p className="text-gray-700 font-medium mb-3">{scenario.category}</p>
                 <div className="flex flex-wrap gap-2">
-                  {scenario.mood.map((mood, index) => (
+                  {scenario.tags.slice(0, 3).map((tag, index) => (
                     <span
                       key={index}
                       className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-sm"
                     >
-                      {mood}
+                      {tag.startsWith('#') ? tag : `#${tag}`}
                     </span>
                   ))}
                 </div>
@@ -259,12 +357,6 @@ export default function CharacterPage() {
                     <span className="text-xs text-gray-500">1,923 ↑</span>
                   </div>
                 </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 text-center">
-                    현재 시나리오 랭킹: <span className="text-purple-600 font-bold">#위워</span>
-                  </p>
-                </div>
               </div>
             </div>
 
@@ -290,7 +382,7 @@ export default function CharacterPage() {
                 {scenarioExpanded && (
                   <div className="px-6 pb-6">
                     <p className="text-gray-700 leading-relaxed text-lg mb-6">
-                      {scenario.detailDescription}
+                      {scenario.description}
                     </p>
 
                     <div className="bg-purple-50 border-l-4 border-purple-600 p-4 rounded-r-lg">
@@ -301,7 +393,7 @@ export default function CharacterPage() {
                         특별한 경험
                       </h3>
                       <p className="text-purple-800 text-sm">
-                        지열한 전투가 끝난 후의 평화로운 일상을 체험해보세요. 동료들과 함께하는 소소한 행복과 서로를 돌보는 따뜻한 마음을 느낄 수 있는 힐링 스토리입니다!
+                        AI 기반 대화로 몰입감 있는 스토리를 경험하세요!
                       </p>
                     </div>
                   </div>
@@ -309,72 +401,70 @@ export default function CharacterPage() {
               </div>
 
               {/* 등장인물 */}
-              {scenario.characters && scenario.characters.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <button
-                    onClick={() => setCharactersExpanded(!charactersExpanded)}
-                    className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+                <button
+                  onClick={() => setCharactersExpanded(!charactersExpanded)}
+                  className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                >
+                  <h2 className="text-2xl font-bold text-gray-900">등장인물</h2>
+                  <svg
+                    className={`w-6 h-6 text-gray-600 transition-transform ${charactersExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <h2 className="text-2xl font-bold text-gray-900">등장인물</h2>
-                    <svg
-                      className={`w-6 h-6 text-gray-600 transition-transform ${charactersExpanded ? 'rotate-180' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-                  {charactersExpanded && (
-                    <div className="px-6 pb-6">
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {scenario.characters.map((character, index) => (
-                          <div
-                            key={index}
-                            className={`${character.color} rounded-2xl p-4 border-2 border-transparent hover:border-purple-300 transition-all`}
-                          >
-                            <div className="flex items-start gap-4">
-                              <div className="relative flex-shrink-0">
-                                <img
-                                  src={character.image}
-                                  alt={character.name}
-                                  className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-md"
-                                />
-                                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
-                              </div>
+                {charactersExpanded && (
+                  <div className="px-6 pb-6">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {mockCharacters.map((character, index) => (
+                        <div
+                          key={index}
+                          className={`${character.color} rounded-2xl p-4 border-2 border-transparent hover:border-purple-300 transition-all`}
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="relative flex-shrink-0">
+                              <img
+                                src={character.image}
+                                alt={character.name}
+                                className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-md"
+                              />
+                              <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+                            </div>
 
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-1">
-                                  <h3 className="font-bold text-gray-900 text-lg">{character.name}</h3>
-                                  <span className="text-xs bg-white px-2 py-1 rounded-full text-gray-600 font-medium">
-                                    {character.status}
-                                  </span>
-                                </div>
-                                <p className="text-gray-700 text-sm leading-relaxed">
-                                  {character.greeting}
-                                </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <h3 className="font-bold text-gray-900 text-lg">{character.name}</h3>
+                                <span className="text-xs bg-white px-2 py-1 rounded-full text-gray-600 font-medium">
+                                  {character.status}
+                                </span>
                               </div>
+                              <p className="text-gray-700 text-sm leading-relaxed">
+                                {character.greeting}
+                              </p>
                             </div>
                           </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                        <h4 className="flex items-center gap-2 text-blue-900 font-semibold mb-2">
-                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                          </svg>
-                          상호작용 팁
-                        </h4>
-                        <p className="text-blue-800 text-sm">
-                          각 캐릭터는 고유한 성격과 말투를 가지고 있어요. 자연스럽게 대화하면서 그들의 개성을 느껴보세요!
-                        </p>
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-              )}
+
+                    <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                      <h4 className="flex items-center gap-2 text-blue-900 font-semibold mb-2">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+                        </svg>
+                        상호작용 팁
+                      </h4>
+                      <p className="text-blue-800 text-sm">
+                        각 캐릭터는 고유한 성격과 말투를 가지고 있어요. 자연스럽게 대화하면서 그들의 개성을 느껴보세요!
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

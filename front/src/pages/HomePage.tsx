@@ -29,7 +29,7 @@ export default function HomePage() {
   const [characters, setCharacters] = useState<CharacterCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toggleSidebar, openSettings, currentUser } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn } = useApp();
 
   // Load scenarios from API
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function HomePage() {
       setError(null);
       try {
         // Use authenticated endpoint if user is logged in for user-specific data
-        const scenarios: ScenarioCard[] = currentUser
+        const scenarios: ScenarioCard[] = isLoggedIn
           ? await apiClient.getUserScenarios()
           : await apiClient.getScenarios();
 
@@ -59,7 +59,7 @@ export default function HomePage() {
         setCharacters(transformedCharacters);
 
         // Set initial liked cards from user progress (if authenticated)
-        if (currentUser) {
+        if (isLoggedIn) {
           const likedScenarioIds = scenarios
             .filter(s => s.is_liked)
             .map(s => s.scenario_id);
@@ -74,7 +74,7 @@ export default function HomePage() {
     };
 
     loadScenarios();
-  }, [currentUser]);
+  }, [isLoggedIn]);
 
   const handleLike = async (cardId: string) => {
     // Optimistically update UI first
@@ -101,7 +101,7 @@ export default function HomePage() {
     }));
 
     // Call API if user is authenticated
-    if (currentUser) {
+    if (isLoggedIn) {
       try {
         const result = await apiClient.toggleScenarioLike(cardId);
 
