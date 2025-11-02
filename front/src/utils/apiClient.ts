@@ -11,8 +11,8 @@ import {
   isTokenExpiringSoon,
 } from './authUtils';
 
-// API 베이스 URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// API 베이스 URL (VITE_API_URL로 통일)
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Axios 인스턴스 생성
 const apiClient: AxiosInstance = axios.create({
