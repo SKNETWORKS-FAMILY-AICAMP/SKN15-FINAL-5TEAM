@@ -703,6 +703,29 @@ async def get_me(user: Dict = Depends(require_auth)):
     }
 
 
+@app.get("/api/users/me/credits")
+async def get_user_credits(user: Dict = Depends(require_auth)):
+    """사용자 크레딧(버블) 조회"""
+    credits = _hybrid_manager.db.get_user_credits(user["user_id"])
+    if not credits:
+        raise HTTPException(status_code=404, detail="크레딧 정보를 찾을 수 없습니다")
+    return credits
+
+
+class ConsumeCreditsRequest(BaseModel):
+    amount: int
+    description: str
+
+
+@app.post("/api/users/me/credits/consume")
+async def consume_user_credits(req: ConsumeCreditsRequest, user: Dict = Depends(require_auth)):
+    """사용자 크레딧(버블) 소비"""
+    success = _hybrid_manager.db.consume_credits(user["user_id"], req.amount, req.description)
+    if not success:
+        raise HTTPException(status_code=400, detail="크레딧 잔액이 부족합니다")
+    return {"success": True, "message": f"{req.amount} 버블이 차감되었습니다"}
+
+
 # ============================================================
 # OAuth 2.0 소셜 로그인 엔드포인트 (Google, Kakao)
 # ============================================================
