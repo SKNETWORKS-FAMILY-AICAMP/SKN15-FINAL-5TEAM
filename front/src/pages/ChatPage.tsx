@@ -5,17 +5,7 @@ import ChatHeader from '@/components/ChatHeader';
 import LoginModal from '@/components/LoginModal';
 import SessionResumeModal from '@/components/SessionResumeModal';
 import { useApp } from '@/contexts/AppContext';
-import { apiClient, LastSessionInfo } from '@/services/api';
-import scenariosData from '@/data/scenarios.json';
-
-interface ScenarioData {
-  id: string;
-  title: string;
-  image: string;
-  description: string;
-  detailDescription: string;
-  implemented: boolean;
-}
+import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
 
 const SCENARIO_ID_MAP: Record<string, string> = {
   train: 'cutscene5_llm_driven',
@@ -27,11 +17,42 @@ export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
   const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
 
+  // Scenario loading state
+  const [scenario, setScenario] = useState<ScenarioCard | null>(null);
+  const [scenarioLoading, setScenarioLoading] = useState(true);
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
+
   // Session restoration state
   const [lastSession, setLastSession] = useState<LastSessionInfo | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
+
+  // Load scenario data from API
+  useEffect(() => {
+    const loadScenario = async () => {
+      if (!characterId) {
+        setScenarioError('시나리오 ID가 필요합니다.');
+        setScenarioLoading(false);
+        return;
+      }
+
+      setScenarioLoading(true);
+      setScenarioError(null);
+
+      try {
+        const data = await apiClient.getScenario(characterId);
+        setScenario(data);
+      } catch (err) {
+        console.error('Failed to load scenario:', err);
+        setScenarioError('시나리오를 불러올 수 없습니다.');
+      } finally {
+        setScenarioLoading(false);
+      }
+    };
+
+    loadScenario();
+  }, [characterId]);
 
   // Authentication guard: show login modal if not authenticated
   useEffect(() => {
@@ -77,12 +98,30 @@ export default function ChatPage() {
     setSessionCheckDone(true);
   };
 
-  // Load scenario data dynamically
-  const scenarios = scenariosData as Record<string, ScenarioData>;
-  const scenario = characterId ? scenarios[characterId] : null;
+  // Loading state for scenario
+  if (scenarioLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <ChatHeader
+          onToggleSidebar={toggleSidebar}
+          onOpenSettings={openSettings}
+          title="로딩 중..."
+          showBackButton={true}
+        />
+        <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
+          <div className="relative z-10 flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+              <p className="mt-4 text-gray-600">시나리오를 불러오는 중...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  // Fallback for unknown scenarios
-  if (!scenario) {
+  // Error state or scenario not found
+  if (scenarioError || !scenario) {
     return (
       <div className="min-h-screen bg-gray-50">
         <ChatHeader
@@ -95,8 +134,12 @@ export default function ChatPage() {
           <div className="relative z-10 flex items-center justify-center h-full">
             <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
               <div className="text-6xl mb-6">❓</div>
-              <h1 className="text-3xl font-bold mb-4 text-gray-800">존재하지 않는 시나리오</h1>
-              <p className="text-gray-600 mb-6">요청하신 시나리오를 찾을 수 없습니다.</p>
+              <h1 className="text-3xl font-bold mb-4 text-gray-800">
+                {scenarioError ? '시나리오 로딩 실패' : '존재하지 않는 시나리오'}
+              </h1>
+              <p className="text-gray-600 mb-6">
+                {scenarioError || '요청하신 시나리오를 찾을 수 없습니다.'}
+              </p>
               <Link
                 to="/"
                 className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -110,8 +153,8 @@ export default function ChatPage() {
     );
   }
 
-  // Check if implemented
-  if (!scenario.implemented) {
+  // Check if implemented (is_active: true means active, false means not yet available)
+  if (!scenario.is_active) {
     return (
       <div className="min-h-screen bg-gray-50">
         <ChatHeader
@@ -129,7 +172,7 @@ export default function ChatPage() {
                 <span className="font-semibold text-purple-600">{scenario.title}</span>
                 {' '}시나리오는 현재 개발 중입니다.
               </p>
-              <p className="text-sm text-gray-500 mb-6">백엔드 API 연결 후 이용 가능합니다!</p>
+              <p className="text-sm text-gray-500 mb-6">곧 만나보실 수 있습니다!</p>
               <Link
                 to="/"
                 className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"

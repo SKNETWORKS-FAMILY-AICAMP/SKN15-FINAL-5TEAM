@@ -2,9 +2,14 @@
 """
 Scenario Database Seeding Script
 Seeds the database with existing 6 scenarios from HomePage
+
+Usage:
+  python seed_scenarios.py                # Use .env.local (local DB)
+  python seed_scenarios.py production     # Use .env.production (RDS)
 """
 import sys
 import os
+from dotenv import load_dotenv
 
 # Add parent directory to path to import DatabaseManager
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -12,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.database.db_manager import DatabaseManager
 
 # Get database config from environment variables or use defaults
-def get_db_config():
+def get_db_config(env='local'):
     """Get DB config from environment variables or use defaults"""
     return {
         'host': os.getenv('DB_HOST', 'localhost'),
@@ -267,9 +272,24 @@ def main():
     print("     Scenario Database Seeding Script")
     print("🌱" * 35)
 
+    # Check environment argument
+    env = sys.argv[1] if len(sys.argv) > 1 else 'local'
+
+    # Load appropriate .env file
+    if env == 'production':
+        env_file = os.path.join(os.path.dirname(__file__), '..', '.env.production')
+        print(f"\n🌍 Environment: PRODUCTION")
+        print(f"📄 Loading: {env_file}")
+    else:
+        env_file = os.path.join(os.path.dirname(__file__), '..', '.env.local')
+        print(f"\n🌍 Environment: LOCAL")
+        print(f"📄 Loading: {env_file}")
+
+    load_dotenv(dotenv_path=env_file, override=True)
+
     # Get DB config and create DB manager
     try:
-        db_config = get_db_config()
+        db_config = get_db_config(env)
 
         print(f"\n📡 Connecting to database: {db_config['host']}:{db_config['port']}/{db_config['dbname']}")
         db = DatabaseManager(
