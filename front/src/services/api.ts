@@ -3,6 +3,7 @@
  * Handles all backend communication for KIME Chat
  */
 
+import axios from 'axios'
 import authenticatedApiClient from '@/utils/apiClient'
 
 // API Configuration
