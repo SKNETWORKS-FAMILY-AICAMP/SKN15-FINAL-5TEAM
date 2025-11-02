@@ -347,9 +347,17 @@ export default function LoginModal() {
 
                   <button
                     type="submit"
-                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    disabled={isLoading}
+                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    로그인
+                    {isLoading ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin"></div>
+                        <span>로그인 중...</span>
+                      </div>
+                    ) : (
+                      '로그인'
+                    )}
                   </button>
                 </form>
 
@@ -458,9 +466,17 @@ export default function LoginModal() {
 
                   <button
                     type="submit"
-                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+                    disabled={isLoading}
+                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
                   >
-                    회원가입
+                    {isLoading ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="w-5 h-5 border-t-2 border-white rounded-full animate-spin"></div>
+                        <span>가입 중...</span>
+                      </div>
+                    ) : (
+                      '회원가입'
+                    )}
                   </button>
                 </form>
 
