@@ -49,7 +49,7 @@ from src.database.cache_manager import create_cache_manager_from_env
 # ------------------------------------------------------------
 # ✅ Conversation Summarizer 로드 (대화 요약 자동화)
 # ------------------------------------------------------------
-from src.utils.conversation_summarizer import update_conversation_summary
+from src.utils.conversation_summarizer import update_conversation_summary, generate_embedding
 
 # ------------------------------------------------------------
 # ✅ Authentication 모듈 로드
@@ -1139,6 +1139,296 @@ async def update_scenario_progress(
         raise HTTPException(status_code=500, detail="Failed to update progress")
 
     return {"success": True}
+
+
+# ============================================================
+# 사용자 장기 기억 관리 엔드포인트 (Long-term Memory)
+# ============================================================
+
+@app.get("/api/users/me/memories")
+async def get_user_memories(
+    memory_type: Optional[str] = None,
+    limit: int = 50,
+    user: Dict = Depends(require_auth)
+):
+    """사용자의 장기 기억 목록 조회
+
+    Args:
+        memory_type: 기억 타입 필터 (character_preference, user_fact, game_progress, relationship, important_event)
+        limit: 반환할 최대 개수 (기본값: 50)
+        user: 인증된 사용자 정보
+
+    Returns:
+        List of memories with metadata
+    """
+    try:
+        memories = _hybrid_manager.db.get_user_memories(
+            user_id=user["user_id"],
+            memory_type=memory_type,
+            limit=limit
+        )
+        return memories if memories else []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve memories: {str(e)}")
+
+
+@app.get("/api/users/me/memories/{memory_key}")
+async def get_memory_by_key(
+    memory_key: str,
+    user: Dict = Depends(require_auth)
+):
+    """특정 키로 기억 조회
+
+    Args:
+        memory_key: 기억 키 (예: "favorite_character")
+        user: 인증된 사용자 정보
+
+    Returns:
+        Memory object or 404
+    """
+    try:
+        memory = _hybrid_manager.db.get_memory_by_key(
+            user_id=user["user_id"],
+            memory_key=memory_key
+        )
+
+        if not memory:
+            raise HTTPException(status_code=404, detail="Memory not found")
+
+        return memory
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve memory: {str(e)}")
+
+
+@app.post("/api/users/me/memories")
+async def create_memory(
+    memory_data: Dict,
+    user: Dict = Depends(require_auth)
+):
+    """새로운 기억 생성
+
+    Args:
+        memory_data: {
+            "memory_key": str (required),
+            "memory_value": str (required),
+            "memory_type": str (optional, default: "fact"),
+            "importance": float (optional, 0.0-1.0),
+            "tags": List[str] (optional),
+            "context": Dict (optional),
+            "confidence": float (optional, 0.0-1.0)
+        }
+        user: 인증된 사용자 정보
+
+    Returns:
+        {"success": bool, "memory_id": int}
+    """
+    try:
+        # Required fields
+        if "memory_key" not in memory_data or "memory_value" not in memory_data:
+            raise HTTPException(status_code=400, detail="memory_key and memory_value are required")
+
+        # Generate embedding for the memory value
+        embedding = None
+        if memory_data.get("memory_value"):
+            embedding = generate_embedding(memory_data["memory_value"])
+
+        # Create or update memory
+        memory_id = _hybrid_manager.db.create_or_update_memory(
+            user_id=user["user_id"],
+            memory_key=memory_data["memory_key"],
+            memory_value=memory_data["memory_value"],
+            memory_type=memory_data.get("memory_type", "fact"),
+            importance=memory_data.get("importance", 0.5),
+            tags=memory_data.get("tags"),
+            context=memory_data.get("context"),
+            confidence=memory_data.get("confidence"),
+            embedding=embedding
+        )
+
+        if not memory_id:
+            raise HTTPException(status_code=500, detail="Failed to create memory")
+
+        return {"success": True, "memory_id": memory_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create memory: {str(e)}")
+
+
+@app.put("/api/users/me/memories/{memory_key}")
+async def update_memory(
+    memory_key: str,
+    memory_data: Dict,
+    user: Dict = Depends(require_auth)
+):
+    """기존 기억 업데이트
+
+    Args:
+        memory_key: 업데이트할 기억 키
+        memory_data: {
+            "memory_value": str (required),
+            "memory_type": str (optional),
+            "importance": float (optional),
+            "tags": List[str] (optional),
+            "context": Dict (optional),
+            "confidence": float (optional)
+        }
+        user: 인증된 사용자 정보
+
+    Returns:
+        {"success": bool, "memory_id": int}
+    """
+    try:
+        # Check if memory exists
+        existing_memory = _hybrid_manager.db.get_memory_by_key(
+            user_id=user["user_id"],
+            memory_key=memory_key
+        )
+
+        if not existing_memory:
+            raise HTTPException(status_code=404, detail="Memory not found")
+
+        # Required field
+        if "memory_value" not in memory_data:
+            raise HTTPException(status_code=400, detail="memory_value is required")
+
+        # Generate new embedding if memory_value changed
+        embedding = None
+        if memory_data.get("memory_value"):
+            embedding = generate_embedding(memory_data["memory_value"])
+
+        # Update memory (same as create - upsert pattern)
+        memory_id = _hybrid_manager.db.create_or_update_memory(
+            user_id=user["user_id"],
+            memory_key=memory_key,
+            memory_value=memory_data["memory_value"],
+            memory_type=memory_data.get("memory_type", existing_memory.get("memory_type", "fact")),
+            importance=memory_data.get("importance", existing_memory.get("importance", 0.5)),
+            tags=memory_data.get("tags", existing_memory.get("tags")),
+            context=memory_data.get("context", existing_memory.get("context")),
+            confidence=memory_data.get("confidence", existing_memory.get("confidence")),
+            embedding=embedding
+        )
+
+        if not memory_id:
+            raise HTTPException(status_code=500, detail="Failed to update memory")
+
+        return {"success": True, "memory_id": memory_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update memory: {str(e)}")
+
+
+@app.delete("/api/users/me/memories/{memory_key}")
+async def delete_memory(
+    memory_key: str,
+    user: Dict = Depends(require_auth)
+):
+    """기억 삭제 (소프트 삭제)
+
+    Args:
+        memory_key: 삭제할 기억 키
+        user: 인증된 사용자 정보
+
+    Returns:
+        {"success": bool}
+    """
+    try:
+        success = _hybrid_manager.db.delete_memory(
+            user_id=user["user_id"],
+            memory_key=memory_key
+        )
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Memory not found")
+
+        return {"success": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete memory: {str(e)}")
+
+
+@app.post("/api/users/me/memories/search")
+async def search_memories_by_similarity(
+    search_data: Dict,
+    user: Dict = Depends(require_auth)
+):
+    """의미 기반 기억 검색 (Vector Similarity Search)
+
+    Args:
+        search_data: {
+            "query": str (required) - 검색 쿼리,
+            "limit": int (optional, default: 5) - 반환할 최대 개수,
+            "min_importance": float (optional, default: 0.0) - 최소 중요도
+        }
+        user: 인증된 사용자 정보
+
+    Returns:
+        List of memories sorted by similarity (with distance field)
+    """
+    try:
+        if "query" not in search_data:
+            raise HTTPException(status_code=400, detail="query is required")
+
+        # Generate embedding for query
+        query_embedding = generate_embedding(search_data["query"])
+
+        if not query_embedding:
+            raise HTTPException(status_code=500, detail="Failed to generate query embedding")
+
+        # Search by similarity
+        memories = _hybrid_manager.db.search_memories_by_similarity(
+            user_id=user["user_id"],
+            query_embedding=query_embedding,
+            limit=search_data.get("limit", 5),
+            min_importance=search_data.get("min_importance", 0.0)
+        )
+
+        return memories if memories else []
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to search memories: {str(e)}")
+
+
+@app.get("/api/users/me/memories/session/{session_id}")
+async def get_memories_by_session(
+    session_id: str,
+    user: Dict = Depends(require_auth)
+):
+    """특정 세션에서 생성된 기억 조회
+
+    Args:
+        session_id: 세션 ID
+        user: 인증된 사용자 정보
+
+    Returns:
+        List of memories from this session
+    """
+    try:
+        memories = _hybrid_manager.db.get_user_memories(
+            user_id=user["user_id"],
+            limit=100  # Higher limit for session-specific queries
+        )
+
+        # Filter by source_session_id
+        session_memories = [
+            m for m in memories
+            if m.get("source_session_id") == session_id
+        ]
+
+        return session_memories
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve session memories: {str(e)}")
 
 
 # ============================================================
