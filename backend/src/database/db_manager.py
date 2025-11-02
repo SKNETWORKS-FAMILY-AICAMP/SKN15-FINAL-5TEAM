@@ -1565,6 +1565,60 @@ class DatabaseManager:
             logger.error(f"Failed to find similar entities: {e}")
             return []
 
+    # ============================================================
+    # User Credits (Bubble System)
+    # ============================================================
+
+    def get_user_credits(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 크레딧 조회"""
+        query = """
+        SELECT bubble_count, total_purchased, total_consumed, last_updated
+        FROM statedb.user_credits
+        WHERE user_id = %s
+        """
+        results = self.execute_query(query, (user_id,))
+        return results[0] if results else None
+
+    def consume_credits(self, user_id: str, amount: int, description: str) -> bool:
+        """크레딧 소비 (트랜잭션)"""
+        query = """
+        WITH updated AS (
+          UPDATE statedb.user_credits
+          SET bubble_count = bubble_count - %s,
+              total_consumed = total_consumed + %s,
+              last_updated = NOW()
+          WHERE user_id = %s AND bubble_count >= %s
+          RETURNING user_id, bubble_count
+        )
+        INSERT INTO statedb.credit_transactions
+          (user_id, amount, transaction_type, balance_after, description)
+        SELECT user_id, -%s, 'consume', bubble_count, %s
+        FROM updated
+        RETURNING transaction_id;
+        """
+        results = self.execute_query(query, (amount, amount, user_id, amount, amount, description))
+        return len(results) > 0
+
+    def add_credits(self, user_id: str, amount: int, transaction_type: str, description: str) -> bool:
+        """크레딧 추가 (purchase, bonus, refund)"""
+        query = """
+        WITH updated AS (
+          UPDATE statedb.user_credits
+          SET bubble_count = bubble_count + %s,
+              total_purchased = total_purchased + %s,
+              last_updated = NOW()
+          WHERE user_id = %s
+          RETURNING user_id, bubble_count
+        )
+        INSERT INTO statedb.credit_transactions
+          (user_id, amount, transaction_type, balance_after, description)
+        SELECT user_id, %s, %s, bubble_count, %s
+        FROM updated
+        RETURNING transaction_id;
+        """
+        results = self.execute_query(query, (amount, amount, user_id, amount, transaction_type, description))
+        return len(results) > 0
+
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼
 def create_database_manager_from_env() -> DatabaseManager:
