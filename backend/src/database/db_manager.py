@@ -1638,40 +1638,38 @@ class DatabaseManager:
         Raises:
             Exception: DB 오류 시 예외 발생
         """
+        # NOTE: 이 함수는 더 이상 필요하지 않을 수 있음
+        # 012_user_progression.sql의 Trigger (create_user_progression)가
+        # 자동으로 신규 사용자의 progression을 초기화합니다.
+        # 하지만 Trigger가 없는 환경을 위해 이 함수는 유지합니다.
+
         try:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
-                    # 1. user_progression_ranks 초기화 (trainee, level 1, 0 XP)
+                    # 1. user_progression 초기화 (novice, level 1, 0 XP)
                     cur.execute("""
-                        INSERT INTO statedb.user_progression_ranks (user_id, rank_code, level, experience_points)
-                        VALUES (%s, 'trainee', 1, 0)
+                        INSERT INTO statedb.user_progression (user_id, rank_code, experience_points, level)
+                        VALUES (%s, 'novice', 0, 1)
+                        ON CONFLICT (user_id) DO NOTHING
                     """, (user_id,))
 
-                    # 2. user_progression_stats 초기화 (모든 카운터 0)
+                    # 2. user_equipment 초기화 (good, worn, waiting 상태)
                     cur.execute("""
-                        INSERT INTO statedb.user_progression_stats (
-                            user_id, total_messages, total_sessions, total_play_minutes,
-                            scenarios_completed, achievements_count
-                        )
-                        VALUES (%s, 0, 0, 0, 0, 0)
-                    """, (user_id,))
-
-                    # 3. user_progression_equipment 초기화 (모두 'waiting' 상태)
-                    cur.execute("""
-                        INSERT INTO statedb.user_progression_equipment (
-                            user_id, sword_status, uniform_status, crow_status
-                        )
-                        VALUES (%s, 'waiting', 'waiting', 'waiting')
+                        INSERT INTO statedb.user_equipment (user_id, sword_status, uniform_status, crow_status)
+                        VALUES (%s, 'good', 'worn', 'waiting')
+                        ON CONFLICT (user_id) DO NOTHING
                     """, (user_id,))
 
             print(f"✅ User progression initialized for user_id: {user_id}")
             return True
 
         except Exception as e:
-            print(f"❌ Failed to initialize progression for user {user_id}: {e}")
+            print(f"⚠️ Warning: Failed to initialize progression for user {user_id}: {e}")
+            print("   (Trigger may have already initialized progression)")
             import traceback
             traceback.print_exc()
-            raise
+            # 예외를 발생시키지 않고 False 반환 (Trigger가 처리할 수 있으므로)
+            return False
 
     def get_user_progression(self, user_id: str) -> Optional[Dict[str, Any]]:
         """사용자 진행도 조회 (rank, level, XP, stats, equipment 포함)
