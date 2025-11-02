@@ -56,6 +56,16 @@ export interface ScenarioInfo {
   id: string
 }
 
+export interface LastSessionInfo {
+  sessionId: string
+  scenarioId: string
+  currentStage?: string
+  turnCount: number
+  createdAt?: string
+  updatedAt?: string
+  conversationSummary?: string
+}
+
 // ============================================================
 // API Client
 // ============================================================
@@ -129,6 +139,32 @@ class ApiClient {
     } catch (error) {
       console.error('Health check failed:', error)
       return false
+    }
+  }
+
+  /**
+   * Get user's last session (with JWT authentication)
+   */
+  async getUserLastSession(scenarioId?: string): Promise<LastSessionInfo | null> {
+    try {
+      const params = scenarioId ? { scenario_id: scenarioId } : {}
+      const response = await authenticatedApiClient.get('/api/session/last', { params })
+
+      if (response.data.has_session) {
+        return {
+          sessionId: response.data.session_id,
+          scenarioId: response.data.scenario_id,
+          currentStage: response.data.current_stage,
+          turnCount: response.data.turn_count,
+          createdAt: response.data.created_at,
+          updatedAt: response.data.updated_at,
+          conversationSummary: response.data.conversation_summary
+        }
+      }
+      return null
+    } catch (error) {
+      console.error('Error getting last session:', error)
+      return null
     }
   }
 }

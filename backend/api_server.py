@@ -1752,6 +1752,55 @@ async def delete_session(session_id: str):
 
 
 # ------------------------------------------------------------
+# ✅ 사용자의 마지막 세션 조회 (세션 복원용)
+# ------------------------------------------------------------
+@app.get("/api/session/last")
+async def get_user_last_session(
+    scenario_id: Optional[str] = None,
+    current_user: Dict = Depends(require_auth)
+):
+    """
+    현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용)
+
+    Query Parameters:
+        scenario_id (Optional[str]): 특정 시나리오의 마지막 세션만 조회 (미지정 시 모든 시나리오 중 최신)
+
+    Returns:
+        {
+            "session_id": "...",
+            "scenario_id": "...",
+            "current_stage": "...",
+            "turn_count": 5,
+            "created_at": "...",
+            "updated_at": "...",
+            "conversation_summary": "...",  # 장기기억 요약
+            "has_session": true  # 세션이 존재하는지 여부
+        }
+    """
+    user_id = current_user.get('user_id')
+
+    # 데이터베이스에서 마지막 세션 조회
+    last_session = DB_MANAGER.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
+
+    if not last_session:
+        return {
+            "has_session": False,
+            "message": "저장된 세션이 없습니다"
+        }
+
+    return {
+        "has_session": True,
+        "session_id": str(last_session.get("session_id")),
+        "scenario_id": last_session.get("scenario_id"),
+        "current_stage": last_session.get("current_stage"),
+        "turn_count": last_session.get("turn_count", 0),
+        "created_at": last_session.get("created_at").isoformat() if last_session.get("created_at") else None,
+        "updated_at": last_session.get("updated_at").isoformat() if last_session.get("updated_at") else None,
+        "conversation_summary": last_session.get("conversation_summary")  # 장기기억 요약
+    }
+
+
+# ------------------------------------------------------------
 # ✅ 사용 가능한 시나리오 목록 조회 (프론트 시나리오 선택용)
 # ------------------------------------------------------------
 @app.get("/api/scenarios")

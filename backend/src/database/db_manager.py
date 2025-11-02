@@ -421,6 +421,47 @@ class DatabaseManager:
             logger.error(f"Failed to update session {session_id}: {e}")
             return False
 
+    def get_user_last_session(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자의 마지막 세션 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID (Optional, 지정하면 해당 시나리오의 마지막 세션만 반환)
+
+        Returns:
+            Optional[Dict]: 세션 정보 or None
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    if scenario_id:
+                        # 특정 시나리오의 마지막 세션
+                        cur.execute("""
+                            SELECT * FROM statedb.sessions
+                            WHERE user_id = %s AND scenario_id = %s
+                            ORDER BY updated_at DESC
+                            LIMIT 1
+                        """, (user_id, scenario_id))
+                    else:
+                        # 모든 시나리오 중 마지막 세션
+                        cur.execute("""
+                            SELECT * FROM statedb.sessions
+                            WHERE user_id = %s
+                            ORDER BY updated_at DESC
+                            LIMIT 1
+                        """, (user_id,))
+
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get last session for user {user_id}: {e}")
+            return None
+
     # ========================================
     # StateDB: User Inputs
     # ========================================
