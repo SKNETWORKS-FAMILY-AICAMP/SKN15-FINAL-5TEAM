@@ -1,9 +1,11 @@
 import { useParams, Link } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import ChatHeader from '@/components/ChatHeader';
 import LoginModal from '@/components/LoginModal';
+import SessionResumeModal from '@/components/SessionResumeModal';
 import { useApp } from '@/contexts/AppContext';
+import { apiClient, LastSessionInfo } from '@/services/api';
 import scenariosData from '@/data/scenarios.json';
 
 interface ScenarioData {
@@ -15,16 +17,65 @@ interface ScenarioData {
   implemented: boolean;
 }
 
+const SCENARIO_ID_MAP: Record<string, string> = {
+  train: 'cutscene5_llm_driven',
+  ending: 'cutscene5_llm_driven',
+  cutscene5_llm_driven: 'cutscene5_llm_driven',
+};
+
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
   const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
+
+  // Session restoration state
+  const [lastSession, setLastSession] = useState<LastSessionInfo | null>(null);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
+  const [sessionCheckDone, setSessionCheckDone] = useState(false);
 
   // Authentication guard: show login modal if not authenticated
   useEffect(() => {
     if (!isLoggedIn) {
       openLoginModal();
+      setSessionCheckDone(false);
     }
   }, [isLoggedIn, openLoginModal]);
+
+  // Check for last session after login
+  useEffect(() => {
+    if (isLoggedIn && characterId && !sessionCheckDone) {
+      checkLastSession();
+    }
+  }, [isLoggedIn, characterId, sessionCheckDone]);
+
+  const checkLastSession = async () => {
+    try {
+      const backendScenarioId = SCENARIO_ID_MAP[characterId || ''] || characterId;
+      const session = await apiClient.getUserLastSession(backendScenarioId);
+
+      if (session) {
+        setLastSession(session);
+        setShowResumeModal(true);
+      }
+      setSessionCheckDone(true);
+    } catch (error) {
+      console.error('Failed to check last session:', error);
+      setSessionCheckDone(true);
+    }
+  };
+
+  const handleResume = (sessionId: string) => {
+    console.log('Resuming session:', sessionId);
+    setResumeSessionId(sessionId);
+    setShowResumeModal(false);
+  };
+
+  const handleNewSession = () => {
+    console.log('Starting new session');
+    setResumeSessionId(undefined);
+    setShowResumeModal(false);
+    setSessionCheckDone(true);
+  };
 
   // Load scenario data dynamically
   const scenarios = scenariosData as Record<string, ScenarioData>;
@@ -136,9 +187,23 @@ export default function ChatPage() {
 
       <main style={{ height: 'calc(100vh - 64px)' }}>
         {/* ChatInterface handles full layout (left background + right chat) */}
-        <ChatInterface characterId={characterId || 'ending'} />
+        <ChatInterface
+          characterId={characterId || 'ending'}
+          initialSessionId={resumeSessionId}
+        />
       </main>
+
       <LoginModal />
+
+      {/* Session Resume Modal */}
+      {showResumeModal && lastSession && (
+        <SessionResumeModal
+          lastSession={lastSession}
+          onResume={handleResume}
+          onNewSession={handleNewSession}
+          onClose={() => setShowResumeModal(false)}
+        />
+      )}
     </div>
   );
 }

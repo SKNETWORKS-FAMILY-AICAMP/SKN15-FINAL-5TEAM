@@ -23,6 +23,7 @@ interface ChatInterfaceProps {
   onUserLogin?: (username: string) => void;
   onMessageSent?: () => void;
   characterId?: string;
+  initialSessionId?: string;  // 세션 복원용 session_id
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
@@ -33,7 +34,7 @@ const SCENARIO_ID_MAP: Record<string, string> = {
   cutscene5_llm_driven: 'cutscene5_llm_driven',
 };
 
-export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending' }: ChatInterfaceProps) {
+export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending', initialSessionId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [showCharacterModal, setShowCharacterModal] = useState(false);
@@ -42,7 +43,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const [transcript, setTranscript] = useState('');
   const [invitedCharacters, setInvitedCharacters] = useState<string[]>(['tanjiro', 'inosuke', 'zenitsu', 'nezuko']); // 현재 참여중인 캐릭터들
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);  // 세션 복원 지원
   const [isLoading, setIsLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false); // 타이핑 중 표시
