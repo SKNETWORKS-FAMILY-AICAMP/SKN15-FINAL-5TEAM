@@ -2212,6 +2212,258 @@ class DatabaseManager:
             logger.error(f"Failed to get scenarios with user progress for {user_id}: {e}")
             return []
 
+    # ========================================
+    # StateDB: User Memories (장기 기억 시스템)
+    # ========================================
+
+    def create_or_update_memory(
+        self,
+        user_id: str,
+        memory_key: str,
+        memory_value: str,
+        memory_type: str = "fact",
+        importance: float = 0.5,
+        tags: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        source_session_id: Optional[str] = None,
+        confidence: Optional[float] = None,
+        embedding: Optional[List[float]] = None,
+        expires_at: Optional[datetime] = None
+    ) -> Optional[int]:
+        """사용자 기억 생성 또는 업데이트
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 기억의 키 (예: "favorite_character")
+            memory_value: 기억 내용 (예: "탄지로를 좋아함")
+            memory_type: 기억 타입 (fact, preference, progress 등)
+            importance: 중요도 (0.0~1.0)
+            tags: 태그 리스트
+            context: 추가 컨텍스트 (JSONB)
+            source_session_id: 원본 세션 ID
+            confidence: 신뢰도 (0.0~1.0)
+            embedding: 임베딩 벡터 (1536차원)
+            expires_at: 만료 시간
+
+        Returns:
+            생성/업데이트된 기억의 ID
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO statedb.user_memories
+                        (user_id, memory_key, memory_value, memory_type, importance,
+                         tags, context, source_session_id, confidence, embedding, expires_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id, memory_key)
+                        DO UPDATE SET
+                            memory_value = EXCLUDED.memory_value,
+                            memory_type = EXCLUDED.memory_type,
+                            importance = EXCLUDED.importance,
+                            tags = EXCLUDED.tags,
+                            context = EXCLUDED.context,
+                            confidence = EXCLUDED.confidence,
+                            embedding = EXCLUDED.embedding,
+                            expires_at = EXCLUDED.expires_at,
+                            updated_at = NOW()
+                        RETURNING id
+                    """, (user_id, memory_key, memory_value, memory_type, importance,
+                          tags, Json(context) if context else None, source_session_id,
+                          confidence, embedding, expires_at))
+                    result = cur.fetchone()
+                    return result[0] if result else None
+        except Exception as e:
+            logger.error(f"Failed to create/update memory for user {user_id}, key {memory_key}: {e}")
+            return None
+
+    def get_user_memories(
+        self,
+        user_id: str,
+        memory_type: Optional[str] = None,
+        min_importance: float = 0.0,
+        tags: Optional[List[str]] = None,
+        limit: int = 100,
+        include_inactive: bool = False
+    ) -> List[Dict[str, Any]]:
+        """사용자의 기억 조회
+
+        Args:
+            user_id: 사용자 ID
+            memory_type: 특정 타입만 조회 (선택)
+            min_importance: 최소 중요도
+            tags: 특정 태그가 포함된 기억만 조회
+            limit: 최대 조회 개수
+            include_inactive: 비활성 기억 포함 여부
+
+        Returns:
+            기억 리스트
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    conditions = ["user_id = %s", "importance >= %s"]
+                    params = [user_id, min_importance]
+
+                    if memory_type:
+                        conditions.append("memory_type = %s")
+                        params.append(memory_type)
+
+                    if tags:
+                        conditions.append("tags && %s")
+                        params.append(tags)
+
+                    if not include_inactive:
+                        conditions.append("is_active = true")
+                        conditions.append("(expires_at IS NULL OR expires_at > NOW())")
+
+                    query = f"""
+                        SELECT * FROM statedb.user_memories
+                        WHERE {' AND '.join(conditions)}
+                        ORDER BY importance DESC, last_accessed_at DESC NULLS LAST
+                        LIMIT %s
+                    """
+                    params.append(limit)
+
+                    cur.execute(query, params)
+                    results = cur.fetchall()
+                    return [dict(row) for row in results] if results else []
+        except Exception as e:
+            logger.error(f"Failed to get memories for user {user_id}: {e}")
+            return []
+
+    def get_memory_by_key(self, user_id: str, memory_key: str) -> Optional[Dict[str, Any]]:
+        """특정 키의 기억 조회
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 기억 키
+
+        Returns:
+            기억 정보 또는 None
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.user_memories
+                        WHERE user_id = %s AND memory_key = %s AND is_active = true
+                    """, (user_id, memory_key))
+                    result = cur.fetchone()
+
+                    if result:
+                        # Update access count
+                        cur.execute("""
+                            UPDATE statedb.user_memories
+                            SET access_count = access_count + 1,
+                                last_accessed_at = NOW()
+                            WHERE user_id = %s AND memory_key = %s
+                        """, (user_id, memory_key))
+
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get memory {memory_key} for user {user_id}: {e}")
+            return None
+
+    def search_memories_by_similarity(
+        self,
+        user_id: str,
+        query_embedding: List[float],
+        limit: int = 5,
+        min_importance: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """임베딩 벡터 유사도로 기억 검색
+
+        Args:
+            user_id: 사용자 ID
+            query_embedding: 검색할 임베딩 벡터 (1536차원)
+            limit: 최대 조회 개수
+            min_importance: 최소 중요도
+
+        Returns:
+            유사도 순으로 정렬된 기억 리스트 (distance 포함)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # pgvector의 <=> 연산자는 코사인 거리 (작을수록 유사)
+                    cur.execute("""
+                        SELECT
+                            *,
+                            embedding <=> %s::vector AS distance
+                        FROM statedb.user_memories
+                        WHERE user_id = %s
+                          AND embedding IS NOT NULL
+                          AND is_active = true
+                          AND importance >= %s
+                          AND (expires_at IS NULL OR expires_at > NOW())
+                        ORDER BY embedding <=> %s::vector
+                        LIMIT %s
+                    """, (query_embedding, user_id, min_importance, query_embedding, limit))
+                    results = cur.fetchall()
+                    return [dict(row) for row in results] if results else []
+        except Exception as e:
+            logger.error(f"Failed to search memories by similarity for user {user_id}: {e}")
+            return []
+
+    def delete_memory(self, user_id: str, memory_key: str, soft_delete: bool = True) -> bool:
+        """기억 삭제
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 기억 키
+            soft_delete: True면 is_active=false, False면 실제 삭제
+
+        Returns:
+            성공 여부
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    if soft_delete:
+                        cur.execute("""
+                            UPDATE statedb.user_memories
+                            SET is_active = false, updated_at = NOW()
+                            WHERE user_id = %s AND memory_key = %s
+                        """, (user_id, memory_key))
+                    else:
+                        cur.execute("""
+                            DELETE FROM statedb.user_memories
+                            WHERE user_id = %s AND memory_key = %s
+                        """, (user_id, memory_key))
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete memory {memory_key} for user {user_id}: {e}")
+            return False
+
+    def add_related_session_to_memory(self, user_id: str, memory_key: str, session_id: str) -> bool:
+        """기억에 관련 세션 추가
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 기억 키
+            session_id: 추가할 세션 ID
+
+        Returns:
+            성공 여부
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE statedb.user_memories
+                        SET related_session_ids = array_append(
+                            COALESCE(related_session_ids, ARRAY[]::uuid[]),
+                            %s::uuid
+                        ),
+                        updated_at = NOW()
+                        WHERE user_id = %s AND memory_key = %s
+                    """, (session_id, user_id, memory_key))
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add related session to memory {memory_key} for user {user_id}: {e}")
+            return False
+
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼
 def create_database_manager_from_env() -> DatabaseManager:
