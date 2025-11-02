@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { isAuthenticated, getUserData, clearTokens } from '@/utils/authUtils';
+import { apiClient } from '@/services/api';
 
 interface AppContextType {
   isSidebarOpen: boolean;
@@ -10,6 +11,7 @@ interface AppContextType {
   isPaymentModalOpen: boolean;
   isPasswordResetModalOpen: boolean;
   isLoggedIn: boolean;
+  isAuthLoading: boolean;
   userEmail: string;
   currentBubbles: number;
   updateBubbles: (count: number) => void;
@@ -52,18 +54,36 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isPasswordResetModalOpen, setIsPasswordResetModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState('');
-  const [currentBubbles, setCurrentBubbles] = useState(847);
+  const [currentBubbles, setCurrentBubbles] = useState(0);
 
-  // 초기 로딩 시 토큰 기반 로그인 상태 확인
+  // 초기 로딩 시 토큰 유효성 검증 및 로그인 상태 확인
   useEffect(() => {
-    if (isAuthenticated()) {
-      const userData = getUserData();
-      if (userData) {
-        setIsLoggedIn(true);
-        setUserEmail(userData.email || `${userData.username}@kimechat.com`);
+    const validateToken = async () => {
+      if (isAuthenticated()) {
+        try {
+          // Validate token by calling /api/auth/me
+          const userInfo = await apiClient.getCurrentUser();
+
+          // Token is valid, set logged in state
+          setIsLoggedIn(true);
+          setUserEmail(userInfo.display_name || userInfo.username);
+
+          // TODO (Issue #6): Fetch bubble count from backend
+          // Backend needs to implement bubble/credits system first
+          // For now, bubbles remain at 0 (frontend-only feature)
+        } catch (error) {
+          // Token is invalid or expired, clear it
+          console.error('Token validation failed:', error);
+          clearTokens();
+          setIsLoggedIn(false);
+        }
       }
-    }
+      setIsAuthLoading(false);
+    };
+
+    validateToken();
   }, []);
 
   const openSidebar = () => setIsSidebarOpen(true);
@@ -112,6 +132,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         isPaymentModalOpen,
         isPasswordResetModalOpen,
         isLoggedIn,
+        isAuthLoading,
         userEmail,
         currentBubbles,
         openSidebar,
