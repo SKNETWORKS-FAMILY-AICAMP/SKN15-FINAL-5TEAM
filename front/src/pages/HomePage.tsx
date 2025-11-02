@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import CharacterCarousel from '@/components/CharacterCarousel';
 import ChatHeader from '@/components/ChatHeader';
 import MyAccountModal from '@/components/MyAccountModal';
 import LoginModal from '@/components/LoginModal';
 import { useApp } from '@/contexts/AppContext';
+import { apiClient, type ScenarioCard } from '@/services/api';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -25,84 +26,59 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState('Home');
   const [likedCards, setLikedCards] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const { toggleSidebar, openSettings } = useApp();
+  const [characters, setCharacters] = useState<CharacterCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toggleSidebar, openSettings, currentUser } = useApp();
 
-  const characters: CharacterCard[] = [
-    {
-      id: 'tanjiro',
-      title: '편의점 알바생 탄지로',
-      description: '탄지로와 함께하는 편의점 일상 체험',
-      image: `${CDN_URL}/편의점탄지로.png`,
-      likes: 121,
-      comments: 45,
-      views: 1200,
-      tags: ['#편의점', '#일상', '#탄지로'],
-      size: 'normal',
-      link: '/chat/tanjiro'
-    },
-    {
-      id: 'train',
-      title: '무한열차',
-      description: '열차 안에서 벌어지는 사건에 휘말려 캐릭터들과 협력하여 생존 및 해결을 도모',
-      image: `${CDN_URL}/무한열차.jpeg`,
-      likes: 98,
-      comments: 32,
-      views: 890,
-      tags: ['#무한열차', '#꿈속전투', '#엔무'],
-      size: 'normal',
-      link: '/character/train'
-    },
-    {
-      id: 'infinity-castle',
-      title: '무한성',
-      description: '최종 결전을 배경으로, 캐릭터들과 함께 전략을 세우며 전투 직전의 긴장감을 체험',
-      image: `${CDN_URL}/무한성.webp`,
-      likes: 156,
-      comments: 67,
-      views: 1850,
-      tags: ['#최종결전', '#귀살대', '#무잔전'],
-      size: 'large',
-      link: '/character/infinity-castle'
-    },
-    {
-      id: 'ending',
-      title: '엔딩 이후',
-      description: '최종 결전 후 동료들과 함께하는 평범하지만 소중한 일상. 탄지로, 젠이츠, 이노스케와 함께 마을 순찰과 훈련을 하며 서로를 돌보는 따뜻한 이야기',
-      image: `${CDN_URL}/엔딩이후.png`,
-      likes: 87,
-      comments: 28,
-      views: 720,
-      tags: ['#엔딩이후', '#일상', '#평화', '#동료애'],
-      size: 'normal',
-      link: '/chat/ending'
-    },
-    {
-      id: 'counseling',
-      title: '귀칼 상담소 AU',
-      description: '캐릭터들이 상담사가 되어 서로의 고민을 풀어가는 힐링 스토리',
-      image: `${CDN_URL}/귀칼상담소.png`,
-      likes: 134,
-      comments: 52,
-      views: 1150,
-      tags: ['#상담소', '#힐링AU', '#감정공감'],
-      size: 'normal',
-      link: '/chat/counseling'
-    },
-    {
-      id: 'idol',
-      title: '아이돌/밴드 AU',
-      description: '귀멸 캐릭터들이 아이돌 그룹으로 활동, 매니저 or 팬클럽으로서 그들의 성장과 무대를 지켜봄',
-      image: `${CDN_URL}/아이돌밴드.png`,
-      likes: 203,
-      comments: 89,
-      views: 2100,
-      tags: ['#아이돌AU', '#밴드AU', '#팬심폭발'],
-      size: 'normal',
-      link: '/chat/idol'
-    }
-  ];
+  // Load scenarios from API
+  useEffect(() => {
+    const loadScenarios = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Use authenticated endpoint if user is logged in for user-specific data
+        const scenarios: ScenarioCard[] = currentUser
+          ? await apiClient.getUserScenarios()
+          : await apiClient.getScenarios();
 
-  const handleLike = (cardId: string) => {
+        // Transform API data to CharacterCard format
+        const transformedCharacters: CharacterCard[] = scenarios.map((scenario) => ({
+          id: scenario.scenario_id,
+          title: scenario.title,
+          description: scenario.description,
+          image: scenario.image_url,
+          likes: scenario.likes,
+          comments: scenario.comments,
+          views: scenario.views,
+          tags: scenario.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`),
+          size: scenario.card_size,
+          link: scenario.route_path
+        }));
+
+        setCharacters(transformedCharacters);
+
+        // Set initial liked cards from user progress (if authenticated)
+        if (currentUser) {
+          const likedScenarioIds = scenarios
+            .filter(s => s.is_liked)
+            .map(s => s.scenario_id);
+          setLikedCards(new Set(likedScenarioIds));
+        }
+      } catch (err) {
+        console.error('Failed to load scenarios:', err);
+        setError('시나리오를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadScenarios();
+  }, [currentUser]);
+
+  const handleLike = async (cardId: string) => {
+    // Optimistically update UI first
+    const isCurrentlyLiked = likedCards.has(cardId);
     setLikedCards(prev => {
       const newLiked = new Set(prev);
       if (newLiked.has(cardId)) {
@@ -112,6 +88,53 @@ export default function HomePage() {
       }
       return newLiked;
     });
+
+    // Also update the likes count in the characters array
+    setCharacters(prev => prev.map(char => {
+      if (char.id === cardId) {
+        return {
+          ...char,
+          likes: isCurrentlyLiked ? char.likes - 1 : char.likes + 1
+        };
+      }
+      return char;
+    }));
+
+    // Call API if user is authenticated
+    if (currentUser) {
+      try {
+        const result = await apiClient.toggleScenarioLike(cardId);
+
+        // Update likes count with server response
+        setCharacters(prev => prev.map(char => {
+          if (char.id === cardId) {
+            return { ...char, likes: result.total_likes };
+          }
+          return char;
+        }));
+      } catch (err) {
+        console.error('Failed to toggle like:', err);
+        // Revert optimistic update on error
+        setLikedCards(prev => {
+          const newLiked = new Set(prev);
+          if (isCurrentlyLiked) {
+            newLiked.add(cardId);
+          } else {
+            newLiked.delete(cardId);
+          }
+          return newLiked;
+        });
+        setCharacters(prev => prev.map(char => {
+          if (char.id === cardId) {
+            return {
+              ...char,
+              likes: isCurrentlyLiked ? char.likes + 1 : char.likes - 1
+            };
+          }
+          return char;
+        }));
+      }
+    }
   };
 
   const filteredCharacters = characters.filter(character => {
@@ -242,7 +265,28 @@ export default function HomePage() {
 
           {/* 캐릭터 표시 영역 */}
           <div className="flex-1 flex items-center">
-            {searchQuery && filteredCharacters.length > 0 && filteredCharacters.length <= 3 ? (
+            {loading ? (
+              <div className="w-full flex justify-center items-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600 font-medium">시나리오를 불러오는 중...</p>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="w-full flex justify-center items-center">
+                <div className="text-center bg-white bg-opacity-90 rounded-2xl p-8 shadow-lg">
+                  <div className="text-6xl mb-4">⚠️</div>
+                  <h3 className="text-xl font-semibold text-gray-700 mb-2">불러오기 실패</h3>
+                  <p className="text-gray-600 mb-4">{error}</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              </div>
+            ) : searchQuery && filteredCharacters.length > 0 && filteredCharacters.length <= 3 ? (
               <div className="w-full flex justify-center">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-4xl">
                   {filteredCharacters.map((character) => (
