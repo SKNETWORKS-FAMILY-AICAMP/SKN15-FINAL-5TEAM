@@ -17,6 +17,7 @@ export default function LoginModal() {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!isLoginModalOpen) return null;
 
