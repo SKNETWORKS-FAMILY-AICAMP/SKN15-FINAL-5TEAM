@@ -79,6 +79,60 @@ export interface UserCredits {
   last_updated?: string
 }
 
+export interface UserProgression {
+  user_id: string
+  rank_code: string
+  rank_name_ko: string
+  rank_icon: string
+  experience_points: number
+  level: number
+  next_rank_xp: number
+  total_messages: number
+  total_sessions: number
+  total_play_minutes: number
+  scenarios_completed: number
+  achievements_count: number
+  sword_status: string
+  uniform_status: string
+  crow_status: string
+  updated_at?: string
+}
+
+export interface UserEquipment {
+  sword_status: string
+  uniform_status: string
+  crow_status: string
+  sword_type?: string
+  uniform_color?: string
+  crow_name?: string
+}
+
+export interface XPTransaction {
+  transaction_id: string
+  xp_amount: number
+  xp_type: string
+  xp_balance_after: number
+  level_before: number
+  level_after: number
+  did_level_up: boolean
+  description?: string
+  created_at: string
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  user_id: string
+  username: string
+  display_name: string
+  rank_code: string
+  rank_name_ko: string
+  rank_icon: string
+  experience_points: number
+  level: number
+  total_messages: number
+  scenarios_completed: number
+}
+
 // ============================================================
 // API Client
 // ============================================================
@@ -261,6 +315,111 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error('Error consuming credits:', error)
+      throw error
+    }
+  }
+
+  // ============================================================
+  // User Progression Methods
+  // ============================================================
+
+  /**
+   * Get user progression (rank, level, XP, stats, equipment)
+   */
+  async getUserProgression(): Promise<UserProgression> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/progression')
+      return response.data
+    } catch (error) {
+      console.error('Error getting user progression:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user equipment status
+   */
+  async getUserEquipment(): Promise<UserEquipment> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/equipment')
+      return response.data
+    } catch (error) {
+      console.error('Error getting user equipment:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Award experience points (internal API - typically called by backend)
+   */
+  async awardXP(
+    xpAmount: number,
+    xpType: string,
+    description?: string,
+    metadata?: Record<string, any>
+  ): Promise<{
+    user_id: string
+    experience_points: number
+    level: number
+    level_before: number
+    level_after: number
+    did_level_up: boolean
+  }> {
+    try {
+      const response = await authenticatedApiClient.post('/api/users/me/progression/award-xp', {
+        xp_amount: xpAmount,
+        xp_type: xpType,
+        description,
+        metadata
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error awarding XP:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update user equipment status
+   */
+  async updateEquipment(equipmentUpdates: Record<string, string>): Promise<{ success: boolean }> {
+    try {
+      const response = await authenticatedApiClient.put('/api/users/me/equipment', {
+        equipment_updates: equipmentUpdates
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error updating equipment:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get XP transaction history (paginated)
+   */
+  async getXPTransactions(limit: number = 50, offset: number = 0): Promise<XPTransaction[]> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/xp-transactions', {
+        params: { limit, offset }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error getting XP transactions:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get global leaderboard (public API, no JWT required)
+   */
+  async getLeaderboard(limit: number = 100): Promise<LeaderboardEntry[]> {
+    try {
+      const response = await axios.get(`${this.baseUrl}/api/leaderboard`, {
+        params: { limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error getting leaderboard:', error)
       throw error
     }
   }
