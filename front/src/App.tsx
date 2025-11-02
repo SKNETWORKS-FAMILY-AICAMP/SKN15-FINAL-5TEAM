@@ -4,13 +4,14 @@ import ChatPage from './pages/ChatPage'
 import CharacterPage from './pages/CharacterPage'
 import PasswordResetConfirmPage from './pages/PasswordResetConfirmPage'
 import PasswordResetModal from './components/PasswordResetModal'
+import ErrorBoundary from './components/ErrorBoundary'
 import { useApp } from './contexts/AppContext'
 
 function App() {
   const { isPasswordResetModalOpen, closePasswordResetModal } = useApp()
 
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/chat/:characterId" element={<ChatPage />} />
@@ -23,7 +24,7 @@ function App() {
         isOpen={isPasswordResetModalOpen}
         onClose={closePasswordResetModal}
       />
-    </>
+    </ErrorBoundary>
   )
 }
 
