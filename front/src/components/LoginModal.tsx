@@ -50,6 +50,7 @@ export default function LoginModal() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -94,6 +95,8 @@ export default function LoginModal() {
     } catch (err) {
       console.error('로그인 오류:', err);
       setError('서버 연결에 실패했습니다. 나중에 다시 시도해주세요.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -116,6 +119,8 @@ export default function LoginModal() {
       setError('비밀번호는 영문과 숫자를 포함해야 합니다.');
       return;
     }
+
+    setIsLoading(true);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
@@ -168,6 +173,8 @@ export default function LoginModal() {
     } catch (err) {
       console.error('회원가입 오류:', err);
       setError('서버 연결에 실패했습니다. 나중에 다시 시도해주세요.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
