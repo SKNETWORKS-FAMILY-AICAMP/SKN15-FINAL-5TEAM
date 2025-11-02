@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { setTokens, setUserData, TokenData, UserData } from '@/utils/authUtils';
 
+// API Configuration
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 type AuthMode = 'login' | 'register';
 
 export default function LoginModal() {
@@ -24,11 +27,11 @@ export default function LoginModal() {
       let authUrl: string;
 
       if (provider === 'Google') {
-        const response = await fetch('http://localhost:8000/api/auth/google');
+        const response = await fetch(`${API_BASE_URL}/api/auth/google`);
         const data = await response.json();
         authUrl = data.auth_url;
       } else if (provider === 'Kakao') {
-        const response = await fetch('http://localhost:8000/api/auth/kakao');
+        const response = await fetch(`${API_BASE_URL}/api/auth/kakao`);
         const data = await response.json();
         authUrl = data.auth_url;
       } else {
@@ -48,7 +51,7 @@ export default function LoginModal() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,13 +106,18 @@ export default function LoginModal() {
       return;
     }
 
-    if (password.length < 3) {
-      setError('비밀번호는 최소 3자 이상이어야 합니다.');
+    // Password validation - must match PasswordResetConfirmPage requirements
+    if (password.length < 8) {
+      setError('비밀번호는 최소 8자 이상이어야 합니다.');
+      return;
+    }
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('비밀번호는 영문과 숫자를 포함해야 합니다.');
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/register', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -348,22 +356,6 @@ export default function LoginModal() {
                   >
                     비밀번호를 잊으셨나요?
                   </button>
-                </div>
-
-                {/* Account info */}
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <p className="font-semibold text-center mb-2">📋 사용 가능한 계정:</p>
-                    <div className="grid grid-cols-2 gap-1 text-center">
-                      <div>tanjiro / 123</div>
-                      <div>zenitsu / 123</div>
-                      <div>inosuke / 123</div>
-                      <div>giyu / 123</div>
-                      <div>rengoku / 123</div>
-                      <div>tengen / 123</div>
-                    </div>
-                    <p className="text-center text-xs mt-2">모든 계정의 비밀번호는 123입니다! 🗡️</p>
-                  </div>
                 </div>
               </div>
             </>
