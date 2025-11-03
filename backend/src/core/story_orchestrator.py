@@ -38,6 +38,7 @@ class StoryOrchestrator:
     ) -> Dict[str, Any]:
         """
         Open Narrative 턴에서 LLM을 호출하여 대사 및 상태 업데이트를 생성.
+        유저 입력을 받아서 LLM 호출 → 대사(dialogues) 생성 → state 업데이트까지 함.
 
         Args:
             state: 현재 게임 상태
