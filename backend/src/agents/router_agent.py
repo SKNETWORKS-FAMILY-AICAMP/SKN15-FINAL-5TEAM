@@ -1,18 +1,30 @@
 from __future__ import annotations
 
 import time
+<<<<<<< HEAD
 from concurrent.futures import ThreadPoolExecutor
+=======
+from concurrent.futures import ThreadPoolExecutor, as_completed
+>>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
+<<<<<<< HEAD
 from src.tools.fallback_tools import handle_off_topic, reset_fallback_count
+=======
+from src.utils.fallback_llm import generate_off_topic_response
+>>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 from src.utils.llm_client import LLMClient, get_llm_client
 from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
+<<<<<<< HEAD
+=======
+from src.database.session_manager import HybridSessionManager
+>>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
@@ -45,6 +57,7 @@ class RouterAgent:
     def __init__(self) -> None:
         self._llm_client: LLMClient = get_llm_client()
         self._embedding_client: EmbeddingClient = get_embedding_client()
+        self._session_manager: Optional[HybridSessionManager] = None
         self._topic_matcher = EmbeddingMatcher(
             {
                 # 임시 키워드 분류
@@ -56,16 +69,26 @@ class RouterAgent:
                     "mbti가 뭐야?"
                 ],
             },
-            threshold=0.4,
+            threshold=0.6,
             embedding_client=self._embedding_client,
         )
+
+        # Initialize session manager for error logging
+        try:
+            from src.database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            self._session_manager = HybridSessionManager(db_manager=db)
+        except Exception as e:
+            log("router", "session_manager_init_failed", error=str(e))
 
     # ============================================================
     # 🚦 분류 엔트리 포인트
     # ============================================================
     # 전체 실행 함수, 임베딩 -> LLM 순으로 분류, 입력이 없는 경우 off 토픽
     def run(self, state: Dict[str, Any], user_input: str) -> Dict[str, Any]:
+        # Phase 4: 로그 수집 시작
         start_time = time.perf_counter()
+
         normalized = (user_input or "").strip()
         state["user_input"] = normalized
 
@@ -77,6 +100,7 @@ class RouterAgent:
                 reason="empty_input",
             )
             result = self._handle_off_topic(state, normalized, empty_topic)
+            # Phase 4: 로그 수집
             self._log_execution(state, result, start_time)
             return result
 
@@ -88,14 +112,17 @@ class RouterAgent:
                 if embedding_topic.is_off_topic
                 else self._handle_on_topic(state, normalized, embedding_topic)
             )
+            # Phase 4: 로그 수집
             self._log_execution(state, result, start_time)
             return result
 
+        # 🚀 Phase 2 최적화: topic classification + intent detection 병렬 실행
         with ThreadPoolExecutor(max_workers=2) as executor:
             topic_future = executor.submit(self._classify_with_llm, state, normalized)
             intent_future = executor.submit(self._detect_route_intent, state, normalized)
 
             topic = topic_future.result()
+            # topic이 on_topic일 때만 intent 결과 사용
             detected_intent = intent_future.result() if not topic.is_off_topic else None
 
         if topic.is_off_topic:
@@ -103,6 +130,7 @@ class RouterAgent:
         else:
             result = self._handle_on_topic(state, normalized, topic, precomputed_intent=detected_intent)
 
+        # Phase 4: 로그 수집
         self._log_execution(state, result, start_time)
         return result
 
@@ -132,10 +160,6 @@ class RouterAgent:
             label=match.label,
             score=f"{confidence:.4f}",
             is_off_topic=is_off_topic,
-        )
-        print(
-            f"[ROUTER] Embedding match → label={match.label}, score={confidence:.4f}, off_topic={is_off_topic}",
-            flush=True,
         )
 
         return TopicClassification(
@@ -181,6 +205,26 @@ class RouterAgent:
             )
         except Exception as exc:
             log("router", "LLM topic classification failed", error=str(exc))
+
+            # 🚨 LLM 호출 실패 에러 로깅
+            if self._session_manager:
+                try:
+                    session_id = state.get("session_id")
+                    if session_id:
+                        self._session_manager.save_error_log(
+                            error_type="router_llm_call_failed",
+                            error_message=str(exc),
+                            session_id=session_id,
+                            metadata={
+                                "agent": "router",
+                                "scenario_id": scenario_id,
+                                "current_stage": current_stage,
+                                "user_input": text[:100] if text else None
+                            }
+                        )
+                except Exception as e:
+                    log("router", "error_log_save_failed", error=str(e))
+
             return TopicClassification(
                 is_off_topic=True,
                 confidence=0.6,
@@ -211,10 +255,6 @@ class RouterAgent:
             classification=classification,
             confidence=f"{confidence:.4f}",
             reason=reason or "n/a",
-        )
-        print(
-            f"[ROUTER] LLM classification → result={classification}, confidence={confidence:.4f}",
-            flush=True,
         )
 
         return TopicClassification(
@@ -320,18 +360,9 @@ class RouterAgent:
         state["user_intent"] = "off_topic"
         state["classification"] = "off_topic"
 
-        # fallback_tools 통합 함수 사용
-        fallback_result = handle_off_topic(state, user_input, use_llm=True)
-        print(f'fallback_result 확인 : {fallback_result}')
-
-        # dialogue 우선, 없으면 message 사용
-        dialogue = fallback_result.get("dialogue")
-        if dialogue:
-            fallback_text = dialogue.get("text", "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요.")
-            fallback_speaker = dialogue.get("speaker", "system")
-        else:
-            fallback_text = fallback_result.get("message", "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요.")
-            fallback_speaker = fallback_result.get("speaker", "system")
+        fallback = generate_off_topic_response(state, user_input) or {}
+        fallback_text = fallback.get("text") or "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요."
+        fallback_speaker = fallback.get("speaker") or "system"
 
         scenario = state.get("scenario") or state.get("scenario_data")
         character_refs: Dict[str, Any] = {}
@@ -435,9 +466,8 @@ class RouterAgent:
         temp.pop("sticky_intent", None)
         temp.pop("intent_stage", None)
 
-        detected_intent = precomputed_intent
-        if not detected_intent:
-            detected_intent = self._detect_route_intent(state, normalized_input)
+        # 🚀 Phase 2 최적화: precomputed_intent 우선 사용 (병렬 실행 결과)
+        detected_intent = precomputed_intent if precomputed_intent is not None else self._detect_route_intent(state, normalized_input)
         if detected_intent and isinstance(detected_intent, dict):
             intent_key = str(detected_intent.get("intent") or "").strip()
             if intent_key:
@@ -504,28 +534,50 @@ class RouterAgent:
         return vector
 
     # ============================================================
-    # 📊 Training Logger 연동
+    # Phase 4: 로그 수집
     # ============================================================
-    def _log_execution(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float) -> None:
+    def _log_execution(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float):
+        """Router Agent 실행 로그를 LogDB에 저장"""
         try:
-            routing_result = result.get("routing_result") or {}
+            # Model output 추출
             model_output = {
                 "next_node": result.get("next_node"),
-                "classification": routing_result.get("classification", result.get("classification", "unknown")),
-                "confidence": routing_result.get("confidence", result.get("confidence", 0.0)),
-                "reason": routing_result.get("reason"),
-                "intent": routing_result.get("intent"),
+                "classification": result.get("classification", "unknown"),
+                "confidence": result.get("confidence", 0.0),
+                "category": result.get("category"),
+                "reason": result.get("reason"),
             }
 
+            # 로그 저장 (비동기 처리는 추후 개선 가능)
             log_agent(
                 agent_name="router",
                 state=state,
                 model_output=model_output,
                 start_time=start_time,
-                llm_model="gpt-4o-mini",
+                llm_model="gpt-4o-mini",  # Router가 사용하는 LLM 모델
             )
-        except Exception as exc:
-            log("router", "training_log_failed", error=str(exc))
+
+            # 📊 Performance Metric 저장: Router Agent 실행 시간
+            if self._session_manager:
+                try:
+                    execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+                    session_id = state.get("session_id")
+                    if session_id:
+                        self._session_manager.save_performance_metric(
+                            metric_name="router_agent_execution_time",
+                            metric_value=execution_time_ms,
+                            session_id=session_id,
+                            metadata={
+                                "classification": result.get("classification"),
+                                "next_node": result.get("next_node")
+                            }
+                        )
+                except Exception as e:
+                    log("router", "performance_metric_save_failed", error=str(e))
+
+        except Exception as e:
+            # 로깅 실패는 무시 (메인 로직에 영향 없도록)
+            log("router", "training_log_failed", error=str(e))
 
 DEFAULT_AGENT = RouterAgent()
 

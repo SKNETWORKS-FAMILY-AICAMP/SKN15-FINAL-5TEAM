@@ -708,6 +708,7 @@ class ParentAgent:
 DEFAULT_AGENT = ParentAgent()
 
 def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
+    # Phase 4: 로그 수집
     start_time = time.perf_counter()
 
     try:
@@ -720,25 +721,52 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             "current_stage": result.get("current_stage"),
         }
 
+        # 로그 저장 (result를 state로 전달 - children_ctx 포함)
         log_agent(
             agent_name="parent",
-            state=result,
+            state=result,  # 업데이트된 result 사용
             model_output=model_output,
             start_time=start_time,
-            llm_model="gpt-4o-mini",
+            llm_model="gpt-4o-mini",  # Parent Agent uses default_model from settings (gpt-4o-mini)
         )
 
+        # 📊 Performance Metric 저장: Parent Agent 실행 시간
+        try:
+            from src.database.session_manager import HybridSessionManager
+            from src.database.db_manager import DatabaseManager
+
+            execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+            session_id = result.get("session_id")
+
+            if session_id:
+                db = DatabaseManager()
+                session_manager = HybridSessionManager(db_manager=db)
+                session_manager.save_performance_metric(
+                    metric_name="parent_agent_execution_time",
+                    metric_value=execution_time_ms,
+                    session_id=session_id,
+                    metadata={
+                        "stage_tag": result.get("stage_tag"),
+                        "current_stage": result.get("current_stage"),
+                        "next_node": result.get("next_node")
+                    }
+                )
+        except Exception as e:
+            log("parent", "performance_metric_save_failed", error=str(e))
+
         return result
-    except Exception as exc:
+
+    except Exception as e:
+        # 에러 발생 시에도 로그 수집 (실패 예시로 학습 가능)
         log_agent(
             agent_name="parent",
             state=state,
-            model_output={"error": str(exc)},
+            model_output={"error": str(e)},
             start_time=start_time,
             is_error=True,
-            error_message=str(exc),
+            error_message=str(e),
         )
-        raise
+        raise  # 에러는 다시 발생시켜 상위에서 처리
 
 def parent_after_dialogue(state: Dict[str, Any]) -> Dict[str, Any]:
     return DEFAULT_AGENT.after_dialogue(state)

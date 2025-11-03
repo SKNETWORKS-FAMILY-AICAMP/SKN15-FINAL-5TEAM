@@ -44,7 +44,7 @@ class ImageManager:
     }
     """
 
-    def __init__(self, config_path: str, debug: bool = False,
+    def __init__(self, config_path: str, debug: bool = True,
                  use_llm: bool = True, llm_metadata_path: Optional[str] = None):
         """
         Args:
@@ -86,14 +86,14 @@ class ImageManager:
                 # 우선순위 기준으로 정렬 (높은 순서대로)
                 self.mappings.sort(key=lambda m: m.get('priority', 0), reverse=True)
 
-                self._debug_print(f"✅ ImageManager loaded: {len(self.mappings)} mappings from {self.config_path}")
-                self._debug_print(f"   Default image: {self.default_image}")
-                if self.mappings:
-                    self._debug_print(f"   Priority range: {self.mappings[0].get('priority', 0)} ~ {self.mappings[-1].get('priority', 0)}")
+                print(f"✅ ImageManager loaded: {len(self.mappings)} mappings from {self.config_path}")
+                if self.debug:
+                    print(f"   Default image: {self.default_image}")
+                    print(f"   Priority range: {self.mappings[0].get('priority', 0)} ~ {self.mappings[-1].get('priority', 0)}")
         except FileNotFoundError:
-            self._debug_print(f"⚠️ Image config not found: {self.config_path}, using defaults")
+            print(f"⚠️ Image config not found: {self.config_path}, using defaults")
         except json.JSONDecodeError as e:
-            self._debug_print(f"❌ Error parsing image config: {e}")
+            print(f"❌ Error parsing image config: {e}")
 
     def get_current_image(self, state: Dict[str, Any]) -> str:
         """
@@ -438,3 +438,156 @@ JSON 형식으로 응답하세요:
             선택된 이미지 인덱스 (e.g., "3") 또는 None
         """
         return self.select_with_llm(state, max_dialogue_index=up_to_index)
+
+    def select_images_batch(self, state: Dict[str, Any]) -> List[Optional[str]]:
+        """
+        전체 대화에 대한 이미지를 한 번에 선택 (배치 처리)
+
+        Args:
+            state: GraphState
+
+        Returns:
+            각 대화에 대응하는 이미지 인덱스 리스트 (e.g., ["1", "2", "2", "3", ...])
+            이미지가 변경되지 않으면 None
+        """
+        if not self.llm_client or not self.image_metadata:
+            return []
+
+        try:
+            # 전체 대화 추출
+            dialogues = state.get('output', {}).get('dialogues', [])
+
+            if not dialogues:
+                if self.debug:
+                    print(f"🤖 [LLM Batch] No dialogues to analyze")
+                return []
+
+            # 대화를 텍스트로 포맷
+            dialogue_lines = []
+            for idx, d in enumerate(dialogues):
+                speaker = d.get('speaker', 'unknown')
+                text = d.get('text', d.get('content', ''))
+                dialogue_lines.append(f"[{idx}] {speaker}: {text}")
+
+            dialogue_text = "\n".join(dialogue_lines)
+
+            # 대화 내용에서 등장한 캐릭터 확인
+            dialogue_text_lower = dialogue_text.lower()
+
+            character_appeared = {
+                'akaza': 'akaza' in dialogue_text_lower or '아카자' in dialogue_text_lower,
+                'rengoku': 'rengoku' in dialogue_text_lower or '렌고쿠' in dialogue_text_lower or '쿄쥬로' in dialogue_text_lower,
+                'tanjiro': 'tanjiro' in dialogue_text_lower or '탄지로' in dialogue_text_lower,
+                'zenitsu': 'zenitsu' in dialogue_text_lower or '젠이츠' in dialogue_text_lower,
+                'inosuke': 'inosuke' in dialogue_text_lower or '이노스케' in dialogue_text_lower
+            }
+
+            if self.debug:
+                appeared_chars = [char for char, appeared in character_appeared.items() if appeared]
+                print(f"🤖 [LLM Batch] Characters in dialogue: {appeared_chars if appeared_chars else 'None'}")
+
+            # 등장하지 않은 캐릭터의 이미지 필터링
+            filtered_metadata = []
+            for img in self.image_metadata:
+                img_tags = [tag.lower() for tag in img.get('tags', [])]
+                img_keywords = [kw.lower() for kw in img.get('keywords', [])]
+
+                if 'akaza' in img_tags or '아카자' in img_keywords:
+                    if character_appeared['akaza']:
+                        filtered_metadata.append(img)
+                    elif self.debug:
+                        print(f"🤖 [LLM Batch] Filtering out image {img['index']} (Akaza not appeared)")
+                else:
+                    filtered_metadata.append(img)
+
+            if not filtered_metadata:
+                if self.debug:
+                    print(f"🤖 [LLM Batch] No available images after filtering")
+                return []
+
+            # 이미지 목록을 텍스트로 포맷
+            image_lines = []
+            for img in filtered_metadata:
+                index = img['index']
+                name = img['name']
+                description = img['description']
+                image_lines.append(f"{index}. {name} - {description}")
+
+            images_text = "\n".join(image_lines)
+
+            # 현재 상태 정보
+            current_stage = state.get('current_stage', 'unknown')
+            dialogue_count = state.get('dialogues_generated_count', 0)
+            event_flags = state.get('event_flags', [])
+            flags_text = ", ".join(event_flags) if event_flags else "없음"
+
+            user_prompt = f"""=== 전체 대화 ({len(dialogues)}개) ===
+{dialogue_text}
+
+=== 현재 게임 상태 ===
+Stage: {current_stage}
+Dialogue Count: {dialogue_count}
+Event Flags: {flags_text}
+
+=== 선택 가능한 이미지 ({len(filtered_metadata)}개) ===
+{images_text}
+
+위 대화 내용을 분석하여 **각 대화 번호([0], [1], [2]...)마다** 가장 어울리는 배경 이미지를 선택하세요.
+이미지가 변경될 필요가 없으면 이전과 동일한 인덱스를 유지하세요.
+
+JSON 형식으로 응답하세요:
+{{
+  "images": [
+    {{"dialogue_index": 0, "selected_index": "1", "reason": "이유"}},
+    {{"dialogue_index": 1, "selected_index": "1", "reason": "이유"}},
+    {{"dialogue_index": 2, "selected_index": "2", "reason": "이유"}}
+  ]
+}}"""
+
+            if self.debug:
+                print(f"\n🤖 [LLM Batch] Analyzing {len(dialogues)} dialogues in one call...")
+
+            # LLM 호출 (1회만)
+            response = self.llm_client.call_json(
+                system_prompt=_IMAGE_SELECTION_PROMPT,
+                user_prompt=user_prompt,
+                temperature=self.llm_client.get_agent_setting("image_manager", "temperature", 0.3),
+                max_tokens=self.llm_client.get_agent_setting("image_manager", "max_tokens", 800),
+                agent="image_manager",
+            )
+
+            # 응답 파싱
+            images_list = response.get('images', [])
+
+            if not images_list:
+                if self.debug:
+                    print(f"⚠️ [LLM Batch] No images in response")
+                return []
+
+            # 결과를 리스트로 변환 (인덱스 순서대로)
+            result = []
+            for i in range(len(dialogues)):
+                # 해당 인덱스의 이미지 찾기
+                found = False
+                for img_info in images_list:
+                    if img_info.get('dialogue_index') == i:
+                        selected_index = img_info.get('selected_index')
+                        reason = img_info.get('reason', 'N/A')
+                        result.append(str(selected_index) if selected_index else None)
+                        if self.debug:
+                            print(f"🤖 [LLM Batch] Dialogue[{i}]: image={selected_index}, reason={reason}")
+                        found = True
+                        break
+
+                if not found:
+                    result.append(None)
+
+            if self.debug:
+                print(f"✅ [LLM Batch] Selected {len(result)} images in 1 LLM call")
+
+            return result
+
+        except Exception as e:
+            if self.debug:
+                print(f"⚠️ [LLM Batch] Image selection failed: {e}")
+            return []

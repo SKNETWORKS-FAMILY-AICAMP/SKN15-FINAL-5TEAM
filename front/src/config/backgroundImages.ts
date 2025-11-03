@@ -228,9 +228,11 @@ export function getBackgroundById(scenarioId: string, backgroundId: string): Bac
 
 /**
  * 배경 이미지의 전체 경로를 반환합니다
+ * 환경변수 VITE_CDN_URL을 사용하여 로컬/AWS 환경을 자동 전환합니다
  */
 export function getBackgroundImagePath(scenarioId: string, fileName: string): string {
-  return `/images/backgrounds/${scenarioId}/${fileName}`;
+  const cdnUrl = import.meta.env.VITE_CDN_URL || '/images';
+  return `${cdnUrl}/backgrounds/${scenarioId}/${fileName}`;
 }
 
 /**
