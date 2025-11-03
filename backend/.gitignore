@@ -1,0 +1,144 @@
+# ==============================================================================
+# KIME Chat Agent - Git Ignore
+# 민감한 정보 및 불필요한 파일 제외
+# ==============================================================================
+
+# ============================
+# 🔒 민감한 정보 (절대 공유 금지)
+# ============================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+credentials.json
+
+# .env.example은 포함 (예시 파일이므로 공유 필요)
+!.env.example
+
+# Claude Code 설정 (개인 설정)
+.claude/
+
+# ============================
+# 🐍 Python 캐시 및 빌드
+# ============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================
+# 🧪 테스트 관련
+# ============================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+*.log
+
+# ============================
+# 📁 로그 및 임시 파일
+# ============================
+logs/
+*.log
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# ============================
+# 💾 데이터베이스 파일
+# ============================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ============================
+# 🖥️ IDE 및 에디터 설정
+# ============================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# ============================
+# 📊 실험 및 백업 데이터
+# ============================
+logs/experiments/
+logs/experiments_backup/
+logs/dev/
+*.json.bak
+manual_test_*.json
+experiments/
+notebooks/
+*.ipynb_checkpoints/
+
+# ============================
+# 🗑️ 기타 불필요한 파일
+# ============================
+.pypirc
+pip-log.txt
+pip-delete-this-directory.txt
+*.pid
+*.seed
+*.pid.lock
+
+# ============================
+# 🐳 Docker 관련
+# ============================
+docker-compose.override.yml
+
+# ============================
+# 🧪 개발 환경
+# ============================
+.env.test
+.env.development
+venv/
+env/
+ENV/
+.venv/
+
+# ============================
+# ✅ Git에 포함할 필수 파일들 (명시적 추가)
+# ============================
+# 다음 파일들은 반드시 포함됩니다:
+# - README.md
+# - DOCKER_GUIDE.md (Docker 실행 가이드)
+# - requirements.txt
+# - play.py (메인 실행 파일)
+# - Dockerfile (Docker 이미지 빌드)
+# - docker-compose.yml (Docker Compose 설정)
+# - src/ (소스 코드)
+# - data/ (시나리오 데이터)
+# - configs/ (설정 파일)
+# - .env.example (환경 변수 예시)
+# - tests/ (테스트 코드)
