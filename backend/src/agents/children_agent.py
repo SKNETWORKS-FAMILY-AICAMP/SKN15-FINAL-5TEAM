@@ -8,8 +8,8 @@ from src.core import scene_dialogue_tools as dialogue_tools
 from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 from src.utils.config_loader import get_config_loader
-from src.utils.world_loader import WorldLoader
 from src.tools.training_logger import log_agent
+from src.database.session_manager import HybridSessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
@@ -35,6 +35,15 @@ class ChildrenAgent:
     def __init__(self):
         """LLM 클라이언트 초기화"""
         self._llm = get_llm_client()
+        self._session_manager: Optional[HybridSessionManager] = None
+
+        # Initialize session manager for error logging
+        try:
+            from src.database.db_manager import DatabaseManager
+            db = DatabaseManager()
+            self._session_manager = HybridSessionManager(db_manager=db)
+        except Exception as e:
+            log("children", "session_manager_init_failed", error=str(e))
 
     # ============================================================
     # 🚦 실행 엔트리 포인트
@@ -103,78 +112,6 @@ class ChildrenAgent:
         for token, value in replacements.items():
             result = result.replace(token, value)
         return result
-
-    def _is_player_speaker(self, speaker: str) -> bool:
-        """
-        주어진 speaker가 플레이어/유저 이름인지 확인
-
-        금지된 speaker 이름:
-        - "user", "player", "you", "당신", "유저", "플레이어"
-
-        Note: state가 필요한 동적 이름(player_name, user_name)은 여기서 체크 불가
-        """
-        if not speaker:
-            return False
-
-        speaker_lower = speaker.lower().strip()
-
-        # 고정된 금지 이름 목록
-        prohibited = {
-            "user", "player", "you", "당신", "유저", "플레이어",
-            "츠구코",  # 기본 플레이어 이름
-        }
-
-        return speaker_lower in prohibited
-
-    def _remove_player_speakers(self, state: Dict[str, Any], response_text: str) -> str:
-        """
-        LLM 응답에서 플레이어/유저 speaker를 제거하고 narr로 변환
-
-        금지된 speaker 이름:
-        - "user", "player", "you", "당신", "유저", "플레이어"
-        - state의 player_name (예: "츠구코")
-        - state의 user_name
-
-        예시:
-        {"speaker": "user", "text": "..."} → {"speaker": "narr", "text": "..."}
-        {"speaker": "츠구코", "text": "..."} → {"speaker": "narr", "text": "..."}
-        """
-        import re
-
-        # 금지된 speaker 이름 목록
-        prohibited_names = {
-            "user", "player", "you", "당신", "유저", "플레이어",
-            state.get("player_name", "").lower(),
-            state.get("user_name", "").lower(),
-        }
-        # 빈 문자열 제거
-        prohibited_names.discard("")
-
-        if not prohibited_names:
-            return response_text
-
-        # 각 금지된 이름에 대해 검사 및 교체
-        for name in prohibited_names:
-            if not name:
-                continue
-
-            # JSON 내 "speaker": "name" 패턴 찾기 (다양한 형태 지원)
-            patterns = [
-                f'"speaker"\\s*:\\s*"{name}"',
-                f'"speaker"\\s*:\\s*\'{name}\'',
-            ]
-
-            for pattern in patterns:
-                if re.search(pattern, response_text, flags=re.IGNORECASE):
-                    log("children", f"❌ Removing invalid speaker '{name}' from LLM response")
-                    response_text = re.sub(
-                        pattern,
-                        '"speaker": "narr"',
-                        response_text,
-                        flags=re.IGNORECASE
-                    )
-
-        return response_text
 
     # ============================================================
     # 💬 대사 생성
@@ -853,18 +790,43 @@ def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             state=state,
             model_output=model_output,
             start_time=start_time,
-            llm_model="gpt-4o-mini",
+            llm_model="gpt-4o-mini",  # Children Agent uses gpt-4o-mini (설정 기준)
         )
 
+        # 📊 Performance Metric 저장: Children Agent 실행 시간
+        try:
+            from src.database.session_manager import HybridSessionManager
+            from src.database.db_manager import DatabaseManager
+
+            execution_time_ms = (time.perf_counter() - start_time) * 1000.0
+            session_id = state.get("session_id")
+
+            if session_id:
+                db = DatabaseManager()
+                session_manager = HybridSessionManager(db_manager=db)
+                session_manager.save_performance_metric(
+                    metric_name="children_agent_execution_time",
+                    metric_value=execution_time_ms,
+                    session_id=session_id,
+                    metadata={
+                        "dialogue_count": len(result.get("agent_responses", [])),
+                        "has_more": result.get("has_more_dialogues", False),
+                        "next_node": result.get("next_node")
+                    }
+                )
+        except Exception as e:
+            log("children", "performance_metric_save_failed", error=str(e))
+
         return result
-    except Exception as exc:
+    except Exception as e:
+        # Phase 4: 로그 수집 (에러)
         log_agent(
             agent_name="children",
             state=state,
-            model_output={"error": str(exc)},
+            model_output={"error": str(e)},
             start_time=start_time,
             is_error=True,
-            error_message=str(exc),
+            error_message=str(e),
         )
         raise
 

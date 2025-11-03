@@ -123,7 +123,15 @@
     animation-delay: 0.15s;
   }
 
-  /* 배경 이미지 클래스 */
+  /* 배경 이미지 클래스
+   * ⚠️ 주의: 현재 사용되지 않음.
+   * CSS는 환경 변수를 직접 사용할 수 없으므로,
+   * S3+CloudFront 배포 시 이 클래스 대신 인라인 스타일을 사용하세요.
+   *
+   * 예시:
+   * const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
+   * style={{ backgroundImage: `url('${CDN_URL}/엔딩이후.png')` }}
+   */
   .bg-ending-default {
     background-image: url('/images/엔딩이후.png');
   }
