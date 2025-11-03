@@ -25,7 +25,7 @@ const SCENARIO_ID_MAP: Record<string, string> = {
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal } = useApp();
 
   // Session restoration state
   const [lastSession, setLastSession] = useState<LastSessionInfo | null>(null);
@@ -35,11 +35,12 @@ export default function ChatPage() {
 
   // Authentication guard: show login modal if not authenticated
   useEffect(() => {
-    if (!isLoggedIn) {
+    // isAuthLoading이 false가 되어 로딩이 완료된 후에만 체크
+    if (!isAuthLoading && !isLoggedIn) {
       openLoginModal();
       setSessionCheckDone(false);
     }
-  }, [isLoggedIn, openLoginModal]);
+  }, [isLoggedIn, isAuthLoading, openLoginModal]);
 
   // Check for last session after login
   useEffect(() => {

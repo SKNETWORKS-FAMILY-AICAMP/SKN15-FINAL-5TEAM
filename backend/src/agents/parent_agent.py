@@ -174,6 +174,12 @@ class ParentAgent:
                 st.reset_stage_turn(state)
                 state["current_stage"] = next_stage
                 log("parent", f"🔄 Stage advanced: {stage_tag} → {next_stage}")
+
+                # 🆕 스테이지 전환 시 이전 대화 출력 리셋 (새 스테이지에 이전 대화 혼재 방지)
+                if "output" in state and isinstance(state["output"], dict):
+                    state["output"]["dialogues"] = []
+                    log("parent", "🧹 Cleared output dialogues for new stage")
+
                 next_stage_def = scene_tools.get_stage(scenario, next_stage)
                 scene_state["stage_completed"] = False
                 temp_data.pop("completed_stage", None)

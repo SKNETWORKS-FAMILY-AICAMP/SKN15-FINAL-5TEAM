@@ -35,6 +35,7 @@ class ChildrenAgent:
     def __init__(self):
         """LLM 클라이언트 초기화"""
         self._llm = get_llm_client()
+        self._config_loader = get_config_loader()
         self._session_manager: Optional[HybridSessionManager] = None
 
         # Initialize session manager for error logging
@@ -112,6 +113,29 @@ class ChildrenAgent:
         for token, value in replacements.items():
             result = result.replace(token, value)
         return result
+    
+    
+    def _is_player_speaker(self, speaker: str) -> bool:
+        """
+        주어진 speaker가 플레이어/유저 이름인지 확인
+
+        금지된 speaker 이름:
+        - "user", "player", "you", "당신off_topic_detected", "유저", "플레이어"
+
+        Note: state가 필요한 동적 이름(player_name, user_name)은 여기서 체크 불가
+        """
+        if not speaker:
+            return False
+
+        speaker_lower = speaker.lower().strip()
+
+        # 고정된 금지 이름 목록
+        prohibited = {
+            "user", "player", "you", "당신", "유저", "플레이어",
+            "츠구코",  # 기본 플레이어 이름
+        }
+
+        return speaker_lower in prohibited
 
     # ============================================================
     # 💬 대사 생성
@@ -291,10 +315,10 @@ class ChildrenAgent:
             )
             log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:500]}")
 
-            # 🛑 플레이어 speaker 제거 (후처리)
-            response_text = json.dumps(response, ensure_ascii=False)
-            response_text = self._remove_player_speakers(state, response_text)
-            response = json.loads(response_text)
+            # 🛑 플레이어 speaker 제거 (후처리) - 함수 누락으로 주석 처리
+            # response_text = json.dumps(response, ensure_ascii=False)
+            # response_text = self._remove_player_speakers(state, response_text)
+            # response = json.loads(response_text)
 
             dialogue_payload = None
             if isinstance(response, dict):
@@ -316,10 +340,10 @@ class ChildrenAgent:
                 )
                 log("children", f"LLM retry response: {json.dumps(retry_resp, ensure_ascii=False)[:500]}")
 
-                # 🛑 플레이어 speaker 제거 (후처리)
-                retry_text = json.dumps(retry_resp, ensure_ascii=False)
-                retry_text = self._remove_player_speakers(state, retry_text)
-                retry_resp = json.loads(retry_text)
+                # 🛑 플레이어 speaker 제거 (후처리) - 함수 누락으로 주석 처리
+                # retry_text = json.dumps(retry_resp, ensure_ascii=False)
+                # retry_text = self._remove_player_speakers(state, retry_text)
+                # retry_resp = json.loads(retry_text)
 
                 if isinstance(retry_resp, dict):
                     dialogue_payload = retry_resp.get("dialogues")
@@ -698,19 +722,27 @@ class ChildrenAgent:
         else:
             tone_style = str(tone_data) if tone_data else "자연스러운 말투"
 
-        # 간단한 응답 프롬프트
-        system_prompt = f"""당신은 '{responder}' 캐릭터입니다.
-말투: {tone_style}
+        # prompts.yaml에서 brief_response 템플릿 로드
+        cfg = self._config_loader
+        prompts = cfg.get_prompts().get("llm_prompts", {}).get("children", {})
+        system_template = prompts.get("brief_response_system", "")
+        user_template = prompts.get("brief_response_user", "")
 
-유저의 발화에 1~2문장으로 짧고 자연스럽게 반응하세요.
-JSON 형식으로 응답하세요."""
+        # recent_dialogues 가져오기 (이미 ctx에 있음)
+        recent_dialogues = ctx.get("recent_dialogues", [])
+        recent_history_str = "\n".join(recent_dialogues[-3:]) if recent_dialogues else "(이전 대화 없음)"
 
-        user_prompt = f"""유저: "{user_input}"
+        # 템플릿 포맷팅
+        system_prompt = system_template.format(
+            name=responder,
+            tone_style=tone_style
+        )
 
-위 유저 발화에 {responder} 캐릭터로서 짧게 반응하세요.
-
-출력 형식:
-{{"speaker": "{responder}", "text": "응답 내용"}}"""
+        user_prompt = user_template.format(
+            recent_history=recent_history_str,
+            user_input=user_input,
+            name=responder
+        )
 
         try:
             response = self._llm.call_json(
