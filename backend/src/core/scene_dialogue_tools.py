@@ -77,6 +77,7 @@ def compose_llm_prompt(
     recent_dialogues: Optional[List[str]] = None,
     stage_context: Optional[str] = None,
     world_context: Optional[str] = None,
+    conversation_summary: Optional[str] = None,  # 🧠 장기기억 요약
 ) -> str:
     """
     tone_profiles + beats + 관계 정보 + 세계관 정보를 포함한 LLM 프롬프트

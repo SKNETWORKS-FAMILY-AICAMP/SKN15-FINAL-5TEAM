@@ -216,7 +216,9 @@ class FallbackManager:
     ) -> Dict[str, Any]:
         """LLM 대사 생성 허용 (limit 이하)"""
         # ✅ LLM 대사 생성
-        dialogue = self._generate_dialogue(state, stage_data, user_input, blocking=False)
+        # 🔹 마지막 카운트일 때만 임무로 유도 (is_last_chance=True)
+        is_last_chance = (count >= limit)
+        dialogue = self._generate_dialogue(state, stage_data, user_input, blocking=False, is_last_chance=is_last_chance)
 
         if dialogue:
             msg = dialogue["text"]
@@ -246,7 +248,8 @@ class FallbackManager:
         state: Dict[str, Any],
         stage: Dict[str, Any],
         user_input: str,
-        blocking: bool
+        blocking: bool,
+        is_last_chance: bool = False
     ) -> Optional[Dict[str, str]]:
         """
         LLM 호출하여 캐릭터 대사 생성 (children_agent와 동일한 tone_profile 구조 사용)
@@ -255,6 +258,7 @@ class FallbackManager:
         - pool이 비어있으면 "narr" 사용
         - tone_profile (tone, emotion, relationships)을 children_agent와 동일하게 로드
         - world_context를 세계관 정보로 활용
+        - is_last_chance: 마지막 허용 카운트일 때 True (임무로 유도)
         """
         try:
             # 🔹 Speaker 선택 (speaker_pool 전용)
@@ -267,8 +271,13 @@ class FallbackManager:
             world_context = self._load_world_context(state)
 
             # 🔹 프롬프트 템플릿 선택
-            sys_tmpl = self._prompts["urgent_off_topic_base"] if blocking else self._prompts["off_topic_base"]
-            usr_tmpl = self._prompts["urgent_off_topic_user"] if blocking else self._prompts["off_topic_user"]
+            # blocking일 때는 urgent, is_last_chance일 때는 normal이지만 임무 유도 필요
+            if blocking:
+                sys_tmpl = self._prompts["urgent_off_topic_base"]
+                usr_tmpl = self._prompts["urgent_off_topic_user"]
+            else:
+                sys_tmpl = self._prompts["off_topic_base"]
+                usr_tmpl = self._prompts["off_topic_user"]
 
             # 🔹 템플릿 포맷팅
             # ✅ scene_tools.get_stage_atmosphere()로 숫자→문자열 변환 활용
@@ -316,6 +325,10 @@ class FallbackManager:
                 relationships_section=relationships_section,
                 world_context_section=world_context_section
             )
+            # 🔹 마지막 기회일 때 힌트 추가
+            if is_last_chance:
+                mission_hint = f"{mission_hint}\n\n⚠️ 중요: 이제 슬슬 현재 임무나 상황으로 자연스럽게 유도하세요. (마지막 허용)"
+
             usr = usr_tmpl.format(
                 user_input=user_input,
                 stage_tag=stage_tag,
