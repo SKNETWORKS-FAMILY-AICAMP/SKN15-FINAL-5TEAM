@@ -43,7 +43,7 @@ except ImportError as e:
 class TrainingLogger:
     """에이전트 실행 로그를 LogDB에 수집하는 클래스 (맥락 중심 하이브리드 평가)"""
 
-    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+    def __init__(self, db_manager: Optional["DatabaseManager"] = None):
         """LogDB 연결 및 LLM 설정 초기화"""
         self.logdb_url = os.getenv(
             "LOGDB_URL",

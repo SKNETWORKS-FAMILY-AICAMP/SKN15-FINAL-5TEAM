@@ -327,6 +327,9 @@ class SessionManagerAdapter:
 
 
 # HybridSessionManager 초기화
+# 초기화
+_hybrid_manager = None
+
 try:
     # 환경 변수 기반 DatabaseManager 생성 (도커 env 지원)
     db_env_host = os.getenv("DB_HOST", "localhost")
@@ -520,16 +523,6 @@ async def root():
     return {"status": "running", "service": "KIME Chat API", "version": "1.0.0"}
 
 
-<<<<<<< HEAD
-@app.post("/api/chat")
-async def chat(request: Request):
-    """
-    메인 채팅 엔드포인트
-    1. 세션 생성 or 복원
-    2. 시나리오 로드
-    3. LangGraph 실행
-    4. 결과를 반환
-=======
 # ============================================================
 # 🔐 인증 API 엔드포인트
 # ============================================================
@@ -637,6 +630,36 @@ async def login(req: LoginRequest, request: Request):
         AuthResponse (success, message, user_id, username, display_name)
     """
     try:
+        # Fallback: 데이터베이스가 없을 때 개발 모드 인증
+        if _hybrid_manager is None:
+            # 개발 모드: 간단한 인증 (kime/dev123)
+            if req.username == "kime" and req.password == "dev123":
+                from src.auth.jwt_utils import create_access_token, create_refresh_token
+
+                user_id = "dev_user_1"
+                token_data = {
+                    "user_id": user_id,
+                    "username": req.username,
+                    "display_name": "개발자"
+                }
+                access_token = create_access_token(data=token_data)
+                refresh_token = create_refresh_token(data={"user_id": user_id})
+
+                return AuthResponse(
+                    success=True,
+                    message="로그인 성공 (개발 모드)",
+                    user_id=user_id,
+                    username=req.username,
+                    display_name="개발자",
+                    access_token=access_token,
+                    refresh_token=refresh_token
+                )
+            else:
+                return AuthResponse(
+                    success=False,
+                    message="개발 모드: kime/dev123로 로그인하세요"
+                )
+
         # 사용자 인증
         user = _hybrid_manager.db.verify_user_password(
             username=req.username,
@@ -728,6 +751,14 @@ async def get_me(user: Dict = Depends(require_auth)):
 @app.get("/api/users/me/credits")
 async def get_user_credits(user: Dict = Depends(require_auth)):
     """사용자 크레딧(버블) 조회"""
+    # Fallback: 데이터베이스가 없을 때 기본 크레딧 반환
+    if _hybrid_manager is None:
+        return {
+            "user_id": user["user_id"],
+            "bubble_count": 100,  # 개발 모드 기본 버블
+            "last_updated": None
+        }
+
     credits = _hybrid_manager.db.get_user_credits(user["user_id"])
     if not credits:
         raise HTTPException(status_code=404, detail="크레딧 정보를 찾을 수 없습니다")
@@ -977,6 +1008,34 @@ async def get_scenarios():
             ...
         ]
     """
+    if _hybrid_manager is None:
+        # Fallback: Load scenarios from files
+        from src.utils.scenario_loader import scenario_loader
+        import glob
+
+        scenarios = []
+        scenario_files = glob.glob("data/scenarios/*.json")
+
+        for file_path in scenario_files:
+            filename = file_path.split("/")[-1]
+            scenario_data = scenario_loader.load_scenario(filename)
+            if scenario_data:
+                scenario_id = scenario_data.get("scenario_id", filename.replace(".json", ""))
+                scenarios.append({
+                    "scenario_id": scenario_id,
+                    "title": scenario_data.get("title", "Untitled"),
+                    "description": scenario_data.get("description", ""),
+                    "image_url": scenario_data.get("image_url", ""),
+                    "tags": scenario_data.get("tags", []),
+                    "card_size": scenario_data.get("card_size", "medium"),
+                    "route_path": f"/chat/{scenario_id}",
+                    "likes": 0,
+                    "comments": 0,
+                    "views": 0
+                })
+
+        return scenarios
+
     scenarios = _hybrid_manager.db.get_all_scenarios(include_inactive=False)
     return scenarios
 
@@ -1786,7 +1845,6 @@ async def chat(
 
     Raises:
         HTTPException 401: 인증되지 않은 사용자
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
     """
     try:
         request_start = time.perf_counter()
@@ -1797,8 +1855,6 @@ async def chat(
         scenario_id = data.get("scenario_id")
         user_name = data.get("user_name") or "여행자"
 
-<<<<<<< HEAD
-=======
         # 🔐 인증된 사용자 정보 추출 (필수)
         user_id = current_user.get('user_id')
         username = current_user.get('username', 'Unknown')
@@ -1815,16 +1871,11 @@ async def chat(
         except Exception as e:
             print(f"⚠️ Failed to save user auth log: {e}")
 
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
         print(f"📥 Request received: session_id={session_id}, input='{user_input}'")
 
         if not session_id:
             session_id = str(uuid.uuid4())
             print(f"🆕 Creating new session: {session_id}")
-<<<<<<< HEAD
-        else:
-            print(f"🔁 Reusing session: {session_id}")
-=======
             # 📝 General Log: 새 세션 생성
             try:
                 SESSION_MANAGER.save_log(
@@ -1847,7 +1898,6 @@ async def chat(
                 )
             except Exception as e:
                 print(f"⚠️ Failed to save session reuse log: {e}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
         state = SESSION_MANAGER.load_or_create(session_id)
         is_new_session = "messages" not in state
@@ -1872,8 +1922,6 @@ async def chat(
             state["scenario"] = scenario_data
             state["scenario_id"] = resolved_id
             state["user_name"] = user_name
-<<<<<<< HEAD
-=======
             state["user_id"] = user_id  # ✅ 추가: 사용자 ID 저장
 
             # 🧠 사용자 장기 기억 로드 (인증된 사용자만)
@@ -1927,7 +1975,6 @@ async def chat(
                             print(f"⚠️ Failed to save no-memory log: {log_err}")
                 except Exception as e:
                     print(f"⚠️ Failed to load user memories: {e}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
             metadata = scenario_data.get("metadata", {}) if isinstance(scenario_data, dict) else {}
             initial_stage = metadata.get("default_stage")
@@ -1967,13 +2014,6 @@ async def chat(
             state["dialogue_batch_index"] = 0
             # state["dialogues_generated_count"]는 리셋하지 않음 (누적)
 
-<<<<<<< HEAD
-            # 🧹 새 유저 입력 시 이전 output 클리어 (이미 전송됨)
-            state["output"] = {}
-            state["agent_responses"] = []
-
-=======
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
         # 스테이지별 대화 카운터 및 이미지 관련 필드 초기화
         state.setdefault("stage_dialogue_counts", {})
         state.setdefault("dialogues_generated_count", 0)
@@ -1983,14 +2023,6 @@ async def chat(
         print(f"🤖 Processing: session={session_id}, input='{user_input}'")
         workflow_instance = get_workflow()
         workflow_start = time.perf_counter()
-<<<<<<< HEAD
-        result_state = workflow_instance.invoke(state)
-        workflow_end = time.perf_counter()
-
-        turn_count = result_state.get("turn_count", 0) + 1
-        result_state["turn_count"] = turn_count
-        SESSION_MANAGER.save(session_id, result_state)
-=======
 
         try:
             result_state = workflow_instance.invoke(state)
@@ -2205,7 +2237,6 @@ async def chat(
             )
         except Exception as e:
             print(f"⚠️ Failed to save performance metric: {e}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
         print(
             f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}"
@@ -2230,12 +2261,6 @@ async def chat(
                     content = str(dialogue)
                 print(f"🧠 LLM Output[{idx}] ({speaker}): {content}")
 
-<<<<<<< HEAD
-        # ImageManager를 사용하여 각 대화별로 이미지 결정
-        current_image = result_state.get("current_image")  # 이전 이미지
-        scenario_id_for_image = result_state.get("scenario_id", scenario_id)
-        image_debug(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
-=======
         # ========================================
         # 🆕 1. 자동 대화 저장 (dialogues 테이블)
         # ========================================
@@ -2356,7 +2381,6 @@ async def chat(
         current_image = result_state.get("current_image")  # 이전 이미지
         scenario_id_for_image = result_state.get("scenario_id", scenario_id)
         print(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
         scenario_reference = (
             result_state.get("scenario")
@@ -2398,13 +2422,8 @@ async def chat(
 
             image_config_path = resolve_path(image_config_candidate)
             abs_path = image_config_path or image_config_candidate
-<<<<<<< HEAD
-            image_debug(f"🔍 Checking image config path: {abs_path}")
-            image_debug(f"🔍 File exists: {os.path.exists(image_config_path or '')}")
-=======
             print(f"🔍 Checking image config path: {abs_path}")
             print(f"🔍 File exists: {os.path.exists(image_config_path or '')}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
             if scenario_id_for_image not in globals().get("image_managers", {}):
                 if image_config_path and os.path.exists(image_config_path):
@@ -2416,55 +2435,31 @@ async def chat(
 
                     globals()["image_managers"][scenario_id_for_image] = ImageManager(
                         config_path=image_config_path,
-<<<<<<< HEAD
-                        debug=IMAGE_DEBUG,
-=======
                         debug=True,
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
                         use_llm=use_llm,
                         llm_metadata_path=metadata_path,
                     )
                     status_label = "enabled" if use_llm else "disabled"
-<<<<<<< HEAD
-                    image_debug(
-                        f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM {status_label})"
-                    )
-                else:
-                    image_debug(f"⚠️ Image config not found at: {abs_path}")
-=======
                     print(
                         f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM {status_label})"
                     )
                 else:
                     print(f"⚠️ Image config not found at: {abs_path}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
             # ImageManager가 있으면 각 대화별로 이미지 분석
             image_manager = (
                 globals().get("image_managers", {}).get(scenario_id_for_image)
             )
-<<<<<<< HEAD
-            image_debug(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
-            image_debug(
-                f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}"
-            )
-            image_debug(f"🔍 DEBUG: image_manager={image_manager}")
-=======
             print(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
             print(
                 f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}"
             )
             print(f"🔍 DEBUG: image_manager={image_manager}")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
             if image_manager:
                 # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
                 all_dialogues = result_state.get("output", {}).get("dialogues", [])
 
-<<<<<<< HEAD
-                # 각 대화마다 이미지를 분석하여 image_index 할당
-=======
                 # 🚀 배치 처리: 전체 대화를 한 번에 분석 (LLM 1회 호출)
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
                 previous_image = current_image
 
                 # 첫 대화이고 이전 이미지가 없으면 인트로 이미지(1번)로 시작
@@ -2472,39 +2467,6 @@ async def chat(
                     all_dialogues[0]["image_index"] = "1"
                     previous_image = "1"
                     current_image = "1"
-<<<<<<< HEAD
-                    image_debug("🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
-
-                for i, dialogue in enumerate(all_dialogues):
-                    # 첫 대화는 이미 처리했으므로 스킵
-                    if i == 0 and dialogue.get("image_index"):
-                        continue
-
-                    # 해당 대화 인덱스까지의 컨텍스트로 이미지 선택
-                    new_image = image_manager.get_image_for_dialogue_at_index(
-                        result_state, i
-                    )
-
-                    if new_image is not None and new_image != previous_image:
-                        # 이미지가 변경되면 해당 대화에 image_index 추가
-                        dialogue["image_index"] = new_image
-                        previous_image = new_image
-                        current_image = new_image
-                        image_debug(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
-
-                # 최종 current_image를 세션에 저장
-                result_state["current_image"] = current_image
-                image_debug(f"✅ Final image state: {current_image}")
-            else:
-                image_debug(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
-
-        # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
-        total_duration_ms = (time.perf_counter() - request_start) * 1000.0
-        total_duration_s = total_duration_ms / 1000.0
-        print(
-            f"⏱️ 총 처리 시간(입력→응답): {total_duration_ms:.2f} ms ({total_duration_s:.2f} s)"
-        )
-=======
                     print(f"🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
 
                 # 배치로 모든 대화의 이미지 선택 (1회 LLM 호출)
@@ -2533,7 +2495,6 @@ async def chat(
         # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
         total_duration_ms = (time.perf_counter() - request_start) * 1000.0
         print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
         return JSONResponse(
             {
@@ -2594,8 +2555,6 @@ async def delete_session(session_id: str):
 
 
 # ------------------------------------------------------------
-<<<<<<< HEAD
-=======
 # ✅ 사용자의 마지막 세션 조회 (세션 복원용)
 # ------------------------------------------------------------
 @app.get("/api/session/last")
@@ -2645,7 +2604,6 @@ async def get_user_last_session(
 
 
 # ------------------------------------------------------------
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 # ✅ 사용 가능한 시나리오 목록 조회 (프론트 시나리오 선택용)
 # ------------------------------------------------------------
 @app.get("/api/scenarios")

@@ -1,6 +1,6 @@
 {
   "scenario_id": "cutscene5_llm_driven",
-  "title": "🔥 상현 삼(參) 조우 — 리듬형 완전판",
+  "title": "🔥 무한열차",
   "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
   "version": "6.0",
   "mountable": true,
@@ -13,7 +13,7 @@
     "inosuke": "backend/data/characters/inosuke.json",
     "nezuko": "backend/data/characters/nezuko.json",
     "enmu": "backend/data/characters/enmu.json"
-  },
+  }, 
   "i18n": {
     "ko": {
       "beats_rengoku_dialogue": [
@@ -880,7 +880,8 @@
     {
       "tag": "HEROES_ARRIVE",
       "type": "scene",
-      "context": "객차 문이 열리고 탄지로 일행(탄지로, 젠이츠, 이노스케, 네즈코)이 들어온다. {user}와 탄지로 일행이 처음 만나는 순간이다. 탄지로는 렌고쿠를 찾고 있다.",
+      "loop_mode": "micro_beat",
+      "context": "객차 문이 열리고 탄지로 일행(탄지로, 젠이츠, 이노스케, 네즈코)이 들어온다. {user}와 탄지로 일행이 처음 만나는 순간이다. 탄지로 일행은 렌고쿠를 찾고 있다.",
       "llm_beats": true,
       "speaker_pool": [
         "rengoku",
@@ -890,13 +891,14 @@
         "narr"
       ],
       "atmosphere": 3,
-      "min_turns": 1,
-      "max_turns": 3,
+      "min_turns": 3,
+      "max_turns": 8,
       "next": "RENGOKU_TRAIN_DIALOGUE"
     },
     {
       "tag": "RENGOKU_TRAIN_DIALOGUE",
       "type": "scene",
+      "loop_mode": "micro_beat",
       "context": "렌고쿠는 {user}를 '내 제자이자 츠구코'라고 소개한다. 탄지로는 무한열차에서 40명 이상이 실종되었다는 사실을 알게 된다. 탄지로가 렌고쿠에게 히노카미 카구라에 대해 묻는다. 렌고쿠는 잘 모르겠지만 불의 호흡과 관련이 있을 것 같다고 한다. 이노스케는 {user}에게 대결을 신청하고 젠이츠는 이노스케를 말린다.",
       "llm_beats": true,
       "speaker_pool": [
@@ -907,13 +909,14 @@
         "narr"
       ],
       "atmosphere": 3,
-      "min_turns": 2,
-      "max_turns": 3,
+      "min_turns": 3,
+      "max_turns": 8,
       "next": "ENMU_APPEAR"
     },
     {
       "tag": "ENMU_APPEAR",
       "type": "scene",
+      "loop_mode": "none",
       "context": "차장이 검표를 끝낸다. 객차 안에 기묘한 졸음이 퍼진다. 알 수 없는 혈귀술이 발동되고 모두는 눈치채지 못한 채 잠들기 시작한다.",
       "beats_i18n": "beats_enmu_appear",
       "speaker_pool": [
@@ -933,6 +936,7 @@
     {
       "tag": "ENMU_DREAM_WAR",
       "type": "scene",
+      "loop_mode": "micro_beat",
       "context": "{user}는 꿈속에서 과거와 마주한다. 엔무: '영원한 행복을 버리지 마라...'",
       "llm_beats": true,
       "speaker_pool": [
@@ -940,13 +944,14 @@
         "narr"
       ],
       "atmosphere": 3,
-      "min_turns": 2,
-      "max_turns": 4,
+      "min_turns": 3,
+      "max_turns": 6,
       "next": "ENMU_REAL_BATTLE"
     },
     {
       "tag": "ENMU_DREAM_WAKEUP",
       "type": "scene",
+      "loop_mode": "none",
       "context": "꿈속을 헤메던 {user}, 네즈코의 혈귀술이 꿈을 태워서 꿈에서 깬다",
       "llm_beats": true,
       "speaker_pool": [
@@ -962,15 +967,19 @@
     {
       "tag": "ENMU_REAL_BATTLE",
       "type": "scene",
+      "loop_mode": "none",
       "context": "엔무가 열차와 융합해 공격해온다. {user}, 탄지로, 이노스케는 조종칸으로 향한다. 탄지로가 엔무의 목을 찾는 동안, 렌고쿠는 승객들을 지킨다.",
       "beats_i18n": "beats_enmu_real_battle",
       "speaker_pool": ["tanjiro", "inosuke", "rengoku", "nezuko", "enmu", "narr"],
       "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
       "next": "UpperMoons3_appeared"
     },
     {
       "tag": "UpperMoons3_appeared",
       "type": "scene",
+      "loop_mode": "none",
       "next": "ROUTE_CHOICE",
       "beats_i18n": "beats_UpperMoons3_appeared",
       "speaker_pool": [
@@ -980,7 +989,9 @@
         "akaza",
         "narr"
       ],
-      "atmosphere": 0
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2
     },
     {
       "tag": "ROUTE_CHOICE",
@@ -1002,6 +1013,7 @@
     {
       "tag": "INTERVENE",
       "type": "scene",
+      "loop_mode": "none",
       "next": "RECKLESS_SACRIFICE",
       "beats_i18n": "beats_intervene_hint",
       "speaker_pool": [
@@ -1010,7 +1022,9 @@
         "akaza",
         "narr"
       ],
-      "atmosphere": 0
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2
     },
     {
       "tag": "RECRUIT",
@@ -1039,6 +1053,7 @@
     {
       "tag": "RECKLESS_SACRIFICE",
       "type": "scene",
+      "loop_mode": "none",
       "next": "END_ROUTER",
       "beats_i18n": "beats_reckless_sacrifice",
       "speaker_pool": [
@@ -1047,11 +1062,14 @@
         "akaza",
         "narr"
       ],
-      "atmosphere": 0
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2
     },
     {
       "tag": "RETURN_TO_FRONT",
       "type": "scene",
+      "loop_mode": "none",
       "next": "END_ROUTER",
       "beats_i18n": "beats_return_to_front",
       "speaker_pool": [
@@ -1059,7 +1077,9 @@
         "rengoku",
         "akaza",
         "narr"
-      ]
+      ],
+      "min_turns": 1,
+      "max_turns": 2
     },
     {
       "tag": "END_ROUTER",
@@ -1080,35 +1100,44 @@
     {
       "tag": "END_HIDDEN",
       "type": "scene",
+      "loop_mode": "none",
       "beats_i18n": "beats_boss_exit_hidden",
       "speaker_pool": [
         "tanjiro",
         "rengoku",
         "akaza",
         "narr"
-      ]
+      ],
+      "min_turns": 1,
+      "max_turns": 2
     },
     {
       "tag": "END_BASIC",
       "type": "scene",
+      "loop_mode": "none",
       "beats_i18n": "beats_boss_exit_basic",
       "speaker_pool": [
         "tanjiro",
         "rengoku",
         "akaza",
         "narr"
-      ]
+      ],
+      "min_turns": 1,
+      "max_turns": 2
     },
     {
       "tag": "END_BAD",
       "type": "scene",
+      "loop_mode": "none",
       "beats_i18n": "beats_reckless_sacrifice",
       "speaker_pool": [
         "tanjiro",
         "rengoku",
         "akaza",
         "narr"
-      ]
+      ],
+      "min_turns": 1,
+      "max_turns": 2
     }
   ],
   "metadata": {

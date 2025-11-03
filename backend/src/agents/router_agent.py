@@ -1,30 +1,19 @@
 from __future__ import annotations
 
 import time
-<<<<<<< HEAD
-from concurrent.futures import ThreadPoolExecutor
-=======
 from concurrent.futures import ThreadPoolExecutor, as_completed
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
-<<<<<<< HEAD
 from src.tools.fallback_tools import handle_off_topic, reset_fallback_count
-=======
-from src.utils.fallback_llm import generate_off_topic_response
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 from src.utils.llm_client import LLMClient, get_llm_client
 from src.utils.logger import log
 from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
-<<<<<<< HEAD
-=======
 from src.database.session_manager import HybridSessionManager
->>>>>>> 155df9dfffa25462e1081105acb6710e4be8560b
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
@@ -227,7 +216,7 @@ class RouterAgent:
 
             return TopicClassification(
                 is_off_topic=True,
-                confidence=0.6,
+                confidence=0.5,
                 category="llm_fallback",
                 reason="llm_error",
             )
@@ -360,9 +349,17 @@ class RouterAgent:
         state["user_intent"] = "off_topic"
         state["classification"] = "off_topic"
 
-        fallback = generate_off_topic_response(state, user_input) or {}
-        fallback_text = fallback.get("text") or "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요."
-        fallback_speaker = fallback.get("speaker") or "system"
+        fallback_result = handle_off_topic(state, user_input, use_llm=True)
+        print(f'fallback_result 확인 : {fallback_result}')
+
+        # dialogue 우선, 없으면 message 사용
+        dialogue = fallback_result.get("dialogue")
+        if dialogue:
+            fallback_text = dialogue.get("text", "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요.")
+            fallback_speaker = dialogue.get("speaker", "system")
+        else:
+            fallback_text = fallback_result.get("message", "지금은 임무에 집중해야 해요. 이야기는 나중에 이어가요.")
+            fallback_speaker = fallback_result.get("speaker", "system")
 
         scenario = state.get("scenario") or state.get("scenario_data")
         character_refs: Dict[str, Any] = {}
