@@ -102,6 +102,11 @@ class OpenNarrativeHandler:
         dialogues = narrative_result.get("dialogues", [])
         state_update = narrative_result.get("state_update", {})
 
+        # 🔗 유저 입력을 state_update에 추가 (다음 스테이지에서 참조 가능하도록)
+        if user_input:
+            state_update["last_user_input"] = user_input
+            log("open_narrative", f"📝 Saved last_user_input to state_update: '{user_input[:50]}...'")
+
         # story_summary 업데이트
         if "story_summary" in state_update:
             current_summary = state.get("story_summary", "")

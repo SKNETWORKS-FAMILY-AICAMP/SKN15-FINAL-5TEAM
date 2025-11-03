@@ -385,8 +385,22 @@ def run_dialogue_agent(state: AgentState) -> AgentState:
 
         # 🔥 배치 모드 지원: has_more_dialogues가 True면 agent_responses 전체를 사용
         # (children_agent가 이미 배치 크기만큼만 생성함)
-        state["output"]["dialogues"] = agent_responses.copy()
-        print(f"[DIALOGUE] Updated output with {len(agent_responses)} new dialogues")
+        # 🔗 기존 dialogues 보존: pre-transition response만 보존, 나머지는 덮어쓰기
+        existing_dialogues = state["output"]["dialogues"]
+
+        # pre-transition response만 필터링 (is_pre_transition 플래그가 있는 것만)
+        pre_transition_dialogues = [
+            d for d in existing_dialogues
+            if isinstance(d, dict) and d.get("is_pre_transition")
+        ]
+
+        # pre-transition + 새 dialogues
+        state["output"]["dialogues"] = pre_transition_dialogues + agent_responses
+
+        if pre_transition_dialogues:
+            print(f"[DIALOGUE] Kept {len(pre_transition_dialogues)} pre-transition dialogue(s), added {len(agent_responses)} new (total: {len(state['output']['dialogues'])})")
+        else:
+            print(f"[DIALOGUE] Updated output with {len(agent_responses)} new dialogues")
 
         # agent_responses 초기화 (다음 배치를 위해)
         state["agent_responses"] = []

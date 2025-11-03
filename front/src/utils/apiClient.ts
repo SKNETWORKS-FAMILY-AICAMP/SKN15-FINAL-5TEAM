@@ -20,7 +20,7 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30초
+  timeout: 90000, // 90초 (LLM 응답 시간 고려)
 });
 
 // 토큰 갱신 중인지 추적

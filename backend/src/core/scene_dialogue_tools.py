@@ -78,6 +78,12 @@ def compose_llm_prompt(
     stage_context: Optional[str] = None,
     world_context: Optional[str] = None,
     conversation_summary: Optional[str] = None,  # 🧠 장기기억 요약
+    previous_scene_summary: Optional[str] = None,  # 🔗 이전 장면 요약
+    previous_emotional_tone: Optional[str] = None,  # 🔗 이전 감정 톤
+    previous_spatial_context: Optional[str] = None,  # 🔗 공간 연속성
+    previous_character_states: Optional[str] = None,  # 🔗 캐릭터 상태
+    transition_hint: Optional[str] = None,  # 🔗 전환 힌트
+    previous_user_input: Optional[str] = None,  # 🔗 이전 유저 입력
 ) -> str:
     """
     tone_profiles + beats + 관계 정보 + 세계관 정보를 포함한 LLM 프롬프트
@@ -194,6 +200,52 @@ def compose_llm_prompt(
         template = _SCENE_DIALOGUE_PROMPTS.get("scene_context_block", "")
         scene_context_block = template.format(stage_context=stage_context)
 
+    # 🔗 서사 연속성 블록 (이전 장면 정보)
+    continuity_block = ""
+    if any([previous_scene_summary, previous_emotional_tone, previous_spatial_context, previous_character_states, transition_hint, previous_user_input]):
+        continuity_parts = []
+        continuity_parts.append("=" * 60)
+        continuity_parts.append("🚨 **서사 연속성 정보** 🚨")
+        continuity_parts.append("이것은 '새로운 장면'이 아니라 '이전 장면의 연속'입니다!")
+        continuity_parts.append("Stage가 바뀌었다고 해서 시간이 리셋되는 것이 아닙니다!")
+        continuity_parts.append("=" * 60)
+
+        if previous_scene_summary:
+            continuity_parts.append(f"\n📖 [이전 장면 요약]: {previous_scene_summary}")
+
+        if previous_user_input:
+            continuity_parts.append(f"💬 [이전 유저 발화]: \"{previous_user_input}\"")
+            continuity_parts.append("   ⚠️ 이 발화는 이전 장면에서 유저가 한 질문/요청입니다!")
+            continuity_parts.append("   ⚠️ 첫 대사에서 이 발화의 의도/맥락을 자연스럽게 연결하세요!")
+
+        if previous_emotional_tone:
+            continuity_parts.append(f"😶 [이전 감정 톤]: {previous_emotional_tone}")
+
+        if previous_spatial_context:
+            continuity_parts.append(f"📍 [공간 연속성]: {previous_spatial_context}")
+
+        if previous_character_states:
+            continuity_parts.append(f"👥 [캐릭터 상태]: {previous_character_states}")
+
+        if transition_hint:
+            continuity_parts.append(f"➡️ [전환 힌트]: {transition_hint}")
+
+        continuity_parts.append("\n" + "=" * 60)
+        continuity_parts.append("💥 절대 규칙:")
+        continuity_parts.append("1. 첫 narr는 반드시 [이전 장면 요약]의 마지막 상황을 언급하세요")
+        if previous_user_input:
+            continuity_parts.append(f"2. [이전 유저 발화]가 있다면, 그 맥락을 첫 1~2개 대사에서 처리하세요")
+            continuity_parts.append("3. [이전 감정 톤]을 유지하거나 점진적으로 변화시키세요")
+            continuity_parts.append("4. 이미 등장한 캐릭터를 다시 소개하지 마세요")
+            continuity_parts.append("5. 시간 연결어를 사용하세요: '그때', '그 순간', '말을 마치자', '잠시 후'")
+        else:
+            continuity_parts.append("2. [이전 감정 톤]을 유지하거나 점진적으로 변화시키세요")
+            continuity_parts.append("3. 이미 등장한 캐릭터를 다시 소개하지 마세요")
+            continuity_parts.append("4. 시간 연결어를 사용하세요: '그때', '그 순간', '말을 마치자', '잠시 후'")
+        continuity_parts.append("=" * 60)
+
+        continuity_block = "\n" + "\n".join(continuity_parts) + "\n"
+
     # 템플릿 기반 프롬프트 조립
     header = _SCENE_DIALOGUE_PROMPTS.get("header", "")
     instructions = _SCENE_DIALOGUE_PROMPTS.get("instructions", "")
@@ -207,6 +259,8 @@ def compose_llm_prompt(
     {world_context_block}
 
     {scene_context_block}
+
+    {continuity_block}
 
     {user_input_block}
 

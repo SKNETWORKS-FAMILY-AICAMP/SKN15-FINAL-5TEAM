@@ -275,6 +275,15 @@ class ChildrenAgent:
         # 3️⃣ LLM 프롬프트 생성
         # -----------------------------
         stage_turn = int(state.get("stage_turn", 0) or 0)
+
+        # 🔗 서사 연속성 정보 추출 (parent_agent가 children_ctx에 추가한 정보)
+        previous_scene_summary = ctx.get("previous_scene_summary")
+        previous_emotional_tone = ctx.get("previous_emotional_tone")
+        previous_spatial_context = ctx.get("previous_spatial_context")
+        previous_character_states = ctx.get("previous_character_states")
+        transition_hint = ctx.get("transition_hint")
+        previous_user_input = ctx.get("previous_user_input")  # 🔗 이전 유저 입력
+
         llm_prompt = dialogue_tools.compose_llm_prompt(
             stage_tag=stage_tag,
             beats=beats,
@@ -289,6 +298,12 @@ class ChildrenAgent:
             recent_dialogues=recent_dialogues if isinstance(recent_dialogues, list) else None,
             stage_context=stage_context if isinstance(stage_context, str) else None,
             world_context=world_context if isinstance(world_context, str) else None,
+            previous_scene_summary=previous_scene_summary if isinstance(previous_scene_summary, str) else None,
+            previous_emotional_tone=previous_emotional_tone if isinstance(previous_emotional_tone, str) else None,
+            previous_spatial_context=previous_spatial_context if isinstance(previous_spatial_context, str) else None,
+            previous_character_states=previous_character_states if isinstance(previous_character_states, str) else None,
+            transition_hint=transition_hint if isinstance(transition_hint, str) else None,
+            previous_user_input=previous_user_input if isinstance(previous_user_input, str) else None,  # 🔗 추가
         )
 
 
@@ -379,10 +394,18 @@ class ChildrenAgent:
             }])
 
         fallback_dialogues = self._normalize_dialogues(beats)
+
+        # 🚨 fallback은 off_topic/incoherent일 때만 사용
+        classification = state.get("classification", "on_topic")
         fallback = (ctx.get("fallback") or {}).get("dialogues") or []
-        if fallback:
-            log("children", "⚙️ Using provided fallback dialogues for this stage")
+
+        if fallback and classification in ("off_topic", "incoherent"):
+            log("children", f"⚙️ Using provided fallback dialogues (classification={classification})")
             fallback_dialogues = self._normalize_dialogues(fallback)
+        elif fallback and classification == "on_topic":
+            log("children", f"⚠️ Fallback available but classification is on_topic - using beats instead")
+            # on_topic이면 fallback 무시하고 beats 사용
+
         return merge_with_prefetch(self._render_dialogues(state, fallback_dialogues))
 
     def _render_dialogues(self, state: Dict[str, Any], entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
