@@ -41,8 +41,8 @@ llm_client:
       urgent_max_tokens: 150  # 최적화: 1-2 문장 = 약 50-100 토큰 (400 → 150)
     image_manager:
       model: "gpt-4o-mini"
-      temperature: 0.3
-      max_tokens: 200
+      temperature: 0.2  # JSON 출력 안정성을 위해 낮춤
+      max_tokens: 300  # JSON 파싱 오류 방지를 위해 증가
 
 # 데이터베이스 경로
 database:

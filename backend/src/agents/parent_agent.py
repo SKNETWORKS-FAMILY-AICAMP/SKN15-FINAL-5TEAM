@@ -176,9 +176,16 @@ class ParentAgent:
                 log("parent", f"🔄 Stage advanced: {stage_tag} → {next_stage}")
 
                 # 🆕 스테이지 전환 시 이전 대화 출력 리셋 (새 스테이지에 이전 대화 혼재 방지)
+                # 단, pre-transition response는 보존 (User 발화에 대한 응답)
                 if "output" in state and isinstance(state["output"], dict):
-                    state["output"]["dialogues"] = []
-                    log("parent", "🧹 Cleared output dialogues for new stage")
+                    dialogues = state["output"].get("dialogues", [])
+                    # Pre-transition response만 보존
+                    pre_transition_dialogues = [d for d in dialogues if isinstance(d, dict) and d.get("is_pre_transition")]
+                    state["output"]["dialogues"] = pre_transition_dialogues
+                    if pre_transition_dialogues:
+                        log("parent", f"🧹 Cleared old dialogues, kept {len(pre_transition_dialogues)} pre-transition response(s)")
+                    else:
+                        log("parent", "🧹 Cleared output dialogues for new stage")
 
                 next_stage_def = scene_tools.get_stage(scenario, next_stage)
                 scene_state["stage_completed"] = False
@@ -265,6 +272,18 @@ class ParentAgent:
         children_ctx["context_summary"] = self._build_context_summary(state)
         children_ctx["latest_user_input"] = state.get("user_input", "")
         children_ctx["recent_dialogues"] = self._collect_recent_dialogues(state)
+
+        # 🔗 이전 스테이지 서사 연속성 정보 추가 (state_update 기반)
+        previous_state_update = state.get("previous_state_update", {})
+        if isinstance(previous_state_update, dict) and previous_state_update:
+            children_ctx["previous_scene_summary"] = previous_state_update.get("scene_summary")
+            children_ctx["previous_emotional_tone"] = previous_state_update.get("emotional_tone")
+            children_ctx["previous_spatial_context"] = previous_state_update.get("spatial_context")
+            children_ctx["previous_character_states"] = previous_state_update.get("character_states")
+            children_ctx["transition_hint"] = previous_state_update.get("transition_hint")
+            # 🔗 이전 유저 입력 추가 (매우 중요!)
+            children_ctx["previous_user_input"] = previous_state_update.get("last_user_input")
+            log("parent", f"🔗 Added narrative continuity info to children_ctx: scene_summary={bool(children_ctx.get('previous_scene_summary'))}, last_user_input={bool(children_ctx.get('previous_user_input'))}")
 
         stage_key = (stage.get("tag") if isinstance(stage, dict) else stage_tag) or ""
         stage_key_upper = stage_key.upper()
@@ -647,13 +666,20 @@ class ParentAgent:
                 new_dialogues = response_state.get("output", {}).get("dialogues", [])
 
             if isinstance(new_dialogues, list) and new_dialogues:
+                # Pre-transition response에 플래그 추가 (스테이지 전환 시 보존하기 위함)
+                for dialogue in new_dialogues:
+                    if isinstance(dialogue, dict):
+                        dialogue["is_pre_transition"] = True
+
                 output["dialogues"] = existing_dialogues + new_dialogues
                 state["output"] = output
                 log("parent", f"✅ Added {len(new_dialogues)} pre-transition response(s)")
 
-                # 🧹 응답 생성 완료했으므로 user_input 클리어 (다음 스테이지에서 재사용 방지)
-                state["user_input"] = ""
-                log("parent", "🧹 Cleared user_input after successful response")
+                # 🔧 FIX: user_input을 클리어하지 않음 - 다음 스테이지에서 유저 입력 컨텍스트 필요
+                # (이전 코드는 pre-transition response 생성 후 즉시 클리어해서 다음 스테이지가 유저 입력을 못 봤음)
+                # state["user_input"] = ""
+                # log("parent", "🧹 Cleared user_input after successful response")
+                log("parent", "✅ Preserving user_input for next stage context")
 
         except Exception as e:
             log("parent", f"⚠️ Failed to generate pre-transition response: {e}")

@@ -99,6 +99,11 @@ class StoryOrchestrator:
                 log("story_orchestrator", "⚠️ Empty or invalid dialogues")
                 return self._create_fallback_response(context, speaker_pool)
 
+            # 🔗 state_update를 state에 저장 (다음 스테이지로 전달하기 위함)
+            if isinstance(state_update, dict) and state_update:
+                state["previous_state_update"] = state_update
+                log("story_orchestrator", f"💾 Saved state_update for next stage: {list(state_update.keys())}")
+
             return {
                 "dialogues": dialogues,
                 "state_update": state_update if isinstance(state_update, dict) else {},
