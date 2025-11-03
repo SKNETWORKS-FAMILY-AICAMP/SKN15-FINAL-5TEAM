@@ -11,29 +11,31 @@ interface CharacterInfo {
   color: string;
 }
 
+const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
+
 const CHARACTERS: CharacterInfo[] = [
   {
     id: 'tanjiro',
     name: '탄지로',
-    profileImage: '/images/프로필_탄지로.png',
+    profileImage: `${CDN_URL}/프로필_탄지로.png`,
     color: 'from-green-500 to-green-600'
   },
   {
     id: 'inosuke',
     name: '이노스케',
-    profileImage: '/images/프로필_이노스케.png',
+    profileImage: `${CDN_URL}/프로필_이노스케.png`,
     color: 'from-blue-500 to-blue-600'
   },
   {
     id: 'zenitsu',
     name: '젠이츠',
-    profileImage: '/images/프로필_젠이츠.png',
+    profileImage: `${CDN_URL}/프로필_젠이츠.png`,
     color: 'from-yellow-500 to-yellow-600'
   },
   {
     id: 'rengoku',
     name: '렌고쿠',
-    profileImage: '/images/프로필_렌고쿠.png',
+    profileImage: `${CDN_URL}/프로필_렌고쿠.png`,
     color: 'from-red-500 to-red-600'
   }
 ];

@@ -211,9 +211,10 @@ class GuardrailAgent:
         temp.setdefault("skip_parent_after_dialogue", False)
 
     # ============================================================
-    # 📊 Training Logger 연동
+    # 📊 Phase 4: Training Logger
     # ============================================================
     def _log_guardrail(self, state: Dict[str, Any], result: Dict[str, Any], start_time: float) -> None:
+        """Guardrail Agent 로깅"""
         try:
             guardrail_result = result.get("guardrail_result", {"status": "passed"})
 
@@ -227,10 +228,10 @@ class GuardrailAgent:
                     "warning_count": result.get("prohibited_warning_count", 0),
                 },
                 start_time=start_time,
-                llm_model="text-embedding-3-small",
+                llm_model="text-embedding-3-small",  # Guardrail uses embedding model
             )
-        except Exception as exc:
-            log("guardrail", f"Logging failed: {exc}")
+        except Exception as e:
+            log("guardrail", f"Logging failed: {e}")
 
 
 DEFAULT_AGENT = GuardrailAgent()
