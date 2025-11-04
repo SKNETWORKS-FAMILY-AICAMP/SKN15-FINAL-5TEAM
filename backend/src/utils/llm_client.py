@@ -327,6 +327,78 @@ class LLMClient:
             print(f"LLM JSON 호출 중 오류 발생: {str(e)}")
             raise
 
+    def call_stream(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        *,
+        agent: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
+        """
+        LLM 스트리밍 호출 (실시간 응답)
+
+        Args:
+            system_prompt: 시스템 프롬프트
+            user_prompt: 사용자 프롬프트
+            temperature: 창의성 조절 (0.0~1.0)
+            max_tokens: 최대 토큰 수
+
+        Yields:
+            LLM 응답 텍스트 청크 (스트림)
+        """
+        target_model = self._resolve_model(agent, model)
+        resolved_temperature = self._resolve_temperature(agent, temperature)
+        resolved_max_tokens = self._resolve_max_tokens(agent, max_tokens)
+
+        try:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            kwargs = {
+                "model": target_model,
+                "messages": messages,
+                "temperature": resolved_temperature,
+                "stream": True,  # 스트리밍 활성화
+            }
+
+            if resolved_max_tokens is not None:
+                kwargs["max_tokens"] = resolved_max_tokens
+
+            call_started = time.perf_counter()
+            stream = self.client.chat.completions.create(**kwargs)
+
+            full_response = ""
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    yield content
+
+            call_finished = time.perf_counter()
+
+            # 호출 횟수 증가
+            self.call_count += 1
+
+            duration_ms = (call_finished - call_started) * 1000.0
+            if self.verbose_logging:
+                log(
+                    "llm",
+                    "Stream completed",
+                    agent=agent or "default",
+                    model=target_model,
+                    duration_ms=f"{duration_ms:.2f}",
+                    total_length=len(full_response)
+                )
+
+        except Exception as e:
+            print(f"LLM 스트리밍 호출 중 오류 발생: {str(e)}")
+            raise
+
     def call_with_fallback(
         self,
         system_prompt: str,
