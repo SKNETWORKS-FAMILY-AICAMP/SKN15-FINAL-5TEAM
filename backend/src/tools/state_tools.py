@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from src.core.scenes_repo import ScenesRepo
 from src.tools import scene_tools
-from src.utils.fallback import trigger_fallback
+from src.tools.fallback_tools import trigger_fallback
 from src.utils.logger import log
 from src.config.constants import INTRO_STAGE_TAG
 
