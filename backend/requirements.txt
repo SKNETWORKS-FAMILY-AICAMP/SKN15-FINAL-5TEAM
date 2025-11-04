@@ -8,6 +8,7 @@ uvicorn[standard]==0.27.0
 websockets==12.0
 python-multipart==0.0.6
 pydantic>=2.10.0
+slowapi==0.1.9  # Rate limiting for FastAPI
 
 # === LLM 및 AI ===
 anthropic>=0.18.0
@@ -27,6 +28,7 @@ redis==5.0.1
 # === 유틸리티 ===
 python-dotenv==1.0.0
 pyyaml==6.0.1
+python-jose[cryptography]==3.5.0  # JWT token handling
 
 # === 날짜/시간 ===
 python-dateutil==2.8.2

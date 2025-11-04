@@ -21,24 +21,31 @@ class DatabaseManager:
 
     def __init__(
         self,
-        host: str = "localhost",
-        port: int = 5432,
-        dbname: str = "kimedb",
-        user: str = "kime",
-        password: str = "dev123",
+        host: str = None,
+        port: int = None,
+        dbname: str = None,
+        user: str = None,
+        password: str = None,
         min_conn: int = 2,
         max_conn: int = 10
     ):
         """
         Args:
-            host: PostgreSQL 호스트
-            port: PostgreSQL 포트
-            dbname: 데이터베이스 이름
-            user: 사용자 이름
-            password: 비밀번호
+            host: PostgreSQL 호스트 (기본값: DB_HOST 환경변수 또는 localhost)
+            port: PostgreSQL 포트 (기본값: DB_PORT 환경변수 또는 5432)
+            dbname: 데이터베이스 이름 (기본값: DB_NAME 환경변수 또는 kimedb)
+            user: 사용자 이름 (기본값: DB_USER 환경변수 또는 kime)
+            password: 비밀번호 (기본값: DB_PASSWORD 환경변수 또는 dev123)
             min_conn: 최소 연결 수
             max_conn: 최대 연결 수
         """
+        # 환경변수에서 기본값 읽기
+        host = host or os.getenv('DB_HOST', 'localhost')
+        port = port or int(os.getenv('DB_PORT', '5432'))
+        dbname = dbname or os.getenv('DB_NAME', 'kimedb')
+        user = user or os.getenv('DB_USER', 'kime')
+        password = password or os.getenv('DB_PASSWORD', 'dev123')
+
         # Autocommit 활성화한 connection pool 생성
         self.connection_pool = psycopg2.pool.SimpleConnectionPool(
             min_conn,
