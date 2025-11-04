@@ -96,6 +96,25 @@ app.add_middleware(
 )
 
 # ------------------------------------------------------------
+# ✅ Performance Monitoring Middleware
+# ------------------------------------------------------------
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    """API 응답 시간 측정 및 로깅"""
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+
+    # 응답 헤더에 처리 시간 추가
+    response.headers["X-Process-Time"] = f"{process_time:.3f}s"
+
+    # 느린 요청 로깅 (1초 이상)
+    if process_time > 1.0:
+        print(f"⚠️  SLOW REQUEST: {request.method} {request.url.path} took {process_time:.3f}s")
+
+    return response
+
+# ------------------------------------------------------------
 # ✅ API 라우터 등록
 # ------------------------------------------------------------
 app.include_router(monitoring_router)
@@ -956,7 +975,7 @@ async def get_leaderboard(limit: int = 100):
 
 @app.get("/api/scenarios")
 async def get_scenarios():
-    """모든 시나리오 조회 (공개 API)
+    """모든 시나리오 조회 (공개 API) - Redis 캐싱 적용 (P2 최적화)
 
     Returns:
         List of scenario cards with statistics
@@ -976,7 +995,17 @@ async def get_scenarios():
             ...
         ]
     """
+    # Redis 캐시 확인
+    cached_scenarios = cache_manager.get_scenarios_cached()
+    if cached_scenarios is not None:
+        return cached_scenarios
+
+    # 캐시 미스: DB에서 조회
     scenarios = db_manager.get_all_scenarios(include_inactive=False)
+
+    # Redis에 캐싱 (5분 TTL)
+    cache_manager.set_scenarios_cached(scenarios, ttl=300)
+
     return scenarios
 
 

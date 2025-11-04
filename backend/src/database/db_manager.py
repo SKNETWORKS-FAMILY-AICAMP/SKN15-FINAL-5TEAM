@@ -27,7 +27,7 @@ class DatabaseManager:
         user: str = None,
         password: str = None,
         min_conn: int = 2,
-        max_conn: int = 10
+        max_conn: int = 5  # Optimized for single server instance
     ):
         """
         Args:
