@@ -33,6 +33,7 @@ except ImportError:
 try:
     from src.utils.entity_extractor import EntityExtractor
     from src.utils.embedding_matcher import EmbeddingClient
+    from src.utils.relationship_extractor import RelationshipExtractor
     from src.database.db_manager import DatabaseManager
     ENTITY_EXTRACTION_AVAILABLE = True
 except ImportError as e:
@@ -87,6 +88,9 @@ class TrainingLogger:
             try:
                 self.entity_extractor = EntityExtractor()
                 self.embedding_client = EmbeddingClient()
+                self.relationship_extractor = RelationshipExtractor(
+                    enable_llm=os.getenv("RELATIONSHIP_LLM_ENABLED", "false").lower() == "true"
+                )
                 self.db_manager = db_manager or DatabaseManager(
                     host=os.getenv("DB_HOST", "localhost"),
                     port=int(os.getenv("DB_PORT", "5433")),
@@ -94,7 +98,7 @@ class TrainingLogger:
                     user=os.getenv("DB_USER", "kime"),
                     password=os.getenv("DB_PASSWORD", "dev123")
                 )
-                print("[TrainingLogger] Entity extraction and embedding generation enabled")
+                print("[TrainingLogger] Entity extraction, relationship extraction, and embedding generation enabled")
             except Exception as e:
                 self.entity_extraction_enabled = False
                 print(f"[TrainingLogger] Failed to initialize entity extraction: {e}")
@@ -360,6 +364,176 @@ class TrainingLogger:
                     print(f"[TrainingLogger] Processed {len(entities)} entities for log {log_id}")
             except Exception as e:
                 print(f"[TrainingLogger] Failed to update log {log_id} with entities/embedding: {e}")
+
+        # Extract and save relationships between entities
+        if len(entity_ids) >= 2:
+            try:
+                relationships_saved = self._extract_and_save_relationships(
+                    extraction_text=extraction_text,
+                    entities=entities,
+                    session_id=session_id,
+                    turn_count=turn_count
+                )
+                if relationships_saved > 0:
+                    print(f"[TrainingLogger] Saved {relationships_saved} relationships for log {log_id}")
+            except Exception as e:
+                print(f"[TrainingLogger] Failed to extract relationships for log {log_id}: {e}")
+
+    def _extract_and_save_relationships(
+        self,
+        extraction_text: str,
+        entities: List[Any],
+        session_id: str,
+        turn_count: int
+    ) -> int:
+        """
+        Extract and save relationships between entities
+
+        Args:
+            extraction_text: Combined text for relationship extraction
+            entities: List of extracted Entity objects
+            session_id: Session ID
+            turn_count: Turn number
+
+        Returns:
+            Number of relationships saved
+        """
+        # Convert entities to the format expected by RelationshipExtractor
+        entity_dicts = []
+        for entity in entities:
+            entity_dicts.append({
+                "entity_id": getattr(entity, "entity_id", None),
+                "entity_name": entity.entity_name,
+                "canonical_name": entity.canonical_name,
+                "entity_type": entity.entity_type,
+                "confidence": entity.confidence
+            })
+
+        # Extract relationships using RelationshipExtractor
+        relationships = self.relationship_extractor.extract_relationships(
+            text=extraction_text,
+            entities=entity_dicts,
+            session_id=session_id,
+            turn_number=turn_count
+        )
+
+        # Save relationships to database
+        relationships_saved = 0
+        for rel in relationships:
+            try:
+                # Get entity IDs from database if not present
+                source_id = rel.source_entity_id
+                target_id = rel.target_entity_id
+
+                # If entity IDs are missing, look them up by name
+                if not source_id or not target_id:
+                    with self.db_manager.get_connection() as conn:
+                        with conn.cursor() as cur:
+                            if not source_id:
+                                cur.execute(
+                                    "SELECT id FROM entities WHERE entity_name = %s LIMIT 1",
+                                    (rel.source_entity_name,)
+                                )
+                                row = cur.fetchone()
+                                source_id = row[0] if row else None
+
+                            if not target_id:
+                                cur.execute(
+                                    "SELECT id FROM entities WHERE entity_name = %s LIMIT 1",
+                                    (rel.target_entity_name,)
+                                )
+                                row = cur.fetchone()
+                                target_id = row[0] if row else None
+
+                # Skip if we couldn't find entity IDs
+                if not source_id or not target_id:
+                    continue
+
+                # Save relationship (upsert to avoid duplicates)
+                success = self._upsert_relationship(
+                    source_entity_id=source_id,
+                    target_entity_id=target_id,
+                    relationship_type=rel.relationship_type,
+                    strength=rel.strength,
+                    confidence=rel.confidence,
+                    metadata={
+                        "provenance": rel.provenance,
+                        "properties": rel.properties,
+                        "extraction_method": "training_logger",
+                        "session_id": session_id,
+                        "turn_number": turn_count
+                    }
+                )
+
+                if success:
+                    relationships_saved += 1
+
+            except Exception as e:
+                print(f"[TrainingLogger] Failed to save relationship {rel.source_entity_name} -> {rel.target_entity_name}: {e}")
+                continue
+
+        return relationships_saved
+
+    def _upsert_relationship(
+        self,
+        source_entity_id: int,
+        target_entity_id: int,
+        relationship_type: str,
+        strength: float,
+        confidence: float,
+        metadata: Optional[Dict] = None
+    ) -> bool:
+        """
+        Insert or update a relationship in the database
+
+        Args:
+            source_entity_id: Source entity ID
+            target_entity_id: Target entity ID
+            relationship_type: Type of relationship
+            strength: Relationship strength (0.0-1.0)
+            confidence: Confidence score (0.0-1.0)
+            metadata: Additional metadata
+
+        Returns:
+            Success status
+        """
+        try:
+            with self.db_manager.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Upsert relationship
+                    cur.execute("""
+                        INSERT INTO entity_relationships (
+                            source_entity_id,
+                            target_entity_id,
+                            relationship_type,
+                            strength,
+                            confidence,
+                            metadata,
+                            created_at,
+                            updated_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                        )
+                        ON CONFLICT (source_entity_id, target_entity_id, relationship_type)
+                        DO UPDATE SET
+                            strength = GREATEST(entity_relationships.strength, EXCLUDED.strength),
+                            confidence = (entity_relationships.confidence + EXCLUDED.confidence) / 2.0,
+                            metadata = EXCLUDED.metadata,
+                            updated_at = NOW()
+                    """, (
+                        source_entity_id,
+                        target_entity_id,
+                        relationship_type,
+                        strength,
+                        confidence,
+                        Json(metadata) if metadata else None
+                    ))
+                    conn.commit()
+                    return True
+
+        except Exception as e:
+            print(f"[TrainingLogger] Error upserting relationship: {e}")
+            return False
 
     def _auto_label(
         self,
@@ -1228,6 +1402,36 @@ def get_training_logger() -> TrainingLogger:
     return _training_logger
 
 
+def _log_agent_sync(
+    agent_name: str,
+    state: Dict[str, Any],
+    model_output: Dict[str, Any],
+    latency_ms: int,
+    token_count: Optional[int] = None,
+    llm_model: Optional[str] = None,
+    is_error: bool = False,
+    error_message: Optional[str] = None,
+) -> Optional[int]:
+    """
+    내부 함수: 실제 로깅 작업 수행 (동기)
+    """
+    try:
+        logger = get_training_logger()
+        return logger.log_agent_execution(
+            agent_name=agent_name,
+            state=state,
+            model_output=model_output,
+            latency_ms=latency_ms,
+            token_count=token_count,
+            llm_model=llm_model,
+            is_error=is_error,
+            error_message=error_message,
+        )
+    except Exception as e:
+        print(f"[TrainingLogger] Logging failed for {agent_name}: {e}")
+        return None
+
+
 def log_agent(
     agent_name: str,
     state: Dict[str, Any],
@@ -1237,9 +1441,14 @@ def log_agent(
     llm_model: Optional[str] = None,
     is_error: bool = False,
     error_message: Optional[str] = None,
-) -> Optional[int]:
+) -> None:
     """
-    에이전트 실행 로그 기록 (편의 함수)
+    에이전트 실행 로그 기록 (백그라운드 실행)
+
+    ⚡ 성능 최적화: 로깅을 백그라운드 스레드에서 실행하여 응답 지연 방지
+
+    이 함수는 호출 즉시 반환되며, 실제 로깅은 백그라운드에서 비동기적으로 수행됩니다.
+    따라서 에이전트 실행 시간에 로깅 시간이 포함되지 않습니다.
 
     Args:
         agent_name: 에이전트 이름
@@ -1252,14 +1461,14 @@ def log_agent(
         error_message: 에러 메시지
 
     Returns:
-        int: 로그 ID (실패 시 None)
+        None (백그라운드 실행이므로 결과 반환 안함)
 
     Example:
         ```python
         start = time.perf_counter()
         result = run_router_agent(state, user_input)
-        latency_ms = int((time.perf_counter() - start) * 1000)
 
+        # 백그라운드에서 로깅 (즉시 반환)
         log_agent(
             agent_name="router",
             state=state,
@@ -1268,18 +1477,99 @@ def log_agent(
             token_count=result.get("token_count"),
             llm_model="gpt-4o-mini"
         )
+        # 여기서는 이미 로깅이 완료되지 않았을 수 있지만 괜찮습니다
         ```
     """
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+
     latency_ms = int((time.perf_counter() - start_time) * 1000)
 
-    logger = get_training_logger()
-    return logger.log_agent_execution(
-        agent_name=agent_name,
-        state=state,
-        model_output=model_output,
-        latency_ms=latency_ms,
-        token_count=token_count,
-        llm_model=llm_model,
-        is_error=is_error,
-        error_message=error_message,
+    # 백그라운드 스레드 풀 (싱글톤 패턴)
+    global _logging_executor
+    if '_logging_executor' not in globals():
+        _logging_executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="training_logger"
+        )
+
+    # 백그라운드에서 로깅 실행 (fire-and-forget)
+    _logging_executor.submit(
+        _log_agent_sync,
+        agent_name,
+        state.copy() if isinstance(state, dict) else state,  # state 복사로 thread safety 확보
+        model_output.copy() if isinstance(model_output, dict) else model_output,
+        latency_ms,
+        token_count,
+        llm_model,
+        is_error,
+        error_message
     )
+
+
+async def log_agent_async(
+    agent_name: str,
+    state: Dict[str, Any],
+    model_output: Dict[str, Any],
+    start_time: float,
+    token_count: Optional[int] = None,
+    llm_model: Optional[str] = None,
+    is_error: bool = False,
+    error_message: Optional[str] = None,
+) -> None:
+    """
+    에이전트 실행 로그 기록 (비동기, 백그라운드 실행)
+
+    응답 지연을 방지하기 위해 백그라운드 스레드에서 로깅을 수행합니다.
+    이 함수는 결과를 기다리지 않고 즉시 반환됩니다.
+
+    Args:
+        agent_name: 에이전트 이름
+        state: GraphState
+        model_output: 에이전트 출력
+        start_time: time.perf_counter() 시작 시간
+        token_count: 사용된 토큰 수
+        llm_model: LLM 모델명
+        is_error: 에러 발생 여부
+        error_message: 에러 메시지
+
+    Example:
+        ```python
+        start = time.perf_counter()
+        result = run_router_agent(state, user_input)
+
+        # 백그라운드에서 로깅 (응답에 영향 없음)
+        asyncio.create_task(log_agent_async(
+            agent_name="router",
+            state=state,
+            model_output=result,
+            start_time=start
+        ))
+        ```
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    # ThreadPoolExecutor를 사용하여 동기 함수를 백그라운드에서 실행
+    loop = asyncio.get_event_loop()
+    executor = ThreadPoolExecutor(max_workers=1)
+
+    try:
+        # 동기 log_agent 함수를 별도 스레드에서 실행
+        await loop.run_in_executor(
+            executor,
+            log_agent,
+            agent_name,
+            state,
+            model_output,
+            start_time,
+            token_count,
+            llm_model,
+            is_error,
+            error_message
+        )
+    except Exception as e:
+        # 로깅 실패해도 에러를 발생시키지 않음 (백그라운드 작업)
+        print(f"[TrainingLogger] Background logging failed for {agent_name}: {e}")
+    finally:
+        executor.shutdown(wait=False)

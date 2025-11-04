@@ -20,12 +20,13 @@ import json
 import time
 from typing import Any, Dict, Optional, List
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Dict
 from fastapi import Depends
+import asyncio
 
 # ------------------------------------------------------------
 # ✅ LangGraph 관련 내부 모듈 로드
@@ -1792,9 +1793,194 @@ async def confirm_password_reset(req: PasswordResetConfirm):
         )
 
 
+# ============================================================
+# 🚀 백그라운드 처리 함수 (응답 지연 방지)
+# ============================================================
+async def process_post_response_tasks(
+    session_id: str,
+    user_id: str,
+    result_state: Dict[str, Any],
+    user_input: str,
+    agent_responses: List[Dict],
+    turn_count: int,
+    current_user: Dict
+):
+    """
+    응답 반환 후 백그라운드에서 실행할 작업들
+
+    ⚡ 성능 최적화: 사용자 응답에 영향을 주지 않는 작업들을 백그라운드에서 처리
+    - 대화 요약 생성
+    - 메모리 추출
+    - 친밀도 추적
+    - 스테이지 추적
+    - Dialogues 저장
+    """
+    print(f"🔄 [Background] Starting post-response tasks for session {session_id}")
+
+    try:
+        # 1. Dialogues 저장
+        try:
+            if agent_responses and len(agent_responses) > 0:
+                dialogues_to_save = []
+
+                # 사용자 입력
+                dialogues_to_save.append({
+                    "speaker": "user",
+                    "content": user_input
+                })
+
+                # 에이전트 응답들
+                for response in agent_responses:
+                    if isinstance(response, dict):
+                        dialogues_to_save.append({
+                            "speaker": response.get("speaker") or response.get("character") or "agent",
+                            "content": response.get("content") or response.get("text") or "",
+                            "emotion": response.get("emotion"),
+                            "emotion_intensity": response.get("emotion_intensity")
+                        })
+
+                # DB에 저장
+                db_manager.save_dialogues(
+                    session_id=session_id,
+                    turn_number=turn_count,
+                    dialogues=dialogues_to_save
+                )
+
+                print(f"✅ [Background] Saved {len(dialogues_to_save)} dialogues")
+        except Exception as e:
+            print(f"⚠️ [Background] Failed to save dialogues: {e}")
+
+        # 2. 친밀도 변경 추적
+        try:
+            old_affinity = result_state.get("_old_affinity", {})  # workflow 실행 전 상태
+            new_affinity = result_state.get("affinity_scores", {})
+
+            for character, new_score in new_affinity.items():
+                old_score = old_affinity.get(character, 0)
+                if old_score != new_score:
+                    change_amount = new_score - old_score
+                    db_manager.save_affinity(
+                        session_id=session_id,
+                        turn_number=turn_count,
+                        character_name=character,
+                        affinity_score=new_score,
+                        change_amount=change_amount
+                    )
+                    print(f"✅ [Background] Affinity tracked: {character} ({old_score} → {new_score})")
+        except Exception as e:
+            print(f"⚠️ [Background] Failed to track affinity: {e}")
+
+        # 3. 스테이지 변경 추적
+        try:
+            old_stage = result_state.get("_old_stage")  # workflow 실행 전 상태
+            new_stage = result_state.get("current_stage")
+
+            if old_stage != new_stage and new_stage:
+                # 이전 스테이지 종료
+                if old_stage:
+                    db_manager.update_stage_exit(session_id, old_stage)
+                    print(f"✅ [Background] Stage exited: {old_stage}")
+
+                # 새 스테이지 진입
+                stage_history = result_state.get("stage_history", [])
+                stage_order = len(stage_history) + 1
+                db_manager.save_stage_entry(session_id, new_stage, stage_order)
+                print(f"✅ [Background] Stage entered: {new_stage}")
+        except Exception as e:
+            print(f"⚠️ [Background] Failed to track stage progression: {e}")
+
+        # 4. 대화 요약 생성 (10턴마다)
+        try:
+            from src.utils.conversation_summarizer import update_conversation_summary
+
+            last_summary_turn = result_state.get("summary_turn_count", 0)
+            should_summarize = (
+                turn_count >= 10 and
+                (turn_count - last_summary_turn) >= 10
+            )
+
+            if should_summarize:
+                print(f"🧠 [Background] Generating conversation summary at turn {turn_count}...")
+
+                # dialogues 테이블에서 대화 내역 조회
+                dialogues = db_manager.get_session_dialogues(session_id)
+
+                if dialogues and len(dialogues) > 0:
+                    # 대화를 message_history 형식으로 변환
+                    message_history = []
+                    for dlg in dialogues:
+                        turn = dlg["turn_number"]
+                        speaker = dlg["speaker"]
+                        content = dlg["content"]
+
+                        # 턴별 데이터 구조 찾기 또는 생성
+                        turn_data = next((msg for msg in message_history if msg.get("turn") == turn), None)
+                        if not turn_data:
+                            turn_data = {
+                                "turn": turn,
+                                "user_input": "",
+                                "agent_responses": []
+                            }
+                            message_history.append(turn_data)
+
+                        # 데이터 추가
+                        if speaker == "user":
+                            turn_data["user_input"] = content
+                        else:
+                            turn_data["agent_responses"].append({
+                                "speaker": speaker,
+                                "text": content
+                            })
+
+                    # 요약 생성
+                    summary_result = await update_conversation_summary(
+                        state=result_state,
+                        message_history=message_history
+                    )
+
+                    if summary_result and summary_result.get("summary"):
+                        # 세션에 요약 저장
+                        db_manager.update_session(
+                            session_id=session_id,
+                            updates={
+                                "conversation_summary": summary_result["summary"],
+                                "summary_turn_count": summary_result["summary_turn_count"]
+                            }
+                        )
+
+                        print(f"✅ [Background] Summary generated: {len(summary_result['summary'])} chars")
+
+                        # 5. 메모리 추출 (요약 생성된 경우에만)
+                        if user_id:
+                            try:
+                                from src.utils.memory_extractor import extract_and_save_memories
+
+                                saved_count = await extract_and_save_memories(
+                                    user_id=user_id,
+                                    session_id=session_id,
+                                    conversation_summary=summary_result["summary"],
+                                    db_manager=db_manager
+                                )
+
+                                if saved_count > 0:
+                                    print(f"✅ [Background] Extracted {saved_count} memories")
+                            except Exception as e:
+                                print(f"⚠️ [Background] Failed to extract memories: {e}")
+        except Exception as e:
+            print(f"⚠️ [Background] Failed to generate summary: {e}")
+
+        print(f"✅ [Background] All post-response tasks completed for session {session_id}")
+
+    except Exception as e:
+        print(f"❌ [Background] Error in post-response tasks: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 @app.post("/api/chat")
 async def chat(
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: Dict = Depends(require_auth)  # 🔐 필수 인증으로 변경 (로그인 필수!)
 ):
     """
@@ -1990,6 +2176,11 @@ async def chat(
         state.setdefault("image_transition_history", [])
 
         print(f"🤖 Processing: session={session_id}, input='{user_input}'")
+
+        # ⚡ 백그라운드 처리를 위해 workflow 실행 전 상태 저장
+        state["_old_affinity"] = state.get("affinity_scores", {}).copy()
+        state["_old_stage"] = state.get("current_stage")
+
         workflow_instance = get_workflow()
         workflow_start = time.perf_counter()
 
@@ -2029,61 +2220,9 @@ async def chat(
         except Exception as e:
             print(f"⚠️ Failed to save performance metric: {e}")
 
-        # 🧠 장기기억: 대화 요약 생성 (10턴마다)
-        from src.utils.conversation_summarizer import update_conversation_summary
-        message_history = result_state.get("message_history", [])
-        if message_history:
-            summary_result = await update_conversation_summary(result_state, message_history)
-            if summary_result:
-                result_state["conversation_summary"] = summary_result["summary"]
-                result_state["summary_turn_count"] = summary_result["summary_turn_count"]
-
-                # 🧠 자동 Memory 추출 (인증된 사용자만)
-                if user_id and summary_result.get("summary"):
-                    try:
-                        from src.utils.memory_extractor import extract_and_save_memories
-
-                        saved_count = await extract_and_save_memories(
-                            user_id=user_id,
-                            session_id=session_id,
-                            conversation_summary=summary_result["summary"],
-                            db_manager=db_manager
-                        )
-
-                        if saved_count > 0:
-                            print(f"🧠 Extracted and saved {saved_count} memories from conversation summary")
-
-                            # 📝 General Log: 메모리 추출 성공
-                            try:
-                                SESSION_MANAGER.save_log(
-                                    log_level="info",
-                                    log_message=f"Extracted {saved_count} memories from conversation",
-                                    session_id=session_id,
-                                    metadata={
-                                        "user_id": user_id,
-                                        "memory_count": saved_count,
-                                        "turn_count": result_state.get("summary_turn_count")
-                                    }
-                                )
-                            except Exception as log_err:
-                                print(f"⚠️ Failed to save memory extraction log: {log_err}")
-                        else:
-                            print(f"🧠 No new memories extracted from summary")
-                    except Exception as e:
-                        print(f"⚠️ Failed to extract memories: {e}")
-                        # 🚨 Memory 추출 실패 에러 로깅
-                        try:
-                            SESSION_MANAGER.save_error_log(
-                                error_type="memory_extraction_failed",
-                                error_message=str(e),
-                                session_id=session_id,
-                                metadata={"user_id": user_id}
-                            )
-                        except:
-                            pass
-
         print(f"⏱️ Workflow execution time: {workflow_duration_ms:.2f} ms")
 
+        # ⚡ turn_count 증가 (백그라운드 작업에서 사용)
         turn_count = result_state.get("turn_count", 0) + 1
         result_state["turn_count"] = turn_count
 
@@ -2093,102 +2232,11 @@ async def chat(
                 result_state["user_id"] = user_id
                 print(f"🔧 Restored user_id to result_state: {user_id}")
 
-        # 🎮 게임 이벤트 자동 추적 (1): 친밀도 변경 감지
-        try:
-            old_affinity = state.get("affinity_scores", {})
-            new_affinity = result_state.get("affinity_scores", {})
+        # ⚡ 백그라운드 처리를 위해 old 상태 복사 (result_state에도 추가)
+        result_state["_old_affinity"] = state.get("_old_affinity", {})
+        result_state["_old_stage"] = state.get("_old_stage")
 
-            for character, new_score in new_affinity.items():
-                old_score = old_affinity.get(character, 0)
-                if old_score != new_score:
-                    change_amount = new_score - old_score
-                    db_manager.save_affinity(
-                        session_id=session_id,
-                        turn_number=turn_count,
-                        character_name=character,
-                        affinity_score=new_score,
-                        change_amount=change_amount
-                    )
-                    print(f"💞 Affinity tracked: {character} ({old_score} → {new_score}, {change_amount:+d})")
-
-                    # 📝 General Log: 친밀도 변경
-                    try:
-                        SESSION_MANAGER.save_log(
-                            log_level="info",
-                            log_message=f"Affinity changed: {character} {old_score}→{new_score}",
-                            session_id=session_id,
-                            metadata={
-                                "character": character,
-                                "old_score": old_score,
-                                "new_score": new_score,
-                                "change": change_amount,
-                                "turn_count": turn_count
-                            }
-                        )
-                    except Exception as log_err:
-                        print(f"⚠️ Failed to save affinity log: {log_err}")
-        except Exception as e:
-            print(f"⚠️ Failed to track affinity changes: {e}")
-            # 🚨 Affinity 추적 실패 에러 로깅
-            try:
-                SESSION_MANAGER.save_error_log(
-                    error_type="affinity_tracking_failed",
-                    error_message=str(e),
-                    session_id=session_id,
-                    metadata={"affinity_scores": new_affinity}
-                )
-            except:
-                pass
-
-        # 🎮 게임 이벤트 자동 추적 (2): 스테이지 변경 감지
-        try:
-            old_stage = state.get("current_stage")
-            new_stage = result_state.get("current_stage")
-
-            if old_stage != new_stage and new_stage:
-                # 이전 스테이지 종료
-                if old_stage:
-                    db_manager.update_stage_exit(session_id, old_stage)
-                    print(f"🚪 Stage exited: {old_stage}")
-
-                # 새 스테이지 진입
-                stage_history = result_state.get("stage_history", [])
-                stage_order = len(stage_history) + 1
-                db_manager.save_stage_entry(session_id, new_stage, stage_order)
-                print(f"🚪 Stage entered: {new_stage} (order: {stage_order})")
-
-                # 📝 General Log: 스테이지 전환
-                try:
-                    SESSION_MANAGER.save_log(
-                        log_level="info",
-                        log_message=f"Stage changed: {old_stage}→{new_stage}",
-                        session_id=session_id,
-                        metadata={
-                            "old_stage": old_stage,
-                            "new_stage": new_stage,
-                            "stage_order": stage_order,
-                            "turn_count": turn_count
-                        }
-                    )
-                except Exception as log_err:
-                    print(f"⚠️ Failed to save stage transition log: {log_err}")
-        except Exception as e:
-            print(f"⚠️ Failed to track stage progression: {e}")
-            # 🚨 Stage 추적 실패 에러 로깅
-            try:
-                SESSION_MANAGER.save_error_log(
-                    error_type="stage_tracking_failed",
-                    error_message=str(e),
-                    session_id=session_id,
-                    metadata={
-                        "old_stage": old_stage,
-                        "new_stage": new_stage
-                    }
-                )
-            except:
-                pass
-
-        # 📊 세션 저장 성능 측정
+        # 📊 세션 저장 성능 측정 (응답에 필수)
         session_save_start = time.perf_counter()
         SESSION_MANAGER.save(session_id, result_state)
         session_save_duration_ms = (time.perf_counter() - session_save_start) * 1000.0
@@ -2211,6 +2259,23 @@ async def chat(
             f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}"
         )
 
+        # ⚡ 백그라운드 작업 등록 (응답 후 실행)
+        # 무거운 작업들(요약, 메모리, 친밀도, 스테이지, dialogues)을 백그라운드에서 처리
+        agent_responses = result_state.get("output", {}).get("dialogues", [])
+        background_tasks.add_task(
+            process_post_response_tasks,
+            session_id=session_id,
+            user_id=user_id,
+            result_state=result_state.copy(),  # state 복사로 thread safety 확보
+            user_input=user_input,
+            agent_responses=agent_responses,
+            turn_count=turn_count,
+            current_user=current_user
+        )
+
+        print(f"🚀 Background tasks registered for post-response processing")
+
+        # ⚡ 응답 데이터 준비 (이미지 선택은 응답에 필요하므로 여기서 처리)
         agent_responses = result_state.get("output", {}).get("dialogues", [])
         has_more_flag = result_state.get("has_more")
         if has_more_flag is None:
@@ -2230,123 +2295,10 @@ async def chat(
                     content = str(dialogue)
                 print(f"🧠 LLM Output[{idx}] ({speaker}): {content}")
 
-        # ========================================
-        # 🆕 1. 자동 대화 저장 (dialogues 테이블)
-        # ========================================
-        try:
-            if agent_responses and len(agent_responses) > 0:
-                turn_number = result_state.get("turn_count", 1)
+        # ⚡ [제거됨] 대화 저장, 요약, 친밀도/스테이지 추적 → 백그라운드로 이동
+        # 응답 속도 최적화를 위해 무거운 작업들은 백그라운드에서 처리됩니다.
 
-                # 대화 목록 생성
-                dialogues_to_save = []
-
-                # 사용자 입력
-                dialogues_to_save.append({
-                    "speaker": "user",
-                    "content": user_input
-                })
-
-                # 에이전트 응답들
-                for response in agent_responses:
-                    if isinstance(response, dict):
-                        dialogues_to_save.append({
-                            "speaker": response.get("speaker") or response.get("character") or "agent",
-                            "content": response.get("content") or response.get("text") or "",
-                            "emotion": response.get("emotion"),
-                            "emotion_intensity": response.get("emotion_intensity")
-                        })
-
-                # DB에 저장
-                db_manager.save_dialogues(
-                    session_id=session_id,
-                    turn_number=turn_number,
-                    dialogues=dialogues_to_save
-                )
-
-                print(f"💬 Auto-saved {len(dialogues_to_save)} dialogues for turn {turn_number}")
-
-        except Exception as e:
-            print(f"⚠️ Failed to save dialogues: {e}")
-            # 대화 저장 실패해도 응답은 계속 반환
-
-        # ========================================
-        # 🆕 2. 자동 대화 요약 (10턴마다)
-        # ========================================
-        try:
-            turn_count = result_state.get("turn_count", 0)
-            last_summary_turn = result_state.get("summary_turn_count", 0)
-
-            # 10턴 이상 진행되었고, 마지막 요약 이후 10턴 이상 지났으면 요약 생성
-            # (turn_count가 홀수로 증가하는 경우를 고려)
-            should_summarize = (
-                turn_count >= 10 and
-                (turn_count - last_summary_turn) >= 10
-            )
-
-            if should_summarize:
-                print(f"🧠 Auto-generating conversation summary at turn {turn_count}...")
-
-                # dialogues 테이블에서 대화 내역 조회
-                dialogues = db_manager.get_session_dialogues(session_id)
-
-                if dialogues and len(dialogues) > 0:
-                    # 대화를 message_history 형식으로 변환
-                    message_history = []
-                    current_turn_data = {}
-
-                    for dlg in dialogues:
-                        turn = dlg["turn_number"]
-                        speaker = dlg["speaker"]
-                        content = dlg["content"]
-
-                        # 새로운 턴 시작
-                        if turn not in [msg.get("turn") for msg in message_history]:
-                            current_turn_data = {
-                                "turn": turn,
-                                "user_input": "",
-                                "agent_responses": []
-                            }
-                            message_history.append(current_turn_data)
-                        else:
-                            # 기존 턴 찾기
-                            current_turn_data = next(msg for msg in message_history if msg.get("turn") == turn)
-
-                        # 데이터 추가
-                        if speaker == "user":
-                            current_turn_data["user_input"] = content
-                        else:
-                            current_turn_data["agent_responses"].append({
-                                "speaker": speaker,
-                                "text": content
-                            })
-
-                    # 요약 생성
-                    summary_result = await update_conversation_summary(
-                        state=result_state,
-                        message_history=message_history
-                    )
-
-                    if summary_result and summary_result.get("summary"):
-                        # 세션에 요약 저장
-                        db_manager.update_session(
-                            session_id=session_id,
-                            updates={
-                                "conversation_summary": summary_result["summary"],
-                                "summary_turn_count": summary_result["summary_turn_count"]
-                            }
-                        )
-
-                        print(f"✅ Summary auto-generated: {len(summary_result['summary'])} characters")
-                    else:
-                        print(f"⚠️ No summary generated")
-                else:
-                    print(f"⚠️ No dialogues found for summarization")
-
-        except Exception as e:
-            print(f"⚠️ Failed to generate summary: {e}")
-            # 요약 생성 실패해도 응답은 계속 반환
-
-        # ImageManager를 사용하여 각 대화별로 이미지 결정
+        # ImageManager를 사용하여 각 대화별로 이미지 결정 (응답에 필요하므로 여기서 처리)
         current_image = result_state.get("current_image")  # 이전 이미지
         scenario_id_for_image = result_state.get("scenario_id", scenario_id)
         print(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
@@ -2465,17 +2417,56 @@ async def chat(
         total_duration_ms = (time.perf_counter() - request_start) * 1000.0
         print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
 
-        return JSONResponse(
-            {
-                "session_id": session_id,
-                "dialogues": agent_responses,  # 루트 레벨에 dialogues
-                "turn_count": result_state.get("turn_count", 0),
-                "current_stage": result_state.get("current_stage"),
-                "affinity_scores": result_state.get("affinity_scores", {}),
-                "is_ended": result_state.get("is_ended", False),
-                "has_more": has_more_flag,
-                "current_image": current_image,  # 현재 이미지 파일명
-                "output": result_state.get("output", {}),  # 하위 호환성을 위해 유지
+        # 🌊 Streaming Response 구현 (부분 스트리밍)
+        async def generate_stream():
+            """SSE 형식으로 응답을 점진적으로 전송"""
+            try:
+                # 1. 메타데이터 먼저 전송
+                meta_data = {
+                    "type": "metadata",
+                    "session_id": session_id,
+                    "turn_count": result_state.get("turn_count", 0),
+                    "current_stage": result_state.get("current_stage"),
+                    "affinity_scores": result_state.get("affinity_scores", {}),
+                    "is_ended": result_state.get("is_ended", False),
+                    "has_more": has_more_flag,
+                    "current_image": current_image,
+                }
+                yield f"data: {json.dumps(meta_data, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.01)  # 이벤트 루프 양보
+
+                # 2. 각 dialogue를 개별적으로 전송
+                for idx, dialogue in enumerate(agent_responses):
+                    dialogue_data = {
+                        "type": "dialogue",
+                        "index": idx,
+                        "dialogue": dialogue
+                    }
+                    yield f"data: {json.dumps(dialogue_data, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0.8)  # 타이핑 효과 (0.8초 간격)
+
+                # 3. 완료 신호 전송
+                done_data = {
+                    "type": "done",
+                    "total_dialogues": len(agent_responses),
+                    "output": result_state.get("output", {}),
+                }
+                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+
+            except Exception as e:
+                error_data = {
+                    "type": "error",
+                    "message": str(e)
+                }
+                yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",  # Nginx 버퍼링 비활성화
+                "Connection": "keep-alive",
             }
         )
 

@@ -1578,53 +1578,71 @@ class DatabaseManager:
 
     def get_user_credits(self, user_id: str) -> Optional[Dict[str, Any]]:
         """사용자 크레딧 조회"""
-        query = """
-        SELECT bubble_count, total_purchased, total_consumed, last_updated
-        FROM statedb.user_credits
-        WHERE user_id = %s
-        """
-        results = self.execute_query(query, (user_id,))
-        return results[0] if results else None
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT bubble_count, total_purchased, total_consumed, last_updated
+                        FROM statedb.user_credits
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get user credits: {e}")
+            return None
 
     def consume_credits(self, user_id: str, amount: int, description: str) -> bool:
         """크레딧 소비 (트랜잭션)"""
-        query = """
-        WITH updated AS (
-          UPDATE statedb.user_credits
-          SET bubble_count = bubble_count - %s,
-              total_consumed = total_consumed + %s,
-              last_updated = NOW()
-          WHERE user_id = %s AND bubble_count >= %s
-          RETURNING user_id, bubble_count
-        )
-        INSERT INTO statedb.credit_transactions
-          (user_id, amount, transaction_type, balance_after, description)
-        SELECT user_id, -%s, 'consume', bubble_count, %s
-        FROM updated
-        RETURNING transaction_id;
-        """
-        results = self.execute_query(query, (amount, amount, user_id, amount, amount, description))
-        return len(results) > 0
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        WITH updated AS (
+                          UPDATE statedb.user_credits
+                          SET bubble_count = bubble_count - %s,
+                              total_consumed = total_consumed + %s,
+                              last_updated = NOW()
+                          WHERE user_id = %s AND bubble_count >= %s
+                          RETURNING user_id, bubble_count
+                        )
+                        INSERT INTO statedb.credit_transactions
+                          (user_id, amount, transaction_type, balance_after, description)
+                        SELECT user_id, -%s, 'consume', bubble_count, %s
+                        FROM updated
+                        RETURNING transaction_id;
+                    """, (amount, amount, user_id, amount, amount, description))
+                    result = cur.fetchone()
+                    return result is not None
+        except Exception as e:
+            logger.error(f"Failed to consume credits: {e}")
+            return False
 
     def add_credits(self, user_id: str, amount: int, transaction_type: str, description: str) -> bool:
         """크레딧 추가 (purchase, bonus, refund)"""
-        query = """
-        WITH updated AS (
-          UPDATE statedb.user_credits
-          SET bubble_count = bubble_count + %s,
-              total_purchased = total_purchased + %s,
-              last_updated = NOW()
-          WHERE user_id = %s
-          RETURNING user_id, bubble_count
-        )
-        INSERT INTO statedb.credit_transactions
-          (user_id, amount, transaction_type, balance_after, description)
-        SELECT user_id, %s, %s, bubble_count, %s
-        FROM updated
-        RETURNING transaction_id;
-        """
-        results = self.execute_query(query, (amount, amount, user_id, amount, transaction_type, description))
-        return len(results) > 0
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        WITH updated AS (
+                          UPDATE statedb.user_credits
+                          SET bubble_count = bubble_count + %s,
+                              total_purchased = total_purchased + %s,
+                              last_updated = NOW()
+                          WHERE user_id = %s
+                          RETURNING user_id, bubble_count
+                        )
+                        INSERT INTO statedb.credit_transactions
+                          (user_id, amount, transaction_type, balance_after, description)
+                        SELECT user_id, %s, %s, bubble_count, %s
+                        FROM updated
+                        RETURNING transaction_id;
+                    """, (amount, amount, user_id, amount, transaction_type, description))
+                    result = cur.fetchone()
+                    return result is not None
+        except Exception as e:
+            logger.error(f"Failed to add credits: {e}")
+            return False
 
     # ============================================================
     # User Progression Methods (사용자 진행도)
