@@ -96,3 +96,6 @@ tmp/
 # 학습 파일은 workspace 루트에 날짜 형식으로 관리
 20??-??-??-*.md
 venv/
+
+# Personal documentation
+taemin_record/
