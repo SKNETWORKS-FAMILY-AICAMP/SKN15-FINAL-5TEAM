@@ -358,16 +358,17 @@ class GraphEvaluator:
 
 if __name__ == "__main__":
     # 테스트
+    import os
     logging.basicConfig(level=logging.INFO)
 
     from src.database.db_manager import DatabaseManager
 
     db = DatabaseManager(
-        host="localhost",
-        port=5433,
-        dbname="kimedb",
-        user="kime",
-        password="dev123"
+        host=os.getenv('DB_HOST', 'localhost'),
+        port=int(os.getenv('DB_PORT', '5432')),
+        dbname=os.getenv('DB_NAME', 'kimedb'),
+        user=os.getenv('DB_USER', 'kime'),
+        password=os.getenv('DB_PASSWORD', 'dev123')
     )
 
     evaluator = GraphEvaluator(db)

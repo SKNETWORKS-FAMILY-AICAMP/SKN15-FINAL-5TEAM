@@ -5,6 +5,15 @@ FastAPI Server for KIME Chat Agent
 - 프론트엔드(React 등)에서 /api/chat 으로 요청을 보내면 여기서 처리함
 """
 
+# ------------------------------------------------------------
+# ✅ 환경변수 로드 (.env 파일에서 API 키 등 불러옴)
+# 반드시 다른 import보다 먼저 실행되어야 함!
+# ------------------------------------------------------------
+from dotenv import load_dotenv
+load_dotenv(override=True)
+# .env.local도 로드 (로컬 개발용 DB 설정)
+load_dotenv(dotenv_path=".env.local", override=True)
+
 import os
 import uuid
 import json
@@ -17,15 +26,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Dict
 from fastapi import Depends
-from dotenv import load_dotenv
-
-# ------------------------------------------------------------
-# ✅ 환경변수 로드 (.env 파일에서 API 키 등 불러옴)
-# ------------------------------------------------------------
-load_dotenv(override=True)
-
-# .env.local도 로드 (DB 설정용)
-load_dotenv(dotenv_path=".env.local", override=True)
 
 # ------------------------------------------------------------
 # ✅ LangGraph 관련 내부 모듈 로드
@@ -317,28 +317,35 @@ class SessionManagerAdapter:
 
 
 # HybridSessionManager 초기화
+_hybrid_manager = None  # Global variable initialization
+db_manager = None  # Global DatabaseManager
+
 try:
-    # DatabaseManager를 명시적으로 포트 5433으로 생성
+    # DatabaseManager를 환경 변수에서 생성
     db_manager = DatabaseManager(
-        host='127.0.0.1',
-        port=5433,  # 명시적으로 5433 지정
-        dbname='kimedb',
-        user='kime',
-        password='dev123',
+        host=os.getenv('DB_HOST', 'localhost'),
+        port=int(os.getenv('DB_PORT', '5432')),
+        dbname=os.getenv('DB_NAME', 'kimedb'),
+        user=os.getenv('DB_USER', 'kime'),
+        password=os.getenv('DB_PASSWORD', 'dev123'),
         min_conn=2,
         max_conn=10
     )
-    print(f"✅ DatabaseManager 생성: 127.0.0.1:5433")
+    print(f"✅ DatabaseManager 생성: {os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}")
 
-    # CacheManager 생성
-    cache_manager = create_cache_manager_from_env()
-
-    # HybridSessionManager 생성
-    _hybrid_manager = HybridSessionManager(db_manager, cache_manager)
-    SESSION_MANAGER = SessionManagerAdapter(_hybrid_manager)
-    print("✅ Database-backed SessionManager initialized")
+    # CacheManager 생성 (Redis 실패 시에도 db_manager는 유지됨)
+    try:
+        cache_manager = create_cache_manager_from_env()
+        # HybridSessionManager 생성
+        _hybrid_manager = HybridSessionManager(db_manager, cache_manager)
+        SESSION_MANAGER = SessionManagerAdapter(_hybrid_manager)
+        print("✅ Database-backed SessionManager initialized")
+    except Exception as cache_error:
+        print(f"⚠️ Failed to initialize cache manager: {cache_error}")
+        print("⚠️ Database connected but Redis failed - using in-memory sessions")
+        raise  # Re-raise to hit outer except block
 except Exception as e:
-    print(f"⚠️ Failed to initialize database session manager: {e}")
+    print(f"⚠️ Failed to initialize session manager: {e}")
     print("⚠️ Falling back to in-memory session storage")
 
     # Fallback: 메모리 기반 SessionManager
@@ -516,6 +523,12 @@ async def root():
     return {"status": "running", "service": "KIME Chat API", "version": "1.0.0"}
 
 
+@app.get("/health")
+async def health():
+    """ALB 헬스 체크용"""
+    return {"status": "healthy"}
+
+
 # ============================================================
 # 🔐 인증 API 엔드포인트
 # ============================================================
@@ -537,7 +550,7 @@ async def register(req: RegisterRequest, request: Request):
 
     try:
         # 사용자명 중복 체크
-        existing_user = _hybrid_manager.db.get_user_by_username(req.username)
+        existing_user = db_manager.get_user_by_username(req.username)
         if existing_user:
             return AuthResponse(
                 success=False,
@@ -546,7 +559,7 @@ async def register(req: RegisterRequest, request: Request):
 
         # 이메일 중복 체크 (이메일이 제공된 경우)
         if req.email:
-            existing_email = _hybrid_manager.db.get_user_by_email(req.email)
+            existing_email = db_manager.get_user_by_email(req.email)
             if existing_email:
                 return AuthResponse(
                     success=False,
@@ -560,7 +573,7 @@ async def register(req: RegisterRequest, request: Request):
         ).decode('utf-8')
 
         # 사용자 생성
-        user_id = _hybrid_manager.db.create_user(
+        user_id = db_manager.create_user(
             username=req.username,
             password_hash=password_hash,
             email=req.email,
@@ -570,7 +583,7 @@ async def register(req: RegisterRequest, request: Request):
         if user_id:
             # 진행도 초기화 (ranks, stats, equipment)
             try:
-                _hybrid_manager.db.initialize_user_progression(user_id)
+                db_manager.initialize_user_progression(user_id)
             except Exception as e:
                 print(f"⚠️  Warning: Failed to initialize progression for user {user_id}: {e}")
                 # 진행도 초기화 실패해도 계정은 생성됨 (나중에 수동 초기화 가능)
@@ -624,7 +637,7 @@ async def login(req: LoginRequest, request: Request):
     """
     try:
         # 사용자 인증
-        user = _hybrid_manager.db.verify_user_password(
+        user = db_manager.verify_user_password(
             username=req.username,
             password=req.password
         )
@@ -714,7 +727,7 @@ async def get_me(user: Dict = Depends(require_auth)):
 @app.get("/api/users/me/credits")
 async def get_user_credits(user: Dict = Depends(require_auth)):
     """사용자 크레딧(버블) 조회"""
-    credits = _hybrid_manager.db.get_user_credits(user["user_id"])
+    credits = db_manager.get_user_credits(user["user_id"])
     if not credits:
         raise HTTPException(status_code=404, detail="크레딧 정보를 찾을 수 없습니다")
     return credits
@@ -728,7 +741,7 @@ class ConsumeCreditsRequest(BaseModel):
 @app.post("/api/users/me/credits/consume")
 async def consume_user_credits(req: ConsumeCreditsRequest, user: Dict = Depends(require_auth)):
     """사용자 크레딧(버블) 소비"""
-    success = _hybrid_manager.db.consume_credits(user["user_id"], req.amount, req.description)
+    success = db_manager.consume_credits(user["user_id"], req.amount, req.description)
     if not success:
         raise HTTPException(status_code=400, detail="크레딧 잔액이 부족합니다")
     return {"success": True, "message": f"{req.amount} 버블이 차감되었습니다"}
@@ -761,7 +774,7 @@ async def get_user_progression(user: Dict = Depends(require_auth)):
             "crow_status": str
         }
     """
-    progression = _hybrid_manager.db.get_user_progression(user["user_id"])
+    progression = db_manager.get_user_progression(user["user_id"])
     if not progression:
         raise HTTPException(status_code=404, detail="Progression data not found")
     return progression
@@ -781,7 +794,7 @@ async def get_user_equipment(user: Dict = Depends(require_auth)):
             "crow_name": str
         }
     """
-    equipment = _hybrid_manager.db.get_user_equipment(user["user_id"])
+    equipment = db_manager.get_user_equipment(user["user_id"])
     if not equipment:
         # 기본값 반환
         return {
@@ -831,7 +844,7 @@ async def award_user_experience(req: AwardXPRequest, user: Dict = Depends(requir
             detail=f"Invalid xp_type. Must be one of {valid_xp_types}"
         )
 
-    result = _hybrid_manager.db.award_experience(
+    result = db_manager.award_experience(
         user["user_id"],
         req.xp_amount,
         req.xp_type,
@@ -864,7 +877,7 @@ async def update_user_equipment(req: UpdateEquipmentRequest, user: Dict = Depend
     Returns:
         {"success": true}
     """
-    success = _hybrid_manager.db.update_user_equipment(user["user_id"], req.equipment_updates)
+    success = db_manager.update_user_equipment(user["user_id"], req.equipment_updates)
     if not success:
         raise HTTPException(status_code=400, detail="No valid equipment fields to update")
     return {"success": True}
@@ -901,7 +914,7 @@ async def get_user_xp_transactions(
     if limit > 100:
         limit = 100
 
-    transactions = _hybrid_manager.db.get_xp_transactions(user["user_id"], limit, offset)
+    transactions = db_manager.get_xp_transactions(user["user_id"], limit, offset)
     return transactions
 
 
@@ -933,7 +946,7 @@ async def get_leaderboard(limit: int = 100):
     if limit > 500:
         limit = 500
 
-    leaderboard = _hybrid_manager.db.get_rank_leaderboard(limit)
+    leaderboard = db_manager.get_rank_leaderboard(limit)
     return leaderboard
 
 
@@ -963,7 +976,7 @@ async def get_scenarios():
             ...
         ]
     """
-    scenarios = _hybrid_manager.db.get_all_scenarios(include_inactive=False)
+    scenarios = db_manager.get_all_scenarios(include_inactive=False)
     return scenarios
 
 
@@ -977,7 +990,7 @@ async def get_scenario(scenario_id: str):
     Returns:
         Scenario details with statistics
     """
-    scenario = _hybrid_manager.db.get_scenario_by_id(scenario_id)
+    scenario = db_manager.get_scenario_by_id(scenario_id)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     return scenario
@@ -1005,7 +1018,7 @@ async def record_scenario_view(
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
-    success = _hybrid_manager.db.record_scenario_view(
+    success = db_manager.record_scenario_view(
         scenario_id=scenario_id,
         user_id=user_id,
         ip_address=ip_address,
@@ -1046,7 +1059,7 @@ async def get_user_scenarios(user: Dict = Depends(require_auth)):
             ...
         ]
     """
-    scenarios = _hybrid_manager.db.get_scenarios_with_user_progress(user["user_id"])
+    scenarios = db_manager.get_scenarios_with_user_progress(user["user_id"])
     return scenarios
 
 
@@ -1064,7 +1077,7 @@ async def toggle_scenario_like(scenario_id: str, user: Dict = Depends(require_au
         }
     """
     try:
-        result = _hybrid_manager.db.toggle_scenario_like(user["user_id"], scenario_id)
+        result = db_manager.toggle_scenario_like(user["user_id"], scenario_id)
         return result
     except Exception as e:
         print(f"❌ Error toggling like: {e}")
@@ -1092,7 +1105,7 @@ async def get_scenario_progress(scenario_id: str, user: Dict = Depends(require_a
             "is_liked": bool
         }
     """
-    progress = _hybrid_manager.db.get_user_scenario_progress(user["user_id"], scenario_id)
+    progress = db_manager.get_user_scenario_progress(user["user_id"], scenario_id)
     if not progress:
         # Return default progress if not found
         return {
@@ -1131,7 +1144,7 @@ async def update_scenario_progress(
     Returns:
         {"success": bool}
     """
-    success = _hybrid_manager.db.update_user_scenario_progress(
+    success = db_manager.update_user_scenario_progress(
         user["user_id"],
         scenario_id,
         progress_data
@@ -1164,7 +1177,7 @@ async def get_user_memories(
         List of memories with metadata
     """
     try:
-        memories = _hybrid_manager.db.get_user_memories(
+        memories = db_manager.get_user_memories(
             user_id=user["user_id"],
             memory_type=memory_type,
             limit=limit
@@ -1189,7 +1202,7 @@ async def get_memory_by_key(
         Memory object or 404
     """
     try:
-        memory = _hybrid_manager.db.get_memory_by_key(
+        memory = db_manager.get_memory_by_key(
             user_id=user["user_id"],
             memory_key=memory_key
         )
@@ -1237,7 +1250,7 @@ async def create_memory(
             embedding = generate_embedding(memory_data["memory_value"])
 
         # Create or update memory
-        memory_id = _hybrid_manager.db.create_or_update_memory(
+        memory_id = db_manager.create_or_update_memory(
             user_id=user["user_id"],
             memory_key=memory_data["memory_key"],
             memory_value=memory_data["memory_value"],
@@ -1285,7 +1298,7 @@ async def update_memory(
     """
     try:
         # Check if memory exists
-        existing_memory = _hybrid_manager.db.get_memory_by_key(
+        existing_memory = db_manager.get_memory_by_key(
             user_id=user["user_id"],
             memory_key=memory_key
         )
@@ -1303,7 +1316,7 @@ async def update_memory(
             embedding = generate_embedding(memory_data["memory_value"])
 
         # Update memory (same as create - upsert pattern)
-        memory_id = _hybrid_manager.db.create_or_update_memory(
+        memory_id = db_manager.create_or_update_memory(
             user_id=user["user_id"],
             memory_key=memory_key,
             memory_value=memory_data["memory_value"],
@@ -1341,7 +1354,7 @@ async def delete_memory(
         {"success": bool}
     """
     try:
-        success = _hybrid_manager.db.delete_memory(
+        success = db_manager.delete_memory(
             user_id=user["user_id"],
             memory_key=memory_key
         )
@@ -1386,7 +1399,7 @@ async def search_memories_by_similarity(
             raise HTTPException(status_code=500, detail="Failed to generate query embedding")
 
         # Search by similarity
-        memories = _hybrid_manager.db.search_memories_by_similarity(
+        memories = db_manager.search_memories_by_similarity(
             user_id=user["user_id"],
             query_embedding=query_embedding,
             limit=search_data.get("limit", 5),
@@ -1416,7 +1429,7 @@ async def get_memories_by_session(
         List of memories from this session
     """
     try:
-        memories = _hybrid_manager.db.get_user_memories(
+        memories = db_manager.get_user_memories(
             user_id=user["user_id"],
             limit=100  # Higher limit for session-specific queries
         )
@@ -1487,7 +1500,7 @@ async def google_callback(code: str, state: Optional[str] = None):
             )
 
         # DB에 사용자 생성 또는 가져오기
-        user = create_or_get_google_user(_hybrid_manager.db, google_user_info)
+        user = create_or_get_google_user(db_manager, google_user_info)
         if not user:
             raise HTTPException(
                 status_code=500,
@@ -1575,7 +1588,7 @@ async def kakao_callback(code: str):
             )
 
         # DB에 사용자 생성 또는 가져오기
-        user = create_or_get_kakao_user(_hybrid_manager.db, kakao_user_info)
+        user = create_or_get_kakao_user(db_manager, kakao_user_info)
         if not user:
             raise HTTPException(
                 status_code=500,
@@ -1643,7 +1656,7 @@ async def request_password_reset(req: PasswordResetRequest):
 
     try:
         # 이메일로 사용자 찾기
-        user = _hybrid_manager.db.get_user_by_username(req.email)
+        user = db_manager.get_user_by_username(req.email)
         if not user:
             # 보안상 사용자가 없어도 성공 응답 (이메일 존재 여부 노출 방지)
             return {"success": True, "message": "비밀번호 재설정 이메일이 전송되었습니다."}
@@ -1655,7 +1668,7 @@ async def request_password_reset(req: PasswordResetRequest):
         expires_at = datetime.utcnow() + timedelta(hours=1)  # 1시간 유효
 
         # DB에 토큰 저장
-        token_id = _hybrid_manager.db.create_password_reset_token(
+        token_id = db_manager.create_password_reset_token(
             user_id, reset_token, expires_at.isoformat()
         )
 
@@ -1713,7 +1726,7 @@ async def confirm_password_reset(req: PasswordResetConfirm):
 
     try:
         # 토큰 검증
-        token_data = _hybrid_manager.db.get_password_reset_token(req.token)
+        token_data = db_manager.get_password_reset_token(req.token)
         if not token_data:
             raise HTTPException(
                 status_code=400,
@@ -1729,11 +1742,11 @@ async def confirm_password_reset(req: PasswordResetConfirm):
         ).decode('utf-8')
 
         # 비밀번호 업데이트
-        if not _hybrid_manager.db.update_user_password(user_id, new_password_hash):
+        if not db_manager.update_user_password(user_id, new_password_hash):
             raise HTTPException(status_code=500, detail="비밀번호 업데이트 실패")
 
         # 토큰 사용 처리
-        _hybrid_manager.db.mark_password_reset_token_as_used(req.token)
+        db_manager.mark_password_reset_token_as_used(req.token)
 
         return {
             "success": True,
