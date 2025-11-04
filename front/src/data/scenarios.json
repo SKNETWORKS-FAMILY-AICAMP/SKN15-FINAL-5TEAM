@@ -211,5 +211,51 @@
         "color": "bg-orange-100"
       }
     ]
+  },
+  "cutscene5_llm_driven": {
+    "id": "cutscene5_llm_driven",
+    "title": "🔥 무한열차",
+    "emoji": "🚂",
+    "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
+    "detailDescription": "열차 안에서 벌어지는 악몽과 현실의 경계. 엔무와의 대결, 그리고 상현의 참과의 조우까지. 탄지로와 동료들이 승객들을 지키기 위해 싸우는 이야기",
+    "image": "/images/무한열차.jpeg",
+    "implemented": true,
+    "type": "character",
+    "tags": ["#무한열차", "#꿈속전투", "#엔무"],
+    "category": "일상 · 힐링 · 로맨스",
+    "mood": ["평화로운", "따뜻함", "감성적"],
+    "likes": 98,
+    "comments": 32,
+    "views": 890,
+    "characters": [
+      {
+        "name": "탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "안녕하세요! 함께 평화로운 시간을 보내세요.",
+        "status": "대화 가능",
+        "color": "bg-orange-100"
+      },
+      {
+        "name": "렌고쿠",
+        "image": "/images/프로필_렌고쿠.png",
+        "greeting": "불같은 열정으로 함께하겠습니다!",
+        "status": "대화 가능",
+        "color": "bg-red-100"
+      },
+      {
+        "name": "젠이츠",
+        "image": "/images/프로필_젠이츠.png",
+        "greeting": "우와! 정말 즐거운 시간이 될 것 같아요!",
+        "status": "대화 가능",
+        "color": "bg-yellow-100"
+      },
+      {
+        "name": "이노스케",
+        "image": "/images/프로필_이노스케.png",
+        "greeting": "이야! 재미있는 모험을 시작해보자구!",
+        "status": "대화 가능",
+        "color": "bg-green-100"
+      }
+    ]
   }
 }

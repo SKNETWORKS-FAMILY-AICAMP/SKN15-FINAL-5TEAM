@@ -139,6 +139,7 @@ class LLMClient:
         self.enable_caching = enable_caching
         self.cache: Dict[str, str] = {}  # 프롬프트 해시 -> 응답 캐시
         self.call_count = 0  # LLM 호출 횟수
+        self.verbose_logging = os.getenv("LLM_VERBOSE_LOGGING", "false").lower() == "true"
 
     def _get_cache_key(self, system_prompt: str, user_prompt: str, temperature: float, model: str) -> str:
         """캐시 키 생성"""
@@ -266,14 +267,15 @@ class LLMClient:
                 self.cache[cache_key] = result
 
             duration_ms = (call_finished - call_started) * 1000.0
-            log(
-                "llm",
-                "Call completed",
-                agent=agent or "default",
-                model=target_model,
-                duration_ms=f"{duration_ms:.2f}",
-            )
-            log("llm_output", result)
+            if self.verbose_logging:
+                log(
+                    "llm",
+                    "Call completed",
+                    agent=agent or "default",
+                    model=target_model,
+                    duration_ms=f"{duration_ms:.2f}",
+                )
+                log("llm_output", result)
 
             return result
 
@@ -387,67 +389,3 @@ def set_llm_client(client: LLMClient):
     with _global_lock:
         _llm_client_instance = client
 
-
-# 테스트용 함수
-def test_llm_client():
-    """LLM 클라이언트 테스트"""
-    print("=== LLM 클라이언트 테스트 ===")
-
-    # 환경변수에서 API 키 확인
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("경고: OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
-        print("export OPENAI_API_KEY='your-api-key' 를 실행하세요.")
-        return
-
-    try:
-        client = get_llm_client()
-
-        # 테스트 1: 일반 텍스트 응답
-        print("\n테스트 1: 일반 텍스트 응답")
-        response1 = client.call(
-            system_prompt="너는 친근한 AI 어시스턴트야.",
-            user_prompt="안녕! 간단히 인사해줘.",
-            temperature=0.7,
-            max_tokens=50
-        )
-        print(f"응답: {response1}")
-
-        # 테스트 2: JSON 응답
-        print("\n테스트 2: JSON 응답")
-        response2 = client.call_json(
-            system_prompt="당신은 사용자 입력을 분석하는 AI입니다. JSON 형식으로만 응답하세요.",
-            user_prompt="""
-다음 텍스트를 분석하세요:
-"혈귀가 나타났다! 함께 싸우자!"
-
-다음 JSON 형식으로 응답하세요:
-{
-  "classification": "on_topic 또는 off_topic",
-  "intent": "game_action 또는 casual_chat",
-  "confidence": 0.0~1.0 사이의 숫자
-}
-""",
-            temperature=0.3
-        )
-        print(f"JSON 응답: {json.dumps(response2, ensure_ascii=False, indent=2)}")
-
-        # 테스트 3: 폴백 응답
-        print("\n테스트 3: 폴백 응답 (정상 작동)")
-        response3 = client.call_with_fallback(
-            system_prompt="너는 게임 캐릭터야.",
-            user_prompt="간단히 대사 한 줄만 해줘.",
-            fallback_response="기본 대사입니다.",
-            temperature=0.8,
-            max_tokens=30
-        )
-        print(f"응답: {response3}")
-
-        print("\n=== 모든 테스트 완료 ===")
-
-    except Exception as e:
-        print(f"테스트 실패: {str(e)}")
-
-
-if __name__ == "__main__":
-    test_llm_client()
