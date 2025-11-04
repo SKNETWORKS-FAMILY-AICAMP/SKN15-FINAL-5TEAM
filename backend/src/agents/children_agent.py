@@ -431,12 +431,18 @@ class ChildrenAgent:
         # 현재 스테이지의 context 찾기
         stages = scenario_ref.get("stages", [])
         for stage in stages:
-            if stage.get("tag") == stage_tag:
+            # stage가 딕셔너리인지 확인 (문자열일 수도 있음)
+            if isinstance(stage, dict) and stage.get("tag") == stage_tag:
                 stage_context = stage.get("context", "")
                 break
 
         if not stage_context:
             stage_context = f"현재 {stage_tag} 장면이 진행 중입니다."
+
+        # 이전 스테이지 요약 추출
+        previous_summary = state.get("state_update", {}).get("scene_summary", "")
+        if not previous_summary:
+            previous_summary = "(이전 장면 정보 없음)"
 
         # LLM 프롬프트 구성
         system_prompt = _LLM_BEATS_SYSTEM
@@ -444,6 +450,7 @@ class ChildrenAgent:
         recent_history_str = "\n".join(recent_dialogues[-4:]) if recent_dialogues else "(없음)"
 
         user_prompt = _LLM_BEATS_USER.format(
+            previous_stage_summary=previous_summary,
             stage_context=stage_context,
             recent_history=recent_history_str,
             latest_user_input=latest_user_input if latest_user_input else "(없음)",

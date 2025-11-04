@@ -1628,41 +1628,104 @@ feedback_score = 0.76 vs 0.95  # 명확한 품질 차이
 
 ---
 
-## 성능 최적화 및 인프라 문서 (2025-11-04)
+## 62. Entity Relationship 추출 및 성능 최적화 (2025-11-04)
 
-### 📋 문서 목록
+### 문제 1: Entity Relationships 부족
+- 29개 엔티티에 대해 **단 2개**의 관계만 존재
+- Multi-hop RAG와 Graph RAG가 제대로 작동할 수 없는 상태
 
-**61. LLM Streaming 구현**
+### 문제 2: 응답 속도 병목
+- 사용자 입력 후 **5.5~8.5초** 대기
+- Training logger (Entity 추출, Relationship 추출, 오토라벨링)가 동기 실행
+- 대화 요약, 메모리 추출, 친밀도/스테이지 추적이 응답 전 실행
+
+### 해결 1: Entity Relationship 추출 구현
+
+**3가지 방법으로 관계 추출:**
+
+1. **분석 스크립트** (`analyze_entity_relationships.py`)
+   - 현재 상태 분석 및 추출 가능한 관계 파악
+
+2. **배치 추출 스크립트** (`extract_relationships_batch.py`)
+   - Co-occurrence 관계: 같은 턴에 함께 언급
+   - Character-Skill 관계: 캐릭터가 스킬 사용
+   - Affinity 관계: 호감도 기반
+
+3. **실시간 추출 통합** (`training_logger.py`)
+   - Entity 저장 시 자동으로 관계 추출
+   - Upsert로 중복 방지 및 강도 업데이트
+
+**결과:**
+- 2개 → **16개 관계** (+700%)
+- Multi-hop RAG 활성화 ✅
+- 실시간 추출로 지속 증가
+
+### 해결 2: 성능 최적화
+
+**1. Training Logger 비동기화**
+- `log_agent()`를 fire-and-forget 방식으로 변경
+- ThreadPoolExecutor로 백그라운드 실행
+- Entity 추출, Relationship 추출, 오토라벨링이 모두 백그라운드에서 처리
+
+**2. 응답 후 백그라운드 처리**
+- FastAPI `BackgroundTasks` 활용
+- Dialogues 저장, 친밀도/스테이지 추적, 요약, 메모리 추출을 응답 후 실행
+
+**실행 순서 변경:**
+```
+[이전] workflow → 요약 → 메모리 → 친밀도 → 세션저장 → 응답 (5.5~8.5초)
+[현재] workflow → 세션저장 → ⚡응답 (1~2초)⚡ → [백그라운드 실행]
+```
+
+**성능 개선:**
+- 일반 턴: 5.5초 → 1~2초 (**64~82% 감소**)
+- 10턴째: 8.5초 → 1~2초 (**76~88% 감소**)
+
+### 통합 효과
+
+✅ **Graph RAG 준비 완료**: 16개 관계로 Multi-hop 가능
+✅ **사용자 경험 개선**: "대화하는 느낌" 제공
+✅ **데이터 품질 유지**: 백그라운드에서 모든 데이터 수집
+
+**상세 문서**: `taemin_record/62_entity_relationship_and_performance_optimization.md`
+
+---
+
+## 기타 성능 최적화 및 인프라 문서
+
+### 📋 추가 참고 문서
+
+**LLM Streaming 구현**
 - 파일: `61_llm_streaming_implementation.md`
 - 내용: Server-Sent Events를 통한 실시간 스트리밍 응답 구현 가이드
 - 효과: 사용자 체감 속도 90% 향상, 첫 응답 시간 5-15초 → 0.5-1초
 
-**62. P0 배포 가이드**
+**P0 배포 가이드**
 - 파일: `62_p0_deployment_guide.md`
 - 내용: AWS 프로덕션 배포 전 필수 체크리스트
 - 포함: 환경 변수, 보안 그룹, RDS 연결 설정
 
-**63. P2 최적화 가이드**
+**P2 최적화 가이드**
 - 파일: `63_p2_optimization_guide.md`
 - 내용: Redis 캐싱, LLM 스트리밍, 프론트엔드 번들 최적화, 부하 테스트
 - 효과: 장기적 성능 개선 로드맵
 
-**64. 성능 분석 보고서**
+**성능 분석 보고서**
 - 파일: `64_performance_analysis.md`
 - 내용: 프로젝트 전체 성능 분석 및 병목 지점 파악
 - 발견: 중복 프로세스 5개, DB 커넥션 과다, 모니터링 부재
 
-**65. 성능 최적화 완료 보고서**
+**성능 최적화 완료 보고서**
 - 파일: `65_performance_optimization_complete.md`
 - 내용: P0/P1/P2 최적화 작업 완료 요약
 - 성과: API 응답 95% 개선, 리소스 사용 80% 절감
 
-**66. RDS 연결 문제 해결**
+**RDS 연결 문제 해결**
 - 파일: `66_rds_connection_fix.md`
 - 내용: AWS RDS PostgreSQL 연결 문제 트러블슈팅
 - 해결: 보안 그룹, 엔드포인트, 자격증명 검증
 
-**67. DBeaver RDS 설정**
+**DBeaver RDS 설정**
 - 파일: `67_rds_dbeaver_setup.md`
 - 내용: DBeaver에서 AWS RDS 연결 설정 가이드
 - 포함: SSH 터널링, SSL 설정
