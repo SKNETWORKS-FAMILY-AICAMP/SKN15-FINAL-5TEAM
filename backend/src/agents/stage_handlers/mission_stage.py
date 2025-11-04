@@ -688,16 +688,17 @@ class MissionHandler:
 
         # 🎮 미션 기록 자동 저장 (DB)
         try:
+            import os
             from src.database.db_manager import DatabaseManager
 
             # API server에서 사용하는 db_manager 인스턴스 가져오기
             # 또는 새로운 인스턴스 생성
             db_manager = DatabaseManager(
-                host='127.0.0.1',
-                port=5433,
-                dbname='kimedb',
-                user='kime',
-                password='dev123',
+                host=os.getenv('DB_HOST', 'localhost'),
+                port=int(os.getenv('DB_PORT', '5432')),
+                dbname=os.getenv('DB_NAME', 'kimedb'),
+                user=os.getenv('DB_USER', 'kime'),
+                password=os.getenv('DB_PASSWORD', 'dev123'),
                 min_conn=1,
                 max_conn=2
             )

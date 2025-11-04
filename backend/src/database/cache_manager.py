@@ -17,27 +17,33 @@ class CacheManager:
 
     def __init__(
         self,
-        host: str = "localhost",
-        port: int = 6379,
+        host: str = None,
+        port: int = None,
         db: int = 0,
         password: Optional[str] = None,
-        default_ttl: int = 3600
+        default_ttl: int = None
     ):
         """
         Args:
-            host: Redis 호스트
-            port: Redis 포트
+            host: Redis 호스트 (기본값: REDIS_HOST 환경변수 또는 localhost)
+            port: Redis 포트 (기본값: REDIS_PORT 환경변수 또는 6379)
             db: Redis DB 번호
-            password: Redis 비밀번호 (optional)
-            default_ttl: 기본 TTL (초 단위, 기본 1시간)
+            password: Redis 비밀번호 (optional, REDIS_PASSWORD 환경변수)
+            default_ttl: 기본 TTL (초 단위, SESSION_TTL 환경변수 또는 3600초)
         """
+        # 환경변수에서 기본값 읽기
+        host = host or os.getenv('REDIS_HOST', 'localhost')
+        port = port or int(os.getenv('REDIS_PORT', '6379'))
+        password = password or os.getenv('REDIS_PASSWORD')
+        default_ttl = default_ttl or int(os.getenv('SESSION_TTL', '3600'))
+
         self.redis_client = redis.Redis(
             host=host,
             port=port,
             db=db,
             password=password,
             decode_responses=True,  # 자동으로 문자열 디코딩
-            socket_connect_timeout=5,
+            socket_connect_timeout=2,
             socket_timeout=5
         )
         self.default_ttl = default_ttl
