@@ -298,6 +298,126 @@ class CacheManager:
         except Exception as e:
             logger.error(f"Failed to close Redis connection: {e}")
 
+    # ========================================
+    # 시나리오 캐싱 (P2 성능 최적화)
+    # ========================================
+
+    def get_scenarios_cached(self, ttl: int = 300) -> Optional[list]:
+        """
+        시나리오 목록 캐싱 (5분 TTL)
+
+        Args:
+            ttl: Time-to-live in seconds (default: 300 = 5분)
+
+        Returns:
+            시나리오 목록 (list) 또는 None (캐시 미스)
+        """
+        try:
+            cache_key = "scenarios:all"
+            cached = self.redis_client.get(cache_key)
+
+            if cached:
+                logger.debug("Cache HIT: scenarios:all")
+                return json.loads(cached)
+            else:
+                logger.debug("Cache MISS: scenarios:all")
+                return None
+
+        except Exception as e:
+            logger.error(f"Failed to get scenarios from cache: {e}")
+            return None
+
+    def set_scenarios_cached(self, scenarios: list, ttl: int = 300) -> bool:
+        """
+        시나리오 목록 캐싱
+
+        Args:
+            scenarios: 시나리오 목록
+            ttl: Time-to-live in seconds
+
+        Returns:
+            성공 여부
+        """
+        try:
+            cache_key = "scenarios:all"
+            json_data = json.dumps(scenarios, ensure_ascii=False, default=str)
+            self.redis_client.setex(cache_key, ttl, json_data)
+            logger.debug(f"Cache SET: scenarios:all (TTL: {ttl}s)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set scenarios in cache: {e}")
+            return False
+
+    def get_scenario_cached(self, scenario_id: str, ttl: int = 600) -> Optional[dict]:
+        """
+        특정 시나리오 캐싱 (10분 TTL)
+
+        Args:
+            scenario_id: 시나리오 ID
+            ttl: Time-to-live in seconds (default: 600 = 10분)
+
+        Returns:
+            시나리오 데이터 (dict) 또는 None (캐시 미스)
+        """
+        try:
+            cache_key = f"scenario:{scenario_id}"
+            cached = self.redis_client.get(cache_key)
+
+            if cached:
+                logger.debug(f"Cache HIT: scenario:{scenario_id}")
+                return json.loads(cached)
+            else:
+                logger.debug(f"Cache MISS: scenario:{scenario_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Failed to get scenario from cache: {e}")
+            return None
+
+    def set_scenario_cached(self, scenario_id: str, scenario: dict, ttl: int = 600) -> bool:
+        """
+        특정 시나리오 캐싱
+
+        Args:
+            scenario_id: 시나리오 ID
+            scenario: 시나리오 데이터
+            ttl: Time-to-live in seconds
+
+        Returns:
+            성공 여부
+        """
+        try:
+            cache_key = f"scenario:{scenario_id}"
+            json_data = json.dumps(scenario, ensure_ascii=False, default=str)
+            self.redis_client.setex(cache_key, ttl, json_data)
+            logger.debug(f"Cache SET: scenario:{scenario_id} (TTL: {ttl}s)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to set scenario in cache: {e}")
+            return False
+
+    def invalidate_scenarios_cache(self):
+        """
+        시나리오 캐시 무효화 (관리자가 시나리오 수정 시 호출)
+
+        Returns:
+            삭제된 키 개수
+        """
+        try:
+            pattern = "scenario*"
+            keys = self.redis_client.keys(pattern)
+            if keys:
+                deleted = self.redis_client.delete(*keys)
+                logger.info(f"Invalidated {deleted} scenario cache keys")
+                return deleted
+            return 0
+
+        except Exception as e:
+            logger.error(f"Failed to invalidate scenario cache: {e}")
+            return 0
+
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼
 def create_cache_manager_from_env() -> CacheManager:
