@@ -2184,9 +2184,17 @@ async def chat(
         workflow_instance = get_workflow()
         workflow_start = time.perf_counter()
 
+        # 🌊 Real-time Streaming: astream() 사용 준비
+        # invoke() 대신 astream()을 사용하여 각 노드 실행 후 즉시 응답 전송
+        result_state = None
+        workflow_error = None
+
         try:
-            result_state = workflow_instance.invoke(state)
+            # astream()은 실시간 스트리밍을 위해 나중에 사용됨
+            # 여기서는 에러 핸들링만 준비
+            pass
         except Exception as e:
+            workflow_error = e
             # 🚨 Workflow 실행 실패 에러 로깅
             try:
                 SESSION_MANAGER.save_error_log(
@@ -2201,262 +2209,120 @@ async def chat(
                 )
             except:
                 pass  # 에러 로깅 실패해도 원래 에러는 발생시켜야 함
-            raise
 
         workflow_end = time.perf_counter()
         workflow_duration_ms = (workflow_end - workflow_start) * 1000.0
+        print(f"⏱️ Workflow준비 시간: {workflow_duration_ms:.2f} ms (실제 실행은 스트리밍 중)")
 
-        # 📊 Performance Metric 저장: Workflow 실행 시간
-        try:
-            SESSION_MANAGER.save_performance_metric(
-                metric_name="workflow_execution_time",
-                metric_value=workflow_duration_ms,
-                session_id=session_id,
-                metadata={
-                    "stage": result_state.get("current_stage"),
-                    "turn_count": result_state.get("turn_count")
-                }
-            )
-        except Exception as e:
-            print(f"⚠️ Failed to save performance metric: {e}")
-
-        print(f"⏱️ Workflow execution time: {workflow_duration_ms:.2f} ms")
-
-        # ⚡ turn_count 증가 (백그라운드 작업에서 사용)
-        turn_count = result_state.get("turn_count", 0) + 1
-        result_state["turn_count"] = turn_count
-
-        # ✅ user_id 보존: 워크플로우가 반환한 state에 user_id가 없으면 복원
-        if "user_id" not in result_state or result_state.get("user_id") is None:
-            if user_id:
-                result_state["user_id"] = user_id
-                print(f"🔧 Restored user_id to result_state: {user_id}")
-
-        # ⚡ 백그라운드 처리를 위해 old 상태 복사 (result_state에도 추가)
-        result_state["_old_affinity"] = state.get("_old_affinity", {})
-        result_state["_old_stage"] = state.get("_old_stage")
-
-        # 📊 세션 저장 성능 측정 (응답에 필수)
-        session_save_start = time.perf_counter()
-        SESSION_MANAGER.save(session_id, result_state)
-        session_save_duration_ms = (time.perf_counter() - session_save_start) * 1000.0
-
-        # 📊 Performance Metric 저장: 세션 저장 시간
-        try:
-            SESSION_MANAGER.save_performance_metric(
-                metric_name="session_save_time",
-                metric_value=session_save_duration_ms,
-                session_id=session_id,
-                metadata={
-                    "stage": result_state.get("current_stage"),
-                    "turn_count": turn_count
-                }
-            )
-        except Exception as e:
-            print(f"⚠️ Failed to save performance metric: {e}")
-
-        print(
-            f"💾 Session updated: stage={result_state.get('current_stage')}, stage_turn={result_state.get('stage_turn')}"
-        )
-
-        # ⚡ 백그라운드 작업 등록 (응답 후 실행)
-        # 무거운 작업들(요약, 메모리, 친밀도, 스테이지, dialogues)을 백그라운드에서 처리
-        agent_responses = result_state.get("output", {}).get("dialogues", [])
-        background_tasks.add_task(
-            process_post_response_tasks,
-            session_id=session_id,
-            user_id=user_id,
-            result_state=result_state.copy(),  # state 복사로 thread safety 확보
-            user_input=user_input,
-            agent_responses=agent_responses,
-            turn_count=turn_count,
-            current_user=current_user
-        )
-
-        print(f"🚀 Background tasks registered for post-response processing")
-
-        # ⚡ 응답 데이터 준비 (이미지 선택은 응답에 필요하므로 여기서 처리)
-        agent_responses = result_state.get("output", {}).get("dialogues", [])
-        has_more_flag = result_state.get("has_more")
-        if has_more_flag is None:
-            has_more_flag = result_state.get("has_more_dialogues", False)
-        result_state["has_more"] = has_more_flag
-
-        print(
-            f"✅ Response sent: {len(agent_responses)} dialogues, has_more: {has_more_flag}"
-        )
-        if agent_responses:
-            for idx, dialogue in enumerate(agent_responses):
-                if isinstance(dialogue, dict):
-                    speaker = dialogue.get("speaker") or dialogue.get("character") or "unknown"
-                    content = dialogue.get("content") or dialogue.get("text") or ""
-                else:
-                    speaker = "unknown"
-                    content = str(dialogue)
-                print(f"🧠 LLM Output[{idx}] ({speaker}): {content}")
-
-        # ⚡ [제거됨] 대화 저장, 요약, 친밀도/스테이지 추적 → 백그라운드로 이동
-        # 응답 속도 최적화를 위해 무거운 작업들은 백그라운드에서 처리됩니다.
-
-        # ImageManager를 사용하여 각 대화별로 이미지 결정 (응답에 필요하므로 여기서 처리)
-        current_image = result_state.get("current_image")  # 이전 이미지
-        scenario_id_for_image = result_state.get("scenario_id", scenario_id)
-        print(f"🔍 ImageManager debug: scenario_id={scenario_id_for_image}")
-
-        scenario_reference = (
-            result_state.get("scenario")
-            or result_state.get("scenario_data")
-            or state.get("scenario")
-            or state.get("scenario_data")
-            or {}
-        )
-        images_meta: Dict[str, Any] = {}
-        if isinstance(scenario_reference, dict):
-            images_meta = (scenario_reference.get("metadata") or {}).get("images") or {}
-
-        mapping_pattern = images_meta.get("mapping_pattern")
-        llm_metadata_config = images_meta.get("llm_metadata")
-
-        if scenario_id_for_image:
-            base_dir = os.path.abspath(os.path.dirname(__file__))
-            project_root = os.path.abspath(os.path.join(base_dir, ".."))
-
-            def resolve_path(path_value: Optional[str]) -> Optional[str]:
-                if not path_value:
-                    return None
-                if os.path.isabs(path_value):
-                    return path_value
-                candidate_backend = os.path.abspath(os.path.join(base_dir, path_value))
-                if os.path.exists(candidate_backend):
-                    return candidate_backend
-                return os.path.abspath(os.path.join(project_root, path_value))
-
-            if mapping_pattern and "{scenario_id" in mapping_pattern:
-                formatted = mapping_pattern.format(scenario_id=scenario_id_for_image)
-                image_config_candidate = formatted
-            elif mapping_pattern:
-                image_config_candidate = mapping_pattern
-            else:
-                image_config_candidate = os.path.join(
-                    "data", "image_mappings", f"{scenario_id_for_image}_cutscenes.json"
-                )
-
-            image_config_path = resolve_path(image_config_candidate)
-            abs_path = image_config_path or image_config_candidate
-            print(f"🔍 Checking image config path: {abs_path}")
-            print(f"🔍 File exists: {os.path.exists(image_config_path or '')}")
-
-            if scenario_id_for_image not in globals().get("image_managers", {}):
-                if image_config_path and os.path.exists(image_config_path):
-                    if "image_managers" not in globals():
-                        globals()["image_managers"] = {}
-
-                    metadata_path = resolve_path(llm_metadata_config)
-                    use_llm = bool(metadata_path)
-
-                    globals()["image_managers"][scenario_id_for_image] = ImageManager(
-                        config_path=image_config_path,
-                        debug=True,
-                        use_llm=use_llm,
-                        llm_metadata_path=metadata_path,
-                    )
-                    status_label = "enabled" if use_llm else "disabled"
-                    print(
-                        f"📸 ImageManager loaded for scenario: {scenario_id_for_image} (LLM {status_label})"
-                    )
-                else:
-                    print(f"⚠️ Image config not found at: {abs_path}")
-
-            # ImageManager가 있으면 각 대화별로 이미지 분석
-            image_manager = (
-                globals().get("image_managers", {}).get(scenario_id_for_image)
-            )
-            print(f"🔍 DEBUG: scenario_id_for_image={scenario_id_for_image}")
-            print(
-                f"🔍 DEBUG: image_managers keys={list(globals().get('image_managers', {}).keys())}"
-            )
-            print(f"🔍 DEBUG: image_manager={image_manager}")
-            if image_manager:
-                # 전체 대화 목록을 가져옴 (result_state의 output.dialogues)
-                all_dialogues = result_state.get("output", {}).get("dialogues", [])
-
-                # 🚀 배치 처리: 전체 대화를 한 번에 분석 (LLM 1회 호출)
-                previous_image = current_image
-
-                # 첫 대화이고 이전 이미지가 없으면 인트로 이미지(1번)로 시작
-                if len(all_dialogues) > 0 and current_image is None:
-                    all_dialogues[0]["image_index"] = "1"
-                    previous_image = "1"
-                    current_image = "1"
-                    print(f"🖼️ [Dialogue 0] Initial image set to: 1 (intro)")
-
-                # 배치로 모든 대화의 이미지 선택 (1회 LLM 호출)
-                selected_images = image_manager.select_images_batch(result_state)
-
-                if selected_images:
-                    for i, new_image in enumerate(selected_images):
-                        # 첫 대화는 이미 처리했으므로 스킵
-                        if i == 0 and all_dialogues[i].get("image_index"):
-                            previous_image = all_dialogues[i]["image_index"]
-                            continue
-
-                        if new_image is not None and new_image != previous_image:
-                            # 이미지가 변경되면 해당 대화에 image_index 추가
-                            all_dialogues[i]["image_index"] = new_image
-                            previous_image = new_image
-                            current_image = new_image
-                            print(f"🖼️ [Dialogue {i}] Image changed to: {new_image}")
-
-                # 최종 current_image를 세션에 저장
-                result_state["current_image"] = current_image
-                print(f"✅ Final image state: {current_image}")
-            else:
-                print(f"⚠️ No ImageManager found for scenario: {scenario_id_for_image}")
-
-        # 프론트엔드 호환성을 위해 dialogues를 루트 레벨로 이동
-        total_duration_ms = (time.perf_counter() - request_start) * 1000.0
-        print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
-
-        # 🌊 Streaming Response 구현 (부분 스트리밍)
+        # 🌊 Real Streaming Response 구현 (실시간 스트리밍)
         async def generate_stream():
-            """SSE 형식으로 응답을 점진적으로 전송"""
+            """
+            LangGraph의 astream()을 사용하여 각 노드 실행 시 실시간으로 대화 전송
+            - Time-to-First-Token 최소화
+            - 각 노드(parent_agent, children_agent)가 대화를 생성할 때마다 즉시 전송
+            """
+            nonlocal result_state
+            sent_dialogue_count = 0  # 이미 전송한 대화 수
+            final_state = None
+
             try:
-                # 1. 메타데이터 먼저 전송
-                meta_data = {
+                # 1. 초기 메타데이터 전송 (세션 정보)
+                init_meta = {
                     "type": "metadata",
                     "session_id": session_id,
-                    "turn_count": result_state.get("turn_count", 0),
-                    "current_stage": result_state.get("current_stage"),
-                    "affinity_scores": result_state.get("affinity_scores", {}),
-                    "is_ended": result_state.get("is_ended", False),
-                    "has_more": has_more_flag,
-                    "current_image": current_image,
+                    "current_stage": state.get("current_stage"),
                 }
-                yield f"data: {json.dumps(meta_data, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.01)  # 이벤트 루프 양보
+                yield f"data: {json.dumps(init_meta, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.01)
 
-                # 2. 각 dialogue를 개별적으로 전송
-                for idx, dialogue in enumerate(agent_responses):
-                    dialogue_data = {
-                        "type": "dialogue",
-                        "index": idx,
-                        "dialogue": dialogue
+                # 2. 🔥 Real-time Streaming: workflow의 각 노드 실행을 실시간으로 스트리밍
+                async for event in workflow_instance.astream(state):
+                    # LangGraph astream 이벤트 형식: {node_name: state_snapshot}
+                    # 예: {"parent_agent": {...state...}}
+
+                    # 이벤트에서 노드 이름과 상태 추출
+                    for node_name, node_state in event.items():
+                        print(f"🌊 Stream event from node: {node_name}")
+
+                        # 최신 상태 업데이트
+                        final_state = node_state
+
+                        # 새로운 대화가 생성되었는지 확인
+                        # agent_response 필드에서 대화 목록 추출
+                        current_responses = []
+                        if isinstance(node_state.get("agent_response"), list):
+                            current_responses = node_state["agent_response"]
+                        elif "messages" in node_state and isinstance(node_state["messages"], list):
+                            # messages에서 AI 메시지만 추출
+                            for msg in node_state["messages"]:
+                                if hasattr(msg, "type") and msg.type == "ai":
+                                    current_responses.append({
+                                        "speaker": "AI",
+                                        "text": msg.content
+                                    })
+
+                        # 새로 추가된 대화만 전송
+                        if len(current_responses) > sent_dialogue_count:
+                            new_dialogues = current_responses[sent_dialogue_count:]
+
+                            for dialogue in new_dialogues:
+                                dialogue_data = {
+                                    "type": "dialogue",
+                                    "index": sent_dialogue_count,
+                                    "dialogue": dialogue
+                                }
+                                yield f"data: {json.dumps(dialogue_data, ensure_ascii=False)}\n\n"
+                                sent_dialogue_count += 1
+                                print(f"✅ Sent dialogue #{sent_dialogue_count}: {dialogue.get('text', '')[:50]}...")
+
+                                # 약간의 타이핑 효과 (선택적)
+                                await asyncio.sleep(0.1)
+
+                        # 이벤트 루프 양보
+                        await asyncio.sleep(0.01)
+
+                # 3. Workflow 완료 - 최종 상태 저장
+                if final_state:
+                    result_state = final_state
+
+                    # turn_count 증가
+                    turn_count = result_state.get("turn_count", 0) + 1
+                    result_state["turn_count"] = turn_count
+
+                    # user_id 보존
+                    if "user_id" not in result_state or result_state.get("user_id") is None:
+                        if user_id:
+                            result_state["user_id"] = user_id
+
+                    # 백그라운드 처리용 old 상태 복사
+                    result_state["_old_affinity"] = state.get("_old_affinity", {})
+                    result_state["_old_stage"] = state.get("_old_stage")
+
+                    # 세션 저장
+                    SESSION_MANAGER.save(session_id, result_state)
+                    print(f"💾 Session saved: {session_id}")
+
+                    # 4. 최종 메타데이터 전송
+                    final_meta = {
+                        "type": "done",
+                        "total_dialogues": sent_dialogue_count,
+                        "turn_count": result_state.get("turn_count", 0),
+                        "current_stage": result_state.get("current_stage"),
+                        "affinity_scores": result_state.get("affinity_scores", {}),
+                        "is_ended": result_state.get("is_ended", False),
+                        "output": result_state.get("output", {}),
                     }
-                    yield f"data: {json.dumps(dialogue_data, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.8)  # 타이핑 효과 (0.8초 간격)
-
-                # 3. 완료 신호 전송
-                done_data = {
-                    "type": "done",
-                    "total_dialogues": len(agent_responses),
-                    "output": result_state.get("output", {}),
-                }
-                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps(final_meta, ensure_ascii=False)}\n\n"
 
             except Exception as e:
+                print(f"❌ Streaming error: {e}")
+                import traceback
+                traceback.print_exc()
+
                 error_data = {
                     "type": "error",
-                    "message": str(e)
+                    "message": str(e),
+                    "traceback": traceback.format_exc()
                 }
                 yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
