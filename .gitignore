@@ -99,3 +99,10 @@ venv/
 
 # Personal documentation
 taemin_record/
+
+# Markdown documentation files (except in subdirectories)
+/*.md
+
+# Backend test and script files
+backend/test_*.py
+backend/scripts/
