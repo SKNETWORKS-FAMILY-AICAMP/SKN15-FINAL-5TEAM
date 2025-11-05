@@ -34,7 +34,7 @@ try:
     from src.utils.entity_extractor import EntityExtractor
     from src.utils.embedding_matcher import EmbeddingClient
     from src.utils.relationship_extractor import RelationshipExtractor
-    from src.database.db_manager import DatabaseManager
+    from src.infrastructure.database.db_manager import DatabaseManager
     ENTITY_EXTRACTION_AVAILABLE = True
 except ImportError as e:
     ENTITY_EXTRACTION_AVAILABLE = False

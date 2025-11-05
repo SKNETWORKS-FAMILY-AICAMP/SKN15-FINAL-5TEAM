@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Add parent directory to path to import DatabaseManager
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.database.db_manager import DatabaseManager
+from src.infrastructure.database.db_manager import DatabaseManager
 
 # Get database config from environment variables or use defaults
 def get_db_config(env='local'):

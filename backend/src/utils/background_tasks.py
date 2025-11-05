@@ -64,7 +64,7 @@ def process_entity_extraction_async(
     try:
         from src.utils.entity_extractor import EntityExtractor
         from src.utils.embedding_matcher import EmbeddingClient
-        from src.database.db_manager import DatabaseManager
+        from src.infrastructure.database.db_manager import DatabaseManager
 
         # Entity Extractor 초기화
         entity_extractor = EntityExtractor()
@@ -141,7 +141,7 @@ def process_conversation_summary_async(
         return
 
     try:
-        from src.database.db_manager import DatabaseManager
+        from src.infrastructure.database.db_manager import DatabaseManager
         from src.utils.conversation_summarizer import update_conversation_summary
 
         db_manager = DatabaseManager()

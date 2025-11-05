@@ -1,59 +1,31 @@
-# ============================================================
-# Root .dockerignore
-# Docker 컨텍스트에서 제외할 파일/디렉토리
-# ============================================================
-
 # Git
-.git
+.git/
 .gitignore
 .gitattributes
 
-# Environment files
-.env
-.env.*
-!.env.example
-
 # Documentation
 *.md
-docs/
-taemin_record/
+!README.md
+backup/
 
-# Editor
-.vscode
-.idea
+# Environment
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
 
 # Logs
 *.log
 logs/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-error.log*
-
-# Database files
-*.db
-*.sqlite
-
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
-
-# Misc
-.cache/
-*.bak
-*.tmp
