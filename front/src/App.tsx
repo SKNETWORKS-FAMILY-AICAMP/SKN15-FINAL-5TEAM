@@ -1,48 +1,29 @@
 import { Routes, Route } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
-import { useApp } from './contexts/AppContext'
+import HomePage from './pages/HomePage'
+import ChatPage from './pages/ChatPage'
+import CharacterPage from './pages/CharacterPage'
+import PasswordResetConfirmPage from './pages/PasswordResetConfirmPage'
+import PasswordResetModal from './components/PasswordResetModal'
 import ErrorBoundary from './components/ErrorBoundary'
-
-// Lazy load pages for code splitting (P2 optimization)
-const HomePage = lazy(() => import('./pages/HomePage'))
-const ChatPage = lazy(() => import('./pages/ChatPage'))
-const CharacterPage = lazy(() => import('./pages/CharacterPage'))
-const PasswordResetConfirmPage = lazy(() => import('./pages/PasswordResetConfirmPage'))
-const PasswordResetModal = lazy(() => import('./components/PasswordResetModal'))
-
-// Loading fallback component
-const LoadingFallback = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    fontSize: '1.2rem',
-    color: '#666'
-  }}>
-    Loading...
-  </div>
-)
+import { useApp } from './contexts/AppContext'
 
 function App() {
   const { isPasswordResetModalOpen, closePasswordResetModal } = useApp()
 
   return (
     <ErrorBoundary>
-      <Suspense fallback={<LoadingFallback />}>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/chat/:characterId" element={<ChatPage />} />
-          <Route path="/character/:characterId" element={<CharacterPage />} />
-          <Route path="/reset-password" element={<PasswordResetConfirmPage />} />
-        </Routes>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/chat/:characterId" element={<ChatPage />} />
+        <Route path="/character/:characterId" element={<CharacterPage />} />
+        <Route path="/reset-password" element={<PasswordResetConfirmPage />} />
+      </Routes>
 
-        {/* Global Password Reset Modal */}
-        <PasswordResetModal
-          isOpen={isPasswordResetModalOpen}
-          onClose={closePasswordResetModal}
-        />
-      </Suspense>
+      {/* Global Password Reset Modal */}
+      <PasswordResetModal
+        isOpen={isPasswordResetModalOpen}
+        onClose={closePasswordResetModal}
+      />
     </ErrorBoundary>
   )
 }

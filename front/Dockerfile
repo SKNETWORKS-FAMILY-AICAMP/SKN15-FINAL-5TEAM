@@ -9,6 +9,12 @@ LABEL stage=builder
 # 작업 디렉토리
 WORKDIR /app
 
+# Vite 빌드 시 사용할 API 엔드포인트 설정
+ARG VITE_API_URL
+ARG VITE_API_BASE_URL
+ENV VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+
 # 의존성 파일만 먼저 복사 (캐시 활용)
 COPY package.json package-lock.json ./
 

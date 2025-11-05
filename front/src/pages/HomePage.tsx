@@ -29,7 +29,7 @@ export default function HomePage() {
   const [characters, setCharacters] = useState<CharacterCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toggleSidebar, openSettings, isLoggedIn } = useApp();
+  const { toggleSidebar, openSettings, currentUser } = useApp();
 
   // Load scenarios from API
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function HomePage() {
       setError(null);
       try {
         // Use authenticated endpoint if user is logged in for user-specific data
-        const scenarios: ScenarioCard[] = isLoggedIn
+        const scenarios: ScenarioCard[] = currentUser
           ? await apiClient.getUserScenarios()
           : await apiClient.getScenarios();
 
@@ -59,7 +59,7 @@ export default function HomePage() {
         setCharacters(transformedCharacters);
 
         // Set initial liked cards from user progress (if authenticated)
-        if (isLoggedIn) {
+        if (currentUser) {
           const likedScenarioIds = scenarios
             .filter(s => s.is_liked)
             .map(s => s.scenario_id);
@@ -74,7 +74,7 @@ export default function HomePage() {
     };
 
     loadScenarios();
-  }, [isLoggedIn]);
+  }, [currentUser]);
 
   const handleLike = async (cardId: string) => {
     // Optimistically update UI first
@@ -101,7 +101,7 @@ export default function HomePage() {
     }));
 
     // Call API if user is authenticated
-    if (isLoggedIn) {
+    if (currentUser) {
       try {
         const result = await apiClient.toggleScenarioLike(cardId);
 
@@ -164,27 +164,33 @@ export default function HomePage() {
   const tabs = ['Home', 'Ranking', 'Category'];
 
   return (
-    <div className="min-h-screen bg-zeplin-main">
+    <div className="min-h-screen bg-hero text-theme-primary">
       {/* 헤더 */}
       <ChatHeader
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
-        title="Kime Chat"
+        title="KIME CHAT"
+        titleClassName="font-display-main text-theme-primary"
       />
 
       {/* 메인 콘텐츠 */}
       <main
-        className="relative bg-zeplin-main"
+        className="relative"
         style={{
           backgroundImage: `url('${CDN_URL}/홈배경.jpg')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
           height: 'calc(100vh - 64px)'
         }}
       >
         {/* 배경 오버레이 */}
-        <div className="absolute inset-0 bg-purple-50 bg-opacity-80"></div>
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-hero-overlay opacity-70 mix-blend-screen"></div>
+          <div className="absolute inset-0 bg-white/45 mix-blend-screen"></div>
+        </div>
 
         {/* 컨텐츠 컨테이너 */}
-        <div className="relative z-10 h-full flex flex-col justify-between max-w-7xl mx-auto px-4 py-4">
+        <div className="relative z-10 h-full flex flex-col justify-between max-w-7xl mx-auto px-4 py-4 text-theme-secondary">
 
           {/* 상단 네비게이션 */}
           <div className="flex justify-between items-center mb-4">
@@ -193,17 +199,13 @@ export default function HomePage() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`relative text-lg font-inter font-medium px-3 py-1 transition-all duration-300 ${
+                  className={`relative text-lg font-inter font-medium px-4 py-1 transition-all duration-300 rounded-full border ${
                     activeTab === tab
-                      ? 'text-purple-700'
-                      : 'text-gray-600 hover:text-purple-600'
+                      ? 'bg-theme-surface-strong text-theme-primary border-theme-card shadow-theme'
+                      : 'border-transparent text-theme-secondary hover:text-theme-primary hover:bg-theme-surface'
                   }`}
                 >
                   {tab}
-                  {activeTab === tab && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-full"></div>
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-300 rounded-full scale-x-0 hover:scale-x-100 transition-transform duration-300"></div>
                 </button>
               ))}
             </div>
@@ -216,21 +218,21 @@ export default function HomePage() {
                   placeholder="탄지로, 무한열차, 편의점, 상담소..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-80 px-4 py-2 pl-10 bg-white bg-opacity-90 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 text-gray-700 placeholder-gray-500"
+                  className="w-80 px-4 py-2 pl-10 bg-theme-surface-strong border border-theme-card rounded-full focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 text-theme-primary placeholder:text-[#a299c8]"
                 />
                 <svg
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-theme-secondary"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-theme-secondary hover:text-theme-primary transition-colors"
+                    >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -250,15 +252,18 @@ export default function HomePage() {
                   className="h-20 w-auto object-contain hover:scale-105 transition-transform duration-300"
                 />
               </button>
-              <h1 className="text-5xl font-bold font-inter text-black" style={{ letterSpacing: '-2.16px' }}>
-                Kime Chat
+              <h1
+                className="text-5xl md:text-6xl font-bold font-display-main text-theme-primary drop-shadow-lg"
+                style={{ textShadow: '0 10px 26px rgba(108, 92, 231, 0.25)' }}
+              >
+                KIME CHAT
               </h1>
             </div>
 
             {searchQuery && (
-              <div className="mt-2 text-sm text-gray-600 bg-white bg-opacity-70 px-4 py-2 rounded-full inline-block">
-                <span className="font-medium">"{searchQuery}"</span> 검색 결과:
-                <span className="font-bold text-purple-600 ml-1">{filteredCharacters.length}개</span>
+              <div className="mt-2 text-sm text-theme-secondary bg-white/80 px-4 py-2 rounded-full inline-block">
+                <span className="font-medium text-theme-primary">"{searchQuery}"</span> 검색 결과:
+                <span className="font-bold text-[#6c5ce7] ml-1">{filteredCharacters.length}개</span>
               </div>
             )}
           </div>
@@ -269,18 +274,18 @@ export default function HomePage() {
               <div className="w-full flex justify-center items-center">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600 font-medium">시나리오를 불러오는 중...</p>
+                  <p className="text-theme-secondary font-medium">시나리오를 불러오는 중...</p>
                 </div>
               </div>
             ) : error ? (
               <div className="w-full flex justify-center items-center">
-                <div className="text-center bg-white bg-opacity-90 rounded-2xl p-8 shadow-lg">
+                <div className="text-center bg-theme-surface-strong rounded-2xl p-8 shadow-theme border border-theme-card">
                   <div className="text-6xl mb-4">⚠️</div>
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">불러오기 실패</h3>
-                  <p className="text-gray-600 mb-4">{error}</p>
+                  <h3 className="text-xl font-semibold text-theme-primary mb-2">불러오기 실패</h3>
+                  <p className="text-theme-secondary mb-4">{error}</p>
                   <button
                     onClick={() => window.location.reload()}
-                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    className="px-6 py-2 text-white rounded-lg transition-transform bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)] shadow-[0_14px_28px_rgba(47,29,131,0.3)]"
                   >
                     다시 시도
                   </button>
@@ -314,11 +319,11 @@ export default function HomePage() {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-xl font-semibold text-gray-600 mb-2">검색 결과가 없습니다</h3>
-                <p className="text-gray-500">"{searchQuery}"에 대한 캐릭터를 찾을 수 없습니다.</p>
+                <h3 className="text-xl font-semibold text-theme-primary mb-2">검색 결과가 없습니다</h3>
+                <p className="text-theme-secondary">"{searchQuery}"에 대한 캐릭터를 찾을 수 없습니다.</p>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="mt-4 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  className="mt-4 px-6 py-2 text-white rounded-lg transition-transform bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)] shadow-[0_14px_28px_rgba(47,29,131,0.3)]"
                 >
                   전체 보기
                 </button>
@@ -347,38 +352,43 @@ function SearchResultCard({ character, isLiked, onLike, searchQuery }: SearchRes
   const highlightText = (text: string, query: string) => {
     if (!query.trim()) return text;
 
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = text.split(regex);
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escapedQuery})`, 'i'));
 
-    return parts.map((part, index) =>
-      regex.test(part) ? (
-        <span key={index} className="bg-yellow-200 font-semibold">{part}</span>
-      ) : part
-    );
+    return parts.map((part, index) => {
+      if (part.toLowerCase() === query.toLowerCase()) {
+        return (
+          <span key={index} className="bg-gradient-to-r from-purple-200 to-pink-200 text-theme-primary font-semibold px-1 rounded">
+            {part}
+          </span>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
   };
 
   return (
     <Link to={character.link}>
-      <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer group hover:scale-105">
-        <div className="relative h-48 overflow-hidden">
+      <div className="bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden cursor-pointer group hover:-translate-y-1">
+        <div className="relative h-48 overflow-hidden bg-black/40">
           <img
             src={character.image}
             alt={character.title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute top-2 right-2">
-            <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded-full">
+            <span className="text-xs chip-theme px-2 py-1 rounded-full shadow-sm">
               검색 결과
             </span>
           </div>
         </div>
 
         <div className="p-4">
-          <h3 className="font-bold text-lg mb-2 text-gray-800">
+          <h3 className="font-bold text-lg mb-2 text-theme-primary">
             {highlightText(character.title, searchQuery)}
           </h3>
 
-          <p className="text-gray-600 text-sm mb-3 line-clamp-3">
+          <p className="text-theme-secondary text-sm mb-3 line-clamp-3">
             {highlightText(character.description, searchQuery)}
           </p>
 
@@ -386,7 +396,7 @@ function SearchResultCard({ character, isLiked, onLike, searchQuery }: SearchRes
             {character.tags.map((tag, index) => (
               <span
                 key={index}
-                className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full"
+                className="text-xs chip-theme px-2 py-1 rounded-full"
               >
                 {highlightText(tag, searchQuery)}
               </span>
@@ -394,12 +404,12 @@ function SearchResultCard({ character, isLiked, onLike, searchQuery }: SearchRes
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
+            <div className="flex items-center space-x-4 text-sm text-theme-secondary">
               <div className="flex items-center space-x-1">
                 <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                 </svg>
-                <span>{character.likes + (isLiked ? 1 : 0)}</span>
+                <span>{character.likes}</span>
               </div>
               <div className="flex items-center space-x-1">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -422,10 +432,10 @@ function SearchResultCard({ character, isLiked, onLike, searchQuery }: SearchRes
                 e.stopPropagation();
                 onLike();
               }}
-              className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-full hover:bg-theme-surface transition-colors"
             >
               <svg
-                className={`w-5 h-5 ${isLiked ? 'text-red-500 fill-current' : 'text-gray-400'}`}
+                className={`w-5 h-5 ${isLiked ? 'text-red-500 fill-current' : 'text-theme-secondary'}`}
                 viewBox="0 0 20 20"
                 fill={isLiked ? "currentColor" : "none"}
                 stroke="currentColor"

@@ -183,128 +183,17 @@ class ApiClient {
   }
 
   /**
-   * Send chat message and get response with streaming (SSE)
+   * Send chat message and get response (with JWT authentication)
    */
-  async sendMessage(
-    request: ChatRequest,
-    onDialogue?: (dialogue: ChatMessage, index: number) => void
-  ): Promise<ChatResponse> {
-    return new Promise((resolve, reject) => {
-      try {
-        // Get access token
-        const accessToken = localStorage.getItem('access_token')
-        if (!accessToken) {
-          reject(new Error('No access token found'))
-          return
-        }
-
-        // Prepare request body
-        const requestBody = JSON.stringify(request)
-
-        // EventSource doesn't support POST with body,
-        // so we use fetch with streaming
-        const url = `${this.baseUrl}/api/chat`
-
-        fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: requestBody,
-        })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`)
-            }
-
-            const reader = response.body?.getReader()
-            if (!reader) {
-              throw new Error('No response body')
-            }
-
-            const decoder = new TextDecoder()
-            let buffer = ''
-
-            // Response accumulator
-            let metadata: any = null
-            const dialogues: ChatMessage[] = []
-
-            const readStream = () => {
-              reader.read().then(({ done, value }) => {
-                if (done) {
-                  // Stream ended, resolve with final response
-                  if (metadata) {
-                    resolve({
-                      session_id: metadata.session_id,
-                      turn_count: metadata.turn_count,
-                      dialogues: dialogues,
-                      current_stage: metadata.current_stage,
-                      affinity_scores: metadata.affinity_scores || {},
-                      is_ended: metadata.is_ended || false,
-                      has_more: metadata.has_more || false,
-                      current_image: metadata.current_image,
-                      output: metadata.output || {},
-                    })
-                  } else {
-                    reject(new Error('No metadata received'))
-                  }
-                  return
-                }
-
-                // Decode chunk
-                buffer += decoder.decode(value, { stream: true })
-
-                // Process complete SSE messages
-                const lines = buffer.split('\n\n')
-                buffer = lines.pop() || '' // Keep incomplete message in buffer
-
-                for (const line of lines) {
-                  if (line.startsWith('data: ')) {
-                    const data = line.substring(6)
-                    try {
-                      const parsed = JSON.parse(data)
-
-                      if (parsed.type === 'metadata') {
-                        metadata = parsed
-                      } else if (parsed.type === 'dialogue') {
-                        const dialogue = parsed.dialogue
-                        dialogues.push(dialogue)
-                        // Call callback for real-time UI update
-                        if (onDialogue) {
-                          onDialogue(dialogue, parsed.index)
-                        }
-                      } else if (parsed.type === 'done') {
-                        // Stream complete
-                      } else if (parsed.type === 'error') {
-                        reject(new Error(parsed.message))
-                        return
-                      }
-                    } catch (parseError) {
-                      console.error('Error parsing SSE data:', parseError, data)
-                    }
-                  }
-                }
-
-                // Continue reading
-                readStream()
-              }).catch((err) => {
-                reject(err)
-              })
-            }
-
-            // Start reading stream
-            readStream()
-          })
-          .catch((error) => {
-            console.error('Error sending message:', error)
-            reject(error)
-          })
-      } catch (error) {
-        console.error('Error in sendMessage:', error)
-        reject(error)
-      }
-    })
+  async sendMessage(request: ChatRequest): Promise<ChatResponse> {
+    try {
+      // Use authenticated API client (automatically adds JWT token)
+      const response = await authenticatedApiClient.post('/api/chat', request)
+      return response.data
+    } catch (error) {
+      console.error('Error sending message:', error)
+      throw error
+    }
   }
 
   /**
