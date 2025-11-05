@@ -106,3 +106,11 @@ taemin_record/
 # Backend test and script files
 backend/test_*.py
 backend/scripts/
+
+# Utility and development scripts (root level)
+/*.sh
+/*.py
+restructure_beats.py
+check_aws_resources.sh
+check_language.py
+cleanup_aws.sh
