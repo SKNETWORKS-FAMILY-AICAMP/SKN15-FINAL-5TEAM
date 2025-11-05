@@ -7,7 +7,7 @@ import logging
 from typing import Optional, Dict, Any
 from uuid import UUID
 from .db_manager import DatabaseManager
-from .cache_manager import CacheManager
+from ..cache.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 

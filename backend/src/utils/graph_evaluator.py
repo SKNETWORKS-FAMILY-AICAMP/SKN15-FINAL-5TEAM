@@ -361,7 +361,7 @@ if __name__ == "__main__":
     import os
     logging.basicConfig(level=logging.INFO)
 
-    from src.database.db_manager import DatabaseManager
+    from src.infrastructure.database.db_manager import DatabaseManager
 
     db = DatabaseManager(
         host=os.getenv('DB_HOST', 'localhost'),

@@ -1,32 +1,77 @@
-version: '3.8'
-
 services:
-  kime-chat-agent:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: kime-chat-agent
-    environment:
-      # .env 파일에서 환경 변수 로드
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
-      - USE_LLM=${USE_LLM:-true}
-      - DEBUG=${DEBUG:-false}
-      - PYTHONUNBUFFERED=1
-      - PYTHONIOENCODING=UTF-8
-    volumes:
-      # 로그 및 데이터 영구 저장
-      - ./logs:/app/logs
-      - ./data:/app/data
-    # 인터랙티브 터미널 활성화 (필수!)
-    stdin_open: true
-    tty: true
-    # 재시작 정책 (프로덕션용)
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: kime-redis
     restart: unless-stopped
-    # 네트워크 설정 (필요시)
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - kime-network
 
+  # Backend (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kime-backend
+    restart: unless-stopped
+    environment:
+      # Database
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-kimedb}
+      DB_USER: ${DB_USER:-kime}
+      DB_PASSWORD: ${DB_PASSWORD:-dev123}
+
+      # Redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      # JWT
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
+
+      # App
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - backend_cache:/app/__pycache__
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - kime-network
+
+volumes:
+  redis_data:
+    driver: local
+  backend_cache:
+    driver: local
+
 networks:
   kime-network:
-    driver: bridge
+    external: true
+    name: kime-network

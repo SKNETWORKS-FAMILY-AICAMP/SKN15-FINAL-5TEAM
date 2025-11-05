@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  kime-chat-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kime-chat-agent
+    environment:
+      # .env 파일에서 환경 변수 로드
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
+      - USE_LLM=${USE_LLM:-true}
+      - DEBUG=${DEBUG:-false}
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=UTF-8
+    volumes:
+      # 로그 및 데이터 영구 저장
+      - ./logs:/app/logs
+      - ./data:/app/data
+    # 인터랙티브 터미널 활성화 (필수!)
+    stdin_open: true
+    tty: true
+    # 재시작 정책 (프로덕션용)
+    restart: unless-stopped
+    # 네트워크 설정 (필요시)
+    networks:
+      - kime-network
+
+networks:
+  kime-network:
+    driver: bridge

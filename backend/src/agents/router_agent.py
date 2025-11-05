@@ -13,7 +13,7 @@ from src.utils.intent_handler import detect_intent_with_llm
 from src.utils.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
-from src.database.session_manager import HybridSessionManager
+from src.infrastructure.database.session_manager import HybridSessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
@@ -64,8 +64,8 @@ class RouterAgent:
 
         # Initialize session manager for error logging
         try:
-            from src.database.db_manager import DatabaseManager
-            from src.database.cache_manager import CacheManager
+            from src.infrastructure.database.db_manager import DatabaseManager
+            from src.infrastructure.cache.cache_manager import CacheManager
             db = DatabaseManager()
             cache_manager = CacheManager()
             self._session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)

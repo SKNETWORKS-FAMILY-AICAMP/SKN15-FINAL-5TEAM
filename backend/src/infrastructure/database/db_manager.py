@@ -74,9 +74,9 @@ class DatabaseManager:
             if not conn.autocommit:
                 conn.autocommit = True
 
-            # search_path 설정 (statedb, public 순으로 검색)
+            # search_path 설정 (public 스키마 사용)
             with conn.cursor() as cur:
-                cur.execute("SET search_path TO statedb, public, logdb")
+                cur.execute("SET search_path TO public")
 
             yield conn
 

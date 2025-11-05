@@ -9,7 +9,7 @@ from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
-from src.database.session_manager import HybridSessionManager
+from src.infrastructure.database.session_manager import HybridSessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
@@ -39,8 +39,8 @@ class ChildrenAgent:
 
         # Initialize session manager for error logging
         try:
-            from src.database.db_manager import DatabaseManager
-            from src.database.cache_manager import CacheManager
+            from src.infrastructure.database.db_manager import DatabaseManager
+            from src.infrastructure.cache.cache_manager import CacheManager
             db = DatabaseManager()
             cache_manager = CacheManager()
             self._session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
@@ -571,14 +571,14 @@ def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # 📊 Performance Metric 저장: Children Agent 실행 시간
         try:
-            from src.database.session_manager import HybridSessionManager
-            from src.database.db_manager import DatabaseManager
+            from src.infrastructure.database.session_manager import HybridSessionManager
+            from src.infrastructure.database.db_manager import DatabaseManager
 
             execution_time_ms = (time.perf_counter() - start_time) * 1000.0
             session_id = state.get("session_id")
 
             if session_id:
-                from src.database.cache_manager import CacheManager
+                from src.infrastructure.cache.cache_manager import CacheManager
                 db = DatabaseManager()
                 cache_manager = CacheManager()
                 session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)

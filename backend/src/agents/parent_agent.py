@@ -635,8 +635,8 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # 📊 Performance Metric 저장: Parent Agent 실행 시간
         try:
-            from src.database.session_manager import HybridSessionManager
-            from src.database.db_manager import DatabaseManager
+            from src.infrastructure.database.session_manager import HybridSessionManager
+            from src.infrastructure.database.db_manager import DatabaseManager
 
             execution_time_ms = (time.perf_counter() - start_time) * 1000.0
             session_id = result.get("session_id")
