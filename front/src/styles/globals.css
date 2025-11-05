@@ -1,4 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Brush+Script&family=Roboto:wght@300;400;500;700&family=Shippori+Mincho:wght@500;700&display=swap');
+
+@font-face {
+  font-family: 'CCComicrazy';
+  src: url('/CCComicrazy%20Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,9 +15,96 @@
   html {
     font-family: 'Roboto', system-ui, sans-serif;
   }
+
+  :root {
+    --color-primary: #6c5ce7;
+    --color-secondary: #ff7eb6;
+    --color-tertiary: #f4f0ff;
+    --color-surface: rgba(255, 255, 255, 0.9);
+    --color-surface-strong: rgba(255, 255, 255, 0.98);
+    --color-text-primary: #20123a;
+    --color-text-secondary: rgba(32, 18, 58, 0.72);
+    --color-chip-bg: rgba(108, 92, 231, 0.12);
+    --color-chip-text: #5444d4;
+    --color-card-border: rgba(108, 92, 231, 0.22);
+    --shadow-card: 0 18px 40px rgba(108, 92, 231, 0.16);
+    --gradient-hero: linear-gradient(155deg, rgba(246, 241, 255, 0.95) 0%, rgba(234, 224, 255, 0.92) 48%, rgba(222, 230, 255, 0.95) 100%);
+    --gradient-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(248, 243, 255, 0.45) 55%, rgba(236, 232, 255, 0.5) 100%);
+  }
 }
 
 @layer utilities {
+  .bg-hero {
+    background: var(--gradient-hero);
+  }
+
+  .bg-hero-overlay {
+    background: var(--gradient-overlay);
+  }
+
+  .bg-theme-surface {
+    background: var(--color-surface);
+    backdrop-filter: blur(14px);
+  }
+
+  .bg-theme-surface-strong {
+    background: var(--color-surface-strong);
+    backdrop-filter: blur(18px);
+  }
+
+  .text-theme-primary {
+    color: var(--color-text-primary);
+  }
+
+  .text-theme-secondary {
+    color: var(--color-text-secondary);
+  }
+
+  .chip-theme {
+    background-color: var(--color-chip-bg);
+    color: var(--color-chip-text);
+  }
+
+  .border-theme-card {
+    border-color: var(--color-card-border);
+  }
+
+  .shadow-theme {
+    box-shadow: var(--shadow-card);
+  }
+
+  .font-hero-script {
+    font-family: 'Nanum Brush Script', 'Shippori Mincho', serif;
+  }
+
+  .font-hero-anton {
+    font-family: 'Anton', 'Roboto', sans-serif;
+    letter-spacing: 0.08em;
+  }
+
+  .font-hero-mincho {
+    font-family: 'Shippori Mincho', serif;
+  }
+
+  .font-hero-mixed {
+    font-family: 'Shippori Mincho', 'Roboto', serif;
+    letter-spacing: 0.08em;
+  }
+
+  .font-cccomicrazy-fallback {
+    font-family: 'CCComicrazy', 'IBM Plex Sans KR', 'Shippori Mincho', 'Nanum Brush Script', 'Roboto', sans-serif;
+  }
+
+  .font-display-main {
+    font-family: 'Do Hyeon', 'CCComicrazy', 'Roboto', sans-serif;
+    letter-spacing: 0.08em;
+  }
+
+  .font-display-chat {
+    font-family: 'IBM Plex Sans KR', 'Shippori Mincho', 'Nanum Brush Script', 'Roboto', sans-serif;
+    letter-spacing: 0.04em;
+  }
+
   .message-bubble {
     @apply px-4 py-2 rounded-lg max-w-xs break-words;
   }
@@ -154,5 +249,40 @@
 
   .animate-slide-in-fade {
     animation: slideInFade 0.5s ease-out forwards;
+  }
+
+  @keyframes scrollUnfurl {
+    0% {
+      transform: scaleY(0.92) translateY(-12px);
+      opacity: 0;
+    }
+    60% {
+      transform: scaleY(1.02) translateY(4px);
+      opacity: 1;
+    }
+    100% {
+      transform: scaleY(1) translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-scroll-unfurl {
+    animation: scrollUnfurl 0.55s ease-out forwards;
+    transform-origin: top center;
+  }
+}
+
+@layer components {
+  .card-surface {
+    background: var(--color-surface);
+    border: 1px solid var(--color-card-border);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(20px);
+  }
+
+  .chip-soft {
+    background-color: var(--color-chip-bg);
+    color: var(--color-chip-text);
+    border: 1px solid rgba(108, 92, 231, 0.22);
   }
 }

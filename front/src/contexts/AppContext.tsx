@@ -13,6 +13,7 @@ interface AppContextType {
   isLoggedIn: boolean;
   isAuthLoading: boolean;
   userEmail: string;
+  currentUser: string | null;
   currentBubbles: number;
   updateBubbles: (count: number) => void;
   consumeBubbles: (amount: number) => boolean;
@@ -56,6 +57,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState('');
+  const [currentUser, setCurrentUser] = useState<string | null>(() => {
+    const storedUser = getUserData();
+    if (!storedUser) {
+      return null;
+    }
+    return storedUser.display_name || storedUser.username || null;
+  });
   const [currentBubbles, setCurrentBubbles] = useState(0);
 
   // 초기 로딩 시 토큰 유효성 검증 및 로그인 상태 확인
@@ -69,6 +77,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           // Token is valid, set logged in state
           setIsLoggedIn(true);
           setUserEmail(userInfo.display_name || userInfo.username);
+          setCurrentUser(userInfo.display_name || userInfo.username || null);
 
           // Load user credits (bubble count)
           try {
@@ -83,7 +92,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           console.error('Token validation failed:', error);
           clearTokens();
           setIsLoggedIn(false);
+          setUserEmail('');
+          setCurrentUser(null);
         }
+      } else {
+        setIsLoggedIn(false);
+        setUserEmail('');
+        setCurrentUser(null);
       }
       setIsAuthLoading(false);
     };
@@ -109,11 +124,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const login = (email: string) => {
     setIsLoggedIn(true);
     setUserEmail(email);
+    const storedUser = getUserData();
+    if (storedUser) {
+      setCurrentUser(storedUser.display_name || storedUser.username || null);
+    } else {
+      setCurrentUser(null);
+    }
   };
   const logout = () => {
     clearTokens(); // JWT 토큰 삭제
     setIsLoggedIn(false);
     setUserEmail('');
+    setCurrentUser(null);
   };
   const updateBubbles = (count: number) => {
     setCurrentBubbles(count);
@@ -139,6 +161,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         isLoggedIn,
         isAuthLoading,
         userEmail,
+        currentUser,
         currentBubbles,
         openSidebar,
         closeSidebar,

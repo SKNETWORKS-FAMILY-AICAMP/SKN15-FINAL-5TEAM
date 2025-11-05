@@ -5,7 +5,17 @@ import ChatHeader from '@/components/ChatHeader';
 import LoginModal from '@/components/LoginModal';
 import SessionResumeModal from '@/components/SessionResumeModal';
 import { useApp } from '@/contexts/AppContext';
-import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
+import { apiClient, LastSessionInfo } from '@/services/api';
+import scenariosData from '@/data/scenarios.json';
+
+interface ScenarioData {
+  id: string;
+  title: string;
+  image: string;
+  description: string;
+  detailDescription: string;
+  implemented: boolean;
+}
 
 const SCENARIO_ID_MAP: Record<string, string> = {
   train: 'cutscene5_llm_driven',
@@ -15,12 +25,7 @@ const SCENARIO_ID_MAP: Record<string, string> = {
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
-
-  // Scenario loading state
-  const [scenario, setScenario] = useState<ScenarioCard | null>(null);
-  const [scenarioLoading, setScenarioLoading] = useState(true);
-  const [scenarioError, setScenarioError] = useState<string | null>(null);
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal } = useApp();
 
   // Session restoration state
   const [lastSession, setLastSession] = useState<LastSessionInfo | null>(null);
@@ -28,39 +33,14 @@ export default function ChatPage() {
   const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
 
-  // Load scenario data from API
-  useEffect(() => {
-    const loadScenario = async () => {
-      if (!characterId) {
-        setScenarioError('시나리오 ID가 필요합니다.');
-        setScenarioLoading(false);
-        return;
-      }
-
-      setScenarioLoading(true);
-      setScenarioError(null);
-
-      try {
-        const data = await apiClient.getScenario(characterId);
-        setScenario(data);
-      } catch (err) {
-        console.error('Failed to load scenario:', err);
-        setScenarioError('시나리오를 불러올 수 없습니다.');
-      } finally {
-        setScenarioLoading(false);
-      }
-    };
-
-    loadScenario();
-  }, [characterId]);
-
   // Authentication guard: show login modal if not authenticated
   useEffect(() => {
-    if (!isLoggedIn) {
+    // isAuthLoading이 false가 되어 로딩이 완료된 후에만 체크
+    if (!isAuthLoading && !isLoggedIn) {
       openLoginModal();
       setSessionCheckDone(false);
     }
-  }, [isLoggedIn, openLoginModal]);
+  }, [isLoggedIn, isAuthLoading, openLoginModal]);
 
   // Check for last session after login
   useEffect(() => {
@@ -98,51 +78,34 @@ export default function ChatPage() {
     setSessionCheckDone(true);
   };
 
-  // Loading state for scenario
-  if (scenarioLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <ChatHeader
-          onToggleSidebar={toggleSidebar}
-          onOpenSettings={openSettings}
-          title="로딩 중..."
-          showBackButton={true}
-        />
-        <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
-          <div className="relative z-10 flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-              <p className="mt-4 text-gray-600">시나리오를 불러오는 중...</p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  // Load scenario data dynamically
+  const scenarios = scenariosData as Record<string, ScenarioData>;
+  const scenarioLookupKey =
+    characterId && !scenarios[characterId]
+      ? SCENARIO_ID_MAP[characterId] || characterId
+      : characterId || null;
+  const scenario = scenarioLookupKey ? scenarios[scenarioLookupKey] : null;
 
-  // Error state or scenario not found
-  if (scenarioError || !scenario) {
+  // Fallback for unknown scenarios
+  if (!scenario) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#f5f2ff]">
         <ChatHeader
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
           title="알 수 없는 시나리오"
           showBackButton={true}
+          titleClassName="font-display-main text-theme-primary"
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
-          <div className="relative z-10 flex items-center justify-center h-full">
-            <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
+          <div className="relative z-10 flex items-center justify-center h-full px-4">
+            <div className="text-center card-surface p-8 rounded-2xl max-w-md w-full">
               <div className="text-6xl mb-6">❓</div>
-              <h1 className="text-3xl font-bold mb-4 text-gray-800">
-                {scenarioError ? '시나리오 로딩 실패' : '존재하지 않는 시나리오'}
-              </h1>
-              <p className="text-gray-600 mb-6">
-                {scenarioError || '요청하신 시나리오를 찾을 수 없습니다.'}
-              </p>
+              <h1 className="text-3xl font-bold mb-4 text-theme-primary">존재하지 않는 시나리오</h1>
+              <p className="text-theme-secondary mb-6">요청하신 시나리오를 찾을 수 없습니다.</p>
               <Link
                 to="/"
-                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="inline-block px-6 py-3 bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] text-white rounded-lg transition-transform hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)]"
               >
                 홈으로 돌아가기
               </Link>
@@ -153,29 +116,30 @@ export default function ChatPage() {
     );
   }
 
-  // Check if implemented (is_active: true means active, false means not yet available)
-  if (!scenario.is_active) {
+  // Check if implemented
+  if (!scenario.implemented) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#f5f2ff]">
         <ChatHeader
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
           title={scenario.title}
           showBackButton={true}
+          titleClassName="font-display-main text-theme-primary"
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
-          <div className="relative z-10 flex items-center justify-center h-full">
-            <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
+          <div className="relative z-10 flex items-center justify-center h-full px-4">
+            <div className="text-center card-surface p-8 rounded-2xl max-w-md w-full">
               <div className="text-6xl mb-6">🚧</div>
-              <h1 className="text-3xl font-bold mb-4 text-gray-800">준비 중입니다</h1>
-              <p className="text-gray-600 mb-2">
-                <span className="font-semibold text-purple-600">{scenario.title}</span>
+              <h1 className="text-3xl font-bold mb-4 text-theme-primary">준비 중입니다</h1>
+              <p className="text-theme-secondary mb-2">
+                <span className="font-semibold text-theme-primary">{scenario.title}</span>
                 {' '}시나리오는 현재 개발 중입니다.
               </p>
-              <p className="text-sm text-gray-500 mb-6">곧 만나보실 수 있습니다!</p>
+              <p className="text-sm text-theme-secondary mb-6">백엔드 API 연결 후 이용 가능합니다!</p>
               <Link
                 to="/"
-                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="inline-block px-6 py-3 bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] text-white rounded-lg transition-transform hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)]"
               >
                 홈으로 돌아가기
               </Link>
@@ -189,24 +153,25 @@ export default function ChatPage() {
   // Authentication lock screen for unauthenticated users
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#f5f2ff]">
         <ChatHeader
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
           title={scenario?.title || '채팅'}
           showBackButton={true}
+          titleClassName="font-display-main text-theme-primary"
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
-          <div className="relative z-10 flex items-center justify-center h-full">
-            <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
+          <div className="relative z-10 flex items-center justify-center h-full px-4">
+            <div className="text-center card-surface p-8 rounded-2xl max-w-md w-full">
               <div className="text-6xl mb-6">🔐</div>
-              <h1 className="text-3xl font-bold mb-4 text-gray-800">로그인이 필요합니다</h1>
-              <p className="text-gray-600 mb-6">
+              <h1 className="text-3xl font-bold mb-4 text-theme-primary">로그인이 필요합니다</h1>
+              <p className="text-theme-secondary mb-6">
                 채팅을 시작하려면 로그인해주세요.
               </p>
               <button
                 onClick={openLoginModal}
-                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="inline-block px-6 py-3 bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] text-white rounded-lg transition-transform hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)]"
               >
                 로그인하기
               </button>
@@ -220,12 +185,13 @@ export default function ChatPage() {
 
   // Implemented scenario - ChatInterface handles full layout
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f5f2ff]">
       <ChatHeader
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
-        title={scenario.title}
+        title="KIME CHAT"
         showBackButton={true}
+        titleClassName="font-display-main text-theme-primary"
       />
 
       <main style={{ height: 'calc(100vh - 64px)' }}>
@@ -233,6 +199,7 @@ export default function ChatPage() {
         <ChatInterface
           characterId={characterId || 'ending'}
           initialSessionId={resumeSessionId}
+          scenarioTitle={scenario.title}
         />
       </main>
 

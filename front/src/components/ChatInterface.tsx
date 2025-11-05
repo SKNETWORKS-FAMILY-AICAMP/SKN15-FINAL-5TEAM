@@ -24,6 +24,7 @@ interface ChatInterfaceProps {
   onMessageSent?: () => void;
   characterId?: string;
   initialSessionId?: string;  // 세션 복원용 session_id
+  scenarioTitle?: string;
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
@@ -34,7 +35,13 @@ const SCENARIO_ID_MAP: Record<string, string> = {
   cutscene5_llm_driven: 'cutscene5_llm_driven',
 };
 
-export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending', initialSessionId }: ChatInterfaceProps) {
+export default function ChatInterface({
+  onUserLogin,
+  onMessageSent,
+  characterId = 'ending',
+  initialSessionId,
+  scenarioTitle
+}: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [showCharacterModal, setShowCharacterModal] = useState(false);
@@ -43,11 +50,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const [transcript, setTranscript] = useState('');
   const [invitedCharacters, setInvitedCharacters] = useState<string[]>(['tanjiro', 'inosuke', 'zenitsu', 'nezuko']); // 현재 참여중인 캐릭터들
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);  // 세션 복원 지원
   const [isLoading, setIsLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false); // 타이핑 중 표시
-  const [loadingMessage, setLoadingMessage] = useState<string | null>(null); // 로딩 메시지
   const [isAutoRequesting, setIsAutoRequesting] = useState(false); // 자동 요청 중
   const autoRequestTimerRef = useRef<number | null>(null); // 자동 요청 타이머
   const shouldCancelAutoRequest = useRef(false); // 사용자 중단 플래그
@@ -59,7 +66,6 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
   const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
   const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
-
   // Skip 기능을 위한 ref
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
   const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
@@ -405,37 +411,6 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     };
   };
 
-  // 캐릭터별 대사 생성 로딩 메시지 (각 캐릭터당 3개씩)
-  const getRandomLoadingMessage = () => {
-    const loadingMessages = [
-      // 탄지로 (3개) - 후각에 특화
-      '탄지로가 냄새를 맡는 중입니다...',
-      '탄지로가 상황의 냄새를 분석하고 있어요...',
-      '탄지로가 주변의 기운을 감지하고 있어요...',
-
-      // 아카자 (3개) - 투지/전투에 특화
-      '아카자가 투지를 감지하는 중입니다...',
-      '아카자가 상대의 강함을 측정하고 있어요...',
-      '아카자가 전투 의지를 불태우고 있어요...',
-
-      // 렌고쿠 (3개) - 열정/결의에 특화
-      '렌고쿠가 마음을 불태우고 있습니다...',
-      '렌고쿠가 굳은 결의를 다지고 있어요...',
-      '렌고쿠가 동료를 지키기 위해 고민하고 있어요...',
-
-      // 젠이츠 (3개) - 공포/용기에 특화
-      '젠이츠가 떨면서도 용기를 내고 있어요...',
-      '젠이츠가 위험을 감지하고 경계하고 있어요...',
-      '젠이츠가 번개같은 판단을 하려 하고 있어요...',
-
-      // 이노스케 (3개) - 야성/직감에 특화
-      '이노스케가 야생의 직감으로 상황을 파악하고 있어요...',
-      '이노스케가 돌격할 기회를 엿보고 있어요...',
-      '이노스케가 멧돼지처럼 코를 벌름거리며 냄새를 맡고 있어요...',
-    ];
-    return loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-  };
-
   // INTRO 스테이지 판별 함수 (빠른 출력 적용용)
   const isIntroStage = (stage?: string): boolean => {
     if (!stage) return false;
@@ -620,21 +595,18 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     // 최대 재시도 횟수 체크
     if (retryCount >= 3) {
       console.error('Max retry attempts reached');
-      setLoadingMessage(null);
       return;
     }
 
     // 사용자가 중단을 원하면 취소
     if (shouldCancelAutoRequest.current) {
       shouldCancelAutoRequest.current = false;
-      setLoadingMessage(null);
       setIsAutoRequesting(false);
       return;
     }
 
     try {
       setIsAutoRequesting(true);
-      setLoadingMessage(getRandomLoadingMessage());
 
       // 자동 요청 시에는 "__AUTO_CONTINUE__"를 user_input으로 전송
       const response: ChatResponse = await sendChatMessage(
@@ -643,8 +615,6 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         currentSessionId,
         '츠구코'
       );
-
-      setLoadingMessage(null);
 
       console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
 
@@ -1042,7 +1012,6 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       autoRequestTimerRef.current = null;
     }
     setIsAutoRequesting(false);
-    setLoadingMessage(null);
 
     // Add user message to UI
     const newMessage: Message = {
@@ -1053,6 +1022,9 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     };
     setMessages(prev => [...prev, newMessage]);
     setInputMessage('');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
     // Call message sent callback
     onMessageSent?.();
@@ -1461,13 +1433,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       </div>
 
       {/* 오른쪽: 채팅 영역 (50%) */}
-      <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-white">
+      <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-theme-surface-strong border-l border-theme-card">
         {/* 채팅 헤더 - 높이 축소 */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 bg-white shrink-0 gap-4">
-          {/* 중앙: Kime Chat */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-theme-card bg-theme-surface-strong shrink-0 gap-4">
+          {/* 중앙: 시나리오 타이틀 */}
           <div className="flex items-center flex-1 justify-center">
-            <span className="text-base font-roboto text-text-primary">
-              🗡️ Kime Chat
+            <span className="text-xl font-display-chat text-text-primary leading-none tracking-[0.05em]">
+              🗡️ {scenarioTitle || 'KIME CHAT'}
             </span>
           </div>
 
@@ -1478,7 +1450,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 <img
                   src={getCharacterProfile(charId)}
                   alt={getCharacterName(charId)}
-                  className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                  className="w-6 h-6 rounded-full border-2 border-theme-card shadow-sm bg-theme-surface"
                   style={{ marginLeft: index > 0 ? '-6px' : '0' }}
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
@@ -1487,7 +1459,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
               </div>
             ))}
             {invitedCharacters.length > 1 && (
-              <span className="text-xs text-gray-500 ml-2">
+              <span className="text-xs text-theme-secondary ml-2">
                 {invitedCharacters.length}명
               </span>
             )}
@@ -1495,7 +1467,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         </div>
 
         {/* 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
         {/* Backend error banner */}
         {backendError && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -1663,7 +1635,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
             </div>
             <div className="flex flex-col max-w-xs lg:max-w-md">
               <div className="text-xs mb-1 text-left text-gray-500">
-                {loadingMessage || '입력 중...'}
+                입력 중...
               </div>
               <div className="px-4 py-3 rounded-2xl bg-white border border-gray-200 rounded-bl-md shadow-sm">
                 <div className="flex gap-1">
@@ -1719,7 +1691,6 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                   setIsAutoRequesting(false);
                   setIsTyping(false);
                   setIsLoading(false);
-                  setLoadingMessage(null);
                   shouldCancelAutoRequest.current = true;
                   if (autoRequestTimerRef.current) {
                     clearTimeout(autoRequestTimerRef.current);
@@ -1736,12 +1707,21 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
               </button>
             )}
             <div className="flex-1 relative">
-              <input
-                type="text"
+              <textarea
+                ref={inputRef}
+                rows={1}
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
+                onChange={(e) => {
+                  setInputMessage(e.target.value);
+                  if (inputRef.current) {
+                    inputRef.current.style.height = 'auto';
+                    inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 160)}px`;
+                  }
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+
                     console.log('🔍 [ENTER KEY] Enter pressed!', {
                       inputMessage: inputMessage.substring(0, 20),
                       hasInput: !!inputMessage.trim(),
@@ -1771,13 +1751,18 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                     console.log('🔧 [FIX] Resetting stuck states');
                     setIsAutoRequesting(false);
                     setIsTyping(false);
-                    setLoadingMessage(null);
                     shouldCancelAutoRequest.current = true;
                   }
                 }}
-                placeholder={isEnded ? "시나리오가 종료되었습니다" : (isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요...")}
+                placeholder={
+                  isEnded
+                    ? "시나리오가 종료되었습니다"
+                    : isAutoRequesting
+                      ? "대화가 자동으로 진행 중입니다..."
+                      : "메시지를 입력하세요..."
+                }
                 disabled={isLoading || isTyping || isAutoRequesting || isEnded}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed resize-none pr-12"
               />
               <button
                 onClick={() => {

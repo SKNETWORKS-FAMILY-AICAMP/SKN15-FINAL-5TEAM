@@ -1,50 +1,4 @@
 {
-  "train": {
-    "id": "train",
-    "title": "무한열차",
-    "emoji": "🚂",
-    "description": "무한열차에서 펼쳐지는 치열한 전투와 동료애",
-    "detailDescription": "열차 안에서 벌어지는 악몽과 현실의 경계. 엔무와의 대결, 그리고 상현의 참과의 조우까지. 탄지로와 동료들이 승객들을 지키기 위해 싸우는 이야기",
-    "image": "/images/무한열차.jpeg",
-    "implemented": true,
-    "type": "character",
-    "tags": ["#무한열차", "#꿈속전투", "#엔무"],
-    "category": "일상 · 힐링 · 로맨스",
-    "mood": ["평화로운", "따뜻함", "감성적"],
-    "likes": 98,
-    "comments": 32,
-    "views": 890,
-    "characters": [
-      {
-        "name": "탄지로",
-        "image": "/images/프로필_탄지로.png",
-        "greeting": "안녕하세요! 함께 평화로운 시간을 보내세요.",
-        "status": "대화 가능",
-        "color": "bg-orange-100"
-      },
-      {
-        "name": "렌고쿠",
-        "image": "/images/프로필_렌고쿠.png",
-        "greeting": "불같은 열정으로 함께하겠습니다!",
-        "status": "대화 가능",
-        "color": "bg-red-100"
-      },
-      {
-        "name": "젠이츠",
-        "image": "/images/프로필_젠이츠.png",
-        "greeting": "우와! 정말 즐거운 시간이 될 것 같아요!",
-        "status": "대화 가능",
-        "color": "bg-yellow-100"
-      },
-      {
-        "name": "이노스케",
-        "image": "/images/프로필_이노스케.png",
-        "greeting": "이야! 재미있는 모험을 시작해보자구!",
-        "status": "대화 가능",
-        "color": "bg-green-100"
-      }
-    ]
-  },
   "ending": {
     "id": "ending",
     "title": "엔딩 이후",
@@ -54,9 +8,18 @@
     "image": "/images/엔딩이후.png",
     "implemented": true,
     "type": "character",
-    "tags": ["#엔딩이후", "#일상", "#평화", "#동료애"],
+    "tags": [
+      "#엔딩이후",
+      "#일상",
+      "#평화",
+      "#동료애"
+    ],
     "category": "일상 · 힐링 · 로맨스",
-    "mood": ["평화로운", "따뜻함", "감성적"],
+    "mood": [
+      "평화로운",
+      "따뜻함",
+      "감성적"
+    ],
     "likes": 87,
     "comments": 28,
     "views": 720,
@@ -100,9 +63,17 @@
     "image": "/images/무한성.webp",
     "implemented": false,
     "type": "character",
-    "tags": ["#최종결전", "#귀살대", "#무잔전"],
+    "tags": [
+      "#최종결전",
+      "#귀살대",
+      "#무잔전"
+    ],
     "category": "액션 · 전투 · 긴장감",
-    "mood": ["긴박함", "스릴", "진지함"],
+    "mood": [
+      "긴박함",
+      "스릴",
+      "진지함"
+    ],
     "likes": 156,
     "comments": 67,
     "views": 1850,
@@ -146,9 +117,17 @@
     "image": "/images/편의점탄지로.png",
     "implemented": false,
     "type": "character",
-    "tags": ["#편의점", "#일상", "#탄지로"],
+    "tags": [
+      "#편의점",
+      "#일상",
+      "#탄지로"
+    ],
     "category": "일상 · 힐링 · 현대AU",
-    "mood": ["편안함", "따뜻함", "친근함"],
+    "mood": [
+      "편안함",
+      "따뜻함",
+      "친근함"
+    ],
     "likes": 121,
     "comments": 45,
     "views": 1200,
@@ -171,9 +150,17 @@
     "image": "/images/귀칼상담소.png",
     "implemented": false,
     "type": "character",
-    "tags": ["#상담소", "#힐링AU", "#감정공감"],
+    "tags": [
+      "#상담소",
+      "#힐링AU",
+      "#감정공감"
+    ],
     "category": "힐링 · 상담 · 감성",
-    "mood": ["위로", "공감", "따뜻함"],
+    "mood": [
+      "위로",
+      "공감",
+      "따뜻함"
+    ],
     "likes": 134,
     "comments": 52,
     "views": 1150,
@@ -196,9 +183,17 @@
     "image": "/images/아이돌밴드.png",
     "implemented": false,
     "type": "character",
-    "tags": ["#아이돌AU", "#밴드AU", "#팬심폭발"],
+    "tags": [
+      "#아이돌AU",
+      "#밴드AU",
+      "#팬심폭발"
+    ],
     "category": "엔터테인먼트 · 음악 · 팬심",
-    "mood": ["흥겨움", "열정", "설렘"],
+    "mood": [
+      "흥겨움",
+      "열정",
+      "설렘"
+    ],
     "likes": 203,
     "comments": 89,
     "views": 2100,
@@ -214,16 +209,24 @@
   },
   "cutscene5_llm_driven": {
     "id": "cutscene5_llm_driven",
-    "title": "🔥 무한열차",
+    "title": "무한열차",
     "emoji": "🚂",
-    "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
-    "detailDescription": "열차 안에서 벌어지는 악몽과 현실의 경계. 엔무와의 대결, 그리고 상현의 참과의 조우까지. 탄지로와 동료들이 승객들을 지키기 위해 싸우는 이야기",
+    "description": "무한열차에서 펼쳐지는 치열한 전투와 동료애",
+    "detailDescription": "열차 안에서 벌어지는 악몽과 현실의 경계. 엔무와의 대결, 그리고 상현의 삼(參)과의 조우까지. 탄지로와 동료들이 승객들을 지키기 위해 싸우는 이야기",
     "image": "/images/무한열차.jpeg",
     "implemented": true,
     "type": "character",
-    "tags": ["#무한열차", "#꿈속전투", "#엔무"],
-    "category": "일상 · 힐링 · 로맨스",
-    "mood": ["평화로운", "따뜻함", "감성적"],
+    "tags": [
+      "#무한열차",
+      "#아카자",
+      "#엔무"
+    ],
+    "category": "액션 · 감동",
+    "mood": [
+      "역동적",
+      "긴박함",
+      "감동적"
+    ],
     "likes": 98,
     "comments": 32,
     "views": 890,
