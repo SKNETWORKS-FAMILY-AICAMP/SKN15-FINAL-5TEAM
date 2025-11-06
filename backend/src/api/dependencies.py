@@ -76,8 +76,7 @@ def get_workflow():
     """
     global _workflow
     if _workflow is None:
-        db_manager = get_db_manager()
-        _workflow = create_workflow(db_manager=db_manager)
+        _workflow = create_workflow()
     return _workflow
 
 

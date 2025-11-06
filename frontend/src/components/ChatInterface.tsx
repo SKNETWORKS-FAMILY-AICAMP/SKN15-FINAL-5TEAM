@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import CharacterSelectionModal from './CharacterSelectionModal';
 import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
-import { sendChatMessage, ChatResponse } from '@/services/api';
+import { sendChatMessage, sendChatMessageStream, ChatResponse } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 
@@ -28,6 +28,9 @@ interface ChatInterfaceProps {
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
+
+// SSE 스트리밍 사용 여부 (false면 기존 방식 사용)
+const USE_SSE_STREAMING = false; // TODO: 테스트 후 true로 변경
 
 const SCENARIO_ID_MAP: Record<string, string> = {
   train: 'cutscene5_llm_driven',
@@ -71,6 +74,10 @@ export default function ChatInterface({
   const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
   const shouldSkip = useRef(false); // Skip 플래그
 
+  // SSE 스트리밍을 위한 ref
+  const currentStreamAbort = useRef<(() => void) | null>(null); // 현재 스트리밍 중단 함수
+  const streamMetadata = useRef<Omit<ChatResponse, 'dialogues'> | null>(null); // 스트리밍 메타데이터
+
   // 가장 최근 메시지 ID 계산 (모든 메시지 포함 - 시스템/나레이션/사용자/AI 모두)
   // 단, 첫 메시지는 확대하지 않음 (겹침 방지)
   const latestMessageId = useMemo(() => {
@@ -109,6 +116,18 @@ export default function ChatInterface({
   useEffect(() => {
     preloadImages();
   }, [preloadImages]);
+
+  // 컴포넌트 언마운트 시 스트리밍 중단
+  useEffect(() => {
+    return () => {
+      // Cleanup: 진행 중인 스트리밍 중단
+      if (currentStreamAbort.current) {
+        console.log('🧹 [Cleanup] Aborting stream on unmount');
+        currentStreamAbort.current();
+        currentStreamAbort.current = null;
+      }
+    };
+  }, []);
 
   // 백엔드 이미지 파일명 → 프론트엔드 인덱스 매핑
   const backendImageToIndex: Record<string, number> = {
@@ -1005,6 +1024,13 @@ export default function ChatInterface({
       return;
     }
 
+    // 🚨 기존 스트리밍 중단 (사용자 끼어들기)
+    if (currentStreamAbort.current) {
+      console.log('⚠️ [SSE] User interrupted, aborting current stream');
+      currentStreamAbort.current();
+      currentStreamAbort.current = null;
+    }
+
     // 사용자가 메시지를 보내면 진행 중인 자동 요청을 중단
     shouldCancelAutoRequest.current = true;
     if (autoRequestTimerRef.current) {
@@ -1029,106 +1055,149 @@ export default function ChatInterface({
     // Call message sent callback
     onMessageSent?.();
 
-    // Send to backend
+    // 백엔드 전송 (SSE vs 기존 방식)
     setIsLoading(true);
     setBackendError(null);
 
-    try {
-      const response: ChatResponse = await sendChatMessage(
+    if (USE_SSE_STREAMING) {
+      // ====== SSE 스트리밍 방식 ======
+      streamMetadata.current = null;
+      const streamedMessages: Message[] = [];
+
+      try {
+        console.log('📡 [SSE] Starting stream...');
+
+      const { abort } = sendChatMessageStream(
         backendScenarioId,
         text,
         sessionId,
-        '츠구코'
+        '츠구코',
+        {
+          // 메타데이터 수신 (세션 정보)
+          onMetadata: (metadata) => {
+            console.log('📡 [SSE] Received metadata:', metadata);
+            streamMetadata.current = metadata;
+
+            // Update session ID if it changed
+            if (metadata.session_id !== sessionId) {
+              setSessionId(metadata.session_id);
+            }
+
+            // Update affinity_scores and current_stage
+            setAffinityScores(metadata.affinity_scores || {});
+            setCurrentStage(metadata.current_stage);
+
+            // Check if ended
+            if (metadata.is_ended) {
+              setIsEnded(true);
+              setBackgroundByIndex(21);
+            }
+          },
+
+          // 대화 하나씩 수신
+          onDialogue: async (dialogue, index, total) => {
+            console.log(`📡 [SSE] Received dialogue ${index + 1}/${total}:`, dialogue);
+
+            const message: Message = {
+              id: generateMessageId(),
+              text: dialogue.text || dialogue.content || '',
+              isUser: false,
+              timestamp: new Date(),
+              characterId: dialogue.speaker,
+              isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+              imageIndex: dialogue.image_index
+            };
+
+            streamedMessages.push(message);
+
+            // 즉시 화면에 표시 (타이핑 효과 포함)
+            await addMessagesSequentially([message]);
+          },
+
+          // 스트리밍 완료
+          onComplete: () => {
+            console.log('📡 [SSE] Stream complete');
+            setIsLoading(false);
+            currentStreamAbort.current = null;
+
+            const metadata = streamMetadata.current;
+            if (!metadata) return;
+
+            // 시스템 메시지 추가 (필요시)
+            const additionalMessages: Message[] = [];
+
+            if (metadata.system_message) {
+              additionalMessages.push({
+                id: generateMessageId(),
+                text: metadata.system_message,
+                isUser: false,
+                timestamp: new Date(),
+                characterId: 'system',
+                isSystemMessage: true
+              });
+            }
+
+            // 엔딩 메시지
+            if (metadata.is_ended) {
+              additionalMessages.push({
+                id: generateMessageId(),
+                text: '🎬 시나리오가 종료되었습니다.',
+                isUser: false,
+                timestamp: new Date(),
+                characterId: 'system',
+                isSystemMessage: true
+              });
+
+              // 엔딩 리워드
+              setTimeout(() => {
+                const summary = generateConversationSummary();
+                setEndingSummary(summary);
+                setShowEndingReward(true);
+              }, 2000);
+            }
+
+            // 추가 메시지 표시
+            if (additionalMessages.length > 0) {
+              addMessagesSequentially(additionalMessages);
+            }
+
+            // has_more 처리
+            if (metadata.has_more) {
+              handleAutoRequest(metadata.session_id);
+            }
+          },
+
+          // 에러 처리
+          onError: (error) => {
+            console.error('❌ [SSE] Stream error:', error);
+            setBackendError('메시지 전송에 실패했습니다.');
+            setIsLoading(false);
+            currentStreamAbort.current = null;
+
+            const errorMessage: Message = {
+              id: generateMessageId(),
+              text: '⚠️ 메시지 전송에 실패했습니다. 다시 시도해주세요.',
+              isUser: false,
+              timestamp: new Date(),
+              characterId: 'system',
+              isSystemMessage: true
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          }
+        }
       );
 
-      // Update session ID if it changed
-      if (response.session_id !== sessionId) {
-        setSessionId(response.session_id);
-      }
+      // 중단 함수 저장
+      currentStreamAbort.current = abort;
 
-      // Update affinity_scores and current_stage from response
-      // Note: background changes are now handled per-dialogue via imageIndex
-      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
-      setAffinityScores(response.affinity_scores || {});
-      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
-
-      // Add backend responses to messages sequentially (고유 ID 사용)
-      const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
-        id: generateMessageId(),
-        text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
-        isUser: false,
-        timestamp: new Date(),
-        characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-      }));
-
-      const hasSystemMessageInBackend = backendMessages.some(
-        (message) => message.isSystemMessage && message.text.trim().length > 0
-      );
-      const systemDialogue = response.dialogues.find(
-        (dialogue) =>
-          dialogue.speaker &&
-          dialogue.speaker.toLowerCase() === 'system' &&
-          (dialogue.text || dialogue.content)
-      );
-      const fallbackSystemMessage =
-        response.system_message ||
-        systemDialogue?.text ||
-        systemDialogue?.content ||
-        '';
-
-      // 시스템 메시지와 종료 메시지를 백엔드 메시지에 추가
-      const allMessages = [...backendMessages];
-      let extraMessageOffset = 1;
-
-      const pushSystemMessage = (text: string) => {
-        allMessages.push({
-          id: Date.now() + backendMessages.length + extraMessageOffset,
-          text,
-          isUser: false,
-          timestamp: new Date(),
-          characterId: 'system',
-          isSystemMessage: true
-        });
-        extraMessageOffset += 1;
-      };
-
-      // Show system message if provided
-      if (response.system_message) {
-        pushSystemMessage(response.system_message);
-      } else if (!hasSystemMessageInBackend && fallbackSystemMessage) {
-        pushSystemMessage(fallbackSystemMessage);
-      }
-
-      // Check if chat has ended - Phase 4 개선 + 엔딩 리워드
-      if (response.is_ended) {
-        pushSystemMessage('🎬 시나리오가 종료되었습니다.');
-        setIsEnded(true); // Phase 4: 엔딩 상태 설정
-        setBackgroundByIndex(21); // Phase 4: 엔딩 이미지 표시 (무한열차 마지막 이미지)
-
-        // 엔딩 리워드: 대화 요약 생성 및 모달 표시
-        setTimeout(() => {
-          const summary = generateConversationSummary();
-          setEndingSummary(summary);
-          setShowEndingReward(true);
-        }, 2000); // 2초 후 리워드 모달 표시
-      }
-
-      // 순차적으로 메시지 표시 (타이핑 효과 포함)
-      await addMessagesSequentially(allMessages);
-
-      // has_more가 true이면 자동 요청 시작
-      if (response.has_more) {
-        handleAutoRequest(response.session_id);
-      }
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('Failed to start stream:', error);
       setBackendError('메시지 전송에 실패했습니다.');
+      setIsLoading(false);
+      currentStreamAbort.current = null;
 
-      // Show error message
       const errorMessage: Message = {
-        id: Date.now() + 1,
+        id: generateMessageId(),
         text: '⚠️ 메시지 전송에 실패했습니다. 다시 시도해주세요.',
         isUser: false,
         timestamp: new Date(),
@@ -1136,8 +1205,113 @@ export default function ChatInterface({
         isSystemMessage: true
       };
       setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+    }
+    } else {
+      // ====== 기존 방식 (일반 HTTP 요청) ======
+      try {
+        const response: ChatResponse = await sendChatMessage(
+          backendScenarioId,
+          text,
+          sessionId,
+          '츠구코'
+        );
+
+        // Update session ID if it changed
+        if (response.session_id !== sessionId) {
+          setSessionId(response.session_id);
+        }
+
+        // Update affinity_scores and current_stage from response
+        setAffinityScores(response.affinity_scores || {});
+        setCurrentStage(response.current_stage);
+
+        // Add backend responses to messages sequentially
+        const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
+          id: generateMessageId(),
+          text: dialogue.text || dialogue.content || '',
+          isUser: false,
+          timestamp: new Date(),
+          characterId: dialogue.speaker,
+          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+          imageIndex: dialogue.image_index
+        }));
+
+        const hasSystemMessageInBackend = backendMessages.some(
+          (message) => message.isSystemMessage && message.text.trim().length > 0
+        );
+        const systemDialogue = response.dialogues.find(
+          (dialogue) =>
+            dialogue.speaker &&
+            dialogue.speaker.toLowerCase() === 'system' &&
+            (dialogue.text || dialogue.content)
+        );
+        const fallbackSystemMessage =
+          response.system_message ||
+          systemDialogue?.text ||
+          systemDialogue?.content ||
+          '';
+
+        // 시스템 메시지와 종료 메시지를 백엔드 메시지에 추가
+        const allMessages = [...backendMessages];
+        let extraMessageOffset = 1;
+
+        const pushSystemMessage = (text: string) => {
+          allMessages.push({
+            id: Date.now() + backendMessages.length + extraMessageOffset,
+            text,
+            isUser: false,
+            timestamp: new Date(),
+            characterId: 'system',
+            isSystemMessage: true
+          });
+          extraMessageOffset += 1;
+        };
+
+        // Show system message if provided
+        if (response.system_message) {
+          pushSystemMessage(response.system_message);
+        } else if (!hasSystemMessageInBackend && fallbackSystemMessage) {
+          pushSystemMessage(fallbackSystemMessage);
+        }
+
+        // Check if chat has ended
+        if (response.is_ended) {
+          pushSystemMessage('🎬 시나리오가 종료되었습니다.');
+          setIsEnded(true);
+          setBackgroundByIndex(21);
+
+          // 엔딩 리워드
+          setTimeout(() => {
+            const summary = generateConversationSummary();
+            setEndingSummary(summary);
+            setShowEndingReward(true);
+          }, 2000);
+        }
+
+        // 순차적으로 메시지 표시 (타이핑 효과 포함)
+        await addMessagesSequentially(allMessages);
+
+        // has_more가 true이면 자동 요청 시작
+        if (response.has_more) {
+          handleAutoRequest(response.session_id);
+        }
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        setBackendError('메시지 전송에 실패했습니다.');
+
+        // Show error message
+        const errorMessage: Message = {
+          id: Date.now() + 1,
+          text: '⚠️ 메시지 전송에 실패했습니다. 다시 시도해주세요.',
+          isUser: false,
+          timestamp: new Date(),
+          characterId: 'system',
+          isSystemMessage: true
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 

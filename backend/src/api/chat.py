@@ -5,8 +5,8 @@ Chat Router
 
 import os
 import uuid
-import json
 import time
+import json
 import asyncio
 from typing import Any, Dict, Optional, List
 
@@ -219,9 +219,9 @@ async def chat(
         try:
             session_manager.save_log(
                 log_level="info",
-                log_message=f"Authenticated user: {username}",
+                message=f"Authenticated user: {username}",
                 session_id=None,  # 아직 session_id 없음
-                metadata={"user_id": user_id, "username": username}
+                context_data={"user_id": user_id, "username": username}
             )
         except Exception as e:
             print(f"⚠️ Failed to save user auth log: {e}")
@@ -235,9 +235,9 @@ async def chat(
             try:
                 session_manager.save_log(
                     log_level="info",
-                    log_message="New session created",
+                    message="New session created",
                     session_id=session_id,
-                    metadata={"user_id": user_id, "scenario_id": scenario_id}
+                    context_data={"user_id": user_id, "scenario_id": scenario_id}
                 )
             except Exception as e:
                 print(f"⚠️ Failed to save session creation log: {e}")
@@ -247,22 +247,29 @@ async def chat(
             try:
                 session_manager.save_log(
                     log_level="info",
-                    log_message="Session reused",
+                    message="Session reused",
                     session_id=session_id,
-                    metadata={"user_id": user_id}
+                    context_data={"user_id": user_id}
                 )
             except Exception as e:
                 print(f"⚠️ Failed to save session reuse log: {e}")
 
-        state = session_manager.load_or_create(session_id)
-        is_new_session = "messages" not in state
-
-        if is_new_session:
+        # Check if scenario_id is required for new sessions
+        if not session_id or not scenario_id:
             if not scenario_id:
                 raise HTTPException(
                     status_code=400, detail="scenario_id is required to start a session"
                 )
 
+        state = session_manager.load_or_create(
+            session_id=session_id,
+            scenario_id=scenario_id,
+            user_name=user_name,
+            create_if_missing=True
+        )
+        is_new_session = "messages" not in state
+
+        if is_new_session:
             scenario_data = load_scenario(scenario_id)
             if not scenario_data:
                 raise HTTPException(
@@ -615,58 +622,19 @@ async def chat(
         total_duration_ms = (time.perf_counter() - request_start) * 1000.0
         print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
 
-        # 🌊 Streaming Response 구현 (부분 스트리밍)
-        async def generate_stream():
-            """SSE 형식으로 응답을 점진적으로 전송"""
-            try:
-                # 1. 메타데이터 먼저 전송
-                meta_data = {
-                    "type": "metadata",
-                    "session_id": session_id,
-                    "turn_count": result_state.get("turn_count", 0),
-                    "current_stage": result_state.get("current_stage"),
-                    "affinity_scores": result_state.get("affinity_scores", {}),
-                    "is_ended": result_state.get("is_ended", False),
-                    "has_more": has_more_flag,
-                    "current_image": current_image,
-                }
-                yield f"data: {json.dumps(meta_data, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.01)  # 이벤트 루프 양보
-
-                # 2. 각 dialogue를 개별적으로 전송
-                for idx, dialogue in enumerate(agent_responses):
-                    dialogue_data = {
-                        "type": "dialogue",
-                        "index": idx,
-                        "dialogue": dialogue
-                    }
-                    yield f"data: {json.dumps(dialogue_data, ensure_ascii=False)}\n\n"
-                    await asyncio.sleep(0.8)  # 타이핑 효과 (0.8초 간격)
-
-                # 3. 완료 신호 전송
-                done_data = {
-                    "type": "done",
-                    "total_dialogues": len(agent_responses),
-                    "output": result_state.get("output", {}),
-                }
-                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-
-            except Exception as e:
-                error_data = {
-                    "type": "error",
-                    "message": str(e)
-                }
-                yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",  # Nginx 버퍼링 비활성화
-                "Connection": "keep-alive",
-            }
-        )
+        # 🔄 Non-streaming response (프론트엔드 호환성)
+        # TODO: 나중에 프론트엔드가 SSE를 지원하면 StreamingResponse로 변경
+        return {
+            "session_id": session_id,
+            "turn_count": result_state.get("turn_count", 0),
+            "dialogues": agent_responses,
+            "current_stage": result_state.get("current_stage"),
+            "affinity_scores": result_state.get("affinity_scores", {}),
+            "is_ended": result_state.get("is_ended", False),
+            "has_more": has_more_flag,
+            "current_image": current_image,
+            "output": result_state.get("output", {}),
+        }
 
     # ------------------------------------------------------------
     # 예외 처리
@@ -678,3 +646,293 @@ async def chat(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# SSE Streaming Endpoint
+# ============================================================
+
+@router.post("/stream")
+async def chat_stream(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: Dict = Depends(require_auth),
+    db_manager: DatabaseManager = Depends(get_db_manager),
+    workflow = Depends(get_workflow),
+    session_manager = Depends(get_session_manager)
+):
+    """
+    SSE 스트리밍 채팅 엔드포인트 (🔐 로그인 필수)
+    - 대화를 생성하는 즉시 실시간으로 전송
+    - 사용자가 중간에 끼어들 수 있음 (연결 종료 감지)
+
+    Args:
+        request: HTTP 요청 객체
+        current_user: 인증된 사용자 정보
+
+    Returns:
+        StreamingResponse: SSE 형식의 스트리밍 응답
+    """
+
+    async def generate_events():
+        """SSE 이벤트 생성기"""
+        try:
+            request_start = time.perf_counter()
+            data = await request.json()
+
+            session_id = data.get("session_id")
+            user_input = data.get("user_input", "")
+            scenario_id = data.get("scenario_id")
+            user_name = data.get("user_name") or "여행자"
+
+            # 🔐 인증된 사용자 정보
+            user_id = current_user.get('user_id')
+            username = current_user.get('username', 'Unknown')
+            print(f"🔐 [SSE] Authenticated user: {username} (ID: {user_id})")
+
+            if not session_id:
+                session_id = str(uuid.uuid4())
+                print(f"🆕 [SSE] Creating new session: {session_id}")
+
+            # 세션 로드 또는 생성
+            state = session_manager.load_or_create(
+                session_id=session_id,
+                scenario_id=scenario_id,
+                user_name=user_name,
+                create_if_missing=True
+            )
+            is_new_session = "messages" not in state
+
+            if is_new_session:
+                scenario_data = load_scenario(scenario_id)
+                if not scenario_data:
+                    yield f"event: error\ndata: {json.dumps({'error': 'Scenario not found'})}\n\n"
+                    return
+
+                resolved_id = scenario_data.get("scenario_id") or scenario_id
+                state = create_initial_graph_state(
+                    session_id=session_id, scenario_id=resolved_id
+                )
+                state["scenario_data"] = scenario_data
+                state["scenario"] = scenario_data
+                state["scenario_id"] = resolved_id
+                state["user_name"] = user_name
+                state["user_id"] = user_id
+
+                # 사용자 메모리 로드
+                if user_id:
+                    try:
+                        memory_context = db_manager.get_user_memory_context(user_id)
+                        if memory_context:
+                            state["user_memory_context"] = memory_context
+                            print(f"🧠 [SSE] User memories loaded")
+                    except Exception as e:
+                        print(f"⚠️ [SSE] Failed to load user memories: {e}")
+
+                metadata = scenario_data.get("metadata", {}) if isinstance(scenario_data, dict) else {}
+                initial_stage = metadata.get("default_stage")
+                if not initial_stage:
+                    stages = scenario_data.get("stages", [])
+                    if isinstance(stages, dict):
+                        initial_stage = next(iter(stages.keys()), "intro")
+                    elif isinstance(stages, list) and stages:
+                        initial_stage = stages[0].get("tag") or stages[0].get("id") or "intro"
+                    else:
+                        initial_stage = "intro"
+                state["current_stage"] = initial_stage
+            else:
+                if user_name:
+                    state["user_name"] = user_name
+
+            if not state.get("scenario_data") and scenario_id:
+                scenario_data = load_scenario(scenario_id)
+                if scenario_data:
+                    state["scenario_data"] = scenario_data
+                    state["scenario"] = scenario_data
+                    state.setdefault(
+                        "scenario_id", scenario_data.get("scenario_id") or scenario_id
+                    )
+
+            state["session_id"] = session_id
+            state["user_input"] = user_input
+            state["user_inputs"] = state.get("user_inputs", []) + [user_input]
+
+            if not user_input.startswith("__AUTO_CONTINUE__"):
+                state["dialogue_batch_index"] = 0
+
+            state.setdefault("stage_dialogue_counts", {})
+            state.setdefault("dialogues_generated_count", 0)
+            state.setdefault("event_flags", [])
+            state.setdefault("image_transition_history", [])
+
+            print(f"🤖 [SSE] Processing: session={session_id}, input='{user_input}'")
+
+            # 워크플로우 실행
+            workflow_start = time.perf_counter()
+
+            try:
+                result_state = workflow.invoke(state)
+            except Exception as e:
+                print(f"❌ [SSE] Workflow execution failed: {e}")
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                return
+
+            workflow_duration_ms = (time.perf_counter() - workflow_start) * 1000.0
+            print(f"⏱️ [SSE] Workflow execution time: {workflow_duration_ms:.2f} ms")
+
+            # turn_count 증가
+            turn_count = result_state.get("turn_count", 0) + 1
+            result_state["turn_count"] = turn_count
+
+            if "user_id" not in result_state or result_state.get("user_id") is None:
+                if user_id:
+                    result_state["user_id"] = user_id
+
+            # 세션 저장
+            session_manager.save(session_id, result_state)
+
+            # 대화 추출
+            agent_responses = result_state.get("output", {}).get("dialogues", [])
+            has_more_flag = result_state.get("has_more")
+            if has_more_flag is None:
+                has_more_flag = result_state.get("has_more_dialogues", False)
+
+            # 이미지 처리
+            current_image = result_state.get("current_image")
+            scenario_id_for_image = result_state.get("scenario_id", scenario_id)
+
+            scenario_reference = (
+                result_state.get("scenario")
+                or result_state.get("scenario_data")
+                or state.get("scenario")
+                or state.get("scenario_data")
+                or {}
+            )
+            images_meta: Dict[str, Any] = {}
+            if isinstance(scenario_reference, dict):
+                images_meta = (scenario_reference.get("metadata") or {}).get("images") or {}
+
+            mapping_pattern = images_meta.get("mapping_pattern")
+            image_config_path = None
+            llm_metadata_config = None
+
+            if mapping_pattern:
+                from src.utils.path_resolver import resolve_path
+                abs_path = resolve_path(mapping_pattern)
+                if abs_path and os.path.exists(abs_path):
+                    image_config_path = abs_path
+                llm_metadata_config = images_meta.get("llm_metadata_path")
+
+            if image_config_path:
+                if scenario_id_for_image not in globals().get("image_managers", {}):
+                    if "image_managers" not in globals():
+                        globals()["image_managers"] = {}
+
+                    from src.utils.path_resolver import resolve_path
+                    metadata_path = resolve_path(llm_metadata_config)
+                    use_llm = bool(metadata_path)
+
+                    globals()["image_managers"][scenario_id_for_image] = ImageManager(
+                        config_path=image_config_path,
+                        debug=True,
+                        use_llm=use_llm,
+                        llm_metadata_path=metadata_path,
+                    )
+
+                image_manager = globals().get("image_managers", {}).get(scenario_id_for_image)
+                if image_manager:
+                    all_dialogues = result_state.get("output", {}).get("dialogues", [])
+                    previous_image = current_image
+
+                    if len(all_dialogues) > 0 and current_image is None:
+                        all_dialogues[0]["image_index"] = "1"
+                        previous_image = "1"
+                        current_image = "1"
+
+                    selected_images = image_manager.select_images_batch(result_state)
+
+                    if selected_images:
+                        for i, new_image in enumerate(selected_images):
+                            if i == 0 and all_dialogues[i].get("image_index"):
+                                previous_image = all_dialogues[i]["image_index"]
+                                continue
+
+                            if new_image is not None and new_image != previous_image:
+                                all_dialogues[i]["image_index"] = new_image
+                                previous_image = new_image
+                                current_image = new_image
+
+                    result_state["current_image"] = current_image
+
+            # 🚀 SSE 스트리밍: 대화를 하나씩 전송
+            print(f"📡 [SSE] Streaming {len(agent_responses)} dialogues...")
+
+            # 먼저 메타데이터 전송 (세션 정보)
+            metadata = {
+                "session_id": session_id,
+                "turn_count": turn_count,
+                "current_stage": result_state.get("current_stage"),
+                "affinity_scores": result_state.get("affinity_scores", {}),
+                "is_ended": result_state.get("is_ended", False),
+                "has_more": has_more_flag,
+                "current_image": current_image,
+            }
+            yield f"event: metadata\ndata: {json.dumps(metadata)}\n\n"
+
+            # 대화를 하나씩 스트리밍
+            for idx, dialogue in enumerate(agent_responses):
+                # 클라이언트 연결 확인
+                if await request.is_disconnected():
+                    print(f"⚠️ [SSE] Client disconnected at dialogue {idx}/{len(agent_responses)}")
+                    break
+
+                # 대화 전송
+                dialogue_data = {
+                    "index": idx,
+                    "total": len(agent_responses),
+                    "dialogue": dialogue
+                }
+                yield f"event: dialogue\ndata: {json.dumps(dialogue_data)}\n\n"
+
+                speaker = dialogue.get("speaker", "unknown")
+                content = dialogue.get("content") or dialogue.get("text", "")
+                print(f"📡 [SSE] Sent dialogue {idx+1}/{len(agent_responses)} ({speaker}): {content[:50]}...")
+
+                # 약간의 지연 (자연스러운 타이핑 효과)
+                await asyncio.sleep(0.3)
+
+            # 완료 이벤트
+            yield f"event: complete\ndata: {json.dumps({'completed': True})}\n\n"
+
+            total_duration_ms = (time.perf_counter() - request_start) * 1000.0
+            print(f"⏱️ [SSE] Total streaming time: {total_duration_ms:.2f} ms")
+
+            # 백그라운드 작업 등록
+            background_tasks.add_task(
+                process_post_response_tasks,
+                session_id=session_id,
+                user_id=user_id,
+                result_state=result_state.copy(),
+                user_input=user_input,
+                agent_responses=agent_responses,
+                turn_count=turn_count,
+                current_user=current_user,
+                db_manager=db_manager,
+                session_manager=session_manager
+            )
+
+        except Exception as e:
+            print(f"❌ [SSE] Error in stream generator: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Nginx 버퍼링 비활성화
+        }
+    )

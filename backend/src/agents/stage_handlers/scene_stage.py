@@ -159,11 +159,11 @@ class SceneHandler:
         """
         # LLM 및 config_loader 초기화 (lazy loading)
         if self._config_loader is None:
-            from src.config.config_loader import ConfigLoader
+            from src.utils.config_loader import ConfigLoader
             self._config_loader = ConfigLoader()
 
         if self._llm is None:
-            from src.core.llm_client import LLMClient
+            from src.utils.llm_client import LLMClient
             self._llm = LLMClient()
 
         # prompts.yaml에서 scene_completion_check 프롬프트 로드

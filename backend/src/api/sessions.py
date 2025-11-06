@@ -29,7 +29,7 @@ class SessionManagerAdapter:
 
     def get(self, session_id: str) -> Optional[Dict]:
         """세션 상태 조회"""
-        return self._hybrid.load_session_state(session_id)
+        return self._hybrid.load_or_create(session_id, scenario_id="", create_if_missing=False)
 
     def exists(self, session_id: str) -> bool:
         """세션 존재 여부 확인"""
@@ -44,6 +44,56 @@ class SessionManagerAdapter:
 # ============================================================
 # API 엔드포인트
 # ============================================================
+
+# IMPORTANT: More specific routes must come BEFORE generic path parameters
+# Otherwise /last will be caught by /{session_id}
+
+@router.get("/last", response_model=Dict)
+async def get_user_last_session(
+    scenario_id: Optional[str] = None,
+    user: Dict = Depends(require_auth),
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """
+    현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용)
+
+    Args:
+        scenario_id: 특정 시나리오의 마지막 세션만 조회 (선택)
+
+    Returns:
+        마지막 세션 정보 (세션 ID, 턴 수, 대화 요약 등)
+        또는 세션이 없으면 has_session: false
+    """
+    user_id = user.get("user_id")
+
+    # 데이터베이스에서 마지막 세션 조회
+    last_session = db.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
+
+    if not last_session:
+        return {
+            "has_session": False,
+            "message": "저장된 세션이 없습니다"
+        }
+
+    return {
+        "has_session": True,
+        "session_id": str(last_session.get("session_id")),
+        "scenario_id": last_session.get("scenario_id"),
+        "current_stage": last_session.get("current_stage"),
+        "turn_count": last_session.get("turn_count", 0),
+        "created_at": (
+            last_session.get("created_at").isoformat()
+            if last_session.get("created_at")
+            else None
+        ),
+        "updated_at": (
+            last_session.get("updated_at").isoformat()
+            if last_session.get("updated_at")
+            else None
+        ),
+        "conversation_summary": last_session.get("conversation_summary")  # 장기기억 요약
+    }
+
 
 @router.get("/{session_id}", response_model=SessionInfoResponse)
 async def get_session(
@@ -99,50 +149,3 @@ async def delete_session(
         }
 
     raise HTTPException(status_code=404, detail="Session not found")
-
-
-@router.get("/last", response_model=Dict)
-async def get_user_last_session(
-    scenario_id: Optional[str] = None,
-    user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
-):
-    """
-    현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용)
-
-    Args:
-        scenario_id: 특정 시나리오의 마지막 세션만 조회 (선택)
-
-    Returns:
-        마지막 세션 정보 (세션 ID, 턴 수, 대화 요약 등)
-        또는 세션이 없으면 has_session: false
-    """
-    user_id = user.get("user_id")
-
-    # 데이터베이스에서 마지막 세션 조회
-    last_session = db.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
-
-    if not last_session:
-        return {
-            "has_session": False,
-            "message": "저장된 세션이 없습니다"
-        }
-
-    return {
-        "has_session": True,
-        "session_id": str(last_session.get("session_id")),
-        "scenario_id": last_session.get("scenario_id"),
-        "current_stage": last_session.get("current_stage"),
-        "turn_count": last_session.get("turn_count", 0),
-        "created_at": (
-            last_session.get("created_at").isoformat()
-            if last_session.get("created_at")
-            else None
-        ),
-        "updated_at": (
-            last_session.get("updated_at").isoformat()
-            if last_session.get("updated_at")
-            else None
-        ),
-        "conversation_summary": last_session.get("conversation_summary")  # 장기기억 요약
-    }
