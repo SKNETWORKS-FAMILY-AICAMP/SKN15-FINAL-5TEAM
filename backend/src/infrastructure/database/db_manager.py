@@ -74,9 +74,12 @@ class DatabaseManager:
             if not conn.autocommit:
                 conn.autocommit = True
 
-            # search_path 설정 (public 스키마 사용)
+            # search_path 설정 (새로운 도메인 기반 스키마 사용)
             with conn.cursor() as cur:
-                cur.execute("SET search_path TO public")
+                cur.execute("""
+                    SET search_path TO auth, conversation, knowledge,
+                                      content, progression, observability, ml, public
+                """)
 
             yield conn
 
@@ -125,7 +128,7 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     print(f"🟡 INSERT 쿼리 실행 중...")
                     cur.execute("""
-                        INSERT INTO statedb.users
+                        INSERT INTO auth.users
                         (username, password_hash, email, provider, display_name)
                         VALUES (%s, %s, %s, %s, %s)
                         RETURNING user_id
@@ -146,7 +149,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.users WHERE username = %s
+                        SELECT * FROM auth.users WHERE username = %s
                     """, (username,))
                     result = cur.fetchone()
                     return dict(result) if result else None
@@ -160,7 +163,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.users WHERE email = %s
+                        SELECT * FROM auth.users WHERE email = %s
                     """, (email,))
                     result = cur.fetchone()
                     return dict(result) if result else None
@@ -174,7 +177,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE statedb.users
+                        UPDATE auth.users
                         SET last_login = NOW(), updated_at = NOW()
                         WHERE user_id = %s
                     """, (user_id,))
@@ -235,7 +238,7 @@ class DatabaseManager:
         """
         try:
             query = """
-                INSERT INTO statedb.password_reset_tokens (user_id, token, expires_at)
+                INSERT INTO auth.password_reset_tokens (user_id, token, expires_at)
                 VALUES (%s, %s, %s)
                 RETURNING token_id;
             """
@@ -260,7 +263,7 @@ class DatabaseManager:
         try:
             query = """
                 SELECT token_id, user_id, token, expires_at, used, created_at
-                FROM statedb.password_reset_tokens
+                FROM auth.password_reset_tokens
                 WHERE token = %s AND used = false AND expires_at > NOW();
             """
             result = self.execute_query(query, (token,), fetch=True)
@@ -290,7 +293,7 @@ class DatabaseManager:
         """
         try:
             query = """
-                UPDATE statedb.password_reset_tokens
+                UPDATE auth.password_reset_tokens
                 SET used = true
                 WHERE token = %s;
             """
@@ -313,7 +316,7 @@ class DatabaseManager:
         """
         try:
             query = """
-                UPDATE statedb.users
+                UPDATE auth.users
                 SET password_hash = %s, updated_at = NOW()
                 WHERE user_id = %s;
             """
@@ -356,7 +359,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.sessions (
+                        INSERT INTO conversation.sessions (
                             session_id, scenario_id, user_id, user_name, current_stage,
                             turn_count, stage_turn, final_ending, is_active,
                             conversation_summary, summary_turn_count, updated_at
@@ -389,7 +392,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.sessions WHERE session_id = %s
+                        SELECT * FROM conversation.sessions WHERE session_id = %s
                     """, (session_id,))
                     result = cur.fetchone()
                     return dict(result) if result else None
@@ -415,7 +418,7 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     set_clause = ", ".join([f"{k} = %s" for k in filtered_updates.keys()])
                     query = f"""
-                        UPDATE statedb.sessions
+                        UPDATE conversation.sessions
                         SET {set_clause}, updated_at = NOW()
                         WHERE session_id = %s
                     """
@@ -449,7 +452,7 @@ class DatabaseManager:
                     if scenario_id:
                         # 특정 시나리오의 마지막 세션
                         cur.execute("""
-                            SELECT * FROM statedb.sessions
+                            SELECT * FROM conversation.sessions
                             WHERE user_id = %s AND scenario_id = %s
                             ORDER BY updated_at DESC
                             LIMIT 1
@@ -457,7 +460,7 @@ class DatabaseManager:
                     else:
                         # 모든 시나리오 중 마지막 세션
                         cur.execute("""
-                            SELECT * FROM statedb.sessions
+                            SELECT * FROM conversation.sessions
                             WHERE user_id = %s
                             ORDER BY updated_at DESC
                             LIMIT 1
@@ -484,7 +487,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.user_inputs
+                        INSERT INTO conversation.user_inputs
                         (session_id, turn_number, user_input, timestamp)
                         VALUES (%s, %s, %s, NOW())
                     """, (session_id, turn_number, user_input))
@@ -503,7 +506,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.user_inputs
+                        SELECT * FROM conversation.user_inputs
                         WHERE session_id = %s
                         ORDER BY turn_number DESC
                         LIMIT %s
@@ -541,7 +544,7 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     for idx, dialogue in enumerate(dialogues):
                         cur.execute("""
-                            INSERT INTO statedb.dialogues
+                            INSERT INTO conversation.dialogues
                             (session_id, turn_number, speaker, content,
                              emotion, emotion_intensity, order_index, timestamp)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
@@ -572,13 +575,13 @@ class DatabaseManager:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     if turn_number is not None:
                         cur.execute("""
-                            SELECT * FROM statedb.dialogues
+                            SELECT * FROM conversation.dialogues
                             WHERE session_id = %s AND turn_number = %s
                             ORDER BY order_index ASC
                         """, (session_id, turn_number))
                     else:
                         cur.execute("""
-                            SELECT * FROM statedb.dialogues
+                            SELECT * FROM conversation.dialogues
                             WHERE session_id = %s
                             ORDER BY turn_number DESC, order_index ASC
                             LIMIT %s
@@ -603,7 +606,7 @@ class DatabaseManager:
                                 turn_number, speaker, content,
                                 emotion, emotion_intensity, order_index,
                                 timestamp
-                            FROM statedb.dialogues
+                            FROM conversation.dialogues
                             WHERE session_id = %s
                             ORDER BY turn_number ASC, order_index ASC
                             LIMIT %s
@@ -614,7 +617,7 @@ class DatabaseManager:
                                 turn_number, speaker, content,
                                 emotion, emotion_intensity, order_index,
                                 timestamp
-                            FROM statedb.dialogues
+                            FROM conversation.dialogues
                             WHERE session_id = %s
                             ORDER BY turn_number ASC, order_index ASC
                         """, (session_id,))
@@ -640,7 +643,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.affinity_records
+                        INSERT INTO progression.affinity_records
                         (session_id, turn_number, character_name,
                          affinity_score, change_amount, timestamp)
                         VALUES (%s, %s, %s, %s, %s, NOW())
@@ -662,7 +665,7 @@ class DatabaseManager:
                     cur.execute("""
                         SELECT DISTINCT ON (character_name)
                             character_name, affinity_score
-                        FROM statedb.affinity_records
+                        FROM progression.affinity_records
                         WHERE session_id = %s
                         ORDER BY character_name, turn_number DESC
                     """, (session_id,))
@@ -686,7 +689,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.session_snapshots
+                        INSERT INTO conversation.session_snapshots
                         (session_id, turn_number, state_json, created_at)
                         VALUES (%s, %s, %s, NOW())
                         ON CONFLICT (session_id, turn_number) DO UPDATE
@@ -708,7 +711,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.session_snapshots
+                        SELECT * FROM conversation.session_snapshots
                         WHERE session_id = %s
                         ORDER BY turn_number DESC
                         LIMIT 1
@@ -736,7 +739,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.mission_records
+                        INSERT INTO progression.mission_records
                         (session_id, mission_type, target_character, attempt_count, success, completed_at)
                         VALUES (%s, %s, %s, %s, %s, NOW())
                     """, (session_id, mission_type, target_character, attempt_count, success))
@@ -760,7 +763,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.stage_progression
+                        INSERT INTO progression.stage_progression
                         (session_id, stage_id, stage_order, entered_at)
                         VALUES (%s, %s, %s, NOW())
                     """, (session_id, stage_id, stage_order))
@@ -775,7 +778,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE statedb.stage_progression
+                        UPDATE progression.stage_progression
                         SET exited_at = NOW()
                         WHERE session_id = %s AND stage_id = %s
                           AND exited_at IS NULL
@@ -801,7 +804,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.game_events
+                        INSERT INTO progression.game_events
                         (session_id, turn_number, event_type, event_data, timestamp)
                         VALUES (%s, %s, %s, %s, NOW())
                     """, (session_id, turn_number, event_type, Json(event_data)))
@@ -829,7 +832,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO logdb.logs
+                        INSERT INTO observability.logs
                         (session_id, log_level, stage_name, agent_name,
                          message, context_data, duration_ms, timestamp)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
@@ -856,7 +859,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO logdb.error_logs
+                        INSERT INTO observability.error_logs
                         (session_id, error_type, error_message,
                          stack_trace, context_data, timestamp)
                         VALUES (%s, %s, %s, %s, %s, NOW())
@@ -881,7 +884,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO logdb.performance_metrics
+                        INSERT INTO observability.performance_metrics
                         (metric_name, metric_value, metric_unit, tags, timestamp)
                         VALUES (%s, %s, %s, %s, NOW())
                     """, (
@@ -930,7 +933,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.user_memories (
+                        INSERT INTO knowledge.user_memories (
                             user_id, memory_key, memory_value, memory_type,
                             context, importance, source_session_id, tags, confidence
                         ) VALUES (
@@ -940,8 +943,8 @@ class DatabaseManager:
                             memory_value = EXCLUDED.memory_value,
                             memory_type = EXCLUDED.memory_type,
                             context = EXCLUDED.context,
-                            importance = GREATEST(statedb.user_memories.importance, EXCLUDED.importance),
-                            source_session_id = COALESCE(EXCLUDED.source_session_id, statedb.user_memories.source_session_id),
+                            importance = GREATEST(knowledge.user_memories.importance, EXCLUDED.importance),
+                            source_session_id = COALESCE(EXCLUDED.source_session_id, knowledge.user_memories.source_session_id),
                             tags = EXCLUDED.tags,
                             confidence = EXCLUDED.confidence,
                             updated_at = CURRENT_TIMESTAMP
@@ -987,7 +990,7 @@ class DatabaseManager:
                             id, memory_key, memory_value, memory_type,
                             context, importance, access_count, last_accessed_at,
                             source_session_id, tags, created_at, updated_at
-                        FROM statedb.user_memories
+                        FROM knowledge.user_memories
                         WHERE user_id = %s
                           AND importance >= %s
                     """
@@ -1025,7 +1028,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE statedb.user_memories
+                        UPDATE knowledge.user_memories
                         SET
                             importance = LEAST(1.0, importance + %s),
                             access_count = access_count + 1,
@@ -1062,7 +1065,7 @@ class DatabaseManager:
                                     ))
                                     FROM (
                                         SELECT memory_key, memory_value, importance, context
-                                        FROM statedb.user_memories
+                                        FROM knowledge.user_memories
                                         WHERE user_id = %s
                                           AND memory_type = 'relationship'
                                           AND is_active = TRUE
@@ -1077,7 +1080,7 @@ class DatabaseManager:
                                     ))
                                     FROM (
                                         SELECT memory_key, memory_value
-                                        FROM statedb.user_memories
+                                        FROM knowledge.user_memories
                                         WHERE user_id = %s
                                           AND memory_type = 'preference'
                                           AND is_active = TRUE
@@ -1092,7 +1095,7 @@ class DatabaseManager:
                                     ))
                                     FROM (
                                         SELECT memory_value, context
-                                        FROM statedb.user_memories
+                                        FROM knowledge.user_memories
                                         WHERE user_id = %s
                                           AND memory_type = 'event'
                                           AND is_active = TRUE
@@ -1104,7 +1107,7 @@ class DatabaseManager:
                                     SELECT jsonb_agg(memory_value)
                                     FROM (
                                         SELECT memory_value
-                                        FROM statedb.user_memories
+                                        FROM knowledge.user_memories
                                         WHERE user_id = %s
                                           AND memory_type = 'fact'
                                           AND is_active = TRUE
@@ -1139,7 +1142,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE statedb.user_memories
+                        UPDATE knowledge.user_memories
                         SET is_active = FALSE
                         WHERE user_id = %s
                           AND is_active = TRUE
@@ -1175,7 +1178,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE statedb.user_memories
+                        UPDATE knowledge.user_memories
                         SET
                             embedding = %s,
                             related_entity_ids = %s,
@@ -1209,7 +1212,7 @@ class DatabaseManager:
                         SELECT
                             id, user_id, memory_key, memory_value, memory_type,
                             context, importance, source_session_id, tags, created_at
-                        FROM statedb.user_memories
+                        FROM knowledge.user_memories
                         WHERE embedding IS NULL
                     """
 
@@ -1253,7 +1256,7 @@ class DatabaseManager:
                             id, memory_key, memory_value, memory_type,
                             context, importance, tags,
                             embedding <=> %s::vector AS distance
-                        FROM statedb.user_memories
+                        FROM knowledge.user_memories
                         WHERE user_id = %s
                           AND embedding IS NOT NULL
                           AND is_active = TRUE
@@ -1314,7 +1317,7 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     # Upsert entity (insert or update if exists)
                     cur.execute("""
-                        INSERT INTO statedb.entities (
+                        INSERT INTO knowledge.entities (
                             entity_type, entity_name, canonical_name, description,
                             properties, embedding, importance_score, mention_count
                         )
@@ -1360,7 +1363,7 @@ class DatabaseManager:
                             entity_id, entity_type, entity_name, canonical_name,
                             description, properties, importance_score, mention_count,
                             community_id, created_at, last_updated_at
-                        FROM statedb.entities
+                        FROM knowledge.entities
                         WHERE entity_type = %s AND canonical_name = %s
                     """, (entity_type, canonical_name))
 
@@ -1401,7 +1404,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.entity_mentions (
+                        INSERT INTO knowledge.entity_mentions (
                             entity_id, source_type, source_id, session_id,
                             turn_number, mention_context, extraction_method, confidence
                         )
@@ -1436,7 +1439,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.entity_relationships (
+                        INSERT INTO knowledge.entity_relationships (
                             source_entity_id, target_entity_id, relationship_type,
                             strength, confidence, properties, evidence_count, provenance
                         )
@@ -1482,8 +1485,8 @@ class DatabaseManager:
                             e.entity_id, e.entity_type, e.entity_name, e.canonical_name,
                             e.description, e.importance_score,
                             r.relationship_type, r.strength, r.confidence
-                        FROM statedb.entity_relationships r
-                        JOIN statedb.entities e ON (
+                        FROM knowledge.entity_relationships r
+                        JOIN knowledge.entities e ON (
                             CASE
                                 WHEN r.source_entity_id = %s THEN e.entity_id = r.target_entity_id
                                 ELSE e.entity_id = r.source_entity_id
@@ -1539,7 +1542,7 @@ class DatabaseManager:
                             entity_id, entity_type, entity_name, canonical_name,
                             description, importance_score,
                             embedding <=> %s::vector AS distance
-                        FROM statedb.entities
+                        FROM knowledge.entities
                         WHERE embedding IS NOT NULL
                     """
 
@@ -1583,7 +1586,7 @@ class DatabaseManager:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
                         SELECT bubble_count, total_purchased, total_consumed, last_updated
-                        FROM statedb.user_credits
+                        FROM auth.user_credits
                         WHERE user_id = %s
                     """, (user_id,))
                     result = cur.fetchone()
@@ -1599,14 +1602,14 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     cur.execute("""
                         WITH updated AS (
-                          UPDATE statedb.user_credits
+                          UPDATE auth.user_credits
                           SET bubble_count = bubble_count - %s,
                               total_consumed = total_consumed + %s,
                               last_updated = NOW()
                           WHERE user_id = %s AND bubble_count >= %s
                           RETURNING user_id, bubble_count
                         )
-                        INSERT INTO statedb.credit_transactions
+                        INSERT INTO auth.credit_transactions
                           (user_id, amount, transaction_type, balance_after, description)
                         SELECT user_id, -%s, 'consume', bubble_count, %s
                         FROM updated
@@ -1625,14 +1628,14 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     cur.execute("""
                         WITH updated AS (
-                          UPDATE statedb.user_credits
+                          UPDATE auth.user_credits
                           SET bubble_count = bubble_count + %s,
                               total_purchased = total_purchased + %s,
                               last_updated = NOW()
                           WHERE user_id = %s
                           RETURNING user_id, bubble_count
                         )
-                        INSERT INTO statedb.credit_transactions
+                        INSERT INTO auth.credit_transactions
                           (user_id, amount, transaction_type, balance_after, description)
                         SELECT user_id, %s, %s, bubble_count, %s
                         FROM updated
@@ -1673,14 +1676,14 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     # 1. user_progression 초기화 (novice, level 1, 0 XP)
                     cur.execute("""
-                        INSERT INTO statedb.user_progression (user_id, rank_code, experience_points, level)
+                        INSERT INTO progression.user_progression (user_id, rank_code, experience_points, level)
                         VALUES (%s, 'novice', 0, 1)
                         ON CONFLICT (user_id) DO NOTHING
                     """, (user_id,))
 
                     # 2. user_equipment 초기화 (good, worn, waiting 상태)
                     cur.execute("""
-                        INSERT INTO statedb.user_equipment (user_id, sword_status, uniform_status, crow_status)
+                        INSERT INTO progression.user_equipment (user_id, sword_status, uniform_status, crow_status)
                         VALUES (%s, 'good', 'worn', 'waiting')
                         ON CONFLICT (user_id) DO NOTHING
                     """, (user_id,))
@@ -1726,7 +1729,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.v_user_progression_summary
+                        SELECT * FROM progression.v_user_progression_summary
                         WHERE user_id = %s
                     """, (user_id,))
                     result = cur.fetchone()
@@ -1755,7 +1758,7 @@ class DatabaseManager:
         query = """
         SELECT sword_status, uniform_status, crow_status,
                sword_type, uniform_color, crow_name
-        FROM statedb.user_equipment
+        FROM progression.user_equipment
         WHERE user_id = %s
         """
         results = self.execute_query(query, (user_id,))
@@ -1788,11 +1791,11 @@ class DatabaseManager:
         query = """
         WITH current_state AS (
             SELECT user_id, experience_points, level
-            FROM statedb.user_progression
+            FROM progression.user_progression
             WHERE user_id = %s
         ),
         updated AS (
-            UPDATE statedb.user_progression
+            UPDATE progression.user_progression
             SET experience_points = experience_points + %s,
                 level = FLOOR(SQRT(GREATEST(experience_points + %s, 0)) / 10) + 1,
                 updated_at = NOW()
@@ -1800,7 +1803,7 @@ class DatabaseManager:
             RETURNING user_id, experience_points, level
         ),
         transaction_record AS (
-            INSERT INTO statedb.xp_transactions
+            INSERT INTO progression.xp_transactions
                 (user_id, xp_amount, xp_type, xp_balance_after, level_before, level_after, did_level_up, description, metadata)
             SELECT
                 u.user_id,
@@ -1840,7 +1843,7 @@ class DatabaseManager:
             raise ValueError(f"Invalid stat name: {stat_name}. Must be one of {valid_stats}")
 
         query = f"""
-        UPDATE statedb.user_progression
+        UPDATE progression.user_progression
         SET {stat_name} = {stat_name} + %s,
             updated_at = NOW()
         WHERE user_id = %s
@@ -1872,7 +1875,7 @@ class DatabaseManager:
         values = list(updates.values()) + [user_id]
 
         query = f"""
-        UPDATE statedb.user_equipment
+        UPDATE progression.user_equipment
         SET {set_clause}, updated_at = NOW()
         WHERE user_id = %s
         """
@@ -1893,7 +1896,7 @@ class DatabaseManager:
         query = """
         SELECT transaction_id, user_id, xp_amount, xp_type, xp_balance_after,
                level_before, level_after, did_level_up, description, metadata, created_at
-        FROM statedb.xp_transactions
+        FROM progression.xp_transactions
         WHERE user_id = %s
         ORDER BY created_at DESC
         LIMIT %s OFFSET %s
@@ -1922,9 +1925,9 @@ class DatabaseManager:
             up.level,
             up.total_messages,
             up.scenarios_completed
-        FROM statedb.user_progression up
-        LEFT JOIN statedb.users u ON up.user_id = u.user_id
-        LEFT JOIN statedb.rank_definitions rd ON
+        FROM progression.user_progression up
+        LEFT JOIN auth.users u ON up.user_id = u.user_id
+        LEFT JOIN content.rank_definitions rd ON
             up.experience_points >= rd.min_xp AND
             up.level BETWEEN rd.level_range_start AND rd.level_range_end
         ORDER BY up.experience_points DESC, up.level DESC
@@ -1949,10 +1952,10 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     if include_inactive:
-                        cur.execute("SELECT * FROM statedb.v_scenario_cards ORDER BY display_order")
+                        cur.execute("SELECT * FROM content.v_scenario_cards ORDER BY display_order")
                     else:
                         cur.execute("""
-                            SELECT * FROM statedb.v_scenario_cards
+                            SELECT * FROM content.v_scenario_cards
                             WHERE is_active = true
                             ORDER BY display_order
                         """)
@@ -1975,7 +1978,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.v_scenario_cards
+                        SELECT * FROM content.v_scenario_cards
                         WHERE scenario_id = %s
                     """, (scenario_id,))
                     result = cur.fetchone()
@@ -1997,7 +2000,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.scenario_statistics
+                        SELECT * FROM content.scenario_statistics
                         WHERE scenario_id = %s
                     """, (scenario_id,))
                     result = cur.fetchone()
@@ -2023,7 +2026,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.scenario_views (scenario_id, user_id, ip_address, user_agent)
+                        INSERT INTO content.scenario_views (scenario_id, user_id, ip_address, user_agent)
                         VALUES (%s, %s, %s, %s)
                     """, (scenario_id, user_id, ip_address, user_agent))
                     # Trigger will auto-increment scenario_statistics.total_views
@@ -2046,7 +2049,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.user_scenario_progress
+                        SELECT * FROM progression.user_scenario_progress
                         WHERE user_id = %s AND scenario_id = %s
                     """, (user_id, scenario_id))
                     result = cur.fetchone()
@@ -2068,7 +2071,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.user_scenario_progress
+                        SELECT * FROM progression.user_scenario_progress
                         WHERE user_id = %s
                         ORDER BY last_played_at DESC NULLS LAST
                     """, (user_id,))
@@ -2093,7 +2096,7 @@ class DatabaseManager:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     # Check if progress record exists
                     cur.execute("""
-                        SELECT is_liked FROM statedb.user_scenario_progress
+                        SELECT is_liked FROM progression.user_scenario_progress
                         WHERE user_id = %s AND scenario_id = %s
                     """, (user_id, scenario_id))
                     result = cur.fetchone()
@@ -2102,7 +2105,7 @@ class DatabaseManager:
                         # Toggle existing like status
                         new_liked_status = not result['is_liked']
                         cur.execute("""
-                            UPDATE statedb.user_scenario_progress
+                            UPDATE progression.user_scenario_progress
                             SET is_liked = %s,
                                 liked_at = CASE WHEN %s THEN NOW() ELSE NULL END,
                                 updated_at = NOW()
@@ -2111,7 +2114,7 @@ class DatabaseManager:
                     else:
                         # Create new progress record with like
                         cur.execute("""
-                            INSERT INTO statedb.user_scenario_progress
+                            INSERT INTO progression.user_scenario_progress
                             (user_id, scenario_id, is_liked, liked_at)
                             VALUES (%s, %s, true, NOW())
                         """, (user_id, scenario_id))
@@ -2121,7 +2124,7 @@ class DatabaseManager:
 
                     # Get updated total likes
                     cur.execute("""
-                        SELECT total_likes FROM statedb.scenario_statistics
+                        SELECT total_likes FROM content.scenario_statistics
                         WHERE scenario_id = %s
                     """, (scenario_id,))
                     stats = cur.fetchone()
@@ -2177,7 +2180,7 @@ class DatabaseManager:
                     values.extend([user_id, scenario_id])
 
                     query = f"""
-                        INSERT INTO statedb.user_scenario_progress (user_id, scenario_id, {', '.join([f.split('=')[0].strip() for f in update_fields])})
+                        INSERT INTO progression.user_scenario_progress (user_id, scenario_id, {', '.join([f.split('=')[0].strip() for f in update_fields])})
                         VALUES (%s, %s, {', '.join(['%s'] * len(update_fields))})
                         ON CONFLICT (user_id, scenario_id)
                         DO UPDATE SET {', '.join(update_fields)}
@@ -2223,9 +2226,9 @@ class DatabaseManager:
                             COALESCE(usp.has_completed, false) as has_completed,
                             COALESCE(usp.completion_percentage, 0) as completion_percentage,
                             usp.last_played_at
-                        FROM statedb.scenarios s
-                        LEFT JOIN statedb.scenario_statistics ss ON s.scenario_id = ss.scenario_id
-                        LEFT JOIN statedb.user_scenario_progress usp ON s.scenario_id = usp.scenario_id AND usp.user_id = %s
+                        FROM content.scenarios s
+                        LEFT JOIN content.scenario_statistics ss ON s.scenario_id = ss.scenario_id
+                        LEFT JOIN progression.user_scenario_progress usp ON s.scenario_id = usp.scenario_id AND usp.user_id = %s
                         WHERE s.is_active = true
                         ORDER BY s.display_order
                     """, (user_id,))
@@ -2275,7 +2278,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        INSERT INTO statedb.user_memories
+                        INSERT INTO knowledge.user_memories
                         (user_id, memory_key, memory_value, memory_type, importance,
                          tags, context, source_session_id, confidence, embedding, expires_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -2341,7 +2344,7 @@ class DatabaseManager:
                         conditions.append("(expires_at IS NULL OR expires_at > NOW())")
 
                     query = f"""
-                        SELECT * FROM statedb.user_memories
+                        SELECT * FROM knowledge.user_memories
                         WHERE {' AND '.join(conditions)}
                         ORDER BY importance DESC, last_accessed_at DESC NULLS LAST
                         LIMIT %s
@@ -2369,7 +2372,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
-                        SELECT * FROM statedb.user_memories
+                        SELECT * FROM knowledge.user_memories
                         WHERE user_id = %s AND memory_key = %s AND is_active = true
                     """, (user_id, memory_key))
                     result = cur.fetchone()
@@ -2377,7 +2380,7 @@ class DatabaseManager:
                     if result:
                         # Update access count
                         cur.execute("""
-                            UPDATE statedb.user_memories
+                            UPDATE knowledge.user_memories
                             SET access_count = access_count + 1,
                                 last_accessed_at = NOW()
                             WHERE user_id = %s AND memory_key = %s
@@ -2414,7 +2417,7 @@ class DatabaseManager:
                         SELECT
                             *,
                             embedding <=> %s::vector AS distance
-                        FROM statedb.user_memories
+                        FROM knowledge.user_memories
                         WHERE user_id = %s
                           AND embedding IS NOT NULL
                           AND is_active = true
@@ -2445,13 +2448,13 @@ class DatabaseManager:
                 with conn.cursor() as cur:
                     if soft_delete:
                         cur.execute("""
-                            UPDATE statedb.user_memories
+                            UPDATE knowledge.user_memories
                             SET is_active = false, updated_at = NOW()
                             WHERE user_id = %s AND memory_key = %s
                         """, (user_id, memory_key))
                     else:
                         cur.execute("""
-                            DELETE FROM statedb.user_memories
+                            DELETE FROM knowledge.user_memories
                             WHERE user_id = %s AND memory_key = %s
                         """, (user_id, memory_key))
             return True
@@ -2474,7 +2477,7 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE statedb.user_memories
+                        UPDATE knowledge.user_memories
                         SET related_session_ids = array_append(
                             COALESCE(related_session_ids, ARRAY[]::uuid[]),
                             %s::uuid
@@ -2486,6 +2489,219 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to add related session to memory {memory_key} for user {user_id}: {e}")
             return False
+    # ========================================
+    # Content: Characters
+    # ========================================
+
+    def get_character(self, character_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get complete character data from database
+
+        Args:
+            character_id: Character ID
+
+        Returns:
+            Character dict with all related data (formatted like JSON structure)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # Main character data
+                    cur.execute("""
+                        SELECT character_id, name, description, personality, breathing_style,
+                               default_affinity, appearance_hair, appearance_eyes,
+                               appearance_distinctive, appearance_impression
+                        FROM content.characters
+                        WHERE character_id = %s
+                    """, (character_id,))
+
+                    char = cur.fetchone()
+                    if not char:
+                        return None
+
+                    result = dict(char)
+                    result['id'] = character_id
+
+                    # Appearance dict
+                    result['appearance'] = {
+                        'hair': char['appearance_hair'],
+                        'eyes': char['appearance_eyes'],
+                        'distinctive': char['appearance_distinctive'],
+                        'impression': char['appearance_impression']
+                    }
+
+                    # Core values
+                    cur.execute("""
+                        SELECT value_text
+                        FROM content.character_core_values
+                        WHERE character_id = %s
+                        ORDER BY display_order
+                    """, (character_id,))
+                    result['core_values'] = [row['value_text'] for row in cur.fetchall()]
+
+                    # Emotional triggers
+                    cur.execute("""
+                        SELECT emotion_type, trigger_text
+                        FROM content.character_emotional_triggers
+                        WHERE character_id = %s
+                        ORDER BY emotion_type, display_order
+                    """, (character_id,))
+
+                    triggers = {}
+                    for row in cur.fetchall():
+                        emotion = row['emotion_type']
+                        if emotion not in triggers:
+                            triggers[emotion] = []
+                        triggers[emotion].append(row['trigger_text'])
+                    result['emotional_triggers'] = triggers
+
+                    # Tone settings
+                    cur.execute("""
+                        SELECT affinity_level, level_range_min, level_range_max,
+                               style, calling, suffix, samples
+                        FROM content.character_tone
+                        WHERE character_id = %s
+                        ORDER BY level_range_min
+                    """, (character_id,))
+
+                    tone = {}
+                    for row in cur.fetchall():
+                        tone[row['affinity_level']] = {
+                            'level_range': [row['level_range_min'], row['level_range_max']],
+                            'style': row['style'],
+                            'calling': row['calling'],
+                            'suffix': row['suffix'],
+                            'samples': row['samples'] if isinstance(row['samples'], list) else []
+                        }
+                    result['tone'] = tone
+
+                    # Aliases
+                    cur.execute("""
+                        SELECT alias
+                        FROM content.character_aliases
+                        WHERE character_id = %s
+                    """, (character_id,))
+                    result['aliases'] = [row['alias'] for row in cur.fetchall()]
+
+                    # Quotes
+                    cur.execute("""
+                        SELECT quote_text
+                        FROM content.character_quotes
+                        WHERE character_id = %s
+                        ORDER BY display_order
+                    """, (character_id,))
+                    result['signature_quotes'] = [row['quote_text'] for row in cur.fetchall()]
+
+                    # Intent rules
+                    cur.execute("""
+                        SELECT rule_category, rule_type, rule_value
+                        FROM content.character_intent_rules
+                        WHERE character_id = %s
+                    """, (character_id,))
+
+                    intent_rules = {}
+                    for row in cur.fetchall():
+                        category = row['rule_category']
+                        if category not in intent_rules:
+                            intent_rules[category] = {}
+                        # rule_value is already parsed as dict/list from JSONB
+                        intent_rules[category][row['rule_type']] = row['rule_value']
+                    result['intent_rules'] = intent_rules
+
+                    return result
+
+        except Exception as e:
+            logger.error(f"Failed to get character {character_id}: {e}")
+            return None
+
+    def list_characters(self) -> List[str]:
+        """
+        Get list of all character IDs
+
+        Returns:
+            List of character IDs
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT character_id FROM content.characters ORDER BY character_id")
+                    return [row[0] for row in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to list characters: {e}")
+            return []
+
+    # ========================================
+    # Content: Scenario Beats
+    # ========================================
+
+    def get_scenario_beats(self, scenario_id: str) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get all scenario beats and goals for a scenario
+
+        Args:
+            scenario_id: Scenario ID
+
+        Returns:
+            Dict mapping beat_name to list of goals
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT sb.beat_id, sb.beat_name, bg.goal_text,
+                               bg.speaker_hints, bg.fx, bg.display_order
+                        FROM content.scenario_beats sb
+                        LEFT JOIN content.beat_goals bg ON sb.beat_id = bg.beat_id
+                        WHERE sb.scenario_id = %s
+                        ORDER BY sb.beat_name, bg.display_order
+                    """, (scenario_id,))
+
+                    beats = {}
+                    for row in cur.fetchall():
+                        beat_name = row['beat_name']
+                        if beat_name not in beats:
+                            beats[beat_name] = []
+
+                        if row['goal_text']:  # Only add if goal exists
+                            goal = {
+                                'goal': row['goal_text'],
+                                'speaker_hint': row['speaker_hints'] if isinstance(row['speaker_hints'], list) else [],
+                            }
+                            if row['fx']:
+                                goal['fx'] = row['fx']
+                            beats[beat_name].append(goal)
+
+                    return beats
+
+        except Exception as e:
+            logger.error(f"Failed to get scenario beats for {scenario_id}: {e}")
+            return {}
+
+    def get_image_mappings(self, scenario_id: str) -> Dict[str, str]:
+        """
+        Get image mappings for a scenario
+
+        Args:
+            scenario_id: Scenario ID
+
+        Returns:
+            Dict mapping image_key to image_url
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT image_key, image_url, metadata
+                        FROM content.image_mappings
+                        WHERE scenario_id = %s
+                        ORDER BY mapping_category, image_key
+                    """, (scenario_id,))
+
+                    return {row['image_key']: row['image_url'] for row in cur.fetchall()}
+
+        except Exception as e:
+            logger.error(f"Failed to get image mappings for {scenario_id}: {e}")
+            return {}
 
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼

@@ -201,7 +201,7 @@ class ApiClient {
    */
   async getSession(sessionId: string): Promise<SessionInfo> {
     try {
-      const response = await authenticatedApiClient.get(`/api/session/${sessionId}`)
+      const response = await authenticatedApiClient.get(`/api/sessions/${sessionId}`)
       return response.data
     } catch (error) {
       console.error('Error getting session:', error)
@@ -214,7 +214,7 @@ class ApiClient {
    */
   async deleteSession(sessionId: string): Promise<void> {
     try {
-      await authenticatedApiClient.delete(`/api/session/${sessionId}`)
+      await authenticatedApiClient.delete(`/api/sessions/${sessionId}`)
     } catch (error) {
       console.error('Error deleting session:', error)
       throw error
@@ -227,7 +227,8 @@ class ApiClient {
   async listScenarios(): Promise<ScenarioInfo[]> {
     try {
       const response = await authenticatedApiClient.get('/api/scenarios')
-      return response.data.scenarios
+      // API returns array directly, not wrapped in { scenarios: [...] }
+      return response.data
     } catch (error) {
       console.error('Error listing scenarios:', error)
       throw error
@@ -253,7 +254,7 @@ class ApiClient {
   async getUserLastSession(scenarioId?: string): Promise<LastSessionInfo | null> {
     try {
       const params = scenarioId ? { scenario_id: scenarioId } : {}
-      const response = await authenticatedApiClient.get('/api/session/last', { params })
+      const response = await authenticatedApiClient.get('/api/sessions/last', { params })
 
       if (response.data.has_session) {
         return {
@@ -472,6 +473,9 @@ class ApiClient {
   async getScenarios(): Promise<ScenarioCard[]> {
     try {
       const response = await axios.get(`${this.baseUrl}/api/scenarios`)
+      console.log('[getScenarios] Response data:', response.data)
+      console.log('[getScenarios] Is array:', Array.isArray(response.data))
+      console.log('[getScenarios] Length:', response.data?.length)
       return response.data
     } catch (error) {
       console.error('Error getting scenarios:', error)
@@ -596,6 +600,134 @@ export async function sendChatMessage(
     user_input: userInput,
     user_name: userName,
   })
+}
+
+/**
+ * SSE 스트리밍 채팅 메시지 전송
+ * @returns EventSource for streaming response
+ */
+export function sendChatMessageStream(
+  scenarioId: string,
+  userInput: string,
+  sessionId: string | undefined,
+  userName: string | undefined,
+  callbacks: {
+    onMetadata?: (metadata: Omit<ChatResponse, 'dialogues'>) => void
+    onDialogue?: (dialogue: ChatMessage, index: number, total: number) => void
+    onComplete?: () => void
+    onError?: (error: string) => void
+  }
+): { eventSource: EventSource; abort: () => void } {
+  const token = localStorage.getItem('access_token')
+
+  if (!token) {
+    callbacks.onError?.('인증 토큰이 없습니다')
+    throw new Error('No authentication token')
+  }
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+  // POST 요청을 위한 fetch-based SSE 구현
+  const abortController = new AbortController()
+
+  const request = {
+    session_id: sessionId,
+    scenario_id: scenarioId,
+    user_input: userInput,
+    user_name: userName,
+  }
+
+  // SSE를 위한 fetch 스트리밍
+  fetch(`${API_BASE_URL}/api/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(request),
+    signal: abortController.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      let buffer = ''
+      let currentEvent = 'message'
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) {
+          console.log('📡 [SSE] Stream completed')
+          break
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.substring(6).trim()
+            console.log('📡 [SSE] Event type:', currentEvent)
+            continue
+          }
+
+          if (line.startsWith('data:')) {
+            const data = line.substring(5).trim()
+
+            if (!data) continue
+
+            try {
+              const parsed = JSON.parse(data)
+              console.log('📡 [SSE] Parsed data:', currentEvent, parsed)
+
+              if (currentEvent === 'metadata') {
+                callbacks.onMetadata?.(parsed)
+              } else if (currentEvent === 'dialogue') {
+                callbacks.onDialogue?.(
+                  parsed.dialogue,
+                  parsed.index,
+                  parsed.total
+                )
+              } else if (currentEvent === 'complete') {
+                callbacks.onComplete?.()
+              } else if (currentEvent === 'error') {
+                callbacks.onError?.(parsed.error || 'Unknown error')
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e, line)
+            }
+          }
+        }
+      }
+    })
+    .catch((error) => {
+      if (error.name === 'AbortError') {
+        console.log('⚠️ [SSE] Request aborted by user')
+      } else {
+        console.error('❌ [SSE] Stream error:', error)
+        callbacks.onError?.(error.message || 'Stream error')
+      }
+    })
+
+  // EventSource 호환 인터페이스 반환 (실제로는 fetch 사용)
+  const mockEventSource = {
+    close: () => abortController.abort(),
+  } as EventSource
+
+  return {
+    eventSource: mockEventSource,
+    abort: () => abortController.abort(),
+  }
 }
 
 /**

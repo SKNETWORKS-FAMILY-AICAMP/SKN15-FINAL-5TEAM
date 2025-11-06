@@ -1,4 +1,4 @@
-'''캐릭터 JSON 스캔 + 캐시
+'''캐릭터 DB 로드 + 캐시
 API: list_characters(), get_character(id), default_affinity_of(id), flags(affinity_visible/applicable), build_character_rulebook(char)
 '''
 
@@ -9,26 +9,41 @@ import os
 from functools import lru_cache
 from typing import Dict, Any, List, Tuple
 
+# Import DatabaseManager for database access
+from src.infrastructure.database.db_manager import DatabaseManager
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHAR_DIR = os.path.join(BASE_DIR, "data", "characters")
 
+# Database instance
+_db = DatabaseManager()
 
-@lru_cache(maxsize=1)
+
+@lru_cache(maxsize=32)
 def _scan() -> Dict[str, Dict[str, Any]]:
+    """Load all characters from database and cache"""
     data: Dict[str, Dict[str, Any]] = {}
-    if not os.path.isdir(CHAR_DIR):
-        return data
-    for name in os.listdir(CHAR_DIR):
-        if not name.endswith(".json"):
-            continue
-        path = os.path.join(CHAR_DIR, name)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                obj = json.load(f)
-            cid = (obj.get("id") or os.path.splitext(name)[0]).strip().lower()
-            data[cid] = obj
-        except Exception:
-            continue
+    try:
+        char_ids = _db.list_characters()
+        for char_id in char_ids:
+            char_data = _db.get_character(char_id)
+            if char_data:
+                data[char_id] = char_data
+    except Exception as e:
+        print(f"Failed to load characters from database: {e}")
+        # Fallback to JSON files if database fails
+        if os.path.isdir(CHAR_DIR):
+            for name in os.listdir(CHAR_DIR):
+                if not name.endswith(".json"):
+                    continue
+                path = os.path.join(CHAR_DIR, name)
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        obj = json.load(f)
+                    cid = (obj.get("id") or os.path.splitext(name)[0]).strip().lower()
+                    data[cid] = obj
+                except Exception:
+                    continue
     return data
 
 

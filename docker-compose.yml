@@ -5,8 +5,11 @@
 services:
   # Database: PostgreSQL with pgvector
   postgres:
-    image: ankane/pgvector:latest
-    container_name: kime-postgres
+    image: postgresql
+    build:
+      context: ./database/postgres
+      dockerfile: Dockerfile
+    container_name: postgresql
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-kimedb}
@@ -29,8 +32,8 @@ services:
 
   # Cache: Redis
   redis:
-    image: redis:7-alpine
-    container_name: kime-redis
+    image: redis
+    container_name: redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
@@ -47,15 +50,16 @@ services:
 
   # Backend: FastAPI
   backend:
+    image: backend
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: kime-backend
+    container_name: backend
     restart: unless-stopped
     environment:
-      # Database (External PostgreSQL at 192.168.0.94:5433)
-      DB_HOST: ${DB_HOST:-192.168.0.94}
-      DB_PORT: ${DB_PORT:-5433}
+      # Database (Local PostgreSQL container)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-kimedb}
       DB_USER: ${DB_USER:-kime}
       DB_PASSWORD: ${DB_PASSWORD:-dev123}
@@ -83,6 +87,8 @@ services:
       - ./backend:/app
       - backend_cache:/app/__pycache__
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -95,11 +101,12 @@ services:
 
   # Frontend: React + Vite
   frontend:
+    image: frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
       target: development
-    container_name: kime-frontend
+    container_name: frontend
     restart: unless-stopped
     expose:
       - "5173"
@@ -109,7 +116,7 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost/api}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost}
     stdin_open: true
     tty: true
     networks:
@@ -118,7 +125,7 @@ services:
   # Nginx: Reverse Proxy (http://localhost)
   nginx:
     image: nginx:alpine
-    container_name: kime-nginx
+    container_name: nginx
     restart: unless-stopped
     ports:
       - "80:80"

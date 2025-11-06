@@ -42,7 +42,9 @@ async def health_check(
     """
     try:
         # DB 연결 확인 (간단한 쿼리)
-        db.execute_query("SELECT 1")
+        with db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
         db_status = "healthy"
     except Exception as e:
         db_status = f"unhealthy: {str(e)}"
