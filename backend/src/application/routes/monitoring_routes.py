@@ -329,13 +329,14 @@ async def analyze_low_scores(days: int = Query(7, ge=1, le=30)):
 
 @router.get("/cache-stats")
 async def get_cache_stats():
-    """캐시 통계 조회"""
-        from backend.src.tools.training_logger import get_training_logger
+    """
+    캐시 통계 조회
 
-    logger = get_training_logger()
-
+    TODO: training_logger 모듈 위치 확인 및 재활성화
+    """
+    # 임시: training_logger가 없으므로 빈 응답 반환
     return {
-        "cache_size": len(logger.evaluation_cache),
-        "cache_ttl": logger.cache_ttl,
+        "cache_size": 0,
+        "cache_ttl": 0,
         "cache_enabled": True
     }
