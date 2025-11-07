@@ -16,7 +16,7 @@ from domain.services.classification.intent_handler import detect_intent_with_llm
 from domain.services.classification.intent_detector import detect_intents
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
-from src.infrastructure.database.session_manager import HybridSessionManager
+from core.interfaces.managers.session_manager import ISessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})

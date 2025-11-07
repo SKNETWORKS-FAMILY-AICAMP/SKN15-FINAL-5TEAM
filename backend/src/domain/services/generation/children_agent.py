@@ -14,7 +14,7 @@ from src.utils.llm_client import get_llm_client
 from src.utils.logger import log
 from src.utils.config_loader import get_config_loader
 from src.tools.training_logger import log_agent
-from src.infrastructure.database.session_manager import HybridSessionManager
+from core.interfaces.managers.session_manager import ISessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})
@@ -36,20 +36,15 @@ class ChildrenAgent:
     # ============================================================
     # 🛠️ 초기화
     # ============================================================
-    def __init__(self):
-        """LLM 클라이언트 초기화"""
-        self._llm = get_llm_client()
-        self._session_manager: Optional[HybridSessionManager] = None
+    def __init__(self, session_manager: Optional[ISessionManager] = None):
+        """
+        ChildrenAgent 초기화
 
-        # 초기화     
-        try:
-            from src.infrastructure.database.db_manager import DatabaseManager
-            from src.infrastructure.cache.cache_manager import CacheManager
-            db = DatabaseManager()
-            cache_manager = CacheManager()
-            self._session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
-        except Exception as e:
-            log("children", "session_manager_init_failed", error=str(e))
+        Args:
+            session_manager: 세션 관리자 (DI)
+        """
+        self._llm = get_llm_client()
+        self._session_manager = session_manager
 
     # ============================================================
     # 🚦 실행 엔트리 포인트

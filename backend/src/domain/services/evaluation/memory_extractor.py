@@ -11,7 +11,7 @@ user_memories 테이블에 자동 저장합니다.
 import json
 from typing import Dict, List, Optional, Any
 from src.utils.llm_client import get_llm_client
-from src.infrastructure.database.db_manager import DatabaseManager
+from core.interfaces.repositories.memory_repository import IMemoryRepository
 
 
 MEMORY_EXTRACTION_PROMPT = """다음은 사용자와 AI 캐릭터 간의 대화 요약입니다.

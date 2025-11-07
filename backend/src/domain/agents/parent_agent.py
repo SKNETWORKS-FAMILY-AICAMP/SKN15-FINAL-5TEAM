@@ -603,27 +603,12 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         try:
-            from src.infrastructure.database.session_manager import HybridSessionManager
-            from src.infrastructure.database.db_manager import DatabaseManager
-
+            # TODO: DI Container에서 session_manager를 주입받도록 수정 필요
+            # 임시로 성능 메트릭 저장 비활성화
             execution_time_ms = (time.perf_counter() - start_time) * 1000.0
-            session_id = result.get("session_id")
-
-            if session_id:
-                db = DatabaseManager()
-                session_manager = HybridSessionManager(db_manager=db)
-                session_manager.save_performance_metric(
-                    metric_name="parent_agent_execution_time",
-                    metric_value=execution_time_ms,
-                    session_id=session_id,
-                    metadata={
-                        "stage_tag": result.get("stage_tag"),
-                        "current_stage": result.get("current_stage"),
-                        "next_node": result.get("next_node")
-                    }
-                )
+            log("parent", "execution_time_ms", value=execution_time_ms)
         except Exception as e:
-            log("parent", "performance_metric_save_failed", error=str(e))
+            log("parent", "performance_metric_log_failed", error=str(e))
 
         return result
 
