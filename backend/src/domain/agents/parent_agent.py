@@ -151,8 +151,17 @@ class ParentAgent:
                     log("parent", "⚡ Auto-advance via routed intent", stage_tag=original_stage_tag, next_stage=next_stage)
 
             if next_stage:
-                if current_stage_type in ("router", "free_intent", "open_narrative") or auto_advance_now:
+                # router, free_intent는 즉시 전환
+                # open_narrative는 min_turns 조건을 만족해야만 전환
+                if current_stage_type in ("router", "free_intent") or auto_advance_now:
                     immediate_advance = True
+                elif current_stage_type == "open_narrative":
+                    # open_narrative는 stage 완료 조건을 확인
+                    min_turns = stage.get("min_turns", 3)
+                    current_turn = game_state.get("stage_turn", 0)
+                    if current_turn >= min_turns:
+                        immediate_advance = True
+                        log.info(f"✅ open_narrative completed: {current_turn}/{min_turns} turns")
 
             if immediate_advance:
                 st.set_current_stage(state, next_stage)
