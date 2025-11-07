@@ -94,6 +94,49 @@ class HybridSessionManager:
         logger.warning(f"Session not found and creation disabled: {session_id}")
         return None
 
+    @staticmethod
+    def _extract_db_fields(session_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        GraphState 또는 일반 세션 데이터에서 DB 저장용 필드 추출
+
+        Args:
+            session_data: GraphState (nested) 또는 flat session data
+
+        Returns:
+            DB 저장용 flat dictionary
+        """
+        # GraphState 구조인지 확인 (game 필드 존재)
+        if "game" in session_data:
+            game_state = session_data.get("game", {})
+            return {
+                "session_id": session_data.get("session_id"),
+                "scenario_id": session_data.get("scenario_id"),
+                "user_id": session_data.get("user_id"),
+                "user_name": session_data.get("user_name"),
+                "current_stage": game_state.get("current_stage"),
+                "turn_count": session_data.get("turn_count", 0),
+                "stage_turn": game_state.get("stage_turn", 0),
+                "final_ending": game_state.get("mission_result"),  # final_ending maps to mission_result
+                "is_active": True,
+                "conversation_summary": session_data.get("conversation_summary", ""),
+                "summary_turn_count": session_data.get("summary_turn_count", 0)
+            }
+        else:
+            # 이미 flat한 구조면 그대로 반환 (기본값 설정)
+            return {
+                "session_id": session_data.get("session_id"),
+                "scenario_id": session_data.get("scenario_id"),
+                "user_id": session_data.get("user_id"),
+                "user_name": session_data.get("user_name"),
+                "current_stage": session_data.get("current_stage"),
+                "turn_count": session_data.get("turn_count", 0),
+                "stage_turn": session_data.get("stage_turn", 0),
+                "final_ending": session_data.get("final_ending"),
+                "is_active": session_data.get("is_active", True),
+                "conversation_summary": session_data.get("conversation_summary", ""),
+                "summary_turn_count": session_data.get("summary_turn_count", 0)
+            }
+
     def save(
         self,
         session_id: str,
@@ -105,14 +148,17 @@ class HybridSessionManager:
 
         Args:
             session_id: 세션 ID
-            session_data: 세션 데이터
+            session_data: 세션 데이터 (GraphState 또는 flat dict)
             ttl: 캐시 TTL (None이면 기본값 사용)
 
         Returns:
             성공 여부
         """
+        # GraphState에서 DB 필드 추출
+        db_data = self._extract_db_fields(session_data)
+
         # 1. DB 저장 (영구 저장)
-        db_success = self.db.save_session(session_data)
+        db_success = self.db.save_session(db_data)
 
         # 2. 캐시 저장 (빠른 접근)
         cache_success = self.cache.set_session(session_id, session_data, ttl)

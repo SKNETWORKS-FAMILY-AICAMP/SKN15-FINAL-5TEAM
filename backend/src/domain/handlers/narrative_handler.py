@@ -41,7 +41,7 @@ class OpenNarrativeHandler:
         Returns:
             StageResult with generated narrative
         """
-        log("open_narrative", f"🎭 Processing open narrative stage: {stage.get('tag')}")
+        log.info( f"🎭 Processing open narrative stage: {stage.get('tag')}")
 
         # 1. 스테이지 정보 추출
         stage_tag = stage.get("tag", "UNKNOWN")
@@ -62,17 +62,17 @@ class OpenNarrativeHandler:
         user_input = state.get("user_input", "").strip()
         has_user_input = bool(user_input and user_input != "__AUTO_CONTINUE__")
 
-        log("open_narrative", f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")
+        log.info( f"📊 Stage={stage_tag}, turn={stage_turn}, min={min_turns}, max={max_turns}")
 
         # 5. 스테이지 완료 조건
         stage_complete = False
 
         if stage_turn >= max_turns:
             stage_complete = True
-            log("open_narrative", f"⚠️ Max turns reached ({stage_turn}/{max_turns}), force advancing")
+            log.info( f"⚠️ Max turns reached ({stage_turn}/{max_turns}), force advancing")
         elif stage_turn >= min_turns and has_user_input:
             stage_complete = True
-            log("open_narrative", f"✅ Min turns reached ({stage_turn}/{min_turns}) with user input, auto-advancing")
+            log.info( f"✅ Min turns reached ({stage_turn}/{min_turns}) with user input, auto-advancing")
 
         # 6. 유저 입력이 없으면 프롬프트 제공
         if not user_input:
@@ -106,7 +106,7 @@ class OpenNarrativeHandler:
 
         if user_input:
             state_update["last_user_input"] = user_input
-            log("open_narrative", f"📝 Saved last_user_input to state_update: '{user_input[:50]}...'")
+            log.info( f"📝 Saved last_user_input to state_update: '{user_input[:50]}...'")
 
         if "story_summary" in state_update:
             current_summary = state.get("story_summary", "")
@@ -122,7 +122,7 @@ class OpenNarrativeHandler:
 
         state["turn_count"] = turn_count + 1
 
-        log("open_narrative", f"✅ Generated {len(dialogues)} dialogues, turn={turn_count + 1}/{max_turns}")
+        log.info( f"✅ Generated {len(dialogues)} dialogues, turn={turn_count + 1}/{max_turns}")
 
         children_ctx = {
             "stage_tag": stage_tag,
