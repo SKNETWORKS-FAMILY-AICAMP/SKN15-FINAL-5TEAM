@@ -1,22 +1,23 @@
 """
-사용자 라우터
+사용자 라우터 - Repository Pattern 기반
 - 크레딧, 진행도, 장비, 시나리오 진행도를 관리한다.
 """
 
 # ============================================================
-# 👤 사용자 라우터 — 크레딧·진행도·장비 관리
+# 👤 사용자 라우터 — Repository Pattern 기반
 # ============================================================
 from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies.auth_deps import require_auth
-from src.infrastructure.database.db_manager import DatabaseManager
-from ..dependencies.api_deps import get_db_manager
+from ..dependencies.api_deps import get_progression_repository, get_db_manager
 from ..schemas.api_models import (
     ConsumeCreditsRequest,
     AwardXPRequest,
     UpdateEquipmentRequest,
 )
+from src.core.interfaces.repositories.progression_repository import IProgressionRepository
+from src.infrastructure.database.db_manager import DatabaseManager
 
 # ============================================================
 # 라우터 생성
@@ -30,10 +31,10 @@ router = APIRouter()
 @router.get("/me/credits")
 async def get_user_credits(
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자 크레딧(버블) 조회"""
-    credits = db.get_user_credits(user["user_id"])
+    """사용자 크레딧(버블) 조회 - Repository Pattern"""
+    credits = progression_repo.get_user_credits(user["user_id"])
     if not credits:
         raise HTTPException(status_code=404, detail="크레딧 정보를 찾을 수 없습니다")
     return credits
@@ -42,10 +43,10 @@ async def get_user_credits(
 async def consume_user_credits(
     req: ConsumeCreditsRequest,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자 크레딧(버블) 소비"""
-    success = db.consume_credits(user["user_id"], req.amount, req.description)
+    """사용자 크레딧(버블) 소비 - Repository Pattern"""
+    success = progression_repo.consume_credits(user["user_id"], req.amount, req.description)
     if not success:
         raise HTTPException(status_code=400, detail="크레딧 잔액이 부족합니다")
     return {"success": True, "message": f"{req.amount} 버블이 차감되었습니다"}
@@ -56,9 +57,9 @@ async def consume_user_credits(
 @router.get("/me/progression")
 async def get_user_progression(
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """현재 사용자의 진행도 조회 (rank, level, XP, stats, equipment)
+    """현재 사용자의 진행도 조회 - Repository Pattern
 
     Returns:
         {
@@ -79,7 +80,7 @@ async def get_user_progression(
             "crow_status": str
         }
     """
-    progression = db.get_user_progression(user["user_id"])
+    progression = progression_repo.get_user_progression(user["user_id"])
     if not progression:
         raise HTTPException(status_code=404, detail="Progression data not found")
     return progression
@@ -87,9 +88,9 @@ async def get_user_progression(
 @router.get("/me/equipment")
 async def get_user_equipment(
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """현재 사용자의 장비 상태 조회
+    """현재 사용자의 장비 상태 조회 - Repository Pattern
 
     Returns:
         {
@@ -101,7 +102,7 @@ async def get_user_equipment(
             "crow_name": str
         }
     """
-    equipment = db.get_user_equipment(user["user_id"])
+    equipment = progression_repo.get_user_equipment(user["user_id"])
     if not equipment:
         # 기본값 반환
         return {
@@ -118,9 +119,9 @@ async def get_user_equipment(
 async def award_user_experience(
     req: AwardXPRequest,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자에게 경험치 지급 (내부 API - 메시지 전송 시 자동 호출)
+    """사용자에게 경험치 지급 - Repository Pattern
 
     Request Body:
         {
@@ -147,7 +148,7 @@ async def award_user_experience(
             detail=f"Invalid xp_type. Must be one of {valid_xp_types}"
         )
 
-    result = db.award_experience(
+    result = progression_repo.award_experience(
         user["user_id"],
         req.xp_amount,
         req.xp_type,
@@ -167,6 +168,8 @@ async def update_user_equipment(
     db: DatabaseManager = Depends(get_db_manager)
 ):
     """사용자 장비 상태 업데이트
+
+    TODO: Move to IProgressionRepository.update_user_equipment()
 
     Request Body:
         {
@@ -192,6 +195,8 @@ async def get_user_xp_transactions(
     offset: int = 0
 ):
     """사용자 경험치 거래 내역 조회 (페이지네이션)
+
+    TODO: Move to IProgressionRepository.get_xp_transactions()
 
     Query Parameters:
         limit: 조회 개수 (기본 50, 최대 100)
@@ -230,6 +235,8 @@ async def get_user_scenarios(
 ):
     """사용자별 시나리오 조회 (진행도 포함)
 
+    TODO: Move to IProgressionRepository.get_scenarios_with_user_progress()
+
     인증 필요. 사용자의 진행도 정보가 포함된 시나리오 리스트 반환.
 
     Returns:
@@ -265,6 +272,8 @@ async def toggle_scenario_like(
 ):
     """시나리오 좋아요 토글 (좋아요/취소)
 
+    TODO: Move to IProgressionRepository.toggle_scenario_like()
+
     Args:
         scenario_id: 시나리오 ID
 
@@ -288,6 +297,8 @@ async def get_scenario_progress(
     db: DatabaseManager = Depends(get_db_manager)
 ):
     """사용자의 특정 시나리오 진행도 조회
+
+    TODO: Move to IProgressionRepository.get_user_scenario_progress()
 
     Args:
         scenario_id: 시나리오 ID
@@ -329,6 +340,8 @@ async def update_scenario_progress(
     db: DatabaseManager = Depends(get_db_manager)
 ):
     """사용자의 시나리오 진행도 업데이트
+
+    TODO: Move to IProgressionRepository.update_user_scenario_progress()
 
     Args:
         scenario_id: 시나리오 ID

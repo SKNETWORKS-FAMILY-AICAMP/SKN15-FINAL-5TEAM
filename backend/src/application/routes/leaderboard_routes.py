@@ -1,6 +1,9 @@
 """
 리더보드 API
 - 경험치 기준 사용자 순위 조회
+
+TODO: Migrate to IProgressionRepository
+- get_rank_leaderboard() -> IProgressionRepository.get_leaderboard()
 """
 
 # ============================================================

@@ -3,6 +3,14 @@
 - 시나리오 조회
 - 조회수 기록
 - 사용자별 시나리오 진행도 (users.py에서도 일부 처리)
+
+TODO: Migrate to IProgressionRepository / ICharacterRepository
+- get_all_scenarios() -> ICharacterRepository
+- get_scenario_by_id() -> ICharacterRepository
+- record_scenario_view() -> IProgressionRepository
+- toggle_scenario_like() -> IProgressionRepository
+- get_user_scenario_progress() -> IProgressionRepository
+- update_user_scenario_progress() -> IProgressionRepository
 """
 
 # ============================================================
