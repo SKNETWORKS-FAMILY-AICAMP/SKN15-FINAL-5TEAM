@@ -4,14 +4,15 @@ Chat Feature - Parent Agent
 
 Phase 1: LLM 대사 생성 연동 완료
 Phase 2: State & Stage Management 연동 완료
+Phase 3: Guardrail & Router Agents 연동 완료
 TODO: 향후 구현 필요
-- Guardrail Agent (입출력 검증)
-- Router Agent (토픽 분류)
 - Beat 기반 대화 생성
+- 임베딩 기반 검증/분류
 """
 from typing import Dict, Any
 from ..schemas import DialogueResult, ChatMessage
 from ..services import LLMService, StateService, StageService
+from .guards import GuardrailAgent, RouterAgent
 from app.core.logging import get_parent_logger, print_layer_debug
 
 logger = get_parent_logger("Chat")
@@ -26,6 +27,7 @@ class ChatParent:
     현재 상태:
     - Phase 1: LLM 대사 생성 ✅
     - Phase 2: State & Stage Management ✅
+    - Phase 3: Guardrail & Router Agents ✅
     """
 
     def __init__(self):
@@ -35,7 +37,9 @@ class ChatParent:
         self.llm_service = LLMService()
         self.state_service = StateService()
         self.stage_service = StageService()
-        logger.info("__init__", "ChatParent initialized with all services")
+        self.guardrail_agent = GuardrailAgent()
+        self.router_agent = RouterAgent()
+        logger.info("__init__", "ChatParent initialized with all services and agents")
 
     async def execute(
         self,
@@ -44,18 +48,19 @@ class ChatParent:
         scenario_id: str
     ) -> DialogueResult:
         """
-        에이전트 파이프라인 실행 (Phase 2: State & Stage 연동)
+        에이전트 파이프라인 실행 (Phase 3: Guardrail & Router 연동)
 
         현재 구현:
-        1. State Service를 통한 상태 관리
-        2. Stage Service를 통한 스테이지 진행 관리
-        3. LLM Service를 통한 실제 대사 생성
-        4. 스테이지 전환 로직
+        1. Guardrail Agent로 입력 검증
+        2. Router Agent로 토픽 분류
+        3. State Service를 통한 상태 관리
+        4. Stage Service를 통한 스테이지 진행 관리
+        5. LLM Service를 통한 실제 대사 생성
+        6. 스테이지 전환 로직
 
         TODO: 향후 구현
-        5. Guardrail Agent로 입력 검증
-        6. Router Agent로 토픽 분류
         7. Beat 기반 대화 생성
+        8. 임베딩 기반 검증/분류
 
         Args:
             user_message: 사용자 메시지
@@ -65,28 +70,65 @@ class ChatParent:
         Returns:
             DialogueResult
         """
-        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 2)", user_message_len=len(user_message))
+        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 3)", user_message_len=len(user_message))
         logger.info("execute", "Pipeline started", scenario_id=scenario_id, current_stage=session_state.get("current_stage"))
 
         try:
-            # 1. State 준비
+            # 1. State 준비 (먼저 준비 - 검증에서 state 필요)
             state = self.state_service.prepare_state(session_state, scenario_id, user_message)
 
-            # 2. 현재 Stage 결정
+            # 2. Guardrail: 입력 검증
+            validation_result = self.guardrail_agent.validate(user_message, state)
+            if not validation_result.is_valid:
+                logger.warning(
+                    "execute",
+                    f"❌ Input validation failed: {validation_result.reason}",
+                    severity=validation_result.severity
+                )
+                # 검증 실패 시 에러 메시지 반환
+                error_dialogues = [
+                    ChatMessage(
+                        speaker="시스템",
+                        text=validation_result.message or "입력을 확인해주세요.",
+                        emotion="neutral"
+                    )
+                ]
+                return DialogueResult(
+                    dialogues=error_dialogues,
+                    next_stage=state.get("current_stage", "intro"),
+                    stage_complete=False,
+                    updated_state=state,
+                    affinity_delta={}
+                )
+
+            # 3. Router: 토픽 분류
+            route_result = self.router_agent.classify(user_message, state)
+            response_strategy = self.router_agent.get_response_strategy(route_result)
+            logger.info(
+                "execute",
+                f"Topic: {route_result.topic} (confidence: {route_result.confidence:.2f})",
+                strategy_emotion=response_strategy["emotion"]
+            )
+
+            # 4. 현재 Stage 결정 (State 준비 완료 후)
             current_stage = self.stage_service.resolve_stage(state)
             logger.info("execute", f"Current stage: {current_stage.stage_id} ({current_stage.stage_type})")
 
-            # 3. LLM 대사 생성
+            # 5. LLM 대사 생성 (Router 전략 반영)
             # 캐릭터 설정 (하드코딩, 향후 시나리오에서 로드)
             character_name = "탄지로"
             personality = "정의롭고 친절하며, 가족을 소중히 여기는 검사. 항상 긍정적이고 따뜻한 말투를 사용한다."
 
-            # 스테이지별 감정 설정
-            emotion_map = {
-                "intro": "friendly",
-                "main": "neutral",
-            }
-            emotion = emotion_map.get(current_stage.stage_id, "neutral")
+            # Router 전략에서 감정 가져오기 (우선순위: Router > Stage)
+            emotion = response_strategy.get("emotion", "neutral")
+
+            # 스테이지별 감정으로 폴백
+            if emotion == "neutral":
+                emotion_map = {
+                    "intro": "friendly",
+                    "main": "neutral",
+                }
+                emotion = emotion_map.get(current_stage.stage_id, "neutral")
 
             # 대화 이력
             conversation_history = state.get("conversation_history", [])
@@ -100,17 +142,17 @@ class ChatParent:
                 conversation_history=conversation_history
             )
 
-            # 4. 스테이지 완료 확인
+            # 6. 스테이지 완료 확인
             stage_complete = self.stage_service.check_stage_complete(current_stage, state)
 
-            # 5. 다음 스테이지 결정
+            # 7. 다음 스테이지 결정
             next_stage_id = None
             if stage_complete:
                 next_stage_id = self.stage_service.get_next_stage(current_stage, state)
                 if next_stage_id:
                     logger.info("execute", f"Stage transition: {current_stage.stage_id} → {next_stage_id}")
 
-            # 6. State 업데이트
+            # 8. State 업데이트
             updated_state = self.state_service.update_state(
                 state,
                 dialogues=[msg.dict() for msg in dialogues],
@@ -118,7 +160,7 @@ class ChatParent:
                 stage_complete=stage_complete
             )
 
-            # 7. Result 생성
+            # 9. Result 생성
             result = DialogueResult(
                 dialogues=dialogues,
                 next_stage=next_stage_id or updated_state.get("current_stage"),
