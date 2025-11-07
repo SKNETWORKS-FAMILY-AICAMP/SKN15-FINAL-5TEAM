@@ -5,9 +5,9 @@ Chat Feature - Parent Agent
 Phase 1: LLM 대사 생성 연동 완료
 Phase 2: State & Stage Management 연동 완료
 Phase 3: Guardrail & Router Agents 연동 완료
+Phase 4: Beat 기반 대화 생성 완료
 Phase 6: Scenario & Character 동적 로드 완료
 TODO: 향후 구현 필요
-- Beat 기반 대화 생성
 - 임베딩 기반 검증/분류
 """
 from typing import Dict, Any
@@ -29,6 +29,7 @@ class ChatParent:
     - Phase 1: LLM 대사 생성 ✅
     - Phase 2: State & Stage Management ✅
     - Phase 3: Guardrail & Router Agents ✅
+    - Phase 4: Beat 기반 대화 생성 ✅
     - Phase 6: Scenario & Character 동적 로드 ✅
     """
 
@@ -51,20 +52,24 @@ class ChatParent:
         scenario_id: str
     ) -> DialogueResult:
         """
-        에이전트 파이프라인 실행 (Phase 6: Scenario & Character 동적 로드)
+        에이전트 파이프라인 실행 (Phase 4: Beat 기반 대화 완성)
 
         현재 구현:
-        1. Guardrail Agent로 입력 검증
-        2. Router Agent로 토픽 분류
-        3. State Service를 통한 상태 관리
+        1. State 준비
+        2. Guardrail Agent로 입력 검증
+        3. Router Agent로 토픽 분류
         4. Stage Service를 통한 스테이지 진행 관리
-        5. Scenario Service로 시나리오/캐릭터 로드 (NEW)
+        5. Scenario Service로 시나리오/캐릭터 로드
         6. LLM Service를 통한 실제 대사 생성
-        7. 스테이지 전환 로직
+           - Beat 기반 대화 (Beats 있을 때)
+           - Simple 대화 (Beats 없을 때, 폴백)
+        7. 스테이지 완료 확인
+        8. 다음 스테이지 결정
+        9. State 업데이트
+        10. Result 생성
 
         TODO: 향후 구현
-        8. Beat 기반 대화 생성
-        9. 임베딩 기반 검증/분류
+        - 임베딩 기반 검증/분류
 
         Args:
             user_message: 사용자 메시지
@@ -74,7 +79,7 @@ class ChatParent:
         Returns:
             DialogueResult
         """
-        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 6)", user_message_len=len(user_message))
+        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 4)", user_message_len=len(user_message))
         logger.info("execute", "Pipeline started", scenario_id=scenario_id, current_stage=session_state.get("current_stage"))
 
         try:
@@ -155,26 +160,45 @@ class ChatParent:
             # 대화 이력
             conversation_history = state.get("conversation_history", [])
 
-            # LLM 대사 생성
-            dialogues = await self.llm_service.generate_simple_dialogue(
-                character_name=character_name,
-                user_input=user_message,
-                emotion=emotion,
-                personality=personality,
-                conversation_history=conversation_history
-            )
+            # 6. LLM 대사 생성 (Beat 기반 vs Simple)
+            # Beats가 있으면 Beat 기반 대화, 없으면 Simple 대화
+            beats = self.scenario_service.get_beats_for_stage(scenario_id, current_stage.stage_id)
 
-            # 6. 스테이지 완료 확인
+            if beats and len(beats) > 0:
+                # Beat 기반 대화 생성
+                logger.info("execute", f"Using beat-based dialogue for stage {current_stage.stage_id}", beats_count=len(beats))
+
+                dialogues = await self.llm_service.generate_beat_dialogue(
+                    beats=beats,
+                    character_name=character_name,
+                    user_input=user_message,
+                    emotion=emotion,
+                    personality=personality,
+                    conversation_history=conversation_history
+                )
+            else:
+                # Simple 대화 생성 (폴백)
+                logger.info("execute", f"Using simple dialogue for stage {current_stage.stage_id} (no beats found)")
+
+                dialogues = await self.llm_service.generate_simple_dialogue(
+                    character_name=character_name,
+                    user_input=user_message,
+                    emotion=emotion,
+                    personality=personality,
+                    conversation_history=conversation_history
+                )
+
+            # 7. 스테이지 완료 확인
             stage_complete = self.stage_service.check_stage_complete(current_stage, state)
 
-            # 7. 다음 스테이지 결정
+            # 8. 다음 스테이지 결정
             next_stage_id = None
             if stage_complete:
                 next_stage_id = self.stage_service.get_next_stage(current_stage, state)
                 if next_stage_id:
                     logger.info("execute", f"Stage transition: {current_stage.stage_id} → {next_stage_id}")
 
-            # 8. State 업데이트
+            # 9. State 업데이트
             updated_state = self.state_service.update_state(
                 state,
                 dialogues=[msg.dict() for msg in dialogues],
@@ -182,7 +206,7 @@ class ChatParent:
                 stage_complete=stage_complete
             )
 
-            # 9. Result 생성
+            # 10. Result 생성
             result = DialogueResult(
                 dialogues=dialogues,
                 next_stage=next_stage_id or updated_state.get("current_stage"),

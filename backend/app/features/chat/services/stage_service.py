@@ -40,6 +40,7 @@ class StageService:
     - 스테이지 전환 로직
     - 완료 조건 판단
     - 다음 스테이지 결정
+    - Beat 기반 대화 지원
     """
 
     def __init__(self):
@@ -47,6 +48,16 @@ class StageService:
         # 하드코딩된 간단한 스테이지 정의 (향후 YAML에서 로드)
         self.stages = self._init_default_stages()
         logger.info("__init__", "StageService initialized", stages_count=len(self.stages))
+
+    def register_stage(self, stage: StageDefinition):
+        """
+        동적으로 스테이지 등록 (시나리오 로드 시 사용)
+
+        Args:
+            stage: StageDefinition 객체
+        """
+        self.stages[stage.stage_id] = stage
+        logger.info("register_stage", f"Stage registered: {stage.stage_id}", beats_count=len(stage.beats))
 
     def _init_default_stages(self) -> Dict[str, StageDefinition]:
         """
