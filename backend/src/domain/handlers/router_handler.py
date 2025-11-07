@@ -9,10 +9,10 @@ from typing import Any, Dict
 # ============================================================
 
 import logging
-log = logging.getLogger(__name__)
 from src.domain.services.orchestration.scene_tools import get_next_stage_tag
 from src.core.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
+from src.core.utils.logger import log
 
 
 class RouterStageHandler:

@@ -24,7 +24,7 @@ from src.domain.handlers.scene_handler import SceneHandler
 from src.domain.handlers.narrative_handler import OpenNarrativeHandler
 
 import logging
-log = logging.getLogger(__name__)
+from src.core.utils.logger import log
 
 # ============================================================
 # ============================================================
@@ -158,7 +158,7 @@ class ParentAgent:
                 st.set_current_stage(state, next_stage)
                 st.reset_stage_turn(state)
                 state["current_stage"] = next_stage
-                log("parent", f"🔄 Stage advanced: {stage_tag} → {next_stage}")
+                log.info(f"🔄 Stage advanced: {stage_tag} → {next_stage}")
                 next_stage_def = scene_tools.get_stage(scenario, next_stage)
                 scene_state["stage_completed"] = False
                 temp_data.pop("completed_stage", None)
@@ -438,7 +438,7 @@ class ParentAgent:
         st = get_state_tools()
         temp = st.get_temp_data(state)
         if temp.pop("skip_parent_after_dialogue", False):
-            log("parent", "Skipping post-dialogue hooks (guardrail intervention)")
+            log.info("Skipping post-dialogue hooks (guardrail intervention)")
             state["next_node"] = "wait_user_input"
             return state
 
@@ -455,7 +455,7 @@ class ParentAgent:
                 stage_def = scene_tools.get_stage(scenario, completed_stage)
                 scenario_module.on_stage_complete(state, stage_def, scenario)
             except Exception as e:
-                log("parent", f"on_stage_complete failed: {e}")
+                log.info(f"on_stage_complete failed: {e}")
 
         # 다음 스테이지 전환
         next_stage = st.consume_pending_stage(state)
@@ -477,7 +477,7 @@ class ParentAgent:
     def _invoke_stage_enter(self, state, stage_tag, stage, scenario, scenario_module):
         """Stage 진입 이벤트 트리거"""
         st = get_state_tools()
-        log("parent", f"[StageEnter] {stage_tag}")
+        log.info(f"[StageEnter] {stage_tag}")
 
         if stage_tag == "RECRUIT":
             temp = state.setdefault("temp_data", {})
@@ -504,7 +504,7 @@ class ParentAgent:
             try:
                 scenario_module.on_stage_enter(state, stage, scenario)
             except Exception as e:
-                log("parent", f"on_stage_enter failed: {e}")
+                log.info(f"on_stage_enter failed: {e}")
 
         st.mark_stage_entered(state, stage_tag)
 
@@ -574,7 +574,7 @@ class ParentAgent:
 
         state["_outcome"] = outcome
 
-        log("parent", f"[END_ROUTER] outcome={state['_outcome']} allies={allies}")
+        log.info(f"[END_ROUTER] outcome={state['_outcome']} allies={allies}")
 
 # ============================================================
 # 🚀 실행부
@@ -607,9 +607,9 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
             # TODO: DI Container에서 session_manager를 주입받도록 수정 필요
             # 임시로 성능 메트릭 저장 비활성화
             execution_time_ms = (time.perf_counter() - start_time) * 1000.0
-            log("parent", "execution_time_ms", value=execution_time_ms)
+            log.info("execution_time_ms", value=execution_time_ms)
         except Exception as e:
-            log("parent", "performance_metric_log_failed", error=str(e))
+            log.info("performance_metric_log_failed", error=str(e))
 
         return result
 

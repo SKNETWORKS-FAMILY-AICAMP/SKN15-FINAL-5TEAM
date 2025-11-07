@@ -18,8 +18,8 @@ from src.infrastructure.shared.dependency_container import get_llm_provider as g
 from src.domain.services.orchestration.scene_tools import get_stage_atmosphere
 from src.core.config.constants import FALLBACK_ALLOW_NORMAL
 import logging
-log = logging.getLogger(__name__)
 from src.domain.services.orchestration.tone_profile_loader import load_tone_profiles
+from src.core.utils.logger import log
 
 
 class FallbackManager:

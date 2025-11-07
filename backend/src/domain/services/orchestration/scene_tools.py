@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import logging
-log = logging.getLogger(__name__)
 from src.domain.models.story import Beat
+from src.core.utils.logger import log
 
 
 def _scenario_search_paths(scenario_id: str) -> List[Path]:

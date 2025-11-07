@@ -20,9 +20,9 @@ from src.domain.services.orchestration.scene_tools import (
     get_speaker_pool,
 )
 import logging
-log = logging.getLogger(__name__)
 from src.core.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
+from src.core.utils.logger import log
 
 
 class SceneHandler:

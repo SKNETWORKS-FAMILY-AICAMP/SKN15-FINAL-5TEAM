@@ -7,8 +7,8 @@ TODO: 실제 구현 필요
 
 from typing import Dict, Any
 import logging
+from src.core.utils.logger import log
 
-log = logging.getLogger(__name__)
 
 
 class StoryOrchestrator:

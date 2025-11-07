@@ -17,8 +17,8 @@ from src.domain.services.orchestration.scene_tools import (
     get_speaker_pool,
 )
 import logging
-log = logging.getLogger(__name__)
 from . import StageResult
+from src.core.utils.logger import log
 
 
 class FreeIntentHandler:
