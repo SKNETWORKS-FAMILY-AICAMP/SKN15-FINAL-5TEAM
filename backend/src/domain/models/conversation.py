@@ -15,7 +15,8 @@ class Dialogue:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "speaker": self.speaker,
-            "text": self.content,
+            "content": self.content,  # DB expects "content" field
+            "text": self.content,     # Frontend compatibility (legacy)
             "emotion": self.emotion,
             "fx": self.fx,
         }
