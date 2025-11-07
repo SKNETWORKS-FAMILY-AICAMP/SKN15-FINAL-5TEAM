@@ -250,47 +250,11 @@ class ChildrenAgent:
             )
             log("children", f"LLM raw response: {json.dumps(response, ensure_ascii=False)[:500]}")
 
-            dialogue_payload = None
-            if isinstance(response, dict):
-                # Try standard format first
-                dialogue_payload = response.get("dialogues")
+            # ✅ LLM 응답 키 표준화 적용
+            response = self._normalize_llm_output(response)
 
-                # Try singular form
-                if not dialogue_payload:
-                    dialogue_payload = response.get("dialogue")
-
-                # Fallback: handle alternative formats
-                if not dialogue_payload:
-                    # Format 1: {"characters": {"rengoku": {"dialogue": ["...", "..."]}, ...}}
-                    characters = response.get("characters", {})
-                    if isinstance(characters, dict):
-                        dialogue_payload = []
-                        for speaker, data in characters.items():
-                            if isinstance(data, dict) and "dialogue" in data:
-                                dialogues = data.get("dialogue", [])
-                                if isinstance(dialogues, list):
-                                    for text in dialogues:
-                                        if text:
-                                            dialogue_payload.append({"speaker": speaker, "text": text})
-                                elif isinstance(dialogues, str) and dialogues:
-                                    dialogue_payload.append({"speaker": speaker, "text": dialogues})
-
-                    # Format 2: {"scene": {"characters": {...}}}
-                    if not dialogue_payload and "scene" in response:
-                        scene = response.get("scene", {})
-                        if isinstance(scene, dict):
-                            characters = scene.get("characters", {})
-                            if isinstance(characters, dict):
-                                dialogue_payload = []
-                                for speaker, data in characters.items():
-                                    if isinstance(data, dict) and "dialogue" in data:
-                                        dialogues = data.get("dialogue", [])
-                                        if isinstance(dialogues, list):
-                                            for text in dialogues:
-                                                if text:
-                                                    dialogue_payload.append({"speaker": speaker, "text": text})
-                                        elif isinstance(dialogues, str) and dialogues:
-                                            dialogue_payload.append({"speaker": speaker, "text": dialogues})
+            # 표준화된 응답에서 dialogues 추출
+            dialogue_payload = response.get("dialogues", [])
 
             # 1차 응답 검증
             if not isinstance(dialogue_payload, list) or not dialogue_payload:
@@ -307,45 +271,9 @@ class ChildrenAgent:
                 )
                 log("children", f"LLM retry response: {json.dumps(retry_resp, ensure_ascii=False)[:500]}")
 
-                if isinstance(retry_resp, dict):
-                    dialogue_payload = retry_resp.get("dialogues")
-
-                    # Try singular form
-                    if not dialogue_payload:
-                        dialogue_payload = retry_resp.get("dialogue")
-
-                    # Fallback format for retry as well
-                    if not dialogue_payload:
-                        # Format 1: {"characters": {"rengoku": {"dialogue": ["...", "..."]}, ...}}
-                        characters = retry_resp.get("characters", {})
-                        if isinstance(characters, dict):
-                            dialogue_payload = []
-                            for speaker, data in characters.items():
-                                if isinstance(data, dict) and "dialogue" in data:
-                                    dialogues = data.get("dialogue", [])
-                                    if isinstance(dialogues, list):
-                                        for text in dialogues:
-                                            if text:
-                                                dialogue_payload.append({"speaker": speaker, "text": text})
-                                    elif isinstance(dialogues, str) and dialogues:
-                                        dialogue_payload.append({"speaker": speaker, "text": dialogues})
-
-                        # Format 2: {"scene": {"characters": {...}}}
-                        if not dialogue_payload and "scene" in retry_resp:
-                            scene = retry_resp.get("scene", {})
-                            if isinstance(scene, dict):
-                                characters = scene.get("characters", {})
-                                if isinstance(characters, dict):
-                                    dialogue_payload = []
-                                    for speaker, data in characters.items():
-                                        if isinstance(data, dict) and "dialogue" in data:
-                                            dialogues = data.get("dialogue", [])
-                                            if isinstance(dialogues, list):
-                                                for text in dialogues:
-                                                    if text:
-                                                        dialogue_payload.append({"speaker": speaker, "text": text})
-                                            elif isinstance(dialogues, str) and dialogues:
-                                                dialogue_payload.append({"speaker": speaker, "text": dialogues})
+                # ✅ LLM 응답 키 표준화 적용 (retry)
+                retry_resp = self._normalize_llm_output(retry_resp)
+                dialogue_payload = retry_resp.get("dialogues", [])
 
             if isinstance(dialogue_payload, list) and dialogue_payload:
                 dialogues = self._normalize_dialogues(dialogue_payload)
@@ -426,6 +354,117 @@ class ChildrenAgent:
                 dialogue = Dialogue(speaker="narr", content=text, fx=fx)
                 return [dialogue]
         return []
+
+    def _normalize_llm_output(self, llm_response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        ✅ LLM 응답 키 표준화 추가됨
+
+        LLM이 반환하는 다양한 응답 구조를 표준 형식으로 변환:
+        - {"dialogue": [...]} → {"dialogues": [...]}
+        - {"scene": {"characters": {...}}} → {"dialogues": [...]}
+        - {"character": "..."} → {"speaker": "..."}
+        - {"line": "..."} → {"text": "..."}
+
+        Args:
+            llm_response: LLM 원본 응답 (dict)
+
+        Returns:
+            표준화된 응답 {"dialogues": [{"speaker": "...", "text": "..."}, ...]}
+        """
+        if not isinstance(llm_response, dict):
+            return llm_response
+
+        dialogues_list = []
+
+        # 1️⃣ 표준 구조: {"dialogues": [...]}
+        if "dialogues" in llm_response:
+            dialogues_list = llm_response.get("dialogues", [])
+
+        # 2️⃣ 단수 형태: {"dialogue": [...]}
+        elif "dialogue" in llm_response:
+            dialogue_data = llm_response.get("dialogue", [])
+            if isinstance(dialogue_data, list):
+                dialogues_list = dialogue_data
+            elif isinstance(dialogue_data, dict):
+                dialogues_list = [dialogue_data]
+
+        # 3️⃣ Scene 구조: {"scene": {"characters": {"rengoku": {"dialogue": [...]}, ...}}}
+        elif "scene" in llm_response:
+            scene = llm_response.get("scene", {})
+            if isinstance(scene, dict):
+                # scene.characters 구조
+                characters = scene.get("characters", {})
+                if isinstance(characters, dict):
+                    for speaker, char_data in characters.items():
+                        if isinstance(char_data, dict) and "dialogue" in char_data:
+                            char_dialogues = char_data.get("dialogue", [])
+                            # dialogue가 리스트인 경우
+                            if isinstance(char_dialogues, list):
+                                for text in char_dialogues:
+                                    if text:
+                                        dialogues_list.append({
+                                            "speaker": speaker,
+                                            "text": text
+                                        })
+                            # dialogue가 문자열인 경우
+                            elif isinstance(char_dialogues, str) and char_dialogues:
+                                dialogues_list.append({
+                                    "speaker": speaker,
+                                    "text": char_dialogues
+                                })
+
+                # scene에 직접 dialogue 있는 경우
+                if not dialogues_list and "dialogue" in scene:
+                    scene_dialogue = scene.get("dialogue", [])
+                    if isinstance(scene_dialogue, list):
+                        dialogues_list = scene_dialogue
+
+        # 4️⃣ Characters 구조: {"characters": {"rengoku": {"dialogue": [...]}, ...}}
+        elif "characters" in llm_response:
+            characters = llm_response.get("characters", {})
+            if isinstance(characters, dict):
+                for speaker, char_data in characters.items():
+                    if isinstance(char_data, dict) and "dialogue" in char_data:
+                        char_dialogues = char_data.get("dialogue", [])
+                        if isinstance(char_dialogues, list):
+                            for text in char_dialogues:
+                                if text:
+                                    dialogues_list.append({
+                                        "speaker": speaker,
+                                        "text": text
+                                    })
+                        elif isinstance(char_dialogues, str) and char_dialogues:
+                            dialogues_list.append({
+                                "speaker": speaker,
+                                "text": char_dialogues
+                            })
+
+        # 필드명 표준화: character → speaker, line → text
+        normalized_dialogues = []
+        for item in dialogues_list:
+            if not isinstance(item, dict):
+                continue
+
+            normalized_item = {
+                "speaker": item.get("speaker") or item.get("character") or "narr",
+                "text": item.get("text") or item.get("line") or ""
+            }
+
+            # 추가 필드 보존 (emotion, fx 등)
+            if "emotion" in item:
+                normalized_item["emotion"] = item["emotion"]
+            if "fx" in item:
+                normalized_item["fx"] = item["fx"]
+
+            if normalized_item["text"]:
+                normalized_dialogues.append(normalized_item)
+
+        if normalized_dialogues:
+            log("children", f"✅ Normalized LLM output ({len(normalized_dialogues)} items)")
+            return {"dialogues": normalized_dialogues}
+
+        # 변환 실패 시 원본 반환
+        return llm_response
 
     def _normalize_text(self, text: Optional[str]) -> str:
         return (text or "").strip().lower()
