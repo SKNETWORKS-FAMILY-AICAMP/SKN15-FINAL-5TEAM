@@ -1,6 +1,10 @@
 # ============================================================
 # 👧 자식 에이전트 — 캐릭터별 대사 생성 로직
 # ============================================================
+# TODO: Migrate to Dependency Injection
+# - Replace direct DatabaseManager() instantiation with get_session_manager() from DI container
+# - Use ISessionManager interface instead of HybridSessionManager
+# ============================================================
 from __future__ import annotations
 
 import json

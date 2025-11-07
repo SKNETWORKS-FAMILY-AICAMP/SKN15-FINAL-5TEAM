@@ -3,6 +3,10 @@
 
 conversation_summary에서 LLM을 사용하여 중요한 정보를 추출하고
 user_memories 테이블에 자동 저장합니다.
+
+TODO: Migrate to Repository Pattern
+- Replace DatabaseManager parameter with IMemoryRepository
+- save_user_memory() -> IMemoryRepository.save_memory()
 """
 
 # ============================================================

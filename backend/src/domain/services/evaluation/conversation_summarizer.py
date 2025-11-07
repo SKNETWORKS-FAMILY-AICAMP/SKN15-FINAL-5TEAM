@@ -8,6 +8,10 @@
 - 임베딩 생성 (OpenAI text-embedding-3-small)
 - 중요한 정보 추출 (선호도, 사실 등)
 - user_memories 테이블에 저장
+
+TODO: Migrate to Repository Pattern
+- Replace DatabaseManager parameter with IMemoryRepository/IConversationRepository
+- create_or_update_memory() -> IMemoryRepository
 """
 
 # ============================================================

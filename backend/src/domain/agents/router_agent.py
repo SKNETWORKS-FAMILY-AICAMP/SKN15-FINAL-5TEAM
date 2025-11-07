@@ -1,6 +1,10 @@
 # ============================================================
 # 🚦 라우터 에이전트 — 사용자 발화의 온·오프 토픽 분류
 # ============================================================
+# TODO: Migrate to Dependency Injection
+# - Replace direct DatabaseManager() instantiation with get_session_manager() from DI container
+# - Use ISessionManager interface instead of HybridSessionManager
+# ============================================================
 from __future__ import annotations
 
 import time
