@@ -39,8 +39,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Set PYTHONPATH to include src directory
+# Set PYTHONPATH to include app directory
 ENV PYTHONPATH=/app:$PYTHONPATH
 
 # Run the application (new 4-layer architecture)
-CMD ["python", "-m", "src.application.server"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
