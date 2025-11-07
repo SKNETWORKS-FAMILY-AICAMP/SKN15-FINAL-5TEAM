@@ -11,15 +11,15 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Optional
 
-    from ..schemas.api_models import SessionInfoResponse, MessageResponse
+from ..schemas.api_models import SessionInfoResponse, MessageResponse
 
-    from ..dependencies.api_deps import get_db_manager, get_session_manager
+from ..dependencies.api_deps import get_db_manager, get_session_manager
 
-    from ..dependencies.auth_deps import require_auth
+from ..dependencies.auth_deps import require_auth
 
-    from src.infrastructure.database.db_manager import DatabaseManager
+from src.infrastructure.database.db_manager import DatabaseManager
 
-    from src.infrastructure.database.session_manager import HybridSessionManager
+from src.infrastructure.database.session_manager import HybridSessionManager
 
 router = APIRouter()
 

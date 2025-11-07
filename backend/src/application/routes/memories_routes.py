@@ -10,29 +10,21 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, List, Optional
 
-    from ..schemas.api_models import (
-        MemoryCreateRequest,
-        MemoryUpdateRequest,
-        MemoryResponse,
-        MemorySearchRequest,
-        MessageResponse,
-    )
-except ModuleNotFoundError:
-    from ..schemas.api_models import (
-        MemoryCreateRequest,
-        MemoryUpdateRequest,
-        MemoryResponse,
-        MemorySearchRequest,
-        MessageResponse,
-    )
+from ..schemas.api_models import (
+    MemoryCreateRequest,
+    MemoryUpdateRequest,
+    MemoryResponse,
+    MemorySearchRequest,
+    MessageResponse,
+)
 
-    from ..dependencies.api_deps import get_db_manager
+from ..dependencies.api_deps import get_db_manager
 
-    from ..dependencies.auth_deps import require_auth
+from ..dependencies.auth_deps import require_auth
 
-    from src.infrastructure.database.db_manager import DatabaseManager
+from src.infrastructure.database.db_manager import DatabaseManager
 
-    from src.domain.services.evaluation.conversation_summarizer import generate_embedding
+from src.domain.services.evaluation.conversation_summarizer import generate_embedding
 
 router = APIRouter()
 

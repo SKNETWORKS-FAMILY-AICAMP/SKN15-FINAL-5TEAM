@@ -9,19 +9,14 @@
 from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
-    from ..dependencies.auth_deps import require_auth
-
-    from src.infrastructure.database.db_manager import DatabaseManager
-
-    from ..dependencies.api_deps import get_db_manager
-
-    from ..schemas.api_models import (
-        ConsumeCreditsRequest,
-        AwardXPRequest,
-        UpdateEquipmentRequest,
-    )
-except ModuleNotFoundError:
-    from ..schemas.api_models import ConsumeCreditsRequest, AwardXPRequest, UpdateEquipmentRequest
+from ..dependencies.auth_deps import require_auth
+from src.infrastructure.database.db_manager import DatabaseManager
+from ..dependencies.api_deps import get_db_manager
+from ..schemas.api_models import (
+    ConsumeCreditsRequest,
+    AwardXPRequest,
+    UpdateEquipmentRequest,
+)
 
 # ============================================================
 # 라우터 생성

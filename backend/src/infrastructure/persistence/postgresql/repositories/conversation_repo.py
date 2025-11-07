@@ -6,8 +6,8 @@ IConversationRepository 인터페이스 구현
 from typing import Optional, Dict, Any, List
 from psycopg2.extras import RealDictCursor, Json
 
-from core.interfaces.repositories.conversation_repository import IConversationRepository
-from infrastructure.database.connection import DatabaseConnection
+from src.core.interfaces.repositories.conversation_repository import IConversationRepository
+from src.infrastructure.database.connection import DatabaseConnection
 
 
 class PostgresConversationRepository(IConversationRepository):

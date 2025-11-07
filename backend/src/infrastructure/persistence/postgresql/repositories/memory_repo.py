@@ -7,8 +7,8 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from psycopg2.extras import RealDictCursor
 
-from core.interfaces.repositories.memory_repository import IMemoryRepository
-from infrastructure.database.connection import DatabaseConnection
+from src.core.interfaces.repositories.memory_repository import IMemoryRepository
+from src.infrastructure.database.connection import DatabaseConnection
 
 
 class PostgresMemoryRepository(IMemoryRepository):

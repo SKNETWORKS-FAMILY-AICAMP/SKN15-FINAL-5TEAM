@@ -6,8 +6,8 @@ ICharacterRepository 인터페이스 구현
 from typing import Optional, Dict, Any, List
 from psycopg2.extras import RealDictCursor
 
-from core.interfaces.repositories.character_repository import ICharacterRepository
-from infrastructure.database.connection import DatabaseConnection
+from src.core.interfaces.repositories.character_repository import ICharacterRepository
+from src.infrastructure.database.connection import DatabaseConnection
 
 
 class PostgresCharacterRepository(ICharacterRepository):

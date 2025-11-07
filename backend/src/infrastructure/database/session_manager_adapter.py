@@ -5,8 +5,8 @@ Session Manager Adapter
 """
 from typing import Optional, Dict, Any
 
-from core.interfaces.managers.session_manager import ISessionManager
-from infrastructure.database.session_manager import HybridSessionManager
+from src.core.interfaces.managers.session_manager import ISessionManager
+from src.infrastructure.database.session_manager import HybridSessionManager
 
 
 class SessionManagerAdapter(ISessionManager):

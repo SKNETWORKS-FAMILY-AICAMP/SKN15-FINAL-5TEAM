@@ -9,8 +9,8 @@ from typing import List, Dict, Optional
 import tiktoken
 from openai import AsyncOpenAI
 
-from core.interfaces.providers.llm_provider import ILLMProvider
-from core.exceptions import LLMProviderError, RateLimitExceededError
+from src.core.interfaces.providers.llm_provider import ILLMProvider
+from src.core.exceptions import LLMProviderError, RateLimitExceededError
 
 logger = logging.getLogger(__name__)
 

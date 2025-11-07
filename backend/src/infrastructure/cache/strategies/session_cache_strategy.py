@@ -7,7 +7,7 @@ Session 데이터를 Redis에 캐싱하는 전략.
 import logging
 from typing import Optional, Dict, Any
 
-from core.interfaces.providers.cache_provider import ICacheProvider
+from src.core.interfaces.providers.cache_provider import ICacheProvider
 
 logger = logging.getLogger(__name__)
 

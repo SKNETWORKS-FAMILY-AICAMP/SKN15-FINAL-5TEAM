@@ -11,8 +11,8 @@ import psycopg2
 from psycopg2 import pool
 from psycopg2.extensions import connection
 
-from core.config.settings import get_settings
-from core.exceptions import DatabaseConnectionError
+from src.core.config.settings import get_settings
+from src.core.exceptions import DatabaseConnectionError
 
 logger = logging.getLogger(__name__)
 

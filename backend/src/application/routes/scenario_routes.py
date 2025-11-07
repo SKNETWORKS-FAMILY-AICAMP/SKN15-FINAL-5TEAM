@@ -11,13 +11,13 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Dict, List, Optional
 
-    from ..schemas.api_models import ScenarioResponse, MessageResponse
+from ..schemas.api_models import ScenarioResponse, MessageResponse
 
-    from ..dependencies.api_deps import get_db_manager, get_cache_manager
+from ..dependencies.api_deps import get_db_manager, get_cache_manager
 
-    from ..dependencies.auth_deps import optional_auth, require_auth
+from ..dependencies.auth_deps import optional_auth, require_auth
 
-    from src.infrastructure.database.db_manager import DatabaseManager
+from src.infrastructure.database.db_manager import DatabaseManager
 
 router = APIRouter()
 
