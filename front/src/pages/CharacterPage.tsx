@@ -1,11 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import ChatHeader from '@/components/ChatHeader';
-import LoginModal from '@/components/LoginModal';
 import { useApp } from '@/contexts/AppContext';
-import ScenarioComments from '@/components/ScenarioComments';
-import { useScenarioComments } from '@/hooks/useScenarioComments';
-import { apiClient, ScenarioCard, ScenarioMetrics } from '@/services/api';
 import scenariosData from '@/data/scenarios.json';
 
 interface Character {
@@ -19,21 +15,18 @@ interface Character {
 interface ScenarioData {
   id: string;
   title: string;
-  emoji?: string;
+  emoji: string;
   description: string;
-  detailDescription?: string;
+  detailDescription: string;
   image: string;
   implemented: boolean;
   type: string;
   tags: string[];
-  category?: string;
-  mood?: string[];
+  category: string;
+  mood: string[];
   likes: number;
   comments: number;
   views: number;
-  chatSessions?: number;
-  avgAffinity?: number;
-  bubbleReward?: number;
   characters?: Character[];
 }
 
@@ -42,32 +35,6 @@ const SCENARIO_ID_MAP: Record<string, string> = {
   ending: 'cutscene5_llm_driven',
   cutscene5_llm_driven: 'cutscene5_llm_driven'
 };
-
-const FALLBACK_SCENARIOS = scenariosData as Record<string, ScenarioData>;
-const DEFAULT_SCENARIO_IMAGE = '/images/default-scenario.png';
-
-function normalizeScenarioData(apiScenario: ScenarioCard): ScenarioData {
-  return {
-    id: apiScenario.scenario_id,
-    title: apiScenario.title,
-    emoji: (apiScenario as Record<string, string | undefined>).emoji,
-    description: apiScenario.description,
-    detailDescription: (apiScenario as Record<string, string | undefined>).detail_description ?? apiScenario.description,
-    image: apiScenario.image_url || (apiScenario as Record<string, string | undefined>).thumbnail_url || DEFAULT_SCENARIO_IMAGE,
-    implemented: apiScenario.is_active,
-    type: (apiScenario as Record<string, string | undefined>).type ?? '시나리오',
-    tags: apiScenario.tags ?? [],
-    category: (apiScenario as Record<string, string | undefined>).category ?? '시나리오',
-    mood: (apiScenario as Record<string, string[] | undefined>).mood ?? [],
-    likes: apiScenario.likes ?? 0,
-    comments: apiScenario.comments ?? 0,
-    views: apiScenario.views ?? 0,
-    chatSessions: apiScenario.chat_sessions ?? apiScenario.views ?? 0,
-    avgAffinity: apiScenario.average_affinity_score ?? undefined,
-    bubbleReward: apiScenario.bubble_reward ?? undefined,
-    characters: (apiScenario as Record<string, Character[] | undefined>).characters ?? []
-  };
-}
 
 const TAG_BADGE_STYLES = {
   intense:
@@ -118,156 +85,17 @@ function getTagBadgeTone(tag: string) {
 
 export default function CharacterPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
+  const { toggleSidebar, openSettings } = useApp();
   const navigate = useNavigate();
-  const [scenario, setScenario] = useState<ScenarioData | null>(null);
-  const [scenarioLoading, setScenarioLoading] = useState(true);
-  const [scenarioError, setScenarioError] = useState<string | null>(null);
-  const [metrics, setMetrics] = useState<ScenarioMetrics | null>(null);
-  const [metricsLoading, setMetricsLoading] = useState(false);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(false);
-  const [initialLiked, setInitialLiked] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
 
+  const scenarios = scenariosData as Record<string, ScenarioData>;
   const scenarioLookupKey =
-    characterId && !FALLBACK_SCENARIOS[characterId]
+    characterId && !scenarios[characterId]
       ? SCENARIO_ID_MAP[characterId] || characterId
       : characterId || null;
-
-  useEffect(() => {
-    if (!scenarioLookupKey) {
-      setScenario(null);
-      setScenarioLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const fetchScenario = async () => {
-      setScenarioLoading(true);
-      setScenarioError(null);
-      try {
-        const apiScenario = await apiClient.getScenario(scenarioLookupKey);
-        if (!isMounted) return;
-        setScenario(normalizeScenarioData(apiScenario));
-        const likedFlag = Boolean((apiScenario as Record<string, boolean | undefined>).is_liked);
-        setIsLiked(likedFlag);
-        setInitialLiked(likedFlag);
-        apiClient.recordScenarioView(apiScenario.scenario_id).catch(() => {});
-      } catch (err) {
-        console.error('Failed to load scenario detail:', err);
-        if (!isMounted) return;
-        const fallbackScenario = FALLBACK_SCENARIOS[scenarioLookupKey];
-        if (fallbackScenario) {
-          setScenario(fallbackScenario);
-          setScenarioError('실시간 데이터를 불러오지 못해 임시 정보로 표시합니다.');
-          setIsLiked(false);
-          setInitialLiked(false);
-        } else {
-          setScenario(null);
-          setScenarioError('시나리오를 찾을 수 없습니다.');
-        }
-      } finally {
-        if (isMounted) {
-          setScenarioLoading(false);
-        }
-      }
-    };
-
-    fetchScenario();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [scenarioLookupKey]);
-
-  useEffect(() => {
-    if (!scenarioLookupKey) {
-      setMetrics(null);
-      return;
-    }
-
-    let isMounted = true;
-    setMetricsLoading(true);
-    setMetricsError(null);
-
-    apiClient
-      .getScenarioMetrics(scenarioLookupKey)
-      .then((data) => {
-        if (!isMounted) return;
-        setMetrics(data);
-      })
-      .catch((err) => {
-        console.error('Failed to load scenario metrics:', err);
-        if (isMounted) {
-          setMetricsError('실시간 지표를 불러올 수 없습니다.');
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setMetricsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [scenarioLookupKey]);
-
-  const {
-    comments,
-    totalCount: totalComments,
-    loading: commentsLoading,
-    submitting: commentsSubmitting,
-    error: commentsError,
-    hasMore: hasMoreComments,
-    loadMore: loadMoreComments,
-    addComment,
-    removeComment
-  } = useScenarioComments(scenarioLookupKey || undefined);
-
-  const handleSubmitComment = useCallback(
-    async (content: string) => {
-      if (!isLoggedIn) {
-        openLoginModal();
-        throw new Error('로그인이 필요합니다.');
-      }
-      await addComment(content);
-      setMetrics((prev) => (prev ? { ...prev, comments: prev.comments + 1 } : prev));
-    },
-    [addComment, isLoggedIn, openLoginModal]
-  );
-
-  const handleDeleteComment = useCallback(
-    async (commentId: string) => {
-      await removeComment(commentId);
-      setMetrics((prev) =>
-        prev ? { ...prev, comments: Math.max(0, prev.comments - 1) } : prev
-      );
-    },
-    [removeComment]
-  );
-
-  if (scenarioLoading) {
-    return (
-      <div className="min-h-screen bg-[#04010f] text-slate-100">
-        <ChatHeader
-          onToggleSidebar={toggleSidebar}
-          onOpenSettings={openSettings}
-          title="시나리오 로딩 중"
-          showBackButton={true}
-          titleClassName="font-display-main text-theme-primary"
-        />
-        <main className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(88,28,135,0.35)_0%,transparent_65%)]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-500 mx-auto"></div>
-            <p className="text-slate-300 text-sm">시나리오 데이터를 불러오는 중입니다...</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const scenario = scenarioLookupKey ? scenarios[scenarioLookupKey] : null;
 
   if (!scenario) {
     return (
@@ -286,9 +114,6 @@ export default function CharacterPage() {
             <div className="text-6xl mb-2">❓</div>
             <h1 className="text-3xl font-hero-mincho text-white">존재하지 않는 시나리오</h1>
             <p className="text-slate-300">요청하신 시나리오를 찾을 수 없습니다.</p>
-            {scenarioError && (
-              <p className="text-sm text-slate-400">{scenarioError}</p>
-            )}
             <Link
               to="/"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold tracking-wide transition-transform hover:scale-[1.03] hover:shadow-[0_18px_36px_rgba(99,102,241,0.45)]"
@@ -301,54 +126,19 @@ export default function CharacterPage() {
     );
   }
 
-  const baseLikes = metrics?.likes ?? scenario?.likes ?? 0;
-  const likeAdjustment = isLiked === initialLiked ? 0 : isLiked ? 1 : -1;
-  const likeCount = baseLikes + likeAdjustment;
-  const commentCount = metrics?.comments ?? totalComments ?? scenario?.comments ?? 0;
-  const chatCount = metrics?.chat_sessions ?? scenario?.chatSessions ?? scenario?.views ?? 0;
-  const affinityScore = metrics?.avg_affinity ?? scenario?.avgAffinity ?? null;
-  const bubbleReward = metrics?.bubble_reward ?? scenario?.bubbleReward ?? null;
-
   const handleStartChat = () => {
-    if (scenario?.implemented) {
+    if (scenario.implemented) {
       navigate(`/chat/${scenario.id}`);
     } else {
       alert('백엔드 API 연결 후 채팅 기능이 활성화됩니다!');
     }
   };
 
-  const handleLike = async () => {
-    if (!scenarioLookupKey) return;
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
-    const prevLiked = isLiked;
-    setIsLiked(!prevLiked);
-
-    try {
-      const result = await apiClient.toggleScenarioLike(scenarioLookupKey);
-      setMetrics((prev) =>
-        prev
-          ? { ...prev, likes: result.total_likes }
-          : {
-              scenario_id: scenarioLookupKey,
-              likes: result.total_likes,
-              comments: commentCount,
-              chat_sessions: chatCount,
-              total_messages: chatCount,
-              avg_affinity: affinityScore ?? 0,
-              bubble_reward: bubbleReward ?? 0
-            }
-      );
-      setInitialLiked(result.liked);
-      setIsLiked(result.liked);
-    } catch (error) {
-      console.error('Failed to toggle like:', error);
-      setIsLiked(prevLiked);
-    }
+  const handleLike = () => {
+    setIsLiked((prev) => !prev);
   };
+
+  const likeCount = scenario.likes + (isLiked ? 1 : 0);
 
   const stats = useMemo(
     () => [
@@ -361,34 +151,22 @@ export default function CharacterPage() {
       },
       {
         label: '댓글',
-        value: commentCount.toLocaleString('ko-KR'),
+        value: scenario.comments.toLocaleString('ko-KR'),
         icon: '💬',
         highlightClass: 'text-sky-200 drop-shadow-[0_0_18px_rgba(125,211,252,0.4)]'
       },
       {
-        label: '채팅 수',
-        value: chatCount.toLocaleString('ko-KR'),
-        icon: '🗣️',
-        highlightClass: 'text-indigo-200 drop-shadow-[0_0_20px_rgba(129,140,248,0.35)]'
-      },
-      {
-        label: '평균 친밀도',
-        value: affinityScore !== null ? `${affinityScore.toFixed(1)}%` : '데이터 준비 중',
-        icon: '🤝',
-        highlightClass: 'text-emerald-200 drop-shadow-[0_0_18px_rgba(16,185,129,0.35)]'
-      },
-      {
-        label: '버블 보상',
-        value: bubbleReward ? `+${bubbleReward.toLocaleString('ko-KR')}개` : '준비 중',
-        icon: '🫧',
-        highlightClass: 'text-cyan-200 drop-shadow-[0_0_18px_rgba(6,182,212,0.35)]'
+        label: '조회수',
+        value: scenario.views.toLocaleString('ko-KR'),
+        icon: '👁️',
+        highlightClass: 'text-amber-200 drop-shadow-[0_0_20px_rgba(251,191,36,0.4)]'
       }
     ],
-    [likeCount, commentCount, chatCount, affinityScore, bubbleReward]
+    [scenario.comments, scenario.views, likeCount]
   );
 
-  const detailText = scenario?.detailDescription || scenario?.description || '';
-  const detailShouldToggle = detailText.length > 260;
+  const detailText = scenario.detailDescription || scenario.description;
+ const detailShouldToggle = detailText.length > 260;
 
   return (
     <div className="min-h-screen bg-[#04010f] text-slate-100">
@@ -402,11 +180,6 @@ export default function CharacterPage() {
 
       <main className="min-h-[calc(100vh-64px)] overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(88,28,135,0.35)_0%,transparent_65%)]">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12 space-y-8">
-          {scenarioError && (
-            <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              {scenarioError}
-            </div>
-          )}
           <section className={`relative rounded-[36px] overflow-hidden ${PRIMARY_PANEL}`}>
             <div className="grid md:grid-cols-[1fr_1.2fr] gap-0">
               <div className="relative min-h-[320px] md:min-h-[420px]">
@@ -467,7 +240,7 @@ export default function CharacterPage() {
                   </div>
                 )}
 
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                <div className="grid sm:grid-cols-3 gap-3">
                   {stats.map((stat) => {
                     const content = (
                       <>
@@ -509,12 +282,6 @@ export default function CharacterPage() {
                     );
                   })}
                 </div>
-                {metricsLoading && (
-                  <p className="text-xs text-indigo-200/70">실시간 지표를 불러오는 중입니다...</p>
-                )}
-                {metricsError && !metricsLoading && (
-                  <p className="text-xs text-amber-200/80">{metricsError}</p>
-                )}
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <button
@@ -651,24 +418,8 @@ export default function CharacterPage() {
               </div>
             </section>
           )}
-
-          <ScenarioComments
-            scenarioTitle={scenario.title}
-            comments={comments}
-            totalCount={totalComments}
-            loading={commentsLoading}
-            submitting={commentsSubmitting}
-            error={commentsError}
-            hasMore={hasMoreComments}
-            onLoadMore={loadMoreComments}
-            onSubmit={handleSubmitComment}
-            onDelete={handleDeleteComment}
-            isLoggedIn={isLoggedIn}
-            onRequireLogin={openLoginModal}
-          />
         </div>
       </main>
-      <LoginModal />
     </div>
   );
 }
