@@ -760,6 +760,8 @@ async def chat_stream(
 
             # 대화 추출
             agent_responses = result_state.get("output", {}).get("dialogues", [])
+            print(f"📡 [SSE] DEBUG: result_state.output.dialogues = {len(agent_responses)} dialogues")
+            print(f"📡 [SSE] DEBUG: current_stage = {result_state.get('current_stage')}")
             has_more_flag = result_state.get("has_more")
             if has_more_flag is None:
                 has_more_flag = result_state.get("has_more_dialogues", False)
