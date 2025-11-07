@@ -9,6 +9,9 @@ interface CharacterCard {
   likes: number;
   comments: number;
   views: number;
+  chatSessions?: number;
+  avgAffinity?: number;
+  bubbleReward?: number;
   tags: string[];
   size: 'large' | 'normal';
   link: string;
@@ -452,6 +455,12 @@ function CharacterCardComponent({
               draggable={false}
               style={{ transformOrigin: 'center' }}
             />
+            {character.bubbleReward ? (
+              <div className="absolute top-3 right-3 z-20 inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur">
+                <span role="img" aria-hidden="true">🫧</span>
+                +{character.bubbleReward.toLocaleString('ko-KR')}
+              </div>
+            ) : null}
           </div>
 
           {/* 카드 내용 - 개선된 구조 */}
@@ -502,22 +511,21 @@ function CharacterCardComponent({
             </div>
           </div>
 
-          {/* 상호작용 지표 - Zeplin 스타일 */}
-          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
-            <div className="bg-theme-surface rounded-full px-3 py-1 shadow-theme flex items-center space-x-2 border border-theme-card">
-              {/* 좋아요 버튼 */}
+          {/* 상호작용 지표 */}
+          <div className="absolute bottom-3 left-4 right-4">
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-theme-card bg-theme-surface px-3 py-2 shadow-theme text-[11px] text-theme-primary">
               <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onLike();
                 }}
-                className="flex items-center space-x-1"
+                className="flex items-center gap-1 rounded-xl bg-white/5 px-2 py-1 text-left hover:bg-white/10 transition-colors"
               >
                 <svg
                   className={`w-3.5 h-3.5 ${isLiked ? 'text-red-500 fill-current' : 'text-theme-secondary'}`}
                   viewBox="0 0 20 20"
-                  fill={isLiked ? "currentColor" : "none"}
+                  fill={isLiked ? 'currentColor' : 'none'}
                   stroke="currentColor"
                 >
                   <path
@@ -526,26 +534,35 @@ function CharacterCardComponent({
                     clipRule="evenodd"
                   />
                 </svg>
-                <span className="text-xs font-inter text-theme-primary">
-                  {character.likes}
-                </span>
+                <span>좋아요 {character.likes.toLocaleString('ko-KR')}</span>
               </button>
 
-              {/* 댓글 수 */}
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center gap-1 rounded-xl bg-white/5 px-2 py-1">
                 <svg className="w-3.5 h-3.5 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                <span className="text-xs font-inter text-theme-primary">{character.comments}</span>
+                <span>댓글 {character.comments.toLocaleString('ko-KR')}</span>
               </div>
 
-              {/* 조회수 */}
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center gap-1 rounded-xl bg-white/5 px-2 py-1">
                 <svg className="w-3.5 h-3.5 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2l-4 4-4-4H7a2 2 0 01-2-2v-2" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h.01M11 8h.01M15 8h.01M7 12h10" />
                 </svg>
-                <span className="text-xs font-inter text-theme-primary">{character.views}</span>
+                <span>채팅 {(character.chatSessions ?? character.views).toLocaleString('ko-KR')}</span>
+              </div>
+
+              <div className="flex items-center gap-1 rounded-xl bg-white/5 px-2 py-1">
+                <svg className="w-3.5 h-3.5 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 1.657-1.343 3-3 3S6 12.657 6 11s1.343-3 3-3 3 1.343 3 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 1.657 1.343 3 3 3s3-1.343 3-3-1.343-3-3-3" />
+                </svg>
+                <span>
+                  친밀도{' '}
+                  {character.avgAffinity !== undefined && character.avgAffinity !== null
+                    ? `${character.avgAffinity.toFixed(1)}%`
+                    : '신규'}
+                </span>
               </div>
             </div>
           </div>
@@ -567,33 +584,59 @@ function ScenarioDetailModal({ character, onClose, isLiked }: ScenarioDetailModa
   const [isExpanded, setIsExpanded] = useState(false);
   const descriptionShouldToggle = character.description.length > 160;
 
-  const stats = useMemo(() => [
-    {
-      label: '좋아요',
-      value: character.likes.toLocaleString('ko-KR'),
-      icon: '❤️',
-      accent: 'from-rose-500/25 via-orange-500/10 to-amber-400/10',
-      textClass: 'text-rose-100',
-      glow: 'shadow-[0_0_35px_rgba(244,63,94,0.25)]',
-      isHighlighted: isLiked
-    },
-    {
-      label: '댓글',
-      value: character.comments.toLocaleString('ko-KR'),
-      icon: '💬',
-      accent: 'from-sky-500/25 via-cyan-500/15 to-emerald-400/10',
-      textClass: 'text-sky-100',
-      glow: 'shadow-[0_0_35px_rgba(56,189,248,0.25)]'
-    },
-    {
-      label: '조회수',
-      value: character.views.toLocaleString('ko-KR'),
-      icon: '👁️',
-      accent: 'from-amber-400/25 via-yellow-500/15 to-fuchsia-500/10',
-      textClass: 'text-amber-100',
-      glow: 'shadow-[0_0_35px_rgba(251,191,36,0.18)]'
-    }
-  ], [character.comments, character.likes, character.views, isLiked]);
+  const stats = useMemo(() => {
+    const chatCount = character.chatSessions ?? character.views;
+    const affinityValue =
+      character.avgAffinity !== undefined && character.avgAffinity !== null
+        ? `${character.avgAffinity.toFixed(1)}%`
+        : '데이터 준비 중';
+
+    return [
+      {
+        label: '좋아요',
+        value: character.likes.toLocaleString('ko-KR'),
+        icon: '❤️',
+        accent: 'from-rose-500/25 via-orange-500/10 to-amber-400/10',
+        textClass: 'text-rose-100',
+        glow: 'shadow-[0_0_35px_rgba(244,63,94,0.25)]',
+        isHighlighted: isLiked
+      },
+      {
+        label: '댓글',
+        value: character.comments.toLocaleString('ko-KR'),
+        icon: '💬',
+        accent: 'from-sky-500/25 via-cyan-500/15 to-emerald-400/10',
+        textClass: 'text-sky-100',
+        glow: 'shadow-[0_0_35px_rgba(56,189,248,0.25)]'
+      },
+      {
+        label: '채팅 수',
+        value: chatCount.toLocaleString('ko-KR'),
+        icon: '🗣️',
+        accent: 'from-amber-400/25 via-yellow-500/15 to-fuchsia-500/10',
+        textClass: 'text-amber-100',
+        glow: 'shadow-[0_0_35px_rgba(251,191,36,0.18)]'
+      },
+      {
+        label: '평균 친밀도',
+        value: affinityValue,
+        icon: '🤝',
+        accent: 'from-emerald-400/25 via-teal-500/15 to-blue-500/10',
+        textClass: 'text-emerald-100',
+        glow: 'shadow-[0_0_35px_rgba(16,185,129,0.18)]'
+      },
+      {
+        label: '버블 보상',
+        value: character.bubbleReward
+          ? `+${character.bubbleReward.toLocaleString('ko-KR')}개`
+          : '준비 중',
+        icon: '🫧',
+        accent: 'from-cyan-400/25 via-sky-500/15 to-purple-500/10',
+        textClass: 'text-cyan-100',
+        glow: 'shadow-[0_0_35px_rgba(6,182,212,0.18)]'
+      }
+    ];
+  }, [character, isLiked]);
 
   return (
     <div className="relative w-full max-w-4xl text-slate-100 animate-scroll-unfurl" onClick={(e) => e.stopPropagation()}>
@@ -665,7 +708,7 @@ function ScenarioDetailModal({ character, onClose, isLiked }: ScenarioDetailModa
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             {stats.map(stat => (
               <div
                 key={stat.label}
