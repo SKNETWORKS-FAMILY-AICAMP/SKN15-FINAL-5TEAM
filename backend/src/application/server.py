@@ -20,21 +20,22 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 # ------------------------------------------------------------
+# ✅ Rate Limiting 모듈 로드
 # ------------------------------------------------------------
-from src.middleware import setup_rate_limiting
+from src.application.middleware.rate_limiter import setup_rate_limiting
 
 # ------------------------------------------------------------
+# ✅ 라우터 import (4-layer 아키텍처)
 # ------------------------------------------------------------
-from api.routes import system_routes
-from api.routes import scenario_routes
-from api.routes import session_routes
-from api.routes import monitoring_routes
-from api.routes import auth_routes
-from api.routes import user_routes
-from api.routes import chat_routes
-# 에만 있던 새로운 라우터들
-from api.routes import leaderboard_routes
-from api.routes import memories_routes
+from src.application.routes import system_routes
+from src.application.routes import scenario_routes
+from src.application.routes import session_routes
+from src.application.routes import monitoring_routes
+from src.application.routes import auth_routes
+from src.application.routes import user_routes
+from src.application.routes import chat_routes
+from src.application.routes import leaderboard_routes
+from src.application.routes import memories_routes
 
 
 # ============================================================
@@ -130,7 +131,7 @@ async def shutdown_event():
     print("=" * 60)
 
     # 의존성 정리
-    from api.dependencies.api_deps import cleanup_dependencies
+    from src.application.dependencies.api_deps import cleanup_dependencies
     cleanup_dependencies()
 
 
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "api.server:app",  # jw 폴더 구조에 맞게 수정
+        "src.application.server:app",  # 4-layer 아키텍처에 맞게 수정
         host=os.getenv("API_HOST", "0.0.0.0"),
         port=int(os.getenv("API_PORT", "8000")),
         reload=os.getenv("API_RELOAD", "true").lower() == "true",

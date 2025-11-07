@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 """
-FastAPI Server for KIME Chat Agent (Refactored)
-- 경량화된 메인 파일: 라우터 등록 및 미들웨어만 관리
-- 모든 API 로직은 src/api/ 모듈로 분리
+⚠️  DEPRECATED - 이 파일은 사용되지 않습니다
+새로운 4-layer 아키텍처에서는 src/application/server.py를 사용합니다.
+
+Dockerfile에서 'python -m src.application.server' 명령으로 실행됩니다.
 """
+import sys
+print("=" * 60)
+print("⚠️  경고: 이 파일(api_server.py)은 더 이상 사용되지 않습니다.")
+print("=" * 60)
+print("새로운 진입점: src/application/server.py")
+print("실행 명령: python -m src.application.server")
+print("=" * 60)
+sys.exit(1)
 
 # ------------------------------------------------------------
 # ✅ 환경변수 로드 (.env 파일에서 API 키 등 불러옴)
