@@ -17,64 +17,38 @@ from typing import Any, Dict, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
-try:
-    from backend.api.dependencies.auth_deps import require_auth
-except ModuleNotFoundError:
-    try:
-        from api.dependencies.auth_deps import require_auth
-    except ModuleNotFoundError:
-        from src.auth.dependencies import require_auth
+    from ..dependencies.auth_deps import require_auth
 
-try:
     from backend.src.core.graph_state import create_initial_graph_state
-except ModuleNotFoundError:
-    from src.core.graph_state import create_initial_graph_state
 
-try:
     from backend.src.tools.image_manager import ImageManager
-except ModuleNotFoundError:
-    from src.tools.image_manager import ImageManager
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
-try:
-    from backend.api.dependencies.api_deps import (
+    from ..dependencies.api_deps import (
         get_db_manager,
         get_workflow,
         get_session_manager,
         load_scenario,
     )
 except ModuleNotFoundError:
-    from api.dependencies.api_deps import (
+    from ..dependencies.api_deps import (
         get_db_manager,
         get_workflow,
         get_session_manager,
         load_scenario,
     )
 
-try:
     from backend.domain.services.evaluation.memory_extractor import extract_and_save_memories
-except ModuleNotFoundError:
-    from domain.services.evaluation.memory_extractor import extract_and_save_memories
 
-try:
     from backend.src.utils.conversation_summarizer import update_conversation_summary
-except ModuleNotFoundError:
-    from src.utils.conversation_summarizer import update_conversation_summary
 
-try:
     from backend.src.utils.path_resolver import resolve_path
-except ModuleNotFoundError:
-    from src.utils.path_resolver import resolve_path
 
 # ============================================================
 # 라우터 생성
 # ============================================================
 router = APIRouter()
-
 
 async def process_post_response_tasks(
     session_id: str,
@@ -191,7 +165,6 @@ async def process_post_response_tasks(
         print(f"❌ [Background] Unexpected error in post-response tasks: {e}")
         import traceback
         traceback.print_exc()
-
 
 # ============================================================
 # 🧵 기본 채팅 엔드포인트
@@ -650,7 +623,6 @@ async def chat(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # ============================================================
 # 📡 스트리밍 채팅 엔드포인트

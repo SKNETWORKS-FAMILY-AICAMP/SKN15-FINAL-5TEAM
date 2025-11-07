@@ -5,5 +5,23 @@
 """
 
 # ============================================================
+# 4-layer 아키텍처 imports
 # ============================================================
-from api.dependencies.auth_deps import optional_auth, require_auth  # noqa: F401
+from .auth_deps import optional_auth, require_auth  # noqa: F401
+from .api_deps import (  # noqa: F401
+    get_cache_manager,
+    get_db_manager,
+    get_image_manager,
+    get_session_manager,
+    get_workflow,
+)
+
+__all__ = [
+    "optional_auth",
+    "require_auth",
+    "get_cache_manager",
+    "get_db_manager",
+    "get_image_manager",
+    "get_session_manager",
+    "get_workflow",
+]

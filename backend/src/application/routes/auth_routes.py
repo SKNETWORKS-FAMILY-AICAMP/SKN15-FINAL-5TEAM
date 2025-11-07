@@ -14,68 +14,30 @@ from typing import Dict, Optional
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-try:
-    from backend.api.dependencies.auth_deps import require_auth
-except ModuleNotFoundError:
-    try:
-        from api.dependencies.auth_deps import require_auth
-    except ModuleNotFoundError:
-        from src.auth.dependencies import require_auth
-
-try:
-    from backend.api.security.jwt_utils import (
-        create_access_token,
-        create_refresh_token,
-        refresh_access_token,
-    )
-except ModuleNotFoundError:
-    from api.security.jwt_utils import (
-        create_access_token,
-        create_refresh_token,
-        refresh_access_token,
-    )
-
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
-    from src.infrastructure.database.db_manager import DatabaseManager
-
-try:
-    from backend.src.middleware import limiter, AUTH_RATE_LIMIT
-except ModuleNotFoundError:
-    from src.middleware import limiter, AUTH_RATE_LIMIT
-
-try:
-    from backend.api.dependencies.api_deps import get_db_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager
-
-try:
-    from backend.api.schemas.api_models import (
-        LoginRequest,
-        RegisterRequest,
-        AuthResponse,
-        TokenRefreshRequest,
-        TokenRefreshResponse,
-        PasswordResetRequest,
-        PasswordResetConfirm,
-    )
-except ModuleNotFoundError:
-    from api.schemas.api_models import (
-        LoginRequest,
-        RegisterRequest,
-        AuthResponse,
-        TokenRefreshRequest,
-        TokenRefreshResponse,
-        PasswordResetRequest,
-        PasswordResetConfirm,
-    )
+# 4-layer 아키텍처 imports
+from ..dependencies.auth_deps import require_auth
+from ..security.jwt_utils import (
+    create_access_token,
+    create_refresh_token,
+    refresh_access_token,
+)
+from ..middleware import limiter, AUTH_RATE_LIMIT
+from ..dependencies.api_deps import get_db_manager
+from ..schemas.api_models import (
+    LoginRequest,
+    RegisterRequest,
+    AuthResponse,
+    TokenRefreshRequest,
+    TokenRefreshResponse,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+)
+from src.infrastructure.database.db_manager import DatabaseManager
 
 # ============================================================
 # 라우터 생성
 # ============================================================
 router = APIRouter()
-
 
 # ============================================================
 # 🚦 엔드포인트 정의
@@ -171,7 +133,6 @@ async def register(
             token_type="bearer"
         )
 
-
 @router.post("/login", response_model=AuthResponse)
 @limiter.limit(AUTH_RATE_LIMIT)
 async def login(
@@ -229,7 +190,6 @@ async def login(
             token_type="bearer"
         )
 
-
 @router.post("/refresh", response_model=TokenRefreshResponse)
 async def refresh_token(request: TokenRefreshRequest):
     """
@@ -253,7 +213,6 @@ async def refresh_token(request: TokenRefreshRequest):
             detail="토큰 갱신에 실패했습니다",
         )
 
-
 @router.get("/me")
 async def get_me(user: Dict = Depends(require_auth)):
     """
@@ -271,7 +230,6 @@ async def get_me(user: Dict = Depends(require_auth)):
         "display_name": user.get("display_name")
     }
 
-
 @router.post("/password-reset/request")
 async def request_password_reset(
     req: PasswordResetRequest,
@@ -287,11 +245,7 @@ async def request_password_reset(
         성공 메시지
     """
     try:
-        from backend.src.utils.email_sender import send_email, generate_password_reset_email
-    except ModuleNotFoundError:
-        from src.utils.email_sender import send_email, generate_password_reset_email
-
-    try:
+        from src.domain.services.notification.email_sender import send_email, generate_password_reset_email
         # 이메일로 사용자 찾기
         user = db.get_user_by_username(req.email)
         if not user:
@@ -346,7 +300,6 @@ async def request_password_reset(
             status_code=500,
             detail="비밀번호 재설정 요청 처리 중 오류가 발생했습니다"
         )
-
 
 @router.post("/password-reset/confirm")
 async def confirm_password_reset(

@@ -11,36 +11,17 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Optional
 
-try:
-    from backend.api.schemas.api_models import SessionInfoResponse, MessageResponse
-except ModuleNotFoundError:
-    from api.schemas.api_models import SessionInfoResponse, MessageResponse
+    from ..schemas.api_models import SessionInfoResponse, MessageResponse
 
-try:
-    from backend.api.dependencies.api_deps import get_db_manager, get_session_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager, get_session_manager
+    from ..dependencies.api_deps import get_db_manager, get_session_manager
 
-try:
-    from backend.api.dependencies.auth_deps import require_auth
-except ModuleNotFoundError:
-    try:
-        from api.dependencies.auth_deps import require_auth
-    except ModuleNotFoundError:
-        from src.auth.dependencies import require_auth
+    from ..dependencies.auth_deps import require_auth
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
-try:
-    from backend.src.infrastructure.database.session_manager import HybridSessionManager
-except ModuleNotFoundError:
     from src.infrastructure.database.session_manager import HybridSessionManager
 
 router = APIRouter()
-
 
 # ============================================================
 # ============================================================
@@ -63,7 +44,6 @@ class SessionManagerAdapter:
     def delete(self, session_id: str) -> None:
         """세션 삭제"""
         self._hybrid.delete_session(session_id)
-
 
 # ============================================================
 # 에이피아이 엔드포인트
@@ -117,7 +97,6 @@ async def get_user_last_session(
         "conversation_summary": last_session.get("conversation_summary")  # 장기기억 요약
     }
 
-
 @router.get("/{session_id}", response_model=SessionInfoResponse)
 async def get_session(
     session_id: str,
@@ -146,7 +125,6 @@ async def get_session(
         stage_turn=state.get("stage_turn", 0),
         is_active=True
     )
-
 
 @router.delete("/{session_id}", response_model=MessageResponse)
 async def delete_session(

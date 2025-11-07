@@ -13,9 +13,9 @@ from functools import lru_cache
 from src.infrastructure.database.db_manager import DatabaseManager
 from src.infrastructure.cache.cache_manager import create_cache_manager_from_env
 from src.infrastructure.database.session_manager import HybridSessionManager
-from src.core.workflow import create_workflow
-from src.utils.scenario_loader import scenario_loader
-from src.tools.image_manager import ImageManager
+# from src.domain.workflow import create_workflow  # TODO: 워크플로우 재구성 후 활성화
+from src.domain.services.orchestration.scenario_loader import scenario_loader
+# from src.domain.services.image_manager import ImageManager  # TODO: 이미지 매니저 위치 확인 후 수정
 
 
 # ============================================================
@@ -25,7 +25,7 @@ _db_manager: Optional[DatabaseManager] = None
 _cache_manager = None
 _hybrid_session_manager: Optional[HybridSessionManager] = None
 _workflow = None
-_image_manager: Optional[ImageManager] = None
+_image_manager = None  # TODO: ImageManager 타입 힌트 재활성화
 
 
 # ============================================================
@@ -70,20 +70,23 @@ def get_session_manager() -> HybridSessionManager:
 
 
 # ============================================================
-#  
+# Workflow (TODO: 재구성 필요)
 # ============================================================
 def get_workflow():
     """
     LangGraph Workflow 싱글톤 인스턴스 반환
+
+    TODO: workflow가 Domain layer로 이동 후 경로 수정 필요
     """
     global _workflow
     if _workflow is None:
-        _workflow = create_workflow()
+        # _workflow = create_workflow()  # TODO: 재활성화
+        raise NotImplementedError("Workflow는 Domain layer 재구성 중입니다")
     return _workflow
 
 
 # ============================================================
-#  
+# Scenario Loader
 # ============================================================
 @lru_cache(maxsize=1)
 def get_scenario_loader():
@@ -94,15 +97,18 @@ def get_scenario_loader():
 
 
 # ============================================================
-#  
+# Image Manager (TODO: 재구성 필요)
 # ============================================================
-def get_image_manager() -> ImageManager:
+def get_image_manager():
     """
     ImageManager 싱글톤 인스턴스 반환
+
+    TODO: ImageManager 위치 확인 및 경로 수정 필요
     """
     global _image_manager
     if _image_manager is None:
-        _image_manager = ImageManager()
+        # _image_manager = ImageManager()  # TODO: 재활성화
+        raise NotImplementedError("ImageManager는 재구성 중입니다")
     return _image_manager
 
 
