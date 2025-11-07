@@ -388,40 +388,71 @@ class ChildrenAgent:
             elif isinstance(dialogue_data, dict):
                 dialogues_list = [dialogue_data]
 
-        # 3️⃣ Scene 구조: {"scene": {"characters": {"rengoku": {"dialogue": [...]}, ...}}}
+        # 3️⃣ Scene 구조: {"scene": {"characters": {...}, "dialogues": [...], "dialogue": [...]}}
         elif "scene" in llm_response:
             scene = llm_response.get("scene", {})
             if isinstance(scene, dict):
-                # scene.characters 구조
-                characters = scene.get("characters", {})
-                if isinstance(characters, dict):
-                    for speaker, char_data in characters.items():
-                        if isinstance(char_data, dict) and "dialogue" in char_data:
-                            char_dialogues = char_data.get("dialogue", [])
-                            # dialogue가 리스트인 경우
-                            if isinstance(char_dialogues, list):
-                                for text in char_dialogues:
-                                    if text:
-                                        dialogues_list.append({
-                                            "speaker": speaker,
-                                            "text": text
-                                        })
-                            # dialogue가 문자열인 경우
-                            elif isinstance(char_dialogues, str) and char_dialogues:
-                                dialogues_list.append({
-                                    "speaker": speaker,
-                                    "text": char_dialogues
-                                })
+                # 3-1. scene.dialogues (직접 배열) - 우선 처리
+                if "dialogues" in scene:
+                    scene_dialogues = scene.get("dialogues", [])
+                    if isinstance(scene_dialogues, list):
+                        dialogues_list = scene_dialogues
 
-                # scene에 직접 dialogue 있는 경우
+                # 3-2. scene.dialogue (직접 배열)
                 if not dialogues_list and "dialogue" in scene:
                     scene_dialogue = scene.get("dialogue", [])
                     if isinstance(scene_dialogue, list):
                         dialogues_list = scene_dialogue
 
-        # 4️⃣ Characters 구조: {"characters": {"rengoku": {"dialogue": [...]}, ...}}
+                # 3-3. scene.characters (딕셔너리 형태)
+                if not dialogues_list:
+                    characters = scene.get("characters", {})
+                    if isinstance(characters, dict):
+                        for speaker, char_data in characters.items():
+                            if isinstance(char_data, dict) and "dialogue" in char_data:
+                                char_dialogues = char_data.get("dialogue", [])
+                                # dialogue가 리스트인 경우
+                                if isinstance(char_dialogues, list):
+                                    for text in char_dialogues:
+                                        if text:
+                                            dialogues_list.append({
+                                                "speaker": speaker,
+                                                "text": text
+                                            })
+                                # dialogue가 문자열인 경우
+                                elif isinstance(char_dialogues, str) and char_dialogues:
+                                    dialogues_list.append({
+                                        "speaker": speaker,
+                                        "text": char_dialogues
+                                    })
+
+                # 3-4. scene.characters (리스트 형태) - [{"name": "rengoku", "dialogue": "..."}]
+                if not dialogues_list:
+                    characters = scene.get("characters", [])
+                    if isinstance(characters, list):
+                        for char_item in characters:
+                            if isinstance(char_item, dict):
+                                speaker = char_item.get("name") or char_item.get("speaker") or char_item.get("character")
+                                char_dialogue = char_item.get("dialogue") or char_item.get("text") or char_item.get("line")
+                                if speaker and char_dialogue:
+                                    if isinstance(char_dialogue, list):
+                                        for text in char_dialogue:
+                                            if text:
+                                                dialogues_list.append({
+                                                    "speaker": speaker,
+                                                    "text": text
+                                                })
+                                    elif isinstance(char_dialogue, str):
+                                        dialogues_list.append({
+                                            "speaker": speaker,
+                                            "text": char_dialogue
+                                        })
+
+        # 4️⃣ Characters 구조: {"characters": {...}} 또는 {"characters": [...]}
         elif "characters" in llm_response:
-            characters = llm_response.get("characters", {})
+            characters = llm_response.get("characters")
+
+            # 4-1. 딕셔너리 형태: {"rengoku": {"dialogue": [...]}, ...}
             if isinstance(characters, dict):
                 for speaker, char_data in characters.items():
                     if isinstance(char_data, dict) and "dialogue" in char_data:
@@ -438,6 +469,26 @@ class ChildrenAgent:
                                 "speaker": speaker,
                                 "text": char_dialogues
                             })
+
+            # 4-2. 리스트 형태: [{"name": "rengoku", "dialogue": "..."}]
+            elif isinstance(characters, list):
+                for char_item in characters:
+                    if isinstance(char_item, dict):
+                        speaker = char_item.get("name") or char_item.get("speaker") or char_item.get("character")
+                        char_dialogue = char_item.get("dialogue") or char_item.get("text") or char_item.get("line")
+                        if speaker and char_dialogue:
+                            if isinstance(char_dialogue, list):
+                                for text in char_dialogue:
+                                    if text:
+                                        dialogues_list.append({
+                                            "speaker": speaker,
+                                            "text": text
+                                        })
+                            elif isinstance(char_dialogue, str):
+                                dialogues_list.append({
+                                    "speaker": speaker,
+                                    "text": char_dialogue
+                                })
 
         # 필드명 표준화: character → speaker, line → text
         normalized_dialogues = []
