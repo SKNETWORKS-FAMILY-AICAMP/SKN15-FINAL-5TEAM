@@ -45,13 +45,12 @@ class ScenarioLoader:
             print(f"✅ 캐시에서 시나리오 로드: {scenario_file}")
             return self.loaded_scenarios[scenario_file]
 
-        # 파일 경로 구성
-        file_path = os.path.join(self.scenarios_path, scenario_file)
-
-        # 확장자가 없고 파일이 없으면 조용히 건너뛰어 가 다른 후보를 시도하게 함
+        # 파일 경로 구성 (확장자가 없으면 .json 자동 추가)
         _, ext = os.path.splitext(scenario_file)
-        if not ext and not os.path.exists(file_path):
-            return None
+        if not ext:
+            scenario_file = f"{scenario_file}.json"
+
+        file_path = os.path.join(self.scenarios_path, scenario_file)
 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
