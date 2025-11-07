@@ -6,7 +6,7 @@ Redis (hot cache) + PostgreSQL (cold storage) 하이브리드 아키텍처
 import logging
 from typing import Optional, Dict, Any
 from uuid import UUID
-from .db_manager import DatabaseManager
+from .session_database_adapter import SessionDatabaseAdapter
 from ..cache.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
@@ -24,12 +24,12 @@ class HybridSessionManager:
 
     def __init__(
         self,
-        db_manager: DatabaseManager,
+        db_manager: SessionDatabaseAdapter,
         cache_manager: CacheManager
     ):
         """
         Args:
-            db_manager: DatabaseManager 인스턴스
+            db_manager: SessionDatabaseAdapter 인스턴스
             cache_manager: CacheManager 인스턴스
         """
         self.db = db_manager
