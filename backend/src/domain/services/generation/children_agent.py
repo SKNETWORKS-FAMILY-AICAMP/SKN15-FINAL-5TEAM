@@ -10,7 +10,7 @@ from src.domain.models.conversation import Dialogue
 from src.domain.models.story import Beat
 
 from src.domain.services.orchestration import tone_profile_loader as dialogue_tools
-from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
+from src.core.utils.llm_client import LLMClient
 from src.core.config.config_loader import get_config_loader
 import logging
 from src.core.utils.tools.training_logger import log_agent
@@ -44,7 +44,7 @@ class ChildrenAgent:
         Args:
             session_manager: 세션 관리자 (DI)
         """
-        self._llm = get_llm_client()
+        self._llm = LLMClient()
         self._session_manager = session_manager
 
     # ============================================================
