@@ -5,13 +5,14 @@ Chat Feature - Parent Agent
 Phase 1: LLM 대사 생성 연동 완료
 Phase 2: State & Stage Management 연동 완료
 Phase 3: Guardrail & Router Agents 연동 완료
+Phase 6: Scenario & Character 동적 로드 완료
 TODO: 향후 구현 필요
 - Beat 기반 대화 생성
 - 임베딩 기반 검증/분류
 """
 from typing import Dict, Any
 from ..schemas import DialogueResult, ChatMessage
-from ..services import LLMService, StateService, StageService
+from ..services import LLMService, StateService, StageService, ScenarioService
 from .guards import GuardrailAgent, RouterAgent
 from app.core.logging import get_parent_logger, print_layer_debug
 
@@ -28,6 +29,7 @@ class ChatParent:
     - Phase 1: LLM 대사 생성 ✅
     - Phase 2: State & Stage Management ✅
     - Phase 3: Guardrail & Router Agents ✅
+    - Phase 6: Scenario & Character 동적 로드 ✅
     """
 
     def __init__(self):
@@ -37,6 +39,7 @@ class ChatParent:
         self.llm_service = LLMService()
         self.state_service = StateService()
         self.stage_service = StageService()
+        self.scenario_service = ScenarioService()
         self.guardrail_agent = GuardrailAgent()
         self.router_agent = RouterAgent()
         logger.info("__init__", "ChatParent initialized with all services and agents")
@@ -48,19 +51,20 @@ class ChatParent:
         scenario_id: str
     ) -> DialogueResult:
         """
-        에이전트 파이프라인 실행 (Phase 3: Guardrail & Router 연동)
+        에이전트 파이프라인 실행 (Phase 6: Scenario & Character 동적 로드)
 
         현재 구현:
         1. Guardrail Agent로 입력 검증
         2. Router Agent로 토픽 분류
         3. State Service를 통한 상태 관리
         4. Stage Service를 통한 스테이지 진행 관리
-        5. LLM Service를 통한 실제 대사 생성
-        6. 스테이지 전환 로직
+        5. Scenario Service로 시나리오/캐릭터 로드 (NEW)
+        6. LLM Service를 통한 실제 대사 생성
+        7. 스테이지 전환 로직
 
         TODO: 향후 구현
-        7. Beat 기반 대화 생성
-        8. 임베딩 기반 검증/분류
+        8. Beat 기반 대화 생성
+        9. 임베딩 기반 검증/분류
 
         Args:
             user_message: 사용자 메시지
@@ -70,7 +74,7 @@ class ChatParent:
         Returns:
             DialogueResult
         """
-        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 3)", user_message_len=len(user_message))
+        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 6)", user_message_len=len(user_message))
         logger.info("execute", "Pipeline started", scenario_id=scenario_id, current_stage=session_state.get("current_stage"))
 
         try:
@@ -114,15 +118,33 @@ class ChatParent:
             current_stage = self.stage_service.resolve_stage(state)
             logger.info("execute", f"Current stage: {current_stage.stage_id} ({current_stage.stage_type})")
 
-            # 5. LLM 대사 생성 (Router 전략 반영)
-            # 캐릭터 설정 (하드코딩, 향후 시나리오에서 로드)
-            character_name = "탄지로"
-            personality = "정의롭고 친절하며, 가족을 소중히 여기는 검사. 항상 긍정적이고 따뜻한 말투를 사용한다."
+            # 5. 시나리오 및 캐릭터 로드
+            scenario = self.scenario_service.load_scenario(scenario_id)
 
-            # Router 전략에서 감정 가져오기 (우선순위: Router > Stage)
+            # 기본 캐릭터 설정 (폴백)
+            character_id = "tanjiro"
+            character_name = "탄지로"
+
+            # 시나리오에서 world_id 가져오기
+            world_id = None
+            if scenario:
+                world_id = scenario.get("world_id")
+                logger.info("execute", f"Scenario loaded: {scenario_id}, world: {world_id}")
+
+            # 캐릭터 정보 로드
+            personality = self.scenario_service.get_character_personality(character_id, scenario_id)
+
+            # 친밀도 (state에서 가져오거나 기본값 사용)
+            affinity = state.get("affinity", {}).get(character_id, 500)
+
+            # Router 전략에서 감정 가져오기 (우선순위: Router > Character > Stage)
             emotion = response_strategy.get("emotion", "neutral")
 
-            # 스테이지별 감정으로 폴백
+            # 캐릭터 친밀도 기반 감정으로 보정
+            if emotion == "neutral":
+                emotion = self.scenario_service.get_character_emotion(character_id, affinity)
+
+            # 스테이지별 감정으로 최종 폴백
             if emotion == "neutral":
                 emotion_map = {
                     "intro": "friendly",

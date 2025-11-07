@@ -5,5 +5,6 @@ Chat Feature - Services
 from .llm_service import LLMService
 from .state_service import StateService
 from .stage_service import StageService, StageDefinition
+from .scenario_service import ScenarioService
 
-__all__ = ["LLMService", "StateService", "StageService", "StageDefinition"]
+__all__ = ["LLMService", "StateService", "StageService", "StageDefinition", "ScenarioService"]
