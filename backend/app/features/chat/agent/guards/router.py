@@ -5,6 +5,7 @@ Router Agent - 토픽 분류
 import re
 from typing import Dict, Any, Optional, List
 from app.core.logging import get_parent_logger
+from app.core.embeddings import get_embeddings_service
 
 logger = get_parent_logger("RouterAgent")
 
@@ -33,11 +34,84 @@ class RouterAgent:
     - 토픽 카테고리 분류
     - 적절한 응답 전략 선택
 
-    Phase 3: 키워드 기반 간소화 버전
-    TODO: 향후 임베딩 기반 분류 추가
+    Phase 7: 임베딩 기반 분류 + 키워드 fallback
     """
 
-    # 토픽별 키워드 (간소화 버전)
+    # 토픽별 예시 문장 (임베딩용)
+    TOPIC_EXAMPLES = {
+        "greeting": [
+            "안녕하세요",
+            "처음 뵙겠습니다",
+            "반갑습니다",
+            "하이",
+            "헬로"
+        ],
+        "farewell": [
+            "안녕히 계세요",
+            "나중에 봐요",
+            "다음에 또 만나요",
+            "그만 이야기할게요",
+            "잘 가요"
+        ],
+        "question": [
+            "이게 뭐예요?",
+            "어디로 가야 하나요?",
+            "왜 그런 거죠?",
+            "어떻게 하면 되나요?",
+            "누가 한 거예요?"
+        ],
+        "emotion_positive": [
+            "정말 좋아요!",
+            "최고예요!",
+            "감사합니다!",
+            "너무 행복해요",
+            "기분이 좋네요"
+        ],
+        "emotion_negative": [
+            "화가 나요",
+            "슬퍼요",
+            "짜증이 나네요",
+            "우울해요",
+            "너무 힘들어요"
+        ],
+        "agreement": [
+            "네, 알겠습니다",
+            "그래요, 맞아요",
+            "오케이",
+            "좋아요",
+            "응"
+        ],
+        "disagreement": [
+            "아니요",
+            "싫어요",
+            "안 할래요",
+            "거절할게요",
+            "반대합니다"
+        ],
+        "personal": [
+            "저는요",
+            "제 이야기를 해볼게요",
+            "나는 말이야",
+            "우리 가족은",
+            "내 생각에는"
+        ],
+        "scenario_specific": [
+            "도깨비가 어디 있나요?",
+            "임무를 완수했어요",
+            "이 퀘스트 어떻게 해요?",
+            "미션 진행 상황은?",
+            "목표는 뭔가요?"
+        ],
+        "general": [
+            "그냥 이야기하고 싶어요",
+            "요즘 어때요?",
+            "재미있네요",
+            "계속 해봐요",
+            "그렇군요"
+        ]
+    }
+
+    # 토픽별 키워드 (fallback용)
     TOPIC_KEYWORDS = {
         "greeting": {
             "keywords": ["안녕", "하이", "hello", "hi", "헬로", "처음", "반가"],
@@ -81,13 +155,62 @@ class RouterAgent:
         }
     }
 
-    def __init__(self):
-        """RouterAgent 초기화"""
-        logger.info("__init__", "RouterAgent initialized")
+    def __init__(self, use_embeddings: bool = True):
+        """
+        RouterAgent 초기화
+
+        Args:
+            use_embeddings: 임베딩 기반 분류 사용 여부
+        """
+        self.use_embeddings = use_embeddings
+        self.embeddings_service = None
+        self.topic_embeddings: Dict[str, List[float]] = {}
+
+        if use_embeddings:
+            try:
+                self.embeddings_service = get_embeddings_service()
+                self._precompute_topic_embeddings()
+                logger.info("__init__", "RouterAgent initialized with embeddings")
+            except Exception as e:
+                logger.warning("__init__", f"Failed to initialize embeddings: {e}. Falling back to keywords.")
+                self.use_embeddings = False
+        else:
+            logger.info("__init__", "RouterAgent initialized (keyword-only)")
+
+    def _precompute_topic_embeddings(self):
+        """토픽별 예시 문장들의 평균 임베딩을 미리 계산"""
+        if not self.embeddings_service:
+            return
+
+        logger.info("_precompute_topic_embeddings", "Precomputing topic embeddings...")
+
+        for topic, examples in self.TOPIC_EXAMPLES.items():
+            try:
+                # 배치로 임베딩 생성
+                embeddings = self.embeddings_service.embed_batch(examples)
+
+                # 평균 임베딩 계산 (centroid)
+                import numpy as np
+                avg_embedding = np.mean(embeddings, axis=0).tolist()
+
+                self.topic_embeddings[topic] = avg_embedding
+
+                logger.debug(
+                    "_precompute_topic_embeddings",
+                    f"Topic '{topic}' embedded",
+                    examples_count=len(examples)
+                )
+
+            except Exception as e:
+                logger.error("_precompute_topic_embeddings", f"Failed to embed topic '{topic}': {e}")
+
+        logger.info("_precompute_topic_embeddings", f"✅ Precomputed {len(self.topic_embeddings)} topic embeddings")
 
     def classify(self, user_input: str, state: Dict[str, Any]) -> RouteResult:
         """
         사용자 입력 분류
+
+        Phase 7: 임베딩 기반 → 키워드 fallback
 
         Args:
             user_input: 사용자 입력
@@ -98,6 +221,85 @@ class RouterAgent:
         """
         user_input_lower = user_input.lower().strip()
 
+        # 1. 임베딩 기반 분류 시도
+        if self.use_embeddings and self.embeddings_service and self.topic_embeddings:
+            try:
+                embedding_result = self._classify_by_embedding(user_input, state)
+                if embedding_result.confidence >= 0.6:  # 신뢰도 충분
+                    logger.info(
+                        "classify",
+                        f"✅ Topic classified (embedding): {embedding_result.topic}",
+                        confidence=round(embedding_result.confidence, 2),
+                        method="embedding"
+                    )
+                    return embedding_result
+            except Exception as e:
+                logger.warning("classify", f"Embedding classification failed: {e}. Falling back to keywords.")
+
+        # 2. 키워드 fallback
+        return self._classify_by_keywords(user_input_lower, state)
+
+    def _classify_by_embedding(self, user_input: str, state: Dict[str, Any]) -> RouteResult:
+        """
+        임베딩 기반 분류
+
+        Args:
+            user_input: 사용자 입력
+            state: 세션 상태
+
+        Returns:
+            RouteResult
+        """
+        # 사용자 입력 임베딩
+        input_embedding = self.embeddings_service.embed(user_input)
+
+        # 각 토픽과의 유사도 계산
+        similarities = self.embeddings_service.find_most_similar(
+            query_embedding=input_embedding,
+            candidate_embeddings=self.topic_embeddings,
+            top_k=3  # 상위 3개
+        )
+
+        # 컨텍스트 기반 조정
+        context_modifiers = self._get_context_modifiers(state)
+
+        adjusted_similarities = []
+        for topic, similarity in similarities:
+            # 컨텍스트 보정 적용
+            modifier = context_modifiers.get(topic, 1.0)
+            adjusted_score = similarity * modifier
+            adjusted_similarities.append((topic, adjusted_score))
+
+        # 재정렬
+        adjusted_similarities.sort(key=lambda x: x[1], reverse=True)
+
+        best_topic, best_score = adjusted_similarities[0]
+
+        # 특수 규칙 적용
+        best_topic = self._apply_special_rules(best_topic, user_input.lower(), state)
+
+        return RouteResult(
+            topic=best_topic,
+            confidence=float(best_score),
+            keywords=[],  # 임베딩 기반이므로 키워드 없음
+            metadata={
+                "method": "embedding",
+                "top3": adjusted_similarities[:3],
+                "input_length": len(user_input)
+            }
+        )
+
+    def _classify_by_keywords(self, user_input: str, state: Dict[str, Any]) -> RouteResult:
+        """
+        키워드 기반 분류 (fallback)
+
+        Args:
+            user_input: 사용자 입력 (소문자)
+            state: 세션 상태
+
+        Returns:
+            RouteResult
+        """
         # 1. 컨텍스트 기반 우선순위 조정
         context_modifiers = self._get_context_modifiers(state)
 
@@ -113,7 +315,7 @@ class RouterAgent:
             score = 0.0
 
             for keyword in keywords:
-                if keyword in user_input_lower:
+                if keyword in user_input:  # user_input is already lowercase
                     matched.append(keyword)
                     score += priority
 
@@ -131,14 +333,15 @@ class RouterAgent:
 
         # 4. 특수 케이스 처리
         best_topic = self._apply_special_rules(
-            best_topic, user_input_lower, state
+            best_topic, user_input, state  # user_input is already lowercase
         )
 
         logger.info(
             "classify",
-            f"✅ Topic classified: {best_topic}",
+            f"✅ Topic classified (keywords): {best_topic}",
             confidence=round(confidence, 2),
-            keywords=matched_keywords.get(best_topic, [])
+            keywords=matched_keywords.get(best_topic, []),
+            method="keywords"
         )
 
         return RouteResult(
@@ -146,6 +349,7 @@ class RouterAgent:
             confidence=confidence,
             keywords=matched_keywords.get(best_topic, []),
             metadata={
+                "method": "keywords",
                 "all_scores": topic_scores,
                 "input_length": len(user_input)
             }

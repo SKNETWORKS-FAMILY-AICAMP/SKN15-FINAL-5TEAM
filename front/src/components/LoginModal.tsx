@@ -66,23 +66,23 @@ export default function LoginModal() {
 
       const data = await response.json();
 
-      if (data.success) {
-        if (data.access_token && data.refresh_token) {
-          const tokens: TokenData = {
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-            token_type: data.token_type || 'bearer',
-          };
-          setTokens(tokens);
+      if (response.ok && data.access_token) {
+        // 토큰 저장
+        const tokens: TokenData = {
+          access_token: data.access_token,
+          refresh_token: data.access_token, // refresh_token이 없으면 access_token 사용
+          token_type: data.token_type || 'bearer',
+        };
+        setTokens(tokens);
 
-          const userData: UserData = {
-            user_id: data.user_id,
-            username: data.username,
-            display_name: data.display_name,
-            email: data.email,
-          };
-          setUserData(userData);
-        }
+        // 사용자 데이터 저장
+        const userData: UserData = {
+          user_id: data.user_id,
+          username: data.username,
+          display_name: data.username, // display_name이 없으면 username 사용
+          email: `${data.username}@kimechat.com`,
+        };
+        setUserData(userData);
 
         login(`${username}@kimechat.com`);
         closeLoginModal();
@@ -90,7 +90,7 @@ export default function LoginModal() {
         setUsername('');
         setPassword('');
       } else {
-        setError(data.message || '사용자명 또는 비밀번호가 올바르지 않습니다.');
+        setError(data.detail || data.message || '사용자명 또는 비밀번호가 올바르지 않습니다.');
       }
     } catch (err) {
       console.error('로그인 오류:', err);

@@ -7,9 +7,16 @@ import hashlib
 import time
 from typing import Dict, List, Optional, Any
 from collections import deque
-from openai import OpenAI
+from openai import OpenAI, RateLimitError, APITimeoutError, APIConnectionError
 from app.core.config import get_settings
 from app.core.logging import get_parent_logger
+from app.core.errors import (
+    LLMRateLimitException,
+    LLMTimeoutException,
+    LLMInvalidResponseException,
+    LLMException
+)
+from app.core.retry import with_retry, LLM_RETRY_CONFIG
 
 settings = get_settings()
 logger = get_parent_logger("LLM")
@@ -82,11 +89,12 @@ class LLMClient:
 
         self.client = OpenAI(api_key=self.api_key)
         self.enable_caching = enable_caching
-        self.cache: Dict[str, str] = {}
+        self.cache: Dict[str, tuple[str, float]] = {}  # {key: (response, expiry_time)}
+        self.cache_ttl = 3600  # 1시간 TTL
         self.rate_limiter = RateLimiter(max_requests=max_requests_per_minute, time_window=60)
         self.call_count = 0
 
-        logger.info("__init__", "LLMClient initialized", model=self.model)
+        logger.info("__init__", "LLMClient initialized", model=self.model, cache_ttl=self.cache_ttl)
 
     def _get_cache_key(
         self,
@@ -99,7 +107,85 @@ class LLMClient:
         cache_str = f"{system_prompt}|{user_prompt}|{temperature}|{model}"
         return hashlib.md5(cache_str.encode()).hexdigest()
 
-    def call(
+    def _get_from_cache(self, cache_key: str) -> Optional[str]:
+        """
+        TTL 기반 캐시 조회
+
+        Args:
+            cache_key: 캐시 키
+
+        Returns:
+            캐시된 응답 (없거나 만료되면 None)
+        """
+        if cache_key not in self.cache:
+            return None
+
+        cached_response, expiry_time = self.cache[cache_key]
+        current_time = time.time()
+
+        # TTL 만료 체크
+        if current_time > expiry_time:
+            # 만료된 캐시 제거
+            del self.cache[cache_key]
+            logger.debug("_get_from_cache", "Cache expired", cache_key=cache_key[:8])
+            return None
+
+        logger.info("_get_from_cache", "✅ Cache hit", cache_key=cache_key[:8])
+        return cached_response
+
+    def _save_to_cache(self, cache_key: str, response: str):
+        """
+        TTL 기반 캐시 저장
+
+        Args:
+            cache_key: 캐시 키
+            response: 응답 문자열
+        """
+        expiry_time = time.time() + self.cache_ttl
+        self.cache[cache_key] = (response, expiry_time)
+        logger.debug("_save_to_cache", "Cached response", cache_key=cache_key[:8], ttl=self.cache_ttl)
+
+    @with_retry(LLM_RETRY_CONFIG)
+    async def _call_api_with_retry(self, **kwargs) -> Any:
+        """
+        OpenAI API 호출 (재시도 로직 포함)
+
+        Args:
+            **kwargs: create() 메서드에 전달할 인자
+
+        Returns:
+            API 응답
+
+        Raises:
+            LLMRateLimitException: Rate limit 초과
+            LLMTimeoutException: 타임아웃
+            LLMException: 기타 LLM 에러
+        """
+        try:
+            response = self.client.chat.completions.create(**kwargs)
+            return response
+
+        except RateLimitError as e:
+            # Rate limit 에러 → 재시도 대상
+            logger.warning("_call_api_with_retry", f"Rate limit hit: {e}")
+            raise LLMRateLimitException(str(e))
+
+        except (APITimeoutError, TimeoutError) as e:
+            # Timeout 에러 → 재시도 대상
+            logger.warning("_call_api_with_retry", f"API timeout: {e}")
+            raise LLMTimeoutException(str(e))
+
+        except APIConnectionError as e:
+            # Connection 에러 → 재시도 대상
+            logger.warning("_call_api_with_retry", f"Connection error: {e}")
+            raise LLMTimeoutException(f"Connection failed: {e}")
+
+        except Exception as e:
+            # 기타 에러 → 재시도 안 함
+            logger.error("_call_api_with_retry", f"API call failed: {e}")
+            raise LLMException(f"LLM API error: {e}")
+
+    async def call(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -127,64 +213,61 @@ class LLMClient:
         resolved_max_tokens = max_tokens or self.max_tokens
 
         # 캐시 확인
+        cache_key = None
         if self.enable_caching and use_cache:
             cache_key = self._get_cache_key(system_prompt, user_prompt, resolved_temp, target_model)
-            if cache_key in self.cache:
-                logger.info("call", "✅ Cache hit", model=target_model)
-                return self.cache[cache_key]
+            cached_response = self._get_from_cache(cache_key)
+            if cached_response:
+                return cached_response
 
         # Rate limiting
         self.rate_limiter.acquire()
 
-        try:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
 
-            logger.info(
-                "call",
-                "🤖 Calling LLM",
-                model=target_model,
-                temp=resolved_temp,
-                max_tokens=resolved_max_tokens,
-                system_len=len(system_prompt),
-                user_len=len(user_prompt)
-            )
+        logger.info(
+            "call",
+            "🤖 Calling LLM",
+            model=target_model,
+            temp=resolved_temp,
+            max_tokens=resolved_max_tokens,
+            system_len=len(system_prompt),
+            user_len=len(user_prompt)
+        )
 
-            kwargs = {
-                "model": target_model,
-                "messages": messages,
-                "temperature": resolved_temp,
-            }
+        kwargs = {
+            "model": target_model,
+            "messages": messages,
+            "temperature": resolved_temp,
+        }
 
-            if resolved_max_tokens:
-                kwargs["max_tokens"] = resolved_max_tokens
+        if resolved_max_tokens:
+            kwargs["max_tokens"] = resolved_max_tokens
 
-            response = self.client.chat.completions.create(**kwargs)
+        # API 호출 (재시도 로직 포함)
+        response = await self._call_api_with_retry(**kwargs)
 
-            content = response.choices[0].message.content or ""
-            self.call_count += 1
+        content = response.choices[0].message.content or ""
+        self.call_count += 1
 
-            # 캐시 저장
-            if self.enable_caching and use_cache:
-                self.cache[cache_key] = content
+        # 캐시 저장
+        if self.enable_caching and use_cache and cache_key:
+            self._save_to_cache(cache_key, content)
 
-            logger.info(
-                "call",
-                "✅ LLM response received",
-                model=target_model,
-                response_len=len(content),
-                call_count=self.call_count
-            )
+        logger.info(
+            "call",
+            "✅ LLM response received",
+            model=target_model,
+            response_len=len(content),
+            call_count=self.call_count
+        )
 
-            return content
+        return content
 
-        except Exception as e:
-            logger.error("call", f"❌ LLM API call failed: {e}", model=target_model)
-            raise
-
-    def call_json(
+    async def call_json(
         self,
         system_prompt: str,
         user_prompt: str,
@@ -215,67 +298,62 @@ class LLMClient:
         cache_key = None
         if self.enable_caching and use_cache:
             cache_key = self._get_cache_key(system_prompt, user_prompt, resolved_temp, target_model) + "_json"
-            if cache_key in self.cache:
-                logger.info("call_json", "✅ Cache hit", model=target_model)
-                return json.loads(self.cache[cache_key])
+            cached_response = self._get_from_cache(cache_key)
+            if cached_response:
+                return json.loads(cached_response)
 
         # Rate limiting
         self.rate_limiter.acquire()
 
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        logger.info(
+            "call_json",
+            "🤖 Calling LLM (JSON mode)",
+            model=target_model,
+            temp=resolved_temp,
+            max_tokens=resolved_max_tokens
+        )
+
+        kwargs = {
+            "model": target_model,
+            "messages": messages,
+            "temperature": resolved_temp,
+            "response_format": {"type": "json_object"}
+        }
+
+        if resolved_max_tokens:
+            kwargs["max_tokens"] = resolved_max_tokens
+
+        # API 호출 (재시도 로직 포함)
+        response = await self._call_api_with_retry(**kwargs)
+
+        content = response.choices[0].message.content or "{}"
+        self.call_count += 1
+
+        # JSON 파싱
         try:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
+            result = json.loads(content)
+        except json.JSONDecodeError as je:
+            logger.error("call_json", f"❌ JSON parsing failed: {je}", content_preview=content[:200])
+            raise LLMInvalidResponseException(f"Failed to parse JSON response: {je}")
 
-            logger.info(
-                "call_json",
-                "🤖 Calling LLM (JSON mode)",
-                model=target_model,
-                temp=resolved_temp,
-                max_tokens=resolved_max_tokens
-            )
+        # 캐시 저장
+        if self.enable_caching and use_cache and cache_key:
+            self._save_to_cache(cache_key, content)
 
-            kwargs = {
-                "model": target_model,
-                "messages": messages,
-                "temperature": resolved_temp,
-                "response_format": {"type": "json_object"}
-            }
+        logger.info(
+            "call_json",
+            "✅ LLM JSON response received",
+            model=target_model,
+            keys=list(result.keys()) if isinstance(result, dict) else None,
+            call_count=self.call_count
+        )
 
-            if resolved_max_tokens:
-                kwargs["max_tokens"] = resolved_max_tokens
-
-            response = self.client.chat.completions.create(**kwargs)
-
-            content = response.choices[0].message.content or "{}"
-            self.call_count += 1
-
-            # JSON 파싱
-            try:
-                result = json.loads(content)
-            except json.JSONDecodeError as je:
-                logger.error("call_json", f"❌ JSON parsing failed: {je}", content_preview=content[:200])
-                # Fallback: 빈 딕셔너리 반환
-                result = {}
-
-            # 캐시 저장
-            if self.enable_caching and use_cache and cache_key:
-                self.cache[cache_key] = content
-
-            logger.info(
-                "call_json",
-                "✅ LLM JSON response received",
-                model=target_model,
-                keys=list(result.keys()) if isinstance(result, dict) else None,
-                call_count=self.call_count
-            )
-
-            return result
-
-        except Exception as e:
-            logger.error("call_json", f"❌ LLM JSON API call failed: {e}", model=target_model)
-            raise
+        return result
 
     def clear_cache(self):
         """캐시 초기화"""

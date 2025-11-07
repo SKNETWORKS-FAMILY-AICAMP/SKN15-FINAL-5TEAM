@@ -1,6 +1,7 @@
 """
 Chat Feature - Controller
 HTTP/WS 입출력, 인증, DTO 검증
+Layer 1: Controller (4-Layer Architecture)
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,8 +9,6 @@ from typing import Dict, Any
 
 from .schemas import ChatRequest, ChatResponse, ChatMessage
 from .usecase import ChatUseCase
-from .repository import ChatRepository
-from .agent.parent import ChatParent
 from app.core.db.session import get_db
 from app.core.logging import get_controller_logger, print_layer_debug
 from app.core.errors import AppException
@@ -23,23 +22,14 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 # 의존성 주입
 # ============================================================
 
-def get_chat_repository(db: AsyncSession = Depends(get_db)) -> ChatRepository:
-    """ChatRepository 의존성"""
-    return ChatRepository(db)
+def get_chat_usecase(db: AsyncSession = Depends(get_db)) -> ChatUseCase:
+    """
+    ChatUseCase 의존성
 
-
-def get_chat_parent() -> ChatParent:
-    """ChatParent 의존성"""
-    return ChatParent()
-
-
-def get_chat_usecase(
-    db: AsyncSession = Depends(get_db),
-    repository: ChatRepository = Depends(get_chat_repository),
-    parent: ChatParent = Depends(get_chat_parent)
-) -> ChatUseCase:
-    """ChatUseCase 의존성"""
-    return ChatUseCase(db, repository, parent)
+    Controller는 UseCase만 알면 됨
+    UseCase 내부에서 Repository와 Agent 관리
+    """
+    return ChatUseCase(db)
 
 
 # ============================================================
@@ -104,20 +94,7 @@ async def create_chat(
             logger.info("create_chat", "New session created", session_id=session_id)
 
         # ============================================================
-        # 3. 세션 상태 준비 (TODO: SessionManager 연동)
-        # ============================================================
-        session_state = {
-            "session_id": session_id,
-            "scenario_id": request.scenario_id,
-            "user_id": user_id,
-            "user_name": request.user_name or "여행자",
-            "turn_count": 0,  # TODO: 실제 세션에서 로드
-            "current_stage": "intro",  # TODO: 실제 세션에서 로드
-            "affinity_scores": {},  # TODO: 실제 세션에서 로드
-        }
-
-        # ============================================================
-        # 4. UseCase 호출
+        # 3. UseCase 호출 (세션 로딩은 UseCase 내부에서 처리)
         # ============================================================
         print_layer_debug("CONTROLLER", "Chat", "create_chat", "→ Calling UseCase")
 
@@ -126,7 +103,7 @@ async def create_chat(
             session_id=session_id,
             scenario_id=request.scenario_id,
             user_message=request.user_input,
-            session_state=session_state
+            user_name=request.user_name or "여행자"
         )
 
         # ============================================================
@@ -134,10 +111,10 @@ async def create_chat(
         # ============================================================
         response = ChatResponse(
             session_id=session_id,
-            turn_count=session_state["turn_count"] + 1,
+            turn_count=dialogue_result.updated_state.get("turn_count", 1),
             dialogues=dialogue_result.dialogues,
-            current_stage=dialogue_result.next_stage or session_state["current_stage"],
-            affinity_scores=session_state.get("affinity_scores"),
+            current_stage=dialogue_result.next_stage or dialogue_result.updated_state.get("current_stage", "intro"),
+            affinity_scores=dialogue_result.updated_state.get("affinity_scores", {}),
             is_ended=False,  # TODO: 시나리오 종료 체크
             has_more=False,
         )
@@ -169,6 +146,18 @@ async def create_chat(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
+
+
+@router.post("/stream", response_model=ChatResponse)
+async def create_chat_stream(
+    request: ChatRequest,
+    usecase: ChatUseCase = Depends(get_chat_usecase),
+) -> ChatResponse:
+    """
+    채팅 메시지 전송 (스트림 엔드포인트, 현재는 일반 응답과 동일)
+    TODO: SSE 스트리밍 구현
+    """
+    return await create_chat(request, usecase)
 
 
 @router.get("/{session_id}/history", response_model=list[ChatMessage])

@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     DB_MIN_CONN: int = 2
     DB_MAX_CONN: int = 5
 
+    # Connection Pool 설정 (Phase 8)
+    DB_POOL_SIZE: int = 10  # 기본 연결 풀 크기
+    DB_MAX_OVERFLOW: int = 20  # 추가로 생성 가능한 연결 수
+    DB_POOL_TIMEOUT: int = 30  # 연결 대기 타임아웃 (초)
+    DB_POOL_RECYCLE: int = 3600  # 연결 재사용 주기 (초)
+    DB_POOL_PRE_PING: bool = True  # 연결 상태 체크
+
     @property
     def DATABASE_URL(self) -> str:
         """PostgreSQL 연결 URL"""
