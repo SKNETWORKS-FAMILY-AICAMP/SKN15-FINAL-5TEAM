@@ -149,11 +149,6 @@ export interface ScenarioCard {
   likes: number
   comments: number
   views: number
-  chat_sessions?: number
-  total_messages?: number
-  average_affinity_score?: number
-  bubble_reward?: number
-  bubble_cost?: number
   total_completions?: number
   // User-specific fields (if authenticated)
   is_liked?: boolean
@@ -174,54 +169,6 @@ export interface ScenarioProgress {
   total_messages: number
   total_play_time: number
   is_liked: boolean
-}
-
-export interface LiveStats {
-  total_likes: number
-  total_comments: number
-  total_chats: number
-  active_chat_sessions: number
-  avg_affinity_score: number
-  bubble_circulation: number
-  last_updated: string
-}
-
-export interface ScenarioMetrics {
-  scenario_id: string
-  likes: number
-  comments: number
-  chat_sessions: number
-  total_messages: number
-  avg_affinity: number
-  bubble_reward: number
-  bubble_cost?: number
-  last_updated?: string
-}
-
-export interface ScenarioComment {
-  comment_id: string
-  scenario_id: string
-  user_id: string
-  username: string
-  display_name?: string
-  avatar_url?: string
-  content: string
-  like_count?: number
-  is_liked?: boolean
-  is_owner?: boolean
-  created_at: string
-  updated_at?: string
-}
-
-export interface ScenarioCommentList {
-  items: ScenarioComment[]
-  next_cursor: string | null
-  total_count: number
-}
-
-export interface ScenarioCommentPayload {
-  content: string
-  parent_comment_id?: string
 }
 
 // ============================================================
@@ -520,19 +467,6 @@ class ApiClient {
   // ============================================================
 
   /**
-   * Get realtime landing-page stats
-   */
-  async getLiveStats(): Promise<LiveStats> {
-    try {
-      const response = await axios.get(`${this.baseUrl}/api/stats/live`)
-      return response.data
-    } catch (error) {
-      console.error('Error getting live stats:', error)
-      throw error
-    }
-  }
-
-  /**
    * Get all scenarios (public API, no JWT required)
    */
   async getScenarios(): Promise<ScenarioCard[]> {
@@ -600,91 +534,6 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error(`Error toggling like for scenario ${scenarioId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Get scenario-level metrics (public API)
-   */
-  async getScenarioMetrics(scenarioId: string): Promise<ScenarioMetrics> {
-    try {
-      const response = await axios.get(`${this.baseUrl}/api/scenarios/${scenarioId}/metrics`)
-      return response.data
-    } catch (error) {
-      console.error(`Error getting metrics for scenario ${scenarioId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Get comments for a scenario (public API)
-   */
-  async getScenarioComments(
-    scenarioId: string,
-    params: { cursor?: string; limit?: number } = {}
-  ): Promise<ScenarioCommentList> {
-    try {
-      const response = await axios.get(`${this.baseUrl}/api/scenarios/${scenarioId}/comments`, {
-        params
-      })
-      return response.data
-    } catch (error) {
-      console.error(`Error getting comments for scenario ${scenarioId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Create a new scenario comment (requires JWT)
-   */
-  async createScenarioComment(
-    scenarioId: string,
-    payload: ScenarioCommentPayload
-  ): Promise<ScenarioComment> {
-    try {
-      const response = await authenticatedApiClient.post(
-        `/api/scenarios/${scenarioId}/comments`,
-        payload
-      )
-      return response.data
-    } catch (error) {
-      console.error(`Error creating comment for scenario ${scenarioId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Update an existing comment (requires JWT)
-   */
-  async updateScenarioComment(
-    scenarioId: string,
-    commentId: string,
-    payload: ScenarioCommentPayload
-  ): Promise<ScenarioComment> {
-    try {
-      const response = await authenticatedApiClient.put(
-        `/api/scenarios/${scenarioId}/comments/${commentId}`,
-        payload
-      )
-      return response.data
-    } catch (error) {
-      console.error(`Error updating comment ${commentId} for scenario ${scenarioId}:`, error)
-      throw error
-    }
-  }
-
-  /**
-   * Delete a comment (requires JWT)
-   */
-  async deleteScenarioComment(scenarioId: string, commentId: string): Promise<{ success: boolean }> {
-    try {
-      const response = await authenticatedApiClient.delete(
-        `/api/scenarios/${scenarioId}/comments/${commentId}`
-      )
-      return response.data
-    } catch (error) {
-      console.error(`Error deleting comment ${commentId} for scenario ${scenarioId}:`, error)
       throw error
     }
   }
