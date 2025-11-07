@@ -99,11 +99,11 @@ services:
     networks:
       - kime-network
 
-  # Frontend: React + Vite
+  # Frontend: React + Vite (jw_work branch - merged front/)
   frontend:
     image: frontend
     build:
-      context: ./frontend
+      context: ./front
       dockerfile: Dockerfile
       target: development
     container_name: frontend
@@ -111,7 +111,7 @@ services:
     expose:
       - "5173"
     volumes:
-      - ./frontend:/app
+      - ./front:/app
       - /app/node_modules
     depends_on:
       - backend

@@ -1,6 +1,17 @@
 """
-DatabaseManager - PostgreSQL 연동
-StateDB와 LogDB에 대한 CRUD 작업 제공
+DatabaseManager - PostgreSQL 연동 (LEGACY - 사용 중지 예정)
+
+⚠️  DEPRECATION WARNING ⚠️
+이 파일은 God Class 안티패턴을 포함한 레거시 코드입니다 (2718 lines, 76 methods).
+새로운 코드에서는 Repository Pattern을 사용하세요:
+- PostgresUserRepository (src.infrastructure.database.repositories.user_repository)
+- PostgresSessionRepository (src.infrastructure.database.repositories.session_repository)
+- PostgresDialogueRepository (src.infrastructure.database.repositories.dialogue_repository)
+- PostgresAffinityRepository (src.infrastructure.database.repositories.affinity_repository)
+- PostgresMemoryRepository (src.infrastructure.database.repositories.memory_repository)
+- PostgresMissionRepository (src.infrastructure.database.repositories.mission_repository)
+
+현재 25개 파일에서 사용 중이며, 점진적으로 Repository로 마이그레이션 예정입니다.
 """
 
 import os
@@ -961,57 +972,7 @@ class DatabaseManager:
             logger.error(f"Failed to save user memory: {e}")
             return None
 
-    def get_user_memories(
-        self,
-        user_id: str,
-        memory_type: Optional[str] = None,
-        min_importance: float = 0.0,
-        limit: int = 20,
-        active_only: bool = True
-    ) -> List[Dict[str, Any]]:
-        """
-        사용자 장기 기억 조회
-
-        Args:
-            user_id: 사용자 ID
-            memory_type: 기억 타입 필터 (None이면 전체)
-            min_importance: 최소 중요도
-            limit: 최대 조회 개수
-            active_only: 활성화된 기억만 조회
-
-        Returns:
-            List[Dict]: 기억 목록
-        """
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    query = """
-                        SELECT
-                            id, memory_key, memory_value, memory_type,
-                            context, importance, access_count, last_accessed_at,
-                            source_session_id, tags, created_at, updated_at
-                        FROM knowledge.user_memories
-                        WHERE user_id = %s
-                          AND importance >= %s
-                    """
-                    params = [user_id, min_importance]
-
-                    if memory_type:
-                        query += " AND memory_type = %s"
-                        params.append(memory_type)
-
-                    if active_only:
-                        query += " AND is_active = TRUE"
-
-                    query += " ORDER BY importance DESC, last_accessed_at DESC NULLS LAST LIMIT %s"
-                    params.append(limit)
-
-                    cur.execute(query, params)
-                    memories = cur.fetchall()
-                    return [dict(row) for row in memories]
-        except Exception as e:
-            logger.error(f"Failed to get user memories: {e}")
-            return []
+    # REMOVED: Duplicate get_user_memories() - 더 완전한 버전이 line 2317에 있음
 
     def update_memory_access(self, memory_id: int, importance_boost: float = 0.05) -> bool:
         """
