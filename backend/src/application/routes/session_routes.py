@@ -60,6 +60,8 @@ async def get_user_last_session(
     """
     현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용)
 
+    TODO: Move to ISessionRepository.get_user_last_session()
+
     Args:
         scenario_id: 특정 시나리오의 마지막 세션만 조회 (선택)
 

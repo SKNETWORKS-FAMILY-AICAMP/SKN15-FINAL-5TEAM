@@ -3,6 +3,13 @@
 - 메모리 생성·조회·수정·삭제 기능 제공
 - 벡터 유사도로 메모리를 검색
 - 세션별 저장된 기억을 조회
+
+TODO: Migrate to IMemoryRepository
+- get_user_memories() -> IMemoryRepository
+- get_memory_by_key() -> IMemoryRepository
+- create_or_update_memory() -> IMemoryRepository
+- delete_memory() -> IMemoryRepository
+- search_memories_by_similarity() -> IMemoryRepository
 """
 
 # ============================================================
