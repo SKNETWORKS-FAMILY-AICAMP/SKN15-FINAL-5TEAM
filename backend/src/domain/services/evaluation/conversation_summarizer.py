@@ -22,7 +22,7 @@ import json
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
-from domain.models.conversation import ConversationTurn, Dialogue
+from src.domain.models.conversation import ConversationTurn, Dialogue
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 

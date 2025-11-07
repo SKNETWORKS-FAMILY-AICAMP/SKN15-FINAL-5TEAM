@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from src.core.scenes_repo import ScenesRepo
 from . import scene_tools
-from domain.services.generation.fallback_tools import trigger_fallback
+from src.domain.services.generation.fallback_tools import trigger_fallback
 import logging
 log = logging.getLogger(__name__)
 from src.config.constants import INTRO_STAGE_TAG

@@ -21,13 +21,13 @@ if TYPE_CHECKING:
     from src.core.interfaces.repositories.progression_repository import IProgressionRepository
 
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
-from domain.services.orchestration.scene_tools import (
+from src.domain.services.orchestration.scene_tools import (
     get_i18n_entries,
     get_next_stage_tag,
     get_stage_type,
     get_speaker_pool,
 )
-from domain.services.generation.fallback_tools import trigger_fallback
+from src.domain.services.generation.fallback_tools import trigger_fallback
 import logging
 log = logging.getLogger(__name__)
 # TODO: text_matcher 위치 확인 필요 # detect_mission_target

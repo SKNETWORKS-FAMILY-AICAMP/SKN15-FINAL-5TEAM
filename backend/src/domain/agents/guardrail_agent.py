@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Sequence
 # TODO: EmbeddingMatcher 위치 확인 필요 # EmbeddingClient, EmbeddingMatcher, get_embedding_client
 import logging
 log = logging.getLogger(__name__)
-from domain.services.validation.spell_checker import SpellChecker, get_spell_checker
+from src.domain.services.validation.spell_checker import SpellChecker, get_spell_checker
 # TODO: training_logger 위치 확인 필요
 
 # ============================================================

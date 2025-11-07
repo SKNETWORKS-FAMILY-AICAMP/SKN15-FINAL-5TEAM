@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 import time
 from typing import Any, Dict, List, Optional
-from domain.models.conversation import Dialogue
-from domain.models.story import Beat
+from src.domain.models.conversation import Dialogue
+from src.domain.models.story import Beat
 
 from src.core import scene_dialogue_tools as dialogue_tools
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
@@ -15,7 +15,7 @@ import logging
 log = logging.getLogger(__name__)
 # TODO: get_config_loader 위치 확인 필요
 # TODO: training_logger 위치 확인 필요
-from core.interfaces.managers.session_manager import ISessionManager
+from src.core.interfaces.managers.session_manager import ISessionManager
 
 _PROMPTS = get_config_loader().get_prompts()
 _CHILDREN_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("children") or {})

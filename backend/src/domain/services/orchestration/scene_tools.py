@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import logging
 log = logging.getLogger(__name__)
-from domain.models.story import Beat
+from src.domain.models.story import Beat
 
 
 def _scenario_search_paths(scenario_id: str) -> List[Path]:

@@ -6,9 +6,9 @@ Create Session Use Case
 from dataclasses import dataclass
 from typing import Optional
 
-from core.interfaces.managers.session_manager import ISessionManager
-from core.interfaces.repositories.user_repository import IUserRepository
-from core.exceptions.domain_exceptions import EntityNotFoundError
+from src.core.interfaces.managers.session_manager import ISessionManager
+from src.core.interfaces.repositories.user_repository import IUserRepository
+from src.core.exceptions.domain_exceptions import EntityNotFoundError
 
 
 @dataclass
