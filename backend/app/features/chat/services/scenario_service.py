@@ -257,6 +257,66 @@ class ScenarioService:
         logger.info("get_scenario_characters", f"Characters in {scenario_id}: {character_ids}")
         return character_ids
 
+    def get_beats_for_stage(self, scenario_id: str, stage_id: str, language: str = "ko") -> Optional[List[Dict[str, Any]]]:
+        """
+        특정 스테이지의 Beats 가져오기
+
+        Args:
+            scenario_id: 시나리오 ID
+            stage_id: 스테이지 ID (예: "rengoku_dialogue", "enmu_appear")
+            language: 언어 코드 (기본: "ko")
+
+        Returns:
+            Beats 리스트 또는 None
+        """
+        scenario = self.load_scenario(scenario_id)
+        if not scenario:
+            logger.warning("get_beats_for_stage", f"Scenario not found: {scenario_id}")
+            return None
+
+        # i18n 섹션에서 beats 찾기
+        i18n = scenario.get("i18n", {})
+        lang_data = i18n.get(language, {})
+
+        # beats_{stage_id} 형태로 찾기
+        beats_key = f"beats_{stage_id}"
+        beats = lang_data.get(beats_key)
+
+        if beats:
+            logger.info("get_beats_for_stage", f"Beats found for {scenario_id}/{stage_id}: {len(beats)} beats")
+            return beats
+        else:
+            logger.warning("get_beats_for_stage", f"Beats not found for {scenario_id}/{stage_id}")
+            return None
+
+    def get_available_beat_stages(self, scenario_id: str, language: str = "ko") -> List[str]:
+        """
+        시나리오에서 사용 가능한 beat stage 목록
+
+        Args:
+            scenario_id: 시나리오 ID
+            language: 언어 코드
+
+        Returns:
+            Stage ID 리스트 (beats_ 접두사 제거됨)
+        """
+        scenario = self.load_scenario(scenario_id)
+        if not scenario:
+            return []
+
+        i18n = scenario.get("i18n", {})
+        lang_data = i18n.get(language, {})
+
+        # beats_로 시작하는 모든 키 찾기
+        beat_stages = []
+        for key in lang_data.keys():
+            if key.startswith("beats_"):
+                stage_id = key.replace("beats_", "")
+                beat_stages.append(stage_id)
+
+        logger.info("get_available_beat_stages", f"Beat stages in {scenario_id}: {beat_stages}")
+        return beat_stages
+
     def clear_cache(self):
         """캐시 초기화"""
         self._scenario_cache.clear()
