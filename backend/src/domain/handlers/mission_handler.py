@@ -683,7 +683,7 @@ class MissionHandler:
         # 🎮 미션 기록 자동 저장 (데이터베이스)
         try:
             import os
-            from src.database.db_manager import DatabaseManager
+            from src.infrastructure.database.db_manager import DatabaseManager
 
             # 또는 새로운 인스턴스 생성
             db_manager = DatabaseManager(
