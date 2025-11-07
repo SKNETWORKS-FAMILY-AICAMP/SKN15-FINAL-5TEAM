@@ -106,3 +106,117 @@ class IMemoryRepository(ABC):
             핵심 기억 리스트
         """
         pass
+
+    # ============================================================
+    # User Long-term Memories (장기 기억)
+    # ============================================================
+
+    @abstractmethod
+    def get_user_memories(
+        self,
+        user_id: str,
+        memory_type: Optional[str] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        사용자의 장기 기억 목록 조회
+
+        Args:
+            user_id: 사용자 ID
+            memory_type: 기억 타입 필터 (선택)
+            limit: 반환할 최대 개수
+
+        Returns:
+            메모리 목록
+        """
+        pass
+
+    @abstractmethod
+    def get_memory_by_key(
+        self,
+        user_id: str,
+        memory_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        특정 키로 기억 조회
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 기억 키
+
+        Returns:
+            메모리 객체 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def create_or_update_memory(
+        self,
+        user_id: str,
+        memory_key: str,
+        memory_value: str,
+        memory_type: str = "fact",
+        importance: float = 0.5,
+        tags: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        confidence: Optional[float] = None,
+        embedding: Optional[List[float]] = None
+    ) -> Optional[int]:
+        """
+        새로운 기억 생성 또는 업데이트 (upsert)
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 기억 키
+            memory_value: 기억 값
+            memory_type: 기억 타입
+            importance: 중요도 (0.0-1.0)
+            tags: 태그 리스트
+            context: 컨텍스트 정보
+            confidence: 신뢰도 (0.0-1.0)
+            embedding: 벡터 임베딩
+
+        Returns:
+            메모리 ID 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def delete_memory(
+        self,
+        user_id: str,
+        memory_key: str
+    ) -> bool:
+        """
+        기억 삭제 (소프트 삭제)
+
+        Args:
+            user_id: 사용자 ID
+            memory_key: 삭제할 기억 키
+
+        Returns:
+            성공 여부
+        """
+        pass
+
+    @abstractmethod
+    def search_memories_by_similarity(
+        self,
+        user_id: str,
+        query_embedding: List[float],
+        limit: int = 5,
+        min_importance: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """
+        의미 기반 기억 검색 (Vector Similarity Search)
+
+        Args:
+            user_id: 사용자 ID
+            query_embedding: 검색 쿼리의 벡터 임베딩
+            limit: 반환할 최대 개수
+            min_importance: 최소 중요도
+
+        Returns:
+            유사도순으로 정렬된 메모리 목록
+        """
+        pass

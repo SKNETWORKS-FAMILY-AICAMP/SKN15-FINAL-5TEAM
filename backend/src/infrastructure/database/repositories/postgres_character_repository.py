@@ -182,3 +182,21 @@ class PostgresCharacterRepository(ICharacterRepository):
         except Exception as e:
             print(f"Error getting characters for scenario {scenario_id}: {e}")
             return []
+
+    # ============================================================
+    # Scenario Methods
+    # ============================================================
+
+    def get_all_scenarios(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """모든 시나리오 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_all_scenarios(include_inactive=include_inactive)
+
+    def get_scenario_by_id(self, scenario_id: str) -> Optional[Dict[str, Any]]:
+        """시나리오 ID로 시나리오 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_scenario_by_id(scenario_id)

@@ -216,3 +216,87 @@ class PostgresMemoryRepository(IMemoryRepository):
         except Exception as e:
             print(f"Error extracting key memories for session {session_id}: {e}")
             return []
+
+    # ============================================================
+    # User Long-term Memories (장기 기억)
+    # ============================================================
+
+    def get_user_memories(
+        self,
+        user_id: str,
+        memory_type: Optional[str] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """사용자의 장기 기억 목록 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_user_memories(user_id=user_id, memory_type=memory_type, limit=limit)
+
+    def get_memory_by_key(
+        self,
+        user_id: str,
+        memory_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """특정 키로 기억 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_memory_by_key(user_id=user_id, memory_key=memory_key)
+
+    def create_or_update_memory(
+        self,
+        user_id: str,
+        memory_key: str,
+        memory_value: str,
+        memory_type: str = "fact",
+        importance: float = 0.5,
+        tags: Optional[List[str]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        confidence: Optional[float] = None,
+        embedding: Optional[List[float]] = None
+    ) -> Optional[int]:
+        """새로운 기억 생성 또는 업데이트 (upsert)"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.create_or_update_memory(
+            user_id=user_id,
+            memory_key=memory_key,
+            memory_value=memory_value,
+            memory_type=memory_type,
+            importance=importance,
+            tags=tags,
+            context=context,
+            confidence=confidence,
+            embedding=embedding
+        )
+
+    def delete_memory(
+        self,
+        user_id: str,
+        memory_key: str
+    ) -> bool:
+        """기억 삭제 (소프트 삭제)"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.delete_memory(user_id=user_id, memory_key=memory_key)
+
+    def search_memories_by_similarity(
+        self,
+        user_id: str,
+        query_embedding: List[float],
+        limit: int = 5,
+        min_importance: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """의미 기반 기억 검색 (Vector Similarity Search)"""
+        # FIXME: Implement proper SQL query with pgvector
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.search_memories_by_similarity(
+            user_id=user_id,
+            query_embedding=query_embedding,
+            limit=limit,
+            min_importance=min_importance
+        )

@@ -13,11 +13,11 @@ from typing import Dict, Optional
 
 from ..schemas.api_models import SessionInfoResponse, MessageResponse
 
-from ..dependencies.api_deps import get_db_manager, get_session_manager
+from ..dependencies.api_deps import get_session_manager, get_session_repository
 
 from ..dependencies.auth_deps import require_auth
 
-from src.infrastructure.database.db_manager import DatabaseManager
+from src.core.interfaces.repositories.session_repository import ISessionRepository
 
 from src.infrastructure.database.session_manager import HybridSessionManager
 
@@ -55,12 +55,10 @@ class SessionManagerAdapter:
 async def get_user_last_session(
     scenario_id: Optional[str] = None,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    session_repo: ISessionRepository = Depends(get_session_repository)
 ):
     """
-    현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용)
-
-    TODO: Move to ISessionRepository.get_user_last_session()
+    현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용) - Repository Pattern
 
     Args:
         scenario_id: 특정 시나리오의 마지막 세션만 조회 (선택)
@@ -71,8 +69,8 @@ async def get_user_last_session(
     """
     user_id = user.get("user_id")
 
-    # 데이터베이스에서 마지막 세션 조회
-    last_session = db.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
+    # Repository를 통해 마지막 세션 조회
+    last_session = session_repo.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
 
     if not last_session:
         return {
