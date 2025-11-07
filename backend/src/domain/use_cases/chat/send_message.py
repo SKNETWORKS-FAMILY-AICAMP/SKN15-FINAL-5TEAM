@@ -6,10 +6,10 @@ Send Message Use Case
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
-from core.interfaces.repositories.session_repository import ISessionRepository
-from core.interfaces.repositories.conversation_repository import IConversationRepository
-from core.interfaces.managers.session_manager import ISessionManager
-from core.exceptions.domain_exceptions import EntityNotFoundError, UnauthorizedError
+from src.core.interfaces.repositories.session_repository import ISessionRepository
+from src.core.interfaces.repositories.conversation_repository import IConversationRepository
+from src.core.interfaces.managers.session_manager import ISessionManager
+from src.core.exceptions.domain_exceptions import EntityNotFoundError, UnauthorizedError
 
 
 @dataclass

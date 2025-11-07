@@ -15,7 +15,7 @@ import os
 from functools import lru_cache
 from typing import Dict, Any, List, Tuple, Optional
 
-from core.interfaces.repositories.character_repository import ICharacterRepository
+from src.core.interfaces.repositories.character_repository import ICharacterRepository
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHAR_DIR = os.path.join(BASE_DIR, "data", "characters")

@@ -6,8 +6,8 @@ Login User Use Case
 from dataclasses import dataclass
 from typing import Optional
 
-from core.interfaces.repositories.user_repository import IUserRepository
-from core.exceptions.domain_exceptions import AuthenticationError
+from src.core.interfaces.repositories.user_repository import IUserRepository
+from src.core.exceptions.domain_exceptions import AuthenticationError
 
 
 @dataclass

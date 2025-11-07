@@ -10,7 +10,7 @@ import os
 from typing import Dict, Any, List
 from logging import getLogger
 
-from domain.services.orchestration.characters_repo import (
+from src.domain.services.orchestration.characters_repo import (
     list_characters,
     build_character_rulebook,
     affinity_applicable,

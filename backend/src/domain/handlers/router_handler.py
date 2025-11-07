@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import logging
 log = logging.getLogger(__name__)
-from domain.services.orchestration.scene_tools import get_next_stage_tag
+from src.domain.services.orchestration.scene_tools import get_next_stage_tag
 from src.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
 

@@ -8,20 +8,20 @@ import importlib
 import time
 from typing import Any, Dict, Optional, List
 
-from domain.models.conversation import ConversationTurn, Dialogue
+from src.domain.models.conversation import ConversationTurn, Dialogue
 
 # ============================================================
 # ⚙️  
 # ============================================================
-from domain.services.orchestration import scene_tools
+from src.domain.services.orchestration import scene_tools
 # TODO: training_logger 위치 확인 필요
 
 # 🎯 스테이지 핸들러 관련
-from domain.handlers.free_intent_handler import FreeIntentHandler
-from domain.handlers.mission_handler import MissionHandler
-from domain.handlers.router_handler import RouterStageHandler
-from domain.handlers.scene_handler import SceneHandler
-from domain.handlers.narrative_handler import OpenNarrativeHandler
+from src.domain.handlers.free_intent_handler import FreeIntentHandler
+from src.domain.handlers.mission_handler import MissionHandler
+from src.domain.handlers.router_handler import RouterStageHandler
+from src.domain.handlers.scene_handler import SceneHandler
+from src.domain.handlers.narrative_handler import OpenNarrativeHandler
 
 import logging
 log = logging.getLogger(__name__)
