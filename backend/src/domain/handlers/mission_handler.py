@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from src.utils.llm_client import get_llm_client
+from src.infrastructure.llm.llm_factory import get_llm_client
 from domain.services.orchestration.scene_tools import (
     get_i18n_entries,
     get_next_stage_tag,
@@ -24,9 +24,10 @@ from domain.services.orchestration.scene_tools import (
     get_speaker_pool,
 )
 from domain.services.generation.fallback_tools import trigger_fallback
-from src.utils.logger import log
-from src.utils.text_matcher import detect_mission_target
-from src.utils.config_loader import get_config_loader
+import logging
+log = logging.getLogger(__name__)
+# TODO: text_matcher 위치 확인 필요 # detect_mission_target
+# TODO: get_config_loader 위치 확인 필요
 
 _PROMPTS = get_config_loader().get_prompts()
 _MISSION_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("mission") or {})

@@ -16,7 +16,8 @@ from domain.services.orchestration.scene_tools import (
     get_stage_type,
     get_speaker_pool,
 )
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 from . import StageResult
 
 

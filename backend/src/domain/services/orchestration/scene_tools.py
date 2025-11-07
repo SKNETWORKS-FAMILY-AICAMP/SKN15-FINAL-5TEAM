@@ -9,7 +9,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 from domain.models.story import Beat
 
 

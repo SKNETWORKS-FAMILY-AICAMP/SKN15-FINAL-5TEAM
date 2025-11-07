@@ -69,7 +69,7 @@ def _maybe_llm_boost(state: dict, user_text: str, totals: Dict[str, float]) -> D
         return totals
     try:
         if not totals or max(totals.values()) < 1.0:
-            from src.utils.llm_client import get_llm_client
+            from src.infrastructure.llm.llm_factory import get_llm_client
 
             llm = get_llm_client()
             system = (

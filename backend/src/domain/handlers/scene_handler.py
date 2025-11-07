@@ -19,7 +19,8 @@ from domain.services.orchestration.scene_tools import (
     get_stage_type,
     get_speaker_pool,
 )
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 from src.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
 
@@ -150,11 +151,11 @@ class SceneHandler:
             False: 대화 계속 진행
         """
         if self._config_loader is None:
-            from src.utils.config_loader import ConfigLoader
+            # TODO: ConfigLoader 위치 확인 필요
             self._config_loader = ConfigLoader()
 
         if self._llm is None:
-            from src.utils.llm_client import LLMClient
+            from src.infrastructure.llm.llm_factory import LLMFactory
             self._llm = LLMClient()
 
         prompts = self._config_loader.get_prompts().get("llm_prompts", {}).get("children", {})
