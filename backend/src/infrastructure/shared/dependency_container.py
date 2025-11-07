@@ -10,6 +10,9 @@ from typing import Optional
 # Core Interfaces
 from core.interfaces.repositories.user_repository import IUserRepository
 from core.interfaces.repositories.session_repository import ISessionRepository
+from core.interfaces.repositories.character_repository import ICharacterRepository
+from core.interfaces.repositories.memory_repository import IMemoryRepository
+from core.interfaces.managers.session_manager import ISessionManager
 from core.interfaces.providers.llm_provider import ILLMProvider
 from core.interfaces.providers.cache_provider import ICacheProvider
 
@@ -17,6 +20,12 @@ from core.interfaces.providers.cache_provider import ICacheProvider
 from infrastructure.database.connection import DatabaseConnection
 from infrastructure.database.repositories.postgres_user_repository import PostgresUserRepository
 from infrastructure.database.repositories.postgres_session_repository import PostgresSessionRepository
+from infrastructure.persistence.postgresql.repositories.character_repo import PostgresCharacterRepository
+from infrastructure.persistence.postgresql.repositories.memory_repo import PostgresMemoryRepository
+from infrastructure.database.session_manager import HybridSessionManager
+from infrastructure.database.session_manager_adapter import SessionManagerAdapter
+from infrastructure.database.db_manager import DatabaseManager
+from infrastructure.cache.cache_manager import CacheManager
 from infrastructure.cache.redis_connection import RedisConnection
 from infrastructure.cache.redis_cache_provider import RedisCacheProvider
 from infrastructure.cache.strategies.session_cache_strategy import SessionCacheStrategy
@@ -44,6 +53,11 @@ class DependencyContainer:
         # Repositories (Lazy initialization)
         self._user_repository: Optional[IUserRepository] = None
         self._session_repository: Optional[ISessionRepository] = None
+        self._character_repository: Optional[ICharacterRepository] = None
+        self._memory_repository: Optional[IMemoryRepository] = None
+
+        # Managers (Lazy initialization)
+        self._session_manager: Optional[ISessionManager] = None
 
         # Providers (Lazy initialization)
         self._llm_provider: Optional[ILLMProvider] = None
@@ -93,6 +107,38 @@ class DependencyContainer:
             logger.info("📦 Creating SessionRepository...")
             self._session_repository = PostgresSessionRepository(self.db_connection)
         return self._session_repository
+
+    @property
+    def character_repository(self) -> ICharacterRepository:
+        """Character Repository (Singleton)"""
+        if self._character_repository is None:
+            logger.info("📦 Creating CharacterRepository...")
+            self._character_repository = PostgresCharacterRepository(self.db_connection)
+        return self._character_repository
+
+    @property
+    def memory_repository(self) -> IMemoryRepository:
+        """Memory Repository (Singleton)"""
+        if self._memory_repository is None:
+            logger.info("📦 Creating MemoryRepository...")
+            self._memory_repository = PostgresMemoryRepository(self.db_connection)
+        return self._memory_repository
+
+    # ============================================================
+    # Managers
+    # ============================================================
+
+    @property
+    def session_manager(self) -> ISessionManager:
+        """Session Manager (Singleton)"""
+        if self._session_manager is None:
+            logger.info("🔧 Creating SessionManager...")
+            # Legacy 지원: DatabaseManager + CacheManager로 HybridSessionManager 생성
+            db_manager = DatabaseManager()
+            cache_manager = CacheManager()
+            hybrid_manager = HybridSessionManager(db_manager, cache_manager)
+            self._session_manager = SessionManagerAdapter(hybrid_manager)
+        return self._session_manager
 
     # ============================================================
     # Providers
@@ -197,3 +243,18 @@ def get_llm_provider() -> ILLMProvider:
 def get_cache_provider() -> ICacheProvider:
     """FastAPI Dependency: Cache Provider"""
     return get_container().cache_provider
+
+
+def get_character_repository() -> ICharacterRepository:
+    """FastAPI Dependency: Character Repository"""
+    return get_container().character_repository
+
+
+def get_memory_repository() -> IMemoryRepository:
+    """FastAPI Dependency: Memory Repository"""
+    return get_container().memory_repository
+
+
+def get_session_manager() -> ISessionManager:
+    """FastAPI Dependency: Session Manager"""
+    return get_container().session_manager
