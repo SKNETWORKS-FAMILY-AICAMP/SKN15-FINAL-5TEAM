@@ -220,3 +220,22 @@ class IMemoryRepository(ABC):
             유사도순으로 정렬된 메모리 목록
         """
         pass
+
+    @abstractmethod
+    def get_user_memory_context(self, user_id: str) -> Dict[str, Any]:
+        """
+        새 세션 시작 시 사용할 사용자 기억 컨텍스트 생성
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            Dict: 타입별로 정리된 기억 컨텍스트
+            {
+                "relationships": [...],
+                "preferences": [...],
+                "story_progress": [...],
+                "facts": [...]
+            }
+        """
+        pass

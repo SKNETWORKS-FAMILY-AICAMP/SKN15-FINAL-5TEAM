@@ -21,7 +21,7 @@ from src.domain.services.orchestration.scene_tools import (
 )
 import logging
 log = logging.getLogger(__name__)
-from src.config.constants import INTRO_STAGE_TAGS
+from src.core.config.constants import INTRO_STAGE_TAGS
 from . import StageResult
 
 

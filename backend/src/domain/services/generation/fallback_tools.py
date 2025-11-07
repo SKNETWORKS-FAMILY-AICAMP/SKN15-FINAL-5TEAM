@@ -16,10 +16,10 @@ from typing import Dict, Any, Optional, List
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 # TODO: get_config_loader 위치 확인 필요
 from src.domain.services.orchestration.scene_tools import get_stage_atmosphere
-from src.config.constants import FALLBACK_ALLOW_NORMAL
+from src.core.config.constants import FALLBACK_ALLOW_NORMAL
 import logging
 log = logging.getLogger(__name__)
-from src.core.scene_dialogue_tools import load_tone_profiles
+from src.domain.services.orchestration.tone_profile_loader import load_tone_profiles
 
 
 class FallbackManager:
@@ -35,10 +35,19 @@ class FallbackManager:
 
     def __init__(self):
         """초기화"""
-        cfg = get_config_loader()
+        # TODO: get_config_loader 위치 확인 필요 - 현재는 기본 프롬프트 사용
         self._llm = get_llm_client()
-        self._prompts = cfg.get_prompts().get("llm_prompts", {}).get("fallback", {})
+        self._prompts = self._get_default_prompts()
         self._check_templates()
+
+    def _get_default_prompts(self) -> Dict[str, str]:
+        """기본 fallback 프롬프트 반환"""
+        return {
+            "off_topic_base": "사용자가 게임과 무관한 대화를 시도했습니다.",
+            "off_topic_user": "지금은 게임에 집중해주세요.",
+            "urgent_off_topic_base": "사용자가 긴급한 상황에서 게임과 무관한 대화를 시도했습니다.",
+            "urgent_off_topic_user": "지금은 중요한 시점입니다. 게임에 집중해주세요."
+        }
 
     def _check_templates(self):
         """필수 프롬프트 템플릿 확인"""

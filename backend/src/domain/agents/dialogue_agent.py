@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from src.core.graph_state import AgentState, Dialogue
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
-# TODO: get_config_loader 위치 확인 필요
+from src.core.config.config_loader import get_config_loader
 # TODO: training_logger 위치 확인 필요
 
 _PROMPTS = get_config_loader().get_prompts()

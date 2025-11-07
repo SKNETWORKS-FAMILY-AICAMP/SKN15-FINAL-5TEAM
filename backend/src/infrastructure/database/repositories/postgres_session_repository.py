@@ -168,7 +168,86 @@ class PostgresSessionRepository(ISessionRepository):
         scenario_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """사용자의 마지막 세션 조회"""
-        # FIXME: Implement proper SQL query
-        from src.infrastructure.database.db_manager import DatabaseManager
-        db = DatabaseManager()
-        return db.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                    if scenario_id:
+                        cursor.execute("""
+                            SELECT * FROM conversation.sessions
+                            WHERE user_id = %s AND scenario_id = %s
+                            ORDER BY updated_at DESC
+                            LIMIT 1
+                        """, (user_id, scenario_id))
+                    else:
+                        cursor.execute("""
+                            SELECT * FROM conversation.sessions
+                            WHERE user_id = %s
+                            ORDER BY updated_at DESC
+                            LIMIT 1
+                        """, (user_id,))
+
+                    result = cursor.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"❌ Failed to get last session for user {user_id}: {e}")
+            return None
+
+    # ============================================================
+    # Dialogue & Tracking
+    # ============================================================
+
+    def save_dialogues(
+        self,
+        session_id: str,
+        turn_number: int,
+        dialogues: List[Dict[str, Any]],
+        user_id: Optional[str] = None,
+        scenario_id: Optional[str] = None
+    ) -> bool:
+        """대화 목록 저장"""
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cursor:
+                    for idx, dialogue in enumerate(dialogues):
+                        cursor.execute("""
+                            INSERT INTO conversation.dialogues
+                            (session_id, turn_number, speaker, content,
+                             emotion, emotion_intensity, order_index, timestamp)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                        """, (
+                            session_id,
+                            turn_number,
+                            dialogue.get("speaker"),
+                            dialogue.get("content"),
+                            dialogue.get("emotion"),
+                            dialogue.get("emotion_intensity"),
+                            idx
+                        ))
+                    logger.debug(f"Saved {len(dialogues)} dialogues for turn {turn_number}")
+                    return True
+        except Exception as e:
+            logger.error(f"❌ Failed to save dialogues: {e}")
+            return False
+
+    def track_affinity_change(
+        self,
+        session_id: str,
+        user_id: str,
+        affinity_changes: Dict[str, int]
+    ) -> bool:
+        """친밀도 변화 추적 (미구현 - 향후 추가 예정)"""
+        # TODO: Implement affinity tracking table and logic
+        logger.debug(f"Affinity tracking called for session {session_id}: {affinity_changes}")
+        return True
+
+    def track_stage_change(
+        self,
+        session_id: str,
+        user_id: str,
+        old_stage: Optional[str],
+        new_stage: str
+    ) -> bool:
+        """스테이지 변화 추적 (미구현 - 향후 추가 예정)"""
+        # TODO: Implement stage tracking table and logic
+        logger.debug(f"Stage tracking called for session {session_id}: {old_stage} -> {new_stage}")
+        return True

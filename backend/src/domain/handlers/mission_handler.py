@@ -28,10 +28,10 @@ from src.domain.services.orchestration.scene_tools import (
     get_speaker_pool,
 )
 from src.domain.services.generation.fallback_tools import trigger_fallback
+from src.core.config.config_loader import get_config_loader
 import logging
 log = logging.getLogger(__name__)
 # TODO: text_matcher 위치 확인 필요 # detect_mission_target
-# TODO: get_config_loader 위치 확인 필요
 
 _PROMPTS = get_config_loader().get_prompts()
 _MISSION_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("mission") or {})
