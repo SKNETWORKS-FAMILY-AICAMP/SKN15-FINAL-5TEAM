@@ -11,9 +11,8 @@ from fastapi import APIRouter, Depends
 
 from ..schemas.api_models import MessageResponse
 
-from ..dependencies.api_deps import get_db_manager, get_cache_manager
-
-from src.infrastructure.database.db_manager import DatabaseManager
+from ..dependencies.api_deps import get_cache_manager
+from src.infrastructure.shared.dependency_container import get_container
 
 router = APIRouter()
 
@@ -33,9 +32,7 @@ async def root():
     }
 
 @router.get("/health", tags=["System"])
-async def health_check(
-    db: DatabaseManager = Depends(get_db_manager)
-):
+async def health_check():
     """
     ALB 헬스 체크 엔드포인트
 
@@ -45,8 +42,9 @@ async def health_check(
         헬스 체크 결과
     """
     try:
-        # 데이터베이스 연결 확인 (간단한 쿼리)
-        with db.get_connection() as conn:
+        # 데이터베이스 연결 확인 (간단한 쿼리) via Repository Container
+        container = get_container()
+        with container.db_connection.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
         db_status = "healthy"

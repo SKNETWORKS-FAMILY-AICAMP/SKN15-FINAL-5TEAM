@@ -28,7 +28,7 @@ from src.infrastructure.database.repositories.postgres_conversation_repository i
 from src.infrastructure.database.repositories.postgres_progression_repository import PostgresProgressionRepository
 from src.infrastructure.database.session_manager import HybridSessionManager
 from src.infrastructure.database.session_manager_adapter import SessionManagerAdapter
-from src.infrastructure.database.db_manager import DatabaseManager
+from src.infrastructure.database.session_database_adapter import SessionDatabaseAdapter
 from src.infrastructure.cache.cache_manager import CacheManager
 from src.infrastructure.cache.redis_connection import RedisConnection
 from src.infrastructure.cache.redis_cache_provider import RedisCacheProvider
@@ -155,10 +155,10 @@ class DependencyContainer:
         """Session Manager (Singleton)"""
         if self._session_manager is None:
             logger.info("🔧 Creating SessionManager...")
-            # Legacy 지원: DatabaseManager + CacheManager로 HybridSessionManager 생성
-            db_manager = DatabaseManager()
+            # SessionDatabaseAdapter + CacheManager로 HybridSessionManager 생성
+            db_adapter = SessionDatabaseAdapter()
             cache_manager = CacheManager()
-            hybrid_manager = HybridSessionManager(db_manager, cache_manager)
+            hybrid_manager = HybridSessionManager(db_adapter, cache_manager)
             self._session_manager = SessionManagerAdapter(hybrid_manager)
         return self._session_manager
 
