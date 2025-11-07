@@ -22,6 +22,7 @@ class DatabaseSettings(BaseSettings):
 
     class Config:
         env_prefix = "DB_"
+        extra = "ignore"  # Pydantic v2: 추가 필드 무시
 
 
 class RedisSettings(BaseSettings):
@@ -34,6 +35,7 @@ class RedisSettings(BaseSettings):
 
     class Config:
         env_prefix = "REDIS_"
+        extra = "ignore"  # Pydantic v2: 추가 필드 무시
 
 
 class LLMSettings(BaseSettings):
@@ -47,6 +49,7 @@ class LLMSettings(BaseSettings):
 
     class Config:
         env_prefix = "OPENAI_"
+        extra = "ignore"  # Pydantic v2: 추가 필드 무시
 
     @field_validator("temperature")
     @classmethod
@@ -65,6 +68,7 @@ class JWTSettings(BaseSettings):
 
     class Config:
         env_prefix = "JWT_"
+        extra = "ignore"  # Pydantic v2: 추가 필드 무시
 
 
 class AppSettings(BaseSettings):
@@ -77,6 +81,7 @@ class AppSettings(BaseSettings):
 
     class Config:
         env_prefix = ""
+        extra = "ignore"  # Pydantic v2: 추가 필드 무시
 
     @property
     def is_production(self) -> bool:
@@ -103,6 +108,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # Pydantic v2: 추가 필드 무시
 
 
 # ============================================================
