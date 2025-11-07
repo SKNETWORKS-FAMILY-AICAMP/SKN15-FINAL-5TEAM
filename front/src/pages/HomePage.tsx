@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import CharacterCarousel from '@/components/CharacterCarousel';
 import ChatHeader from '@/components/ChatHeader';
+import LiveStatsBar from '@/components/LiveStatsBar';
 import MyAccountModal from '@/components/MyAccountModal';
 import LoginModal from '@/components/LoginModal';
 import { useApp } from '@/contexts/AppContext';
+import { useLiveStats } from '@/hooks/useLiveStats';
 import { apiClient, type ScenarioCard } from '@/services/api';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
@@ -17,6 +19,9 @@ interface CharacterCard {
   likes: number;
   comments: number;
   views: number;
+  chatSessions?: number;
+  avgAffinity?: number;
+  bubbleReward?: number;
   tags: string[];
   size: 'large' | 'normal';
   link: string;
@@ -29,7 +34,13 @@ export default function HomePage() {
   const [characters, setCharacters] = useState<CharacterCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toggleSidebar, openSettings, currentUser } = useApp();
+  const { toggleSidebar, openSettings, currentUser, currentBubbles } = useApp();
+  const {
+    stats: liveStats,
+    loading: statsLoading,
+    error: statsError,
+    refresh: refreshStats
+  } = useLiveStats({ pollInterval: 20000 });
 
   // Load scenarios from API
   useEffect(() => {
@@ -51,6 +62,9 @@ export default function HomePage() {
           likes: scenario.likes,
           comments: scenario.comments,
           views: scenario.views,
+          chatSessions: scenario.chat_sessions ?? scenario.views,
+          avgAffinity: scenario.average_affinity_score ?? undefined,
+          bubbleReward: scenario.bubble_reward ?? undefined,
           tags: scenario.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`),
           size: scenario.card_size,
           link: scenario.route_path
@@ -241,6 +255,14 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
+          <LiveStatsBar
+            stats={liveStats}
+            loading={statsLoading}
+            error={statsError}
+            bubbleBalance={currentBubbles}
+            onRefresh={refreshStats}
+          />
 
           {/* 메인 제목 */}
           <div className="text-center flex-shrink-0">
