@@ -71,7 +71,7 @@ def get_session_manager() -> HybridSessionManager:
         container = get_container()
         # SessionManagerAdapter가 감싸고 있는 HybridSessionManager 추출
         session_mgr_adapter = container.session_manager
-        _hybrid_session_manager = session_mgr_adapter._session_manager
+        _hybrid_session_manager = session_mgr_adapter._manager
     return _hybrid_session_manager
 
 

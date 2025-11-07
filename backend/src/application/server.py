@@ -102,6 +102,7 @@ app.include_router(system_routes.router, tags=["System"])
 app.include_router(leaderboard_routes.router, prefix="/api", tags=["Leaderboard"])
 app.include_router(scenario_routes.router, prefix="/api/scenarios", tags=["Scenarios"])
 app.include_router(session_routes.router, prefix="/api/sessions", tags=["Sessions"])
+app.include_router(session_routes.router, prefix="/api/session", tags=["Sessions (Singular)"])  # Frontend compatibility
 app.include_router(memories_routes.router, prefix="/api/users/me/memories", tags=["Memories"])
 app.include_router(monitoring_routes.router, prefix="/api/monitoring", tags=["Monitoring"])
 app.include_router(auth_routes.router, prefix="/api/auth", tags=["Auth"])
