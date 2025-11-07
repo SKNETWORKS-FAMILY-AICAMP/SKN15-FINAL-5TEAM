@@ -9,38 +9,24 @@
 from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
-try:
-    from backend.api.dependencies.auth_deps import require_auth
-except ModuleNotFoundError:
-    try:
-        from api.dependencies.auth_deps import require_auth
-    except ModuleNotFoundError:
-        from src.auth.dependencies import require_auth
+    from ..dependencies.auth_deps import require_auth
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
-try:
-    from backend.api.dependencies.api_deps import get_db_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager
+    from ..dependencies.api_deps import get_db_manager
 
-try:
-    from backend.api.schemas.api_models import (
+    from ..schemas.api_models import (
         ConsumeCreditsRequest,
         AwardXPRequest,
         UpdateEquipmentRequest,
     )
 except ModuleNotFoundError:
-    from api.schemas.api_models import ConsumeCreditsRequest, AwardXPRequest, UpdateEquipmentRequest
+    from ..schemas.api_models import ConsumeCreditsRequest, AwardXPRequest, UpdateEquipmentRequest
 
 # ============================================================
 # 라우터 생성
 # ============================================================
 router = APIRouter()
-
 
 # ============================================================
 # 💰 크레딧 및 리소스 관련 엔드포인트
@@ -57,7 +43,6 @@ async def get_user_credits(
         raise HTTPException(status_code=404, detail="크레딧 정보를 찾을 수 없습니다")
     return credits
 
-
 @router.post("/me/credits/consume")
 async def consume_user_credits(
     req: ConsumeCreditsRequest,
@@ -69,7 +54,6 @@ async def consume_user_credits(
     if not success:
         raise HTTPException(status_code=400, detail="크레딧 잔액이 부족합니다")
     return {"success": True, "message": f"{req.amount} 버블이 차감되었습니다"}
-
 
 # ============================================================
 # ============================================================
@@ -105,7 +89,6 @@ async def get_user_progression(
         raise HTTPException(status_code=404, detail="Progression data not found")
     return progression
 
-
 @router.get("/me/equipment")
 async def get_user_equipment(
     user: Dict = Depends(require_auth),
@@ -135,7 +118,6 @@ async def get_user_equipment(
             "crow_name": None
         }
     return equipment
-
 
 @router.post("/me/progression/award-xp")
 async def award_user_experience(
@@ -183,7 +165,6 @@ async def award_user_experience(
 
     return result
 
-
 @router.put("/me/equipment")
 async def update_user_equipment(
     req: UpdateEquipmentRequest,
@@ -207,7 +188,6 @@ async def update_user_equipment(
     if not success:
         raise HTTPException(status_code=400, detail="No valid equipment fields to update")
     return {"success": True}
-
 
 @router.get("/me/xp-transactions")
 async def get_user_xp_transactions(
@@ -243,7 +223,6 @@ async def get_user_xp_transactions(
 
     transactions = db.get_xp_transactions(user["user_id"], limit, offset)
     return transactions
-
 
 # ============================================================
 # 🗺️ 시나리오 진행 관련 엔드포인트
@@ -283,7 +262,6 @@ async def get_user_scenarios(
     scenarios = db.get_scenarios_with_user_progress(user["user_id"])
     return scenarios
 
-
 @router.post("/me/scenarios/{scenario_id}/like")
 async def toggle_scenario_like(
     scenario_id: str,
@@ -307,7 +285,6 @@ async def toggle_scenario_like(
     except Exception as e:
         print(f"❌ Error toggling like: {e}")
         raise HTTPException(status_code=500, detail="Failed to toggle like")
-
 
 @router.get("/me/scenarios/{scenario_id}/progress")
 async def get_scenario_progress(
@@ -348,7 +325,6 @@ async def get_scenario_progress(
             "is_liked": False
         }
     return progress
-
 
 @router.put("/me/scenarios/{scenario_id}/progress")
 async def update_scenario_progress(

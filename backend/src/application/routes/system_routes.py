@@ -9,23 +9,13 @@
 # ============================================================
 from fastapi import APIRouter, Depends
 
-try:
-    from backend.api.schemas.api_models import MessageResponse
-except ModuleNotFoundError:
-    from api.schemas.api_models import MessageResponse
+    from ..schemas.api_models import MessageResponse
 
-try:
-    from backend.api.dependencies.api_deps import get_db_manager, get_cache_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager, get_cache_manager
+    from ..dependencies.api_deps import get_db_manager, get_cache_manager
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
 router = APIRouter()
-
 
 @router.get("/", response_model=MessageResponse, tags=["System"])
 async def root():
@@ -41,7 +31,6 @@ async def root():
         "service": "KIME Chat API",
         "version": "2.0.0"
     }
-
 
 @router.get("/health", tags=["System"])
 async def health_check(
@@ -69,7 +58,6 @@ async def health_check(
         "database": db_status,
         "service": "KIME Chat API"
     }
-
 
 @router.get("/ping", tags=["System"])
 async def ping():

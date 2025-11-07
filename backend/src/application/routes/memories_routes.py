@@ -10,8 +10,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Dict, List, Optional
 
-try:
-    from backend.api.schemas.api_models import (
+    from ..schemas.api_models import (
         MemoryCreateRequest,
         MemoryUpdateRequest,
         MemoryResponse,
@@ -19,7 +18,7 @@ try:
         MessageResponse,
     )
 except ModuleNotFoundError:
-    from api.schemas.api_models import (
+    from ..schemas.api_models import (
         MemoryCreateRequest,
         MemoryUpdateRequest,
         MemoryResponse,
@@ -27,31 +26,15 @@ except ModuleNotFoundError:
         MessageResponse,
     )
 
-try:
-    from backend.api.dependencies.api_deps import get_db_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager
+    from ..dependencies.api_deps import get_db_manager
 
-try:
-    from backend.api.dependencies.auth_deps import require_auth
-except ModuleNotFoundError:
-    try:
-        from api.dependencies.auth_deps import require_auth
-    except ModuleNotFoundError:
-        from src.auth.dependencies import require_auth
+    from ..dependencies.auth_deps import require_auth
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
-try:
     from backend.src.utils.conversation_summarizer import generate_embedding
-except ModuleNotFoundError:
-    from src.utils.conversation_summarizer import generate_embedding
 
 router = APIRouter()
-
 
 @router.get("", response_model=List[Dict])
 async def get_user_memories(
@@ -83,7 +66,6 @@ async def get_user_memories(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve memories: {str(e)}")
 
-
 @router.get("/{memory_key}", response_model=Dict)
 async def get_memory_by_key(
     memory_key: str,
@@ -113,7 +95,6 @@ async def get_memory_by_key(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve memory: {str(e)}")
-
 
 @router.post("", response_model=Dict)
 async def create_memory(
@@ -170,7 +151,6 @@ async def create_memory(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create memory: {str(e)}")
-
 
 @router.put("/{memory_key}", response_model=Dict)
 async def update_memory(
@@ -236,7 +216,6 @@ async def update_memory(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update memory: {str(e)}")
 
-
 @router.delete("/{memory_key}", response_model=MessageResponse)
 async def delete_memory(
     memory_key: str,
@@ -267,7 +246,6 @@ async def delete_memory(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete memory: {str(e)}")
-
 
 @router.post("/search", response_model=List[Dict])
 async def search_memories_by_similarity(
@@ -312,7 +290,6 @@ async def search_memories_by_similarity(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to search memories: {str(e)}")
-
 
 @router.get("/session/{session_id}", response_model=List[Dict])
 async def get_memories_by_session(

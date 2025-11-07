@@ -11,31 +11,15 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Dict, List, Optional
 
-try:
-    from backend.api.schemas.api_models import ScenarioResponse, MessageResponse
-except ModuleNotFoundError:
-    from api.schemas.api_models import ScenarioResponse, MessageResponse
+    from ..schemas.api_models import ScenarioResponse, MessageResponse
 
-try:
-    from backend.api.dependencies.api_deps import get_db_manager, get_cache_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager, get_cache_manager
+    from ..dependencies.api_deps import get_db_manager, get_cache_manager
 
-try:
-    from backend.api.dependencies.auth_deps import optional_auth, require_auth
-except ModuleNotFoundError:
-    try:
-        from api.dependencies.auth_deps import optional_auth, require_auth
-    except ModuleNotFoundError:
-        from src.auth.dependencies import optional_auth, require_auth
+    from ..dependencies.auth_deps import optional_auth, require_auth
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
 router = APIRouter()
-
 
 @router.get("", response_model=List[Dict])
 async def get_scenarios(
@@ -63,7 +47,6 @@ async def get_scenarios(
 
     return scenarios
 
-
 @router.get("/{scenario_id}", response_model=Dict)
 async def get_scenario(
     scenario_id: str,
@@ -83,7 +66,6 @@ async def get_scenario(
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     return scenario
-
 
 @router.post("/{scenario_id}/view", response_model=MessageResponse)
 async def record_scenario_view(
@@ -121,7 +103,6 @@ async def record_scenario_view(
 
     return {"message": "View recorded successfully", "status": "success"}
 
-
 @router.post("/{scenario_id}/like", response_model=Dict)
 async def toggle_scenario_like(
     scenario_id: str,
@@ -148,7 +129,6 @@ async def toggle_scenario_like(
     except Exception as e:
         print(f"❌ Error toggling like: {e}")
         raise HTTPException(status_code=500, detail="Failed to toggle like")
-
 
 @router.get("/{scenario_id}/progress", response_model=Dict)
 async def get_scenario_progress(
@@ -181,7 +161,6 @@ async def get_scenario_progress(
             "is_liked": False
         }
     return progress
-
 
 @router.put("/{scenario_id}/progress", response_model=MessageResponse)
 async def update_scenario_progress(

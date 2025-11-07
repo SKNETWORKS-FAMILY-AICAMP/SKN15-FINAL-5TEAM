@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
-
 # ========================================================================
 # 응답 모델 정의
 # ========================================================================
@@ -31,7 +30,6 @@ class LabelingStatsResponse(BaseModel):
     cost_per_evaluation: str
     agent_stats: Dict[str, Dict[str, float]]
 
-
 class ABTestResultsResponse(BaseModel):
     """A/B 테스트 결과 응답"""
     total_tests: int
@@ -41,13 +39,11 @@ class ABTestResultsResponse(BaseModel):
     avg_score_difference: float
     recommendation: str
 
-
 class FeedbackAnalysisResponse(BaseModel):
     """피드백 분석 응답"""
     low_score_count: int
     common_issues: List[Dict[str, Any]]
     recommendations: List[str]
-
 
 # ========================================================================
 # 데이터베이스 유틸리티
@@ -62,7 +58,6 @@ def get_db_connection():
     except Exception as e:
         print(f"[MonitoringAPI] DB connection failed: {e}")
         raise HTTPException(status_code=500, detail="Database connection failed")
-
 
 # ========================================================================
 # API 엔드포인트 집합
@@ -155,7 +150,6 @@ async def get_labeling_stats(days: int = Query(7, ge=1, le=30)):
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/ab-test-results", response_model=ABTestResultsResponse)
 async def get_ab_test_results(days: int = Query(7, ge=1, le=30)):
     """
@@ -232,7 +226,6 @@ async def get_ab_test_results(days: int = Query(7, ge=1, le=30)):
         cursor.close()
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/feedback-analysis", response_model=FeedbackAnalysisResponse)
 async def analyze_low_scores(days: int = Query(7, ge=1, le=30)):
@@ -334,14 +327,10 @@ async def analyze_low_scores(days: int = Query(7, ge=1, le=30)):
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/cache-stats")
 async def get_cache_stats():
     """캐시 통계 조회"""
-    try:
         from backend.src.tools.training_logger import get_training_logger
-    except ModuleNotFoundError:
-        from src.tools.training_logger import get_training_logger
 
     logger = get_training_logger()
 

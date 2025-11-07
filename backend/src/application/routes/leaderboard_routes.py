@@ -10,23 +10,13 @@ from fastapi import APIRouter, Depends, Query
 from typing import List
 from datetime import datetime
 
-try:
-    from backend.api.schemas.api_models import LeaderboardResponse, LeaderboardEntry
-except ModuleNotFoundError:
-    from api.schemas.api_models import LeaderboardResponse, LeaderboardEntry
+    from ..schemas.api_models import LeaderboardResponse, LeaderboardEntry
 
-try:
-    from backend.api.dependencies.api_deps import get_db_manager
-except ModuleNotFoundError:
-    from api.dependencies.api_deps import get_db_manager
+    from ..dependencies.api_deps import get_db_manager
 
-try:
-    from backend.src.infrastructure.database.db_manager import DatabaseManager
-except ModuleNotFoundError:
     from src.infrastructure.database.db_manager import DatabaseManager
 
 router = APIRouter()
-
 
 @router.get("/leaderboard", response_model=List[dict])
 async def get_leaderboard(
