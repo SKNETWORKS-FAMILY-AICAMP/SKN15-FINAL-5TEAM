@@ -13,7 +13,7 @@ import random
 import re
 from typing import Dict, Any, Optional, List
 
-from src.infrastructure.llm.llm_factory import get_llm_client
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 # TODO: get_config_loader 위치 확인 필요
 from domain.services.orchestration.scene_tools import get_stage_atmosphere
 from src.config.constants import FALLBACK_ALLOW_NORMAL

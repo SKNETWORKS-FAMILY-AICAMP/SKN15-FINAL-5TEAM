@@ -6,7 +6,7 @@ import time
 from typing import Dict, List, Optional
 
 from src.core.graph_state import AgentState, Dialogue
-from src.infrastructure.llm.llm_factory import get_llm_client
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 # TODO: get_config_loader 위치 확인 필요
 # TODO: training_logger 위치 확인 필요
 

@@ -1,10 +1,6 @@
 # ============================================================
 # 👧 자식 에이전트 — 캐릭터별 대사 생성 로직
 # ============================================================
-# TODO: Migrate to Dependency Injection
-# - Replace direct DatabaseManager() instantiation with get_session_manager() from DI container
-# - Use ISessionManager interface instead of HybridSessionManager
-# ============================================================
 from __future__ import annotations
 
 import json
@@ -14,7 +10,7 @@ from domain.models.conversation import Dialogue
 from domain.models.story import Beat
 
 from src.core import scene_dialogue_tools as dialogue_tools
-from src.infrastructure.llm.llm_factory import get_llm_client
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 import logging
 log = logging.getLogger(__name__)
 # TODO: get_config_loader 위치 확인 필요
@@ -545,17 +541,13 @@ def run_children_agent(state: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         try:
-            from src.infrastructure.database.session_manager import HybridSessionManager
-            from src.infrastructure.database.db_manager import DatabaseManager
+            from src.infrastructure.shared.dependency_container import get_session_manager
 
             execution_time_ms = (time.perf_counter() - start_time) * 1000.0
             session_id = state.get("session_id")
 
             if session_id:
-                from src.infrastructure.cache.cache_manager import CacheManager
-                db = DatabaseManager()
-                cache_manager = CacheManager()
-                session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
+                session_manager = get_session_manager()
                 session_manager.save_performance_metric(
                     metric_name="children_agent_execution_time",
                     metric_value=execution_time_ms,

@@ -69,9 +69,9 @@ def _maybe_llm_boost(state: dict, user_text: str, totals: Dict[str, float]) -> D
         return totals
     try:
         if not totals or max(totals.values()) < 1.0:
-            from src.infrastructure.llm.llm_factory import get_llm_client
+            from src.infrastructure.shared.dependency_container import get_llm_provider
 
-            llm = get_llm_client()
+            llm = get_llm_provider()
             system = (
                 "You label user intent for a Demon Slayer game.\n"
                 "Return JSON with scores (0-1) for keys: combat_coop, praise_encourage, positive_core, general_interaction, optimal_interaction, core_goal_achievement, selfish_cowardly.\n"
