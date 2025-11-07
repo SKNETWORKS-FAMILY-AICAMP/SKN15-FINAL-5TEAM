@@ -8,8 +8,8 @@ import logging
 import redis
 from typing import Optional
 
-from core.config.settings import get_settings
-from core.exceptions import CacheConnectionError
+from src.core.config.settings import get_settings
+from src.core.exceptions import CacheConnectionError
 
 logger = logging.getLogger(__name__)
 

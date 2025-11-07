@@ -8,32 +8,32 @@ import logging
 from typing import Optional
 
 # Core Interfaces
-from core.interfaces.repositories.user_repository import IUserRepository
-from core.interfaces.repositories.session_repository import ISessionRepository
-from core.interfaces.repositories.character_repository import ICharacterRepository
-from core.interfaces.repositories.memory_repository import IMemoryRepository
-from core.interfaces.repositories.conversation_repository import IConversationRepository
-from core.interfaces.repositories.progression_repository import IProgressionRepository
-from core.interfaces.managers.session_manager import ISessionManager
-from core.interfaces.providers.llm_provider import ILLMProvider
-from core.interfaces.providers.cache_provider import ICacheProvider
+from src.core.interfaces.repositories.user_repository import IUserRepository
+from src.core.interfaces.repositories.session_repository import ISessionRepository
+from src.core.interfaces.repositories.character_repository import ICharacterRepository
+from src.core.interfaces.repositories.memory_repository import IMemoryRepository
+from src.core.interfaces.repositories.conversation_repository import IConversationRepository
+from src.core.interfaces.repositories.progression_repository import IProgressionRepository
+from src.core.interfaces.managers.session_manager import ISessionManager
+from src.core.interfaces.providers.llm_provider import ILLMProvider
+from src.core.interfaces.providers.cache_provider import ICacheProvider
 
 # Infrastructure Implementations
-from infrastructure.database.connection import DatabaseConnection
-from infrastructure.database.repositories.postgres_user_repository import PostgresUserRepository
-from infrastructure.database.repositories.postgres_session_repository import PostgresSessionRepository
-from infrastructure.persistence.postgresql.repositories.character_repo import PostgresCharacterRepository
-from infrastructure.persistence.postgresql.repositories.memory_repo import PostgresMemoryRepository
-from infrastructure.persistence.postgresql.repositories.conversation_repo import PostgresConversationRepository
-from infrastructure.persistence.postgresql.repositories.progression_repo import PostgresProgressionRepository
-from infrastructure.database.session_manager import HybridSessionManager
-from infrastructure.database.session_manager_adapter import SessionManagerAdapter
-from infrastructure.database.db_manager import DatabaseManager
-from infrastructure.cache.cache_manager import CacheManager
-from infrastructure.cache.redis_connection import RedisConnection
-from infrastructure.cache.redis_cache_provider import RedisCacheProvider
-from infrastructure.cache.strategies.session_cache_strategy import SessionCacheStrategy
-from infrastructure.llm.llm_factory import LLMFactory
+from src.infrastructure.database.connection import DatabaseConnection
+from src.infrastructure.database.repositories.postgres_user_repository import PostgresUserRepository
+from src.infrastructure.database.repositories.postgres_session_repository import PostgresSessionRepository
+from src.infrastructure.persistence.postgresql.repositories.character_repo import PostgresCharacterRepository
+from src.infrastructure.persistence.postgresql.repositories.memory_repo import PostgresMemoryRepository
+from src.infrastructure.persistence.postgresql.repositories.conversation_repo import PostgresConversationRepository
+from src.infrastructure.persistence.postgresql.repositories.progression_repo import PostgresProgressionRepository
+from src.infrastructure.database.session_manager import HybridSessionManager
+from src.infrastructure.database.session_manager_adapter import SessionManagerAdapter
+from src.infrastructure.database.db_manager import DatabaseManager
+from src.infrastructure.cache.cache_manager import CacheManager
+from src.infrastructure.cache.redis_connection import RedisConnection
+from src.infrastructure.cache.redis_cache_provider import RedisCacheProvider
+from src.infrastructure.cache.strategies.session_cache_strategy import SessionCacheStrategy
+from src.infrastructure.llm.llm_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 

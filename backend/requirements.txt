@@ -8,6 +8,7 @@ uvicorn[standard]==0.27.0
 websockets==12.0
 python-multipart==0.0.6
 pydantic>=2.10.0
+pydantic-settings>=2.0.0
 slowapi==0.1.9  # Rate limiting for FastAPI
 
 # === LLM 및 AI ===

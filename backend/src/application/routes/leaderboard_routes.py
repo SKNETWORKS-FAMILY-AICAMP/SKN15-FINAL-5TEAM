@@ -10,11 +10,11 @@ from fastapi import APIRouter, Depends, Query
 from typing import List
 from datetime import datetime
 
-    from ..schemas.api_models import LeaderboardResponse, LeaderboardEntry
+from ..schemas.api_models import LeaderboardResponse, LeaderboardEntry
 
-    from ..dependencies.api_deps import get_db_manager
+from ..dependencies.api_deps import get_db_manager
 
-    from src.infrastructure.database.db_manager import DatabaseManager
+from src.infrastructure.database.db_manager import DatabaseManager
 
 router = APIRouter()
 

@@ -9,10 +9,10 @@ import logging
 from typing import Optional, Dict, Any, List
 from psycopg2.extras import RealDictCursor
 
-from core.interfaces.repositories.session_repository import ISessionRepository
-from core.exceptions import DatabaseQueryError
-from infrastructure.database.connection import DatabaseConnection
-from infrastructure.database.queries.conversation_queries import ConversationQueries
+from src.core.interfaces.repositories.session_repository import ISessionRepository
+from src.core.exceptions import DatabaseQueryError
+from src.infrastructure.database.connection import DatabaseConnection
+from src.infrastructure.database.queries.conversation_queries import ConversationQueries
 
 logger = logging.getLogger(__name__)
 

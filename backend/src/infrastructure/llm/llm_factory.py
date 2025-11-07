@@ -7,9 +7,9 @@ LLM Factory - LLM Provider 생성을 위한 Factory Pattern
 import logging
 from typing import Optional
 
-from core.interfaces.providers.llm_provider import ILLMProvider
-from core.config.settings import get_settings
-from infrastructure.llm.providers.openai_llm_provider import OpenAILLMProvider
+from src.core.interfaces.providers.llm_provider import ILLMProvider
+from src.core.config.settings import get_settings
+from src.infrastructure.llm.providers.openai_llm_provider import OpenAILLMProvider
 
 logger = logging.getLogger(__name__)
 
