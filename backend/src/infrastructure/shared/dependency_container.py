@@ -12,6 +12,8 @@ from core.interfaces.repositories.user_repository import IUserRepository
 from core.interfaces.repositories.session_repository import ISessionRepository
 from core.interfaces.repositories.character_repository import ICharacterRepository
 from core.interfaces.repositories.memory_repository import IMemoryRepository
+from core.interfaces.repositories.conversation_repository import IConversationRepository
+from core.interfaces.repositories.progression_repository import IProgressionRepository
 from core.interfaces.managers.session_manager import ISessionManager
 from core.interfaces.providers.llm_provider import ILLMProvider
 from core.interfaces.providers.cache_provider import ICacheProvider
@@ -22,6 +24,8 @@ from infrastructure.database.repositories.postgres_user_repository import Postgr
 from infrastructure.database.repositories.postgres_session_repository import PostgresSessionRepository
 from infrastructure.persistence.postgresql.repositories.character_repo import PostgresCharacterRepository
 from infrastructure.persistence.postgresql.repositories.memory_repo import PostgresMemoryRepository
+from infrastructure.persistence.postgresql.repositories.conversation_repo import PostgresConversationRepository
+from infrastructure.persistence.postgresql.repositories.progression_repo import PostgresProgressionRepository
 from infrastructure.database.session_manager import HybridSessionManager
 from infrastructure.database.session_manager_adapter import SessionManagerAdapter
 from infrastructure.database.db_manager import DatabaseManager
@@ -55,6 +59,8 @@ class DependencyContainer:
         self._session_repository: Optional[ISessionRepository] = None
         self._character_repository: Optional[ICharacterRepository] = None
         self._memory_repository: Optional[IMemoryRepository] = None
+        self._conversation_repository: Optional[IConversationRepository] = None
+        self._progression_repository: Optional[IProgressionRepository] = None
 
         # Managers (Lazy initialization)
         self._session_manager: Optional[ISessionManager] = None
@@ -123,6 +129,22 @@ class DependencyContainer:
             logger.info("📦 Creating MemoryRepository...")
             self._memory_repository = PostgresMemoryRepository(self.db_connection)
         return self._memory_repository
+
+    @property
+    def conversation_repository(self) -> IConversationRepository:
+        """Conversation Repository (Singleton)"""
+        if self._conversation_repository is None:
+            logger.info("📦 Creating ConversationRepository...")
+            self._conversation_repository = PostgresConversationRepository(self.db_connection)
+        return self._conversation_repository
+
+    @property
+    def progression_repository(self) -> IProgressionRepository:
+        """Progression Repository (Singleton)"""
+        if self._progression_repository is None:
+            logger.info("📦 Creating ProgressionRepository...")
+            self._progression_repository = PostgresProgressionRepository(self.db_connection)
+        return self._progression_repository
 
     # ============================================================
     # Managers
@@ -258,3 +280,13 @@ def get_memory_repository() -> IMemoryRepository:
 def get_session_manager() -> ISessionManager:
     """FastAPI Dependency: Session Manager"""
     return get_container().session_manager
+
+
+def get_conversation_repository() -> IConversationRepository:
+    """FastAPI Dependency: Conversation Repository"""
+    return get_container().conversation_repository
+
+
+def get_progression_repository() -> IProgressionRepository:
+    """FastAPI Dependency: Progression Repository"""
+    return get_container().progression_repository
