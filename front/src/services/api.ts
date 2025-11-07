@@ -641,7 +641,11 @@ export async function* sendChatMessage(
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   const tokenType = getTokenType() || 'Bearer';
 
-  const response = await fetch(`${API_BASE_URL}/api/chat`, {
+  const url = `${API_BASE_URL}/api/chat/stream`;
+  console.log('🌐 [API] Requesting:', url);
+  console.log('📦 [API] Body:', { session_id: sessionId, scenario_id: scenarioId, user_input: userInput, user_name: userName });
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -655,17 +659,23 @@ export async function* sendChatMessage(
     }),
   });
 
+  console.log('📡 [API] Response status:', response.status, response.statusText);
+  console.log('📡 [API] Response headers:', Object.fromEntries(response.headers.entries()));
+
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('API request failed:', errorText);
+    console.error('❌ [API] Request failed:', errorText);
     throw new Error(`API request failed with status ${response.status}`);
   }
 
   if (!response.body) {
+    console.warn('⚠️ [SSE] No response body!');
     return;
   }
 
+  console.log('✅ [SSE] Got response body, creating reader...');
   const reader = response.body.getReader();
+  console.log('✅ [SSE] Reader created, starting to read...');
   const decoder = new TextDecoder();
   let buffer = '';
   let currentEvent: string | null = null;
@@ -698,6 +708,7 @@ export async function* sendChatMessage(
 
   while (true) {
     const { done, value } = await reader.read();
+    console.log('📡 [SSE] Read chunk:', { done, valueLength: value?.length });
     if (done) {
       if (buffer.length > 0) {
         const trimmed = buffer.trim();
@@ -715,17 +726,22 @@ export async function* sendChatMessage(
       }
       break;
     }
-    
-    buffer += decoder.decode(value, { stream: true });
+
+    const decodedText = decoder.decode(value, { stream: true });
+    console.log('📄 [SSE] Decoded text:', decodedText.substring(0, 200));
+    buffer += decodedText;
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
+    console.log('📋 [SSE] Lines to process:', lines.length);
 
     for (const rawLine of lines) {
       const line = rawLine.trimEnd();
+      console.log('📌 [SSE] Processing line:', line.substring(0, 100));
 
       if (line.length === 0) {
         const chunk = flushEvent();
         if (chunk) {
+          console.log('✅ [SSE] Yielding chunk:', chunk);
           yield chunk;
         }
         continue;
@@ -734,14 +750,18 @@ export async function* sendChatMessage(
       if (line.startsWith('event:')) {
         const chunk = flushEvent();
         if (chunk) {
+          console.log('✅ [SSE] Yielding chunk:', chunk);
           yield chunk;
         }
         currentEvent = line.slice(6).trim() || null;
+        console.log('🏷️ [SSE] Event type:', currentEvent);
         continue;
       }
 
       if (line.startsWith('data:')) {
-        dataBuffer.push(line.slice(5).trim());
+        const data = line.slice(5).trim();
+        console.log('📝 [SSE] Data line:', data.substring(0, 100));
+        dataBuffer.push(data);
         continue;
       }
 

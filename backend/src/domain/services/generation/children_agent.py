@@ -391,7 +391,12 @@ class ChildrenAgent:
         # 3️⃣ Scene 구조: {"scene": {"characters": {...}, "dialogues": [...], "dialogue": [...]}}
         elif "scene" in llm_response:
             scene = llm_response.get("scene", {})
-            if isinstance(scene, dict):
+
+            # 3-0. scene이 리스트인 경우: [{"character": "...", "dialogue": "..."}, ...]
+            if isinstance(scene, list):
+                dialogues_list = scene
+
+            elif isinstance(scene, dict):
                 # 3-1. scene.dialogues (직접 배열) - 우선 처리
                 if "dialogues" in scene:
                     scene_dialogues = scene.get("dialogues", [])
@@ -498,7 +503,7 @@ class ChildrenAgent:
 
             normalized_item = {
                 "speaker": item.get("speaker") or item.get("character") or "narr",
-                "text": item.get("text") or item.get("line") or ""
+                "text": item.get("text") or item.get("content") or item.get("line") or item.get("dialogue") or ""
             }
 
             # 추가 필드 보존 (emotion, fx 등)
@@ -526,7 +531,9 @@ class ChildrenAgent:
             if isinstance(entry, dict):
                 text = (
                     entry.get("text")
+                    or entry.get("content")
                     or entry.get("line")
+                    or entry.get("dialogue")
                     or entry.get("goal")
                     or entry.get("description")
                 )
