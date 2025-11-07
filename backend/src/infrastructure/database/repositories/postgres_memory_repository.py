@@ -228,10 +228,32 @@ class PostgresMemoryRepository(IMemoryRepository):
         limit: int = 50
     ) -> List[Dict[str, Any]]:
         """사용자의 장기 기억 목록 조회"""
-        # FIXME: Implement proper SQL query
-        from src.infrastructure.database.db_manager import DatabaseManager
-        db = DatabaseManager()
-        return db.get_user_memories(user_id=user_id, memory_type=memory_type, limit=limit)
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    conditions = ["user_id = %s", "importance >= %s"]
+                    params = [user_id, 0.0]
+
+                    if memory_type:
+                        conditions.append("memory_type = %s")
+                        params.append(memory_type)
+
+                    conditions.append("is_active = true")
+                    conditions.append("(expires_at IS NULL OR expires_at > NOW())")
+
+                    query = f"""
+                        SELECT * FROM knowledge.user_memories
+                        WHERE {' AND '.join(conditions)}
+                        ORDER BY importance DESC, last_accessed_at DESC NULLS LAST
+                        LIMIT %s
+                    """
+                    params.append(limit)
+
+                    cur.execute(query, params)
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            print(f"Error getting user memories for {user_id}: {e}")
+            return []
 
     def get_memory_by_key(
         self,
@@ -239,10 +261,28 @@ class PostgresMemoryRepository(IMemoryRepository):
         memory_key: str
     ) -> Optional[Dict[str, Any]]:
         """특정 키로 기억 조회"""
-        # FIXME: Implement proper SQL query
-        from src.infrastructure.database.db_manager import DatabaseManager
-        db = DatabaseManager()
-        return db.get_memory_by_key(user_id=user_id, memory_key=memory_key)
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM knowledge.user_memories
+                        WHERE user_id = %s AND memory_key = %s AND is_active = true
+                    """, (user_id, memory_key))
+                    result = cur.fetchone()
+
+                    if result:
+                        # Update access count
+                        cur.execute("""
+                            UPDATE knowledge.user_memories
+                            SET access_count = access_count + 1,
+                                last_accessed_at = NOW()
+                            WHERE user_id = %s AND memory_key = %s
+                        """, (user_id, memory_key))
+
+                    return dict(result) if result else None
+        except Exception as e:
+            print(f"Error getting memory by key for {user_id}, {memory_key}: {e}")
+            return None
 
     def create_or_update_memory(
         self,
@@ -257,20 +297,34 @@ class PostgresMemoryRepository(IMemoryRepository):
         embedding: Optional[List[float]] = None
     ) -> Optional[int]:
         """새로운 기억 생성 또는 업데이트 (upsert)"""
-        # FIXME: Implement proper SQL query
-        from src.infrastructure.database.db_manager import DatabaseManager
-        db = DatabaseManager()
-        return db.create_or_update_memory(
-            user_id=user_id,
-            memory_key=memory_key,
-            memory_value=memory_value,
-            memory_type=memory_type,
-            importance=importance,
-            tags=tags,
-            context=context,
-            confidence=confidence,
-            embedding=embedding
-        )
+        try:
+            from psycopg2.extras import Json
+
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO knowledge.user_memories
+                        (user_id, memory_key, memory_value, memory_type, importance,
+                         tags, context, confidence, embedding)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id, memory_key)
+                        DO UPDATE SET
+                            memory_value = EXCLUDED.memory_value,
+                            memory_type = EXCLUDED.memory_type,
+                            importance = EXCLUDED.importance,
+                            tags = EXCLUDED.tags,
+                            context = EXCLUDED.context,
+                            confidence = EXCLUDED.confidence,
+                            embedding = EXCLUDED.embedding,
+                            updated_at = NOW()
+                        RETURNING id
+                    """, (user_id, memory_key, memory_value, memory_type, importance,
+                          tags, Json(context) if context else None, confidence, embedding))
+                    result = cur.fetchone()
+                    return result[0] if result else None
+        except Exception as e:
+            print(f"Error creating/updating memory for {user_id}, {memory_key}: {e}")
+            return None
 
     def delete_memory(
         self,
@@ -278,10 +332,18 @@ class PostgresMemoryRepository(IMemoryRepository):
         memory_key: str
     ) -> bool:
         """기억 삭제 (소프트 삭제)"""
-        # FIXME: Implement proper SQL query
-        from src.infrastructure.database.db_manager import DatabaseManager
-        db = DatabaseManager()
-        return db.delete_memory(user_id=user_id, memory_key=memory_key)
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE knowledge.user_memories
+                        SET is_active = false, updated_at = NOW()
+                        WHERE user_id = %s AND memory_key = %s
+                    """, (user_id, memory_key))
+                    return True
+        except Exception as e:
+            print(f"Error deleting memory for {user_id}, {memory_key}: {e}")
+            return False
 
     def search_memories_by_similarity(
         self,
@@ -291,12 +353,101 @@ class PostgresMemoryRepository(IMemoryRepository):
         min_importance: float = 0.0
     ) -> List[Dict[str, Any]]:
         """의미 기반 기억 검색 (Vector Similarity Search)"""
-        # FIXME: Implement proper SQL query with pgvector
-        from src.infrastructure.database.db_manager import DatabaseManager
-        db = DatabaseManager()
-        return db.search_memories_by_similarity(
-            user_id=user_id,
-            query_embedding=query_embedding,
-            limit=limit,
-            min_importance=min_importance
-        )
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT
+                            *,
+                            embedding <=> %s::vector AS distance
+                        FROM knowledge.user_memories
+                        WHERE user_id = %s
+                          AND embedding IS NOT NULL
+                          AND is_active = true
+                          AND importance >= %s
+                          AND (expires_at IS NULL OR expires_at > NOW())
+                        ORDER BY embedding <=> %s::vector
+                        LIMIT %s
+                    """, (query_embedding, user_id, min_importance, query_embedding, limit))
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            print(f"Error searching memories by similarity for {user_id}: {e}")
+            return []
+
+    def get_user_memory_context(self, user_id: str) -> Dict[str, Any]:
+        """새 세션 시작 시 사용할 사용자 기억 컨텍스트 생성"""
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT
+                            jsonb_build_object(
+                                'relationships', (
+                                    SELECT jsonb_agg(jsonb_build_object(
+                                        'key', memory_key,
+                                        'value', memory_value,
+                                        'importance', importance,
+                                        'context', context
+                                    ))
+                                    FROM (
+                                        SELECT memory_key, memory_value, importance, context
+                                        FROM knowledge.user_memories
+                                        WHERE user_id = %s
+                                          AND memory_type = 'relationship'
+                                          AND is_active = TRUE
+                                        ORDER BY importance DESC
+                                        LIMIT 5
+                                    ) r
+                                ),
+                                'preferences', (
+                                    SELECT jsonb_agg(jsonb_build_object(
+                                        'key', memory_key,
+                                        'value', memory_value
+                                    ))
+                                    FROM (
+                                        SELECT memory_key, memory_value
+                                        FROM knowledge.user_memories
+                                        WHERE user_id = %s
+                                          AND memory_type = 'preference'
+                                          AND is_active = TRUE
+                                        ORDER BY importance DESC
+                                        LIMIT 5
+                                    ) p
+                                ),
+                                'story_progress', (
+                                    SELECT jsonb_agg(jsonb_build_object(
+                                        'event', memory_value,
+                                        'context', context
+                                    ))
+                                    FROM (
+                                        SELECT memory_value, context
+                                        FROM knowledge.user_memories
+                                        WHERE user_id = %s
+                                          AND memory_type = 'event'
+                                          AND is_active = TRUE
+                                        ORDER BY created_at DESC
+                                        LIMIT 10
+                                    ) e
+                                ),
+                                'facts', (
+                                    SELECT jsonb_agg(memory_value)
+                                    FROM (
+                                        SELECT memory_value
+                                        FROM knowledge.user_memories
+                                        WHERE user_id = %s
+                                          AND memory_type = 'fact'
+                                          AND is_active = TRUE
+                                        ORDER BY importance DESC
+                                        LIMIT 10
+                                    ) f
+                                )
+                            ) as memory_context;
+                    """, (user_id, user_id, user_id, user_id))
+
+                    result = cur.fetchone()
+                    if result and result[0]:
+                        return result[0]
+                    return {}
+        except Exception as e:
+            print(f"Error getting user memory context for {user_id}: {e}")
+            return {}

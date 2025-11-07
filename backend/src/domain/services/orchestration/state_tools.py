@@ -9,14 +9,12 @@ from functools import lru_cache
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
-from src.core.scenes_repo import ScenesRepo
+from .scenario_loader import scenario_loader
 from . import scene_tools
 from src.domain.services.generation.fallback_tools import trigger_fallback
 import logging
 log = logging.getLogger(__name__)
-from src.config.constants import INTRO_STAGE_TAG
-
-_SCENES_REPO = ScenesRepo()
+from src.core.config.constants import INTRO_STAGE_TAG
 
 
 class StateTools:
@@ -129,9 +127,13 @@ def ensure_scenario_state(state: dict, scenario_id: Optional[str] = None) -> Opt
     candidate_id = scenario_id or state.get("scenario_id")
     loaded = None
     if candidate_id:
-        loaded = _SCENES_REPO.load(str(candidate_id))
+        # Try loading with .json extension first, then without
+        loaded = scenario_loader.load_scenario(f"{candidate_id}.json")
+        if not loaded:
+            loaded = scenario_loader.load_scenario(str(candidate_id))
     if not loaded:
-        loaded = _SCENES_REPO.load_default()
+        # Load default scenario (cutscene5_llm_driven.json)
+        loaded = scenario_loader.load_scenario("cutscene5_llm_driven.json")
 
     if loaded:
         state["scenario"] = loaded

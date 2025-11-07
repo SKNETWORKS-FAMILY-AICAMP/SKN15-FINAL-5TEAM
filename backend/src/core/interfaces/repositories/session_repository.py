@@ -125,3 +125,73 @@ class ISessionRepository(ABC):
             마지막 세션 정보 또는 None
         """
         pass
+
+    # ============================================================
+    # Dialogue & Tracking
+    # ============================================================
+
+    @abstractmethod
+    def save_dialogues(
+        self,
+        session_id: str,
+        turn_number: int,
+        dialogues: List[Dict[str, Any]],
+        user_id: Optional[str] = None,
+        scenario_id: Optional[str] = None
+    ) -> bool:
+        """
+        대화 목록 저장
+
+        Args:
+            session_id: 세션 ID
+            turn_number: 턴 번호
+            dialogues: 대화 목록 [{"speaker": str, "content": str, ...}, ...]
+            user_id: 사용자 ID (선택, 무시됨)
+            scenario_id: 시나리오 ID (선택, 무시됨)
+
+        Returns:
+            성공 여부
+        """
+        pass
+
+    @abstractmethod
+    def track_affinity_change(
+        self,
+        session_id: str,
+        user_id: str,
+        affinity_changes: Dict[str, int]
+    ) -> bool:
+        """
+        친밀도 변화 추적
+
+        Args:
+            session_id: 세션 ID
+            user_id: 사용자 ID
+            affinity_changes: 캐릭터별 친밀도 변화량 {character: change_amount}
+
+        Returns:
+            성공 여부
+        """
+        pass
+
+    @abstractmethod
+    def track_stage_change(
+        self,
+        session_id: str,
+        user_id: str,
+        old_stage: Optional[str],
+        new_stage: str
+    ) -> bool:
+        """
+        스테이지 변화 추적
+
+        Args:
+            session_id: 세션 ID
+            user_id: 사용자 ID
+            old_stage: 이전 스테이지
+            new_stage: 새 스테이지
+
+        Returns:
+            성공 여부
+        """
+        pass

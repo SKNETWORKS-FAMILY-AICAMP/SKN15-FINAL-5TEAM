@@ -28,7 +28,7 @@ from src.infrastructure.shared.dependency_container import (
 from src.infrastructure.cache.cache_manager import create_cache_manager_from_env
 from src.infrastructure.database.session_manager import HybridSessionManager
 
-# from src.domain.workflow import create_workflow  # TODO: 워크플로우 재구성 후 활성화
+from src.domain.workflow import create_workflow
 from src.domain.services.orchestration.scenario_loader import scenario_loader
 # from src.domain.services.image_manager import ImageManager  # TODO: 이미지 매니저 위치 확인 후 수정
 
@@ -82,12 +82,11 @@ def get_workflow():
     """
     LangGraph Workflow 싱글톤 인스턴스 반환
 
-    TODO: workflow가 Domain layer로 이동 후 경로 수정 필요
+    Domain layer의 Workflow를 반환 (ParentAgent 래핑)
     """
     global _workflow
     if _workflow is None:
-        # _workflow = create_workflow()  # TODO: 재활성화
-        raise NotImplementedError("Workflow는 Domain layer 재구성 중입니다")
+        _workflow = create_workflow(locale="ko")
     return _workflow
 
 

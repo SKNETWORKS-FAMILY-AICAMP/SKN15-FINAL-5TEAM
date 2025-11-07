@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from src.core.story_orchestrator import get_story_orchestrator
+from src.domain.services.orchestration.story_orchestrator import get_story_orchestrator
 import logging
 log = logging.getLogger(__name__)
 

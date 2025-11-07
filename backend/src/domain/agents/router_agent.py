@@ -15,7 +15,7 @@ import logging
 log = logging.getLogger(__name__)
 from src.domain.services.classification.intent_handler import detect_intent_with_llm
 from src.domain.services.classification.intent_detector import detect_intents
-# TODO: get_config_loader 위치 확인 필요
+from src.core.config.config_loader import get_config_loader
 # TODO: training_logger 위치 확인 필요
 from src.core.interfaces.managers.session_manager import ISessionManager
 

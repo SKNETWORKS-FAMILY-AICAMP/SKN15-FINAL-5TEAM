@@ -399,3 +399,57 @@ class IProgressionRepository(ABC):
             성공 여부
         """
         pass
+
+    # ============================================================
+    # Mission & Game Events
+    # ============================================================
+
+    @abstractmethod
+    def save_mission_record(
+        self,
+        session_id: str,
+        mission_type: str,
+        target_character: str,
+        attempt_count: int,
+        success: bool,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[int]:
+        """
+        미션 기록 저장
+
+        Args:
+            session_id: 세션 ID
+            mission_type: 미션 타입 (예: 'recruit')
+            target_character: 대상 캐릭터
+            attempt_count: 시도 횟수
+            success: 성공 여부
+            metadata: 메타데이터 (선택)
+
+        Returns:
+            생성된 레코드 ID 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def save_game_event(
+        self,
+        session_id: str,
+        turn_number: int,
+        event_type: str,
+        event_data: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[int]:
+        """
+        게임 이벤트 저장
+
+        Args:
+            session_id: 세션 ID
+            turn_number: 턴 번호
+            event_type: 이벤트 타입 (예: 'character_recruited')
+            event_data: 이벤트 데이터
+            metadata: 메타데이터 (선택)
+
+        Returns:
+            생성된 이벤트 ID 또는 None
+        """
+        pass
