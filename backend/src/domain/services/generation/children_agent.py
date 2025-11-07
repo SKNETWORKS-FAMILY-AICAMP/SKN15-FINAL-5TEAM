@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from src.domain.models.conversation import Dialogue
 from src.domain.models.story import Beat
 
-from src.core import scene_dialogue_tools as dialogue_tools
+from src.domain.services.orchestration import tone_profile_loader as dialogue_tools
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 from src.core.config.config_loader import get_config_loader
 import logging
