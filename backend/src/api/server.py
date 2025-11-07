@@ -55,24 +55,11 @@ setup_rate_limiting(app)
 # ============================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost",          # 포트 없이
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:8000",     # 백엔드 자체
-        "http://127.0.0.1",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://kime-alb-1043119388.ap-northeast-2.elb.amazonaws.com",
-    ],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=["*"],  # 개발 중에는 전부 허용이 가장 편함
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ============================================================
 # ✅   
 # ============================================================

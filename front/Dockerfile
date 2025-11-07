@@ -1,5 +1,34 @@
 # ============================================================
-# Stage 1: Builder - Node.js 빌드 스테이지
+# Stage 1: Development - 개발용 hot-reload 스테이지
+# ============================================================
+FROM node:18-alpine as development
+
+# 메타데이터
+LABEL stage=development
+
+# 작업 디렉토리
+WORKDIR /app
+
+# 개발용 환경변수 설정
+ARG VITE_API_URL
+ARG VITE_API_BASE_URL
+ENV VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+
+# 의존성 파일만 먼저 복사 (캐시 활용)
+COPY package.json package-lock.json ./
+
+# 의존성 설치 (개발 의존성 포함)
+RUN npm ci
+
+# 소스 코드는 볼륨 마운트로 제공됨
+# Vite dev server 실행 (포트 3000)
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
+
+# ============================================================
+# Stage 2: Builder - Node.js 빌드 스테이지 (프로덕션용)
 # ============================================================
 FROM node:18-alpine as builder
 
