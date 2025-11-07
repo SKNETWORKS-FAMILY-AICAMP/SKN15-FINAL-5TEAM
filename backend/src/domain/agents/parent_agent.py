@@ -351,6 +351,9 @@ class ParentAgent:
         if agent_responses:
             state.setdefault("output", {})["dialogues"] = agent_responses
             log("parent", f"✅ Converted {len(agent_responses)} agent_responses to output.dialogues")
+            # 디버깅: output 구조 확인
+            output_dialogues = state.get("output", {}).get("dialogues", [])
+            log("parent", f"🔍 DEBUG: state.output.dialogues now has {len(output_dialogues)} items")
         else:
             log("parent", "⚠️ No agent_responses from children_agent")
 

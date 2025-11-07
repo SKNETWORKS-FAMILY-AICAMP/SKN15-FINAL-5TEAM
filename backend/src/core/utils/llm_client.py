@@ -306,6 +306,10 @@ class LLMClient:
             파싱된 JSON 딕셔너리
         """
         try:
+            # OpenAI requires the word "json" in the prompt when using json_object format
+            if "json" not in system_prompt.lower() and "json" not in user_prompt.lower():
+                system_prompt = system_prompt + "\n\nRespond in JSON format."
+
             response_text = self.call(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,

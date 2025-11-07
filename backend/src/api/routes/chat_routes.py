@@ -437,6 +437,8 @@ async def chat(
         # ⚡ 백그라운드 작업 등록 (응답 후 실행)
         # 무거운 작업들(요약, 메모리, 친밀도, 스테이지, 대사)을 백그라운드에서 처리
         agent_responses = result_state.get("output", {}).get("dialogues", [])
+        print(f"🎬 DEBUG: result_state.output.dialogues = {len(agent_responses)} dialogues")
+        print(f"🎬 DEBUG: current_stage = {result_state.get('current_stage')}")
         background_tasks.add_task(
             process_post_response_tasks,
             session_id=session_id,
@@ -454,6 +456,7 @@ async def chat(
 
         # ⚡ 응답 데이터 준비 (이미지 선택은 응답에 필요하므로 여기서 처리)
         agent_responses = result_state.get("output", {}).get("dialogues", [])
+        print(f"🎬 Returning {len(agent_responses)} dialogues to frontend (stage={result_state.get('current_stage')})")
         has_more_flag = result_state.get("has_more")
         if has_more_flag is None:
             has_more_flag = result_state.get("has_more_dialogues", False)

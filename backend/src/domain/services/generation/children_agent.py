@@ -252,7 +252,45 @@ class ChildrenAgent:
 
             dialogue_payload = None
             if isinstance(response, dict):
+                # Try standard format first
                 dialogue_payload = response.get("dialogues")
+
+                # Try singular form
+                if not dialogue_payload:
+                    dialogue_payload = response.get("dialogue")
+
+                # Fallback: handle alternative formats
+                if not dialogue_payload:
+                    # Format 1: {"characters": {"rengoku": {"dialogue": ["...", "..."]}, ...}}
+                    characters = response.get("characters", {})
+                    if isinstance(characters, dict):
+                        dialogue_payload = []
+                        for speaker, data in characters.items():
+                            if isinstance(data, dict) and "dialogue" in data:
+                                dialogues = data.get("dialogue", [])
+                                if isinstance(dialogues, list):
+                                    for text in dialogues:
+                                        if text:
+                                            dialogue_payload.append({"speaker": speaker, "text": text})
+                                elif isinstance(dialogues, str) and dialogues:
+                                    dialogue_payload.append({"speaker": speaker, "text": dialogues})
+
+                    # Format 2: {"scene": {"characters": {...}}}
+                    if not dialogue_payload and "scene" in response:
+                        scene = response.get("scene", {})
+                        if isinstance(scene, dict):
+                            characters = scene.get("characters", {})
+                            if isinstance(characters, dict):
+                                dialogue_payload = []
+                                for speaker, data in characters.items():
+                                    if isinstance(data, dict) and "dialogue" in data:
+                                        dialogues = data.get("dialogue", [])
+                                        if isinstance(dialogues, list):
+                                            for text in dialogues:
+                                                if text:
+                                                    dialogue_payload.append({"speaker": speaker, "text": text})
+                                        elif isinstance(dialogues, str) and dialogues:
+                                            dialogue_payload.append({"speaker": speaker, "text": dialogues})
 
             # 1차 응답 검증
             if not isinstance(dialogue_payload, list) or not dialogue_payload:
@@ -271,6 +309,43 @@ class ChildrenAgent:
 
                 if isinstance(retry_resp, dict):
                     dialogue_payload = retry_resp.get("dialogues")
+
+                    # Try singular form
+                    if not dialogue_payload:
+                        dialogue_payload = retry_resp.get("dialogue")
+
+                    # Fallback format for retry as well
+                    if not dialogue_payload:
+                        # Format 1: {"characters": {"rengoku": {"dialogue": ["...", "..."]}, ...}}
+                        characters = retry_resp.get("characters", {})
+                        if isinstance(characters, dict):
+                            dialogue_payload = []
+                            for speaker, data in characters.items():
+                                if isinstance(data, dict) and "dialogue" in data:
+                                    dialogues = data.get("dialogue", [])
+                                    if isinstance(dialogues, list):
+                                        for text in dialogues:
+                                            if text:
+                                                dialogue_payload.append({"speaker": speaker, "text": text})
+                                    elif isinstance(dialogues, str) and dialogues:
+                                        dialogue_payload.append({"speaker": speaker, "text": dialogues})
+
+                        # Format 2: {"scene": {"characters": {...}}}
+                        if not dialogue_payload and "scene" in retry_resp:
+                            scene = retry_resp.get("scene", {})
+                            if isinstance(scene, dict):
+                                characters = scene.get("characters", {})
+                                if isinstance(characters, dict):
+                                    dialogue_payload = []
+                                    for speaker, data in characters.items():
+                                        if isinstance(data, dict) and "dialogue" in data:
+                                            dialogues = data.get("dialogue", [])
+                                            if isinstance(dialogues, list):
+                                                for text in dialogues:
+                                                    if text:
+                                                        dialogue_payload.append({"speaker": speaker, "text": text})
+                                            elif isinstance(dialogues, str) and dialogues:
+                                                dialogue_payload.append({"speaker": speaker, "text": dialogues})
 
             if isinstance(dialogue_payload, list) and dialogue_payload:
                 dialogues = self._normalize_dialogues(dialogue_payload)
@@ -365,7 +440,7 @@ class ChildrenAgent:
                     or entry.get("goal")
                     or entry.get("description")
                 )
-                speaker = entry.get("speaker")
+                speaker = entry.get("speaker") or entry.get("character")
                 if not speaker:
                     hints = entry.get("speaker_hint")
                     if isinstance(hints, list) and hints:
