@@ -32,7 +32,7 @@ except ModuleNotFoundError:
 
     from src.infrastructure.database.db_manager import DatabaseManager
 
-    from backend.src.utils.conversation_summarizer import generate_embedding
+    from src.domain.services.evaluation.conversation_summarizer import generate_embedding
 
 router = APIRouter()
 
