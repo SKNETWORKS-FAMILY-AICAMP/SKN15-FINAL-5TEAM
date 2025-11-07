@@ -592,7 +592,7 @@ async def chat(
         print(f"⏱️ Total chat handler time: {total_duration_ms:.2f} ms")
 
         # TODO: 프론트엔드가 중첩 응답을 처리하면 output 구조만 반환하도록 정리
-        return {
+        response_data = {
             "session_id": session_id,
             "turn_count": result_state.get("turn_count", 0),
             "dialogues": agent_responses,
@@ -603,6 +603,12 @@ async def chat(
             "current_image": current_image,
             "output": result_state.get("output", {}),
         }
+
+        # 📤 최종 응답 로깅
+        print(f"📤 API Response: dialogues={len(agent_responses)}, has_more={has_more_flag}")
+        print(f"📤 Response dialogues: {json.dumps(agent_responses, ensure_ascii=False)}")
+
+        return response_data
 
     # ------------------------------------------------------------
     # 예외 처리
