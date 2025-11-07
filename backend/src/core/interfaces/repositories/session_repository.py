@@ -107,3 +107,21 @@ class ISessionRepository(ABC):
             세션 목록
         """
         pass
+
+    @abstractmethod
+    def get_user_last_session(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자의 마지막 세션 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 특정 시나리오의 마지막 세션 (선택)
+
+        Returns:
+            마지막 세션 정보 또는 None
+        """
+        pass

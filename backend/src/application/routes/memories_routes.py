@@ -1,15 +1,8 @@
 """
-사용자 장기 기억 관리 라우터
+사용자 장기 기억 관리 라우터 - Repository Pattern 기반
 - 메모리 생성·조회·수정·삭제 기능 제공
 - 벡터 유사도로 메모리를 검색
 - 세션별 저장된 기억을 조회
-
-TODO: Migrate to IMemoryRepository
-- get_user_memories() -> IMemoryRepository
-- get_memory_by_key() -> IMemoryRepository
-- create_or_update_memory() -> IMemoryRepository
-- delete_memory() -> IMemoryRepository
-- search_memories_by_similarity() -> IMemoryRepository
 """
 
 # ============================================================
@@ -25,11 +18,11 @@ from ..schemas.api_models import (
     MessageResponse,
 )
 
-from ..dependencies.api_deps import get_db_manager
+from ..dependencies.api_deps import get_memory_repository
 
 from ..dependencies.auth_deps import require_auth
 
-from src.infrastructure.database.db_manager import DatabaseManager
+from src.core.interfaces.repositories.memory_repository import IMemoryRepository
 
 from src.domain.services.evaluation.conversation_summarizer import generate_embedding
 
@@ -43,10 +36,10 @@ async def get_user_memories(
     ),
     limit: int = Query(default=50, ge=1, le=200, description="반환할 최대 개수"),
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    사용자의 장기 기억 목록 조회
+    사용자의 장기 기억 목록 조회 - Repository Pattern
 
     Args:
         memory_type: 기억 타입 필터 (선택)
@@ -56,7 +49,7 @@ async def get_user_memories(
         메모리 목록
     """
     try:
-        memories = db.get_user_memories(
+        memories = memory_repo.get_user_memories(
             user_id=user["user_id"],
             memory_type=memory_type,
             limit=limit
@@ -69,10 +62,10 @@ async def get_user_memories(
 async def get_memory_by_key(
     memory_key: str,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    특정 키로 기억 조회
+    특정 키로 기억 조회 - Repository Pattern
 
     Args:
         memory_key: 기억 키 (예: "favorite_character")
@@ -81,7 +74,7 @@ async def get_memory_by_key(
         메모리 객체 또는 404
     """
     try:
-        memory = db.get_memory_by_key(
+        memory = memory_repo.get_memory_by_key(
             user_id=user["user_id"],
             memory_key=memory_key
         )
@@ -99,10 +92,10 @@ async def get_memory_by_key(
 async def create_memory(
     memory_data: Dict,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    새로운 기억 생성
+    새로운 기억 생성 - Repository Pattern
 
     Args:
         memory_data: {
@@ -129,7 +122,7 @@ async def create_memory(
             embedding = generate_embedding(memory_data["memory_value"])
 
         # upsert 형태로 메모리 저장
-        memory_id = db.create_or_update_memory(
+        memory_id = memory_repo.create_or_update_memory(
             user_id=user["user_id"],
             memory_key=memory_data["memory_key"],
             memory_value=memory_data["memory_value"],
@@ -156,10 +149,10 @@ async def update_memory(
     memory_key: str,
     memory_data: Dict,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    기존 기억 업데이트
+    기존 기억 업데이트 - Repository Pattern
 
     Args:
         memory_key: 업데이트할 기억 키
@@ -177,7 +170,7 @@ async def update_memory(
     """
     try:
         # 기존 메모리 조회
-        existing_memory = db.get_memory_by_key(
+        existing_memory = memory_repo.get_memory_by_key(
             user_id=user["user_id"],
             memory_key=memory_key
         )
@@ -193,7 +186,7 @@ async def update_memory(
         if memory_data.get("memory_value"):
             embedding = generate_embedding(memory_data["memory_value"])
 
-        memory_id = db.create_or_update_memory(
+        memory_id = memory_repo.create_or_update_memory(
             user_id=user["user_id"],
             memory_key=memory_key,
             memory_value=memory_data["memory_value"],
@@ -219,10 +212,10 @@ async def update_memory(
 async def delete_memory(
     memory_key: str,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    기억 삭제 (소프트 삭제)
+    기억 삭제 (소프트 삭제) - Repository Pattern
 
     Args:
         memory_key: 삭제할 기억 키
@@ -231,7 +224,7 @@ async def delete_memory(
         성공 메시지
     """
     try:
-        success = db.delete_memory(
+        success = memory_repo.delete_memory(
             user_id=user["user_id"],
             memory_key=memory_key
         )
@@ -250,10 +243,10 @@ async def delete_memory(
 async def search_memories_by_similarity(
     search_data: Dict,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    의미 기반 기억 검색 (Vector Similarity Search)
+    의미 기반 기억 검색 (Vector Similarity Search) - Repository Pattern
 
     Args:
         search_data: {
@@ -276,7 +269,7 @@ async def search_memories_by_similarity(
             raise HTTPException(status_code=500, detail="Failed to generate query embedding")
 
         # 벡터 유사도 검색 실행
-        memories = db.search_memories_by_similarity(
+        memories = memory_repo.search_memories_by_similarity(
             user_id=user["user_id"],
             query_embedding=query_embedding,
             limit=search_data.get("limit", 5),
@@ -294,10 +287,10 @@ async def search_memories_by_similarity(
 async def get_memories_by_session(
     session_id: str,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    memory_repo: IMemoryRepository = Depends(get_memory_repository)
 ):
     """
-    특정 세션에서 생성된 기억 조회
+    특정 세션에서 생성된 기억 조회 - Repository Pattern
 
     Args:
         session_id: 세션 ID
@@ -306,7 +299,7 @@ async def get_memories_by_session(
         해당 세션에서 생성된 메모리 목록
     """
     try:
-        memories = db.get_user_memories(
+        memories = memory_repo.get_user_memories(
             user_id=user["user_id"],
             limit=100  # Higher limit for session-specific queries
         )

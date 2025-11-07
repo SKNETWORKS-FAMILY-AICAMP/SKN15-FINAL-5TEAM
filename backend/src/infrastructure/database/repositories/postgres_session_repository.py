@@ -161,3 +161,14 @@ class PostgresSessionRepository(ISessionRepository):
                 message=f"Failed to get sessions: {str(e)}",
                 details={"user_id": user_id}
             )
+
+    def get_user_last_session(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """사용자의 마지막 세션 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_user_last_session(user_id=user_id, scenario_id=scenario_id)

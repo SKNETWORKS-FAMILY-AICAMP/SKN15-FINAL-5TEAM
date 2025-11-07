@@ -377,3 +377,25 @@ class IProgressionRepository(ABC):
             성공 여부
         """
         pass
+
+    @abstractmethod
+    def record_scenario_view(
+        self,
+        scenario_id: str,
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> bool:
+        """
+        시나리오 조회 기록 (조회수 증가)
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID (선택)
+            ip_address: IP 주소 (선택)
+            user_agent: User Agent (선택)
+
+        Returns:
+            성공 여부
+        """
+        pass

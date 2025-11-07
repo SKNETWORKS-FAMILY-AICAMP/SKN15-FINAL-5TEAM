@@ -423,3 +423,16 @@ class PostgresProgressionRepository(IProgressionRepository):
         from src.infrastructure.database.db_manager import DatabaseManager
         db = DatabaseManager()
         return db.update_user_scenario_progress(user_id, scenario_id, progress_data)
+
+    def record_scenario_view(
+        self,
+        scenario_id: str,
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> bool:
+        """시나리오 조회 기록"""
+        # FIXME: Implement proper SQL insert
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.record_scenario_view(scenario_id, user_id, ip_address, user_agent)

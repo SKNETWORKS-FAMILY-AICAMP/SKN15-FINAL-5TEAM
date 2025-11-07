@@ -58,3 +58,33 @@ class ICharacterRepository(ABC):
             캐릭터 정보 리스트
         """
         pass
+
+    # ============================================================
+    # Scenario Methods
+    # ============================================================
+
+    @abstractmethod
+    def get_all_scenarios(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """
+        모든 시나리오 조회
+
+        Args:
+            include_inactive: 비활성 시나리오 포함 여부
+
+        Returns:
+            시나리오 정보 리스트
+        """
+        pass
+
+    @abstractmethod
+    def get_scenario_by_id(self, scenario_id: str) -> Optional[Dict[str, Any]]:
+        """
+        시나리오 ID로 시나리오 조회
+
+        Args:
+            scenario_id: 시나리오 ID
+
+        Returns:
+            시나리오 정보 딕셔너리 또는 None
+        """
+        pass
