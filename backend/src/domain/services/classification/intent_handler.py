@@ -4,7 +4,7 @@ cutscene5_llm_driven 시나리오 전용
 """
 # ============================================================
 # ============================================================
-from src.infrastructure.llm.llm_factory import get_llm_client
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 
 def detect_intent_with_llm(state: dict, user_input: str) -> str | None:
     """LLM 기반 의도 판별 (스테이지별)"""

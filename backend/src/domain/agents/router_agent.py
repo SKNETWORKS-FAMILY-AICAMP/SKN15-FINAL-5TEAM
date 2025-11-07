@@ -1,10 +1,6 @@
 # ============================================================
 # 🚦 라우터 에이전트 — 사용자 발화의 온·오프 토픽 분류
 # ============================================================
-# TODO: Migrate to Dependency Injection
-# - Replace direct DatabaseManager() instantiation with get_session_manager() from DI container
-# - Use ISessionManager interface instead of HybridSessionManager
-# ============================================================
 from __future__ import annotations
 
 import time
@@ -14,7 +10,7 @@ from typing import Any, Dict, Optional, Sequence
 
 # TODO: EmbeddingMatcher 위치 확인 필요 # EmbeddingClient, EmbeddingMatcher, get_embedding_client
 from domain.services.generation.fallback_llm import generate_off_topic_response
-from src.infrastructure.llm.llm_factory import LLMFactory, get_llm_client
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 import logging
 log = logging.getLogger(__name__)
 from domain.services.classification.intent_handler import detect_intent_with_llm
@@ -50,10 +46,10 @@ class RouterAgent:
     # ============================================================
     # 🛠️ 초기화
     # ============================================================
-    def __init__(self) -> None:
+    def __init__(self, session_manager: Optional[ISessionManager] = None) -> None:
         self._llm_client: LLMClient = get_llm_client()
         self._embedding_client: EmbeddingClient = get_embedding_client()
-        self._session_manager: Optional[HybridSessionManager] = None
+        self._session_manager: Optional[ISessionManager] = session_manager
         self._topic_matcher = EmbeddingMatcher(
             {
                 # 임시 키워드 분류
@@ -69,15 +65,13 @@ class RouterAgent:
             embedding_client=self._embedding_client,
         )
 
-        # 초기화     
-        try:
-            from src.infrastructure.database.db_manager import DatabaseManager
-            from src.infrastructure.cache.cache_manager import CacheManager
-            db = DatabaseManager()
-            cache_manager = CacheManager()
-            self._session_manager = HybridSessionManager(db_manager=db, cache_manager=cache_manager)
-        except Exception as e:
-            log("router", "session_manager_init_failed", error=str(e))
+        # session_manager가 제공되지 않으면 DI 컨테이너에서 가져오기
+        if self._session_manager is None:
+            try:
+                from src.infrastructure.shared.dependency_container import get_session_manager
+                self._session_manager = get_session_manager()
+            except Exception as e:
+                log("router", "session_manager_init_failed", error=str(e))
 
     # ============================================================
     # 🚦 분류 엔트리 포인트

@@ -4,9 +4,7 @@
 conversation_summary에서 LLM을 사용하여 중요한 정보를 추출하고
 user_memories 테이블에 자동 저장합니다.
 
-TODO: Migrate to Repository Pattern
-- Replace DatabaseManager parameter with IMemoryRepository
-- save_user_memory() -> IMemoryRepository.save_memory()
+IMemoryRepository를 사용하여 DatabaseManager 의존성 제거
 """
 
 # ============================================================
@@ -14,9 +12,8 @@ TODO: Migrate to Repository Pattern
 # ============================================================
 import json
 from typing import Dict, List, Optional, Any
-from src.infrastructure.llm.llm_factory import get_llm_client
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 from src.core.interfaces.repositories.memory_repository import IMemoryRepository
-from src.infrastructure.database.db_manager import DatabaseManager
 
 
 MEMORY_EXTRACTION_PROMPT = """다음은 사용자와 AI 캐릭터 간의 대화 요약입니다.
@@ -148,7 +145,7 @@ async def extract_and_save_memories(
     user_id: str,
     session_id: str,
     conversation_summary: str,
-    db_manager: DatabaseManager,
+    memory_repository: IMemoryRepository,
     llm_client: Optional[Any] = None
 ) -> int:
     """
@@ -158,7 +155,7 @@ async def extract_and_save_memories(
         user_id: 사용자 ID
         session_id: 세션 ID
         conversation_summary: 대화 요약
-        db_manager: DatabaseManager 인스턴스
+        memory_repository: IMemoryRepository 인스턴스
         llm_client: LLM 클라이언트 (선택)
 
     Returns:
@@ -175,15 +172,16 @@ async def extract_and_save_memories(
     saved_count = 0
     for memory in memories:
         try:
-            memory_id = db_manager.save_user_memory(
+            # IMemoryRepository.create_or_update_memory() 사용
+            memory_id = memory_repository.create_or_update_memory(
                 user_id=user_id,
                 memory_key=memory["memory_key"],
                 memory_value=memory["memory_value"],
                 memory_type=memory["memory_type"],
                 importance=memory["importance"],
-                source_session_id=session_id,
                 tags=memory.get("tags", []),
-                confidence=memory.get("confidence")
+                confidence=memory.get("confidence"),
+                context={"source_session_id": session_id}
             )
 
             if memory_id:

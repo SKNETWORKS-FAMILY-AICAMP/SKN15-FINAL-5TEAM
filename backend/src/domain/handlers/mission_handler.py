@@ -7,11 +7,7 @@
 5. 불필요한 재할당을 제거하고 명확한 이름을 사용
 6. 인트로 처리 흐름을 단순화하고 중복을 제거
 7. 일관된 코드 스타일과 가독성을 유지
-
-TODO: Migrate to Repository Pattern
-- Replace direct DatabaseManager() instantiation with IProgressionRepository
-- save_mission_record() -> IProgressionRepository
-- save_game_event() -> IProgressionRepository or new IEventRepository
+8. IProgressionRepository를 사용하여 DatabaseManager 의존성 제거
 """
 
 # ============================================================
@@ -19,9 +15,12 @@ TODO: Migrate to Repository Pattern
 # ============================================================
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from src.infrastructure.llm.llm_factory import get_llm_client
+if TYPE_CHECKING:
+    from src.core.interfaces.repositories.progression_repository import IProgressionRepository
+
+from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 from domain.services.orchestration.scene_tools import (
     get_i18n_entries,
     get_next_stage_tag,
@@ -57,9 +56,15 @@ class MissionHandler:
         "nezuko": "네즈코",
     }
 
-    def __init__(self, locale: str = "ko", llm: Any = None):
+    def __init__(
+        self,
+        locale: str = "ko",
+        llm: Any = None,
+        progression_repository: Optional['IProgressionRepository'] = None
+    ):
         self.locale = locale
         self._llm = llm
+        self._progression_repo = progression_repository
 
     def handle(
         self,
@@ -685,52 +690,41 @@ class MissionHandler:
             "remaining": remaining,
         }
 
-        # 🎮 미션 기록 자동 저장 (데이터베이스)
-        try:
-            import os
-            from src.infrastructure.database.db_manager import DatabaseManager
+        # 🎮 미션 기록 자동 저장 (Repository Pattern)
+        if self._progression_repo:
+            try:
+                session_id = state.get("session_id")
+                turn_count = state.get("turn_count", 0)
 
-            # 또는 새로운 인스턴스 생성
-            db_manager = DatabaseManager(
-                host=os.getenv('DB_HOST', 'localhost'),
-                port=int(os.getenv('DB_PORT', '5432')),
-                dbname=os.getenv('DB_NAME', 'kimedb'),
-                user=os.getenv('DB_USER', 'kime'),
-                password=os.getenv('DB_PASSWORD', 'dev123'),
-                min_conn=1,
-                max_conn=2
-            )
-
-            session_id = state.get("session_id")
-            turn_count = state.get("turn_count", 0)
-
-            if session_id:
-                # 미션 기록 저장
-                db_manager.save_mission_record(
-                    session_id=session_id,
-                    mission_type="recruit",
-                    target_character=character,
-                    attempt_count=attempts,
-                    success=success
-                )
-                log("mission", f"🎮 Mission record saved: {character} ({'SUCCESS' if success else 'FAIL'}, attempt {attempts})")
-
-                # 🎉 게임 이벤트 저장: 캐릭터 합류 성공
-                if success:
-                    db_manager.save_game_event(
+                if session_id:
+                    # 미션 기록 저장
+                    mission_id = self._progression_repo.save_mission_record(
                         session_id=session_id,
-                        turn_number=turn_count,
-                        event_type="character_recruited",
-                        event_data={
-                            "character": character,
-                            "character_display": self.CHARACTER_NAMES_KR.get(character, character),
-                            "mission_type": "recruit",
-                            "attempts": attempts
-                        }
+                        mission_type="recruit",
+                        target_character=character,
+                        attempt_count=attempts,
+                        success=success
                     )
-                    log("mission", f"🎉 Game event saved: character_recruited ({character})")
-        except Exception as e:
-            log("mission", f"⚠️ Failed to save mission/game records: {e}", level=40)
+                    if mission_id:
+                        log("mission", f"🎮 Mission record saved: {character} ({'SUCCESS' if success else 'FAIL'}, attempt {attempts})")
+
+                    # 🎉 게임 이벤트 저장: 캐릭터 합류 성공
+                    if success:
+                        event_id = self._progression_repo.save_game_event(
+                            session_id=session_id,
+                            turn_number=turn_count,
+                            event_type="character_recruited",
+                            event_data={
+                                "character": character,
+                                "character_display": self.CHARACTER_NAMES_KR.get(character, character),
+                                "mission_type": "recruit",
+                                "attempts": attempts
+                            }
+                        )
+                        if event_id:
+                            log("mission", f"🎉 Game event saved: character_recruited ({character})")
+            except Exception as e:
+                log("mission", f"⚠️ Failed to save mission/game records: {e}", level=40)
 
         log(
             "mission",

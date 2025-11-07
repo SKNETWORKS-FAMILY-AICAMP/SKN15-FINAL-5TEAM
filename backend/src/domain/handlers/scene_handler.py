@@ -155,8 +155,8 @@ class SceneHandler:
             self._config_loader = ConfigLoader()
 
         if self._llm is None:
-            from src.infrastructure.llm.llm_factory import LLMFactory
-            self._llm = LLMClient()
+            from src.infrastructure.shared.dependency_container import get_llm_provider
+            self._llm = get_llm_provider()
 
         prompts = self._config_loader.get_prompts().get("llm_prompts", {}).get("children", {})
         prompt_template = prompts.get("scene_completion_check", "")
