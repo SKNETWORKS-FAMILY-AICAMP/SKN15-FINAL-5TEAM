@@ -7,6 +7,11 @@
 5. 불필요한 재할당을 제거하고 명확한 이름을 사용
 6. 인트로 처리 흐름을 단순화하고 중복을 제거
 7. 일관된 코드 스타일과 가독성을 유지
+
+TODO: Migrate to Repository Pattern
+- Replace direct DatabaseManager() instantiation with IProgressionRepository
+- save_mission_record() -> IProgressionRepository
+- save_game_event() -> IProgressionRepository or new IEventRepository
 """
 
 # ============================================================
