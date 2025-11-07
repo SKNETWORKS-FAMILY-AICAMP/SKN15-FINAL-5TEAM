@@ -13,7 +13,7 @@ from src.domain.services.orchestration import tone_profile_loader as dialogue_to
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 from src.core.config.config_loader import get_config_loader
 import logging
-# TODO: training_logger 위치 확인 필요
+from src.core.utils.tools.training_logger import log_agent
 from src.core.interfaces.managers.session_manager import ISessionManager
 from src.core.utils.logger import log
 
