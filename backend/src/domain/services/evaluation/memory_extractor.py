@@ -12,6 +12,7 @@ import json
 from typing import Dict, List, Optional, Any
 from src.infrastructure.llm.llm_factory import get_llm_client
 from src.core.interfaces.repositories.memory_repository import IMemoryRepository
+from src.infrastructure.database.db_manager import DatabaseManager
 
 
 MEMORY_EXTRACTION_PROMPT = """다음은 사용자와 AI 캐릭터 간의 대화 요약입니다.
