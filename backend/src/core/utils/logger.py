@@ -16,22 +16,80 @@ if not _LOGGER.handlers:
 _LOGGER.setLevel(logging.INFO)
 
 
-def log(stage: str, message: str, *, level: int = logging.INFO, **context: Any) -> None:
+class LoggerWrapper:
     """
-    Write a formatted log entry.
+    Wrapper that provides both function-style and method-style logging.
 
-    Args:
-        stage: Logical stage name for the log prefix.
-        message: Human readable log message.
-        level: Standard logging level (INFO by default).
-        context: Optional key/value metadata to append for quick scanning.
+    Usage:
+        # Function style (original)
+        log("parent", "Message here")
+
+        # Method style (standard logging)
+        log.debug("Message here")
+        log.info("Message here")
+        log.warning("Message here")
+        log.error("Message here")
     """
-    prefix = stage.upper() if stage else "GENERAL"
-    suffix = message
-    if context:
-        extras = " ".join(f"{key}={value}" for key, value in context.items())
-        suffix = f"{suffix} ({extras})"
-    _LOGGER.log(level, f"[{prefix}] {suffix}")
 
+    def __call__(self, stage: str, message: str, *, level: int = logging.INFO, **context: Any) -> None:
+        """
+        Write a formatted log entry (function-style).
+
+        Args:
+            stage: Logical stage name for the log prefix.
+            message: Human readable log message.
+            level: Standard logging level (INFO by default).
+            context: Optional key/value metadata to append for quick scanning.
+        """
+        prefix = stage.upper() if stage else "GENERAL"
+        suffix = message
+        if context:
+            extras = " ".join(f"{key}={value}" for key, value in context.items())
+            suffix = f"{suffix} ({extras})"
+        _LOGGER.log(level, f"[{prefix}] {suffix}")
+
+    def debug(self, message: str, **context: Any) -> None:
+        """Log a DEBUG level message."""
+        suffix = message
+        if context:
+            extras = " ".join(f"{key}={value}" for key, value in context.items())
+            suffix = f"{suffix} ({extras})"
+        _LOGGER.debug(suffix)
+
+    def info(self, message: str, **context: Any) -> None:
+        """Log an INFO level message."""
+        suffix = message
+        if context:
+            extras = " ".join(f"{key}={value}" for key, value in context.items())
+            suffix = f"{suffix} ({extras})"
+        _LOGGER.info(suffix)
+
+    def warning(self, message: str, **context: Any) -> None:
+        """Log a WARNING level message."""
+        suffix = message
+        if context:
+            extras = " ".join(f"{key}={value}" for key, value in context.items())
+            suffix = f"{suffix} ({extras})"
+        _LOGGER.warning(suffix)
+
+    def error(self, message: str, **context: Any) -> None:
+        """Log an ERROR level message."""
+        suffix = message
+        if context:
+            extras = " ".join(f"{key}={value}" for key, value in context.items())
+            suffix = f"{suffix} ({extras})"
+        _LOGGER.error(suffix)
+
+    def critical(self, message: str, **context: Any) -> None:
+        """Log a CRITICAL level message."""
+        suffix = message
+        if context:
+            extras = " ".join(f"{key}={value}" for key, value in context.items())
+            suffix = f"{suffix} ({extras})"
+        _LOGGER.critical(suffix)
+
+
+# Create the global logger instance
+log = LoggerWrapper()
 
 __all__ = ["log"]

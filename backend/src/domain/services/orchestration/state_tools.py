@@ -13,8 +13,8 @@ from .scenario_loader import scenario_loader
 from . import scene_tools
 from src.domain.services.generation.fallback_tools import trigger_fallback
 import logging
-log = logging.getLogger(__name__)
 from src.core.config.constants import INTRO_STAGE_TAG
+from src.core.utils.logger import log
 
 
 class StateTools:

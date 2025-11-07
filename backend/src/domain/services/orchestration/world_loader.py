@@ -12,7 +12,7 @@ import yaml
 from pathlib import Path
 
 import logging
-log = logging.getLogger(__name__)
+from src.core.utils.logger import log
 
 
 class WorldLoader:

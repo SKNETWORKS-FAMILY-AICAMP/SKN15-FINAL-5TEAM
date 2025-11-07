@@ -9,9 +9,9 @@ from typing import Any, Dict
 
 from src.domain.services.orchestration.story_orchestrator import get_story_orchestrator
 import logging
-log = logging.getLogger(__name__)
 
 from . import StageResult
+from src.core.utils.logger import log
 
 
 class OpenNarrativeHandler:

@@ -30,7 +30,6 @@ from src.domain.services.orchestration.scene_tools import (
 from src.domain.services.generation.fallback_tools import trigger_fallback
 from src.core.config.config_loader import get_config_loader
 import logging
-log = logging.getLogger(__name__)
 # TODO: text_matcher 위치 확인 필요 # detect_mission_target
 
 _PROMPTS = get_config_loader().get_prompts()
@@ -42,6 +41,7 @@ if not _RECRUITMENT_PROMPT:
 if not _RECRUITMENT_USER_TEMPLATE:
     raise ValueError("MissionHandler recruitment_judge_user prompt missing in configs/prompts.yaml (llm_prompts.mission.recruitment_judge_user).")
 from . import StageResult
+from src.core.utils.logger import log
 
 
 class MissionHandler:

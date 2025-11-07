@@ -12,12 +12,12 @@ from typing import Any, Dict, Optional, Sequence
 from src.domain.services.generation.fallback_llm import generate_off_topic_response
 from src.infrastructure.shared.dependency_container import get_llm_provider as get_llm_client
 import logging
-log = logging.getLogger(__name__)
 from src.domain.services.classification.intent_handler import detect_intent_with_llm
 from src.domain.services.classification.intent_detector import detect_intents
 from src.core.config.config_loader import get_config_loader
 # TODO: training_logger 위치 확인 필요
 from src.core.interfaces.managers.session_manager import ISessionManager
+from src.core.utils.logger import log
 
 _PROMPTS = get_config_loader().get_prompts()
 _ROUTER_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("router") or {})
