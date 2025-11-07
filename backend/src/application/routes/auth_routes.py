@@ -153,7 +153,7 @@ async def login(
     """
     try:
         # 사용자 인증
-        user = user_repo.verify_password(
+        user = user_repo.verify_user_password(
             username=req.username,
             password=req.password
         )
