@@ -341,6 +341,19 @@ class ParentAgent:
 
         state["state_tool_request"] = {"action": "update_state", "updates": {"stage": state.get("stage")}}
         state = st.run_state_tools(state)
+
+        # ✅ children_agent 직접 호출
+        from src.domain.services.generation.children_agent import run_children_agent
+        state = run_children_agent(state)
+
+        # ✅ agent_responses를 output.dialogues로 변환
+        agent_responses = state.get("agent_responses", [])
+        if agent_responses:
+            state.setdefault("output", {})["dialogues"] = agent_responses
+            log("parent", f"✅ Converted {len(agent_responses)} agent_responses to output.dialogues")
+        else:
+            log("parent", "⚠️ No agent_responses from children_agent")
+
         return state
 
     # ============================================================
