@@ -11,7 +11,8 @@ from typing import Dict, Any, Optional
 import yaml
 from pathlib import Path
 
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 
 
 class WorldLoader:

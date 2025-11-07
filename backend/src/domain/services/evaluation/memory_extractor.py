@@ -10,7 +10,7 @@ user_memories 테이블에 자동 저장합니다.
 # ============================================================
 import json
 from typing import Dict, List, Optional, Any
-from src.utils.llm_client import get_llm_client
+from src.infrastructure.llm.llm_factory import get_llm_client
 from core.interfaces.repositories.memory_repository import IMemoryRepository
 
 

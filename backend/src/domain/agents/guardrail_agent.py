@@ -6,10 +6,11 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional, Sequence
 
-from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
-from src.utils.logger import log
+# TODO: EmbeddingMatcher 위치 확인 필요 # EmbeddingClient, EmbeddingMatcher, get_embedding_client
+import logging
+log = logging.getLogger(__name__)
 from domain.services.validation.spell_checker import SpellChecker, get_spell_checker
-from src.tools.training_logger import log_agent
+# TODO: training_logger 위치 확인 필요
 
 # ============================================================
 # ============================================================

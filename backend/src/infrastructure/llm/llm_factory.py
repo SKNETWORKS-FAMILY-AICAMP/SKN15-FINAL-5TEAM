@@ -90,3 +90,18 @@ class LLMFactory:
             api_key=llm_config.api_key,
             model=llm_config.model
         )
+
+
+# ============================================================
+# Convenience Functions (하위 호환성)
+# ============================================================
+def get_llm_client() -> ILLMProvider:
+    """
+    LLM Client 반환 (헬퍼 함수)
+
+    하위 호환성을 위한 함수. 내부적으로 LLMFactory.create_from_env() 호출.
+
+    Returns:
+        ILLMProvider 구현체
+    """
+    return LLMFactory.create_from_env()

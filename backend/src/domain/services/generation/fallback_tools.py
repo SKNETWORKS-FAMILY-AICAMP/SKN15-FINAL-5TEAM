@@ -13,11 +13,12 @@ import random
 import re
 from typing import Dict, Any, Optional, List
 
-from src.utils.llm_client import get_llm_client
-from src.utils.config_loader import get_config_loader
+from src.infrastructure.llm.llm_factory import get_llm_client
+# TODO: get_config_loader 위치 확인 필요
 from domain.services.orchestration.scene_tools import get_stage_atmosphere
 from src.config.constants import FALLBACK_ALLOW_NORMAL
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 from src.core.scene_dialogue_tools import load_tone_profiles
 
 

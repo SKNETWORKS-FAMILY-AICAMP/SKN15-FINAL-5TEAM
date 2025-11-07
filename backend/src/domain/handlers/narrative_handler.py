@@ -8,7 +8,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from src.core.story_orchestrator import get_story_orchestrator
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 
 from . import StageResult
 

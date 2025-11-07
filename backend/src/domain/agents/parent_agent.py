@@ -14,7 +14,7 @@ from domain.models.conversation import ConversationTurn, Dialogue
 # ⚙️  
 # ============================================================
 from domain.services.orchestration import scene_tools
-from src.tools.training_logger import log_agent
+# TODO: training_logger 위치 확인 필요
 
 # 🎯 스테이지 핸들러 관련
 from domain.handlers.free_intent_handler import FreeIntentHandler
@@ -23,7 +23,8 @@ from domain.handlers.router_handler import RouterStageHandler
 from domain.handlers.scene_handler import SceneHandler
 from domain.handlers.narrative_handler import OpenNarrativeHandler
 
-from src.utils.logger import log
+import logging
+log = logging.getLogger(__name__)
 
 # ============================================================
 # ============================================================

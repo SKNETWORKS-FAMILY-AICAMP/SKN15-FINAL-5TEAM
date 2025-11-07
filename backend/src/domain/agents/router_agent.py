@@ -8,14 +8,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
-from src.utils.embedding_matcher import EmbeddingClient, EmbeddingMatcher, get_embedding_client
+# TODO: EmbeddingMatcher 위치 확인 필요 # EmbeddingClient, EmbeddingMatcher, get_embedding_client
 from domain.services.generation.fallback_llm import generate_off_topic_response
-from src.utils.llm_client import LLMClient, get_llm_client
-from src.utils.logger import log
+from src.infrastructure.llm.llm_factory import LLMFactory, get_llm_client
+import logging
+log = logging.getLogger(__name__)
 from domain.services.classification.intent_handler import detect_intent_with_llm
 from domain.services.classification.intent_detector import detect_intents
-from src.utils.config_loader import get_config_loader
-from src.tools.training_logger import log_agent
+# TODO: get_config_loader 위치 확인 필요
+# TODO: training_logger 위치 확인 필요
 from core.interfaces.managers.session_manager import ISessionManager
 
 _PROMPTS = get_config_loader().get_prompts()

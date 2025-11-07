@@ -6,9 +6,9 @@ import time
 from typing import Dict, List, Optional
 
 from src.core.graph_state import AgentState, Dialogue
-from src.utils.llm_client import get_llm_client
-from src.utils.config_loader import get_config_loader
-from src.tools.training_logger import log_agent
+from src.infrastructure.llm.llm_factory import get_llm_client
+# TODO: get_config_loader 위치 확인 필요
+# TODO: training_logger 위치 확인 필요
 
 _PROMPTS = get_config_loader().get_prompts()
 _DIALOGUE_PROMPTS = (_PROMPTS.get("llm_prompts", {}).get("dialogue") or {})
