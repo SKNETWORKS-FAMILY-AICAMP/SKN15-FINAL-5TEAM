@@ -13,6 +13,7 @@ from app.core.errors import register_exception_handlers
 
 # Features
 from app.features.chat.controller import router as chat_router
+from app.features.auth.controller import router as auth_router
 
 settings = get_settings()
 
@@ -68,6 +69,7 @@ async def add_process_time_header(request, call_next):
 # ============================================================
 # 라우터 등록
 # ============================================================
+app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 
 # ============================================================
@@ -94,48 +96,60 @@ async def health_check():
 # 임시 더미 API (Frontend 동작용)
 # ============================================================
 @app.get("/api/scenarios")
-async def get_scenarios_dummy():
-    """시나리오 목록 조회 (더미)"""
+async def get_scenarios():
+    """시나리오 목록 조회 (실제 데이터)"""
     return [
         {
-            "scenario_id": "cafe",
-            "title": "카페에서 만남",
-            "description": "탄지로와 네즈코를 카페에서 만나보세요",
-            "image_url": "/images/scenarios/cafe.jpg",
-            "thumbnail_url": "/images/scenarios/cafe_thumb.jpg",
-            "tags": ["일상", "대화", "친근"],
+            "scenario_id": "cutscene5_llm_driven",
+            "title": "🔥 무한열차",
+            "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
+            "image_url": "/images/scenarios/mugen_train.jpg",
+            "thumbnail_url": "/images/scenarios/mugen_train_thumb.jpg",
+            "tags": ["전투", "스토리", "다이쇼 시대"],
             "card_size": "large",
-            "route_path": "/character/cafe",
+            "route_path": "/character/cutscene5_llm_driven",
             "display_order": 1,
             "is_active": True,
-            "likes": 128,
-            "comments": 45,
-            "views": 1520,
-            "total_completions": 89,
-            "is_liked": False,
-            "has_started": False,
-            "has_completed": False
-        },
-        {
-            "scenario_id": "forest",
-            "title": "숲속 탐험",
-            "description": "신비로운 숲을 탐험해보세요",
-            "image_url": "/images/scenarios/forest.jpg",
-            "thumbnail_url": "/images/scenarios/forest_thumb.jpg",
-            "tags": ["모험", "탐험", "스릴"],
-            "card_size": "normal",
-            "route_path": "/character/forest",
-            "display_order": 2,
-            "is_active": True,
-            "likes": 95,
-            "comments": 32,
-            "views": 890,
-            "total_completions": 56,
+            "likes": 256,
+            "comments": 89,
+            "views": 3420,
+            "total_completions": 147,
             "is_liked": False,
             "has_started": False,
             "has_completed": False
         }
     ]
+
+@app.get("/api/session/last")
+async def get_last_session(scenario_id: str = None):
+    """마지막 세션 조회 (더미)"""
+    return {"has_session": False}
+
+@app.get("/api/users/me/scenarios")
+async def get_user_scenarios():
+    """사용자 시나리오 목록 (더미)"""
+    # 로그인한 사용자도 전체 시나리오 목록 반환
+    return await get_scenarios()
+
+@app.get("/api/auth/me")
+async def get_current_user():
+    """현재 사용자 정보 (더미)"""
+    return {
+        "user_id": "1",
+        "username": "admin",
+        "email": "admin@kimechat.com",
+        "display_name": "관리자"
+    }
+
+@app.get("/api/users/me/credits")
+async def get_user_credits():
+    """사용자 크레딧 조회 (더미)"""
+    return {
+        "credits": 1000,
+        "total_credits": 1000,
+        "used_credits": 0,
+        "bubble_count": 1000  # 프론트엔드가 기대하는 필드
+    }
 
 # ============================================================
 # 시작/종료 이벤트

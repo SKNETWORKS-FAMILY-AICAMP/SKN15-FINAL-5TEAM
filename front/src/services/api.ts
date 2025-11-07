@@ -668,6 +668,16 @@ export async function* sendChatMessage(
     throw new Error(`API request failed with status ${response.status}`);
   }
 
+  // Check if response is JSON (not SSE)
+  const contentType = response.headers.get('content-type');
+  if (contentType?.includes('application/json')) {
+    console.log('📦 [API] Response is JSON, not SSE');
+    const jsonData = await response.json();
+    console.log('✅ [API] JSON data received:', jsonData);
+    yield { type: 'complete', ...jsonData };
+    return;
+  }
+
   if (!response.body) {
     console.warn('⚠️ [SSE] No response body!');
     return;

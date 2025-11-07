@@ -6,13 +6,13 @@
   "mountable": true,
   "world_id": "demon_slayer_taisho",
   "character_refs": {
-    "rengoku": "data/characters/rengoku.json",
-    "tanjiro": "data/characters/tanjiro.json",
-    "akaza": "data/characters/akaza.json",
-    "zenitsu": "data/characters/zenitsu.json",
-    "inosuke": "data/characters/inosuke.json",
-    "nezuko": "data/characters/nezuko.json",
-    "enmu": "data/characters/enmu.json"
+    "rengoku": "backend/data/characters/rengoku.json",
+    "tanjiro": "backend/data/characters/tanjiro.json",
+    "akaza": "backend/data/characters/akaza.json",
+    "zenitsu": "backend/data/characters/zenitsu.json",
+    "inosuke": "backend/data/characters/inosuke.json",
+    "nezuko": "backend/data/characters/nezuko.json",
+    "enmu": "backend/data/characters/enmu.json"
   }, 
   "i18n": {
     "ko": {
@@ -1296,8 +1296,8 @@
       }
     },
     "images": {
-      "mapping_pattern": "data/image_mappings/{scenario_id}_cutscenes.json",
-      "llm_metadata": "data/image_mappings/mugen_train_images.json"
+      "mapping_pattern": "backend/data/image_mappings/{scenario_id}_cutscenes.json",
+      "llm_metadata": "backend/data/image_mappings/mugen_train_images.json"
     }
   }
 }

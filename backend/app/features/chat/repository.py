@@ -3,10 +3,11 @@ Chat Feature - Repository
 DB 접근 레이어 (CRUD)
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import date, datetime, timedelta
+import json
 
 from .models import DialogueTurn
 from app.core.logging import get_repository_logger
@@ -185,3 +186,108 @@ class ChatRepository:
 
         logger.warning("delete_session_dialogues", f"Deleted {count} dialogues", session_id=session_id)
         return count
+
+    # ============================================================
+    # Session State Management (JSONB)
+    # ============================================================
+
+    async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        세션 상태 조회
+
+        Args:
+            session_id: 세션 ID
+
+        Returns:
+            세션 상태 dict (없으면 None)
+        """
+        logger.debug("get_session", "Fetching session", session_id=session_id)
+
+        stmt = text("""
+            SELECT id, user_id, scenario_id, state, created_at, updated_at, last_interaction_at
+            FROM chat_sessions
+            WHERE id = :session_id AND is_active = TRUE
+        """)
+
+        result = await self.db.execute(stmt, {"session_id": session_id})
+        row = result.fetchone()
+
+        if not row:
+            logger.debug("get_session", "Session not found", session_id=session_id)
+            return None
+
+        session_data = {
+            "session_id": row.id,
+            "user_id": row.user_id,
+            "scenario_id": row.scenario_id,
+            "state": row.state if isinstance(row.state, dict) else json.loads(row.state),
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "last_interaction_at": row.last_interaction_at,
+        }
+
+        logger.debug("get_session", "Session found", session_id=session_id)
+        return session_data
+
+    async def save_session(
+        self,
+        session_id: str,
+        user_id: str,
+        scenario_id: str,
+        state: Dict[str, Any]
+    ) -> None:
+        """
+        세션 상태 저장 (upsert)
+
+        Args:
+            session_id: 세션 ID
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+            state: 세션 상태 dict
+        """
+        logger.info("save_session", "Saving session", session_id=session_id)
+
+        stmt = text("""
+            INSERT INTO chat_sessions (id, user_id, scenario_id, state, created_at, updated_at, last_interaction_at)
+            VALUES (:session_id, :user_id, :scenario_id, CAST(:state AS jsonb), NOW(), NOW(), NOW())
+            ON CONFLICT (id)
+            DO UPDATE SET
+                state = CAST(:state AS jsonb),
+                updated_at = NOW(),
+                last_interaction_at = NOW()
+        """)
+
+        await self.db.execute(stmt, {
+            "session_id": session_id,
+            "user_id": user_id,
+            "scenario_id": scenario_id,
+            "state": json.dumps(state)
+        })
+
+        await self.db.flush()
+        logger.info("save_session", "Session saved", session_id=session_id)
+
+    async def delete_session(self, session_id: str) -> bool:
+        """
+        세션 삭제 (soft delete)
+
+        Args:
+            session_id: 세션 ID
+
+        Returns:
+            삭제 성공 여부
+        """
+        logger.warning("delete_session", "Deleting session", session_id=session_id)
+
+        stmt = text("""
+            UPDATE chat_sessions
+            SET is_active = FALSE, updated_at = NOW()
+            WHERE id = :session_id
+        """)
+
+        result = await self.db.execute(stmt, {"session_id": session_id})
+        await self.db.flush()
+
+        deleted = result.rowcount > 0
+        logger.warning("delete_session", f"Session deleted: {deleted}", session_id=session_id)
+        return deleted

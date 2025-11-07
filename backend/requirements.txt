@@ -19,6 +19,7 @@ langchain-core>=0.1.22
 langchain-anthropic>=0.1.1
 langgraph>=0.0.20
 langchain-openai>=0.0.5
+numpy>=1.24.0  # 벡터 연산 (임베딩용)
 
 # === 데이터베이스 ===
 sqlalchemy==2.0.25

@@ -160,43 +160,66 @@ class ChatParent:
             # 대화 이력
             conversation_history = state.get("conversation_history", [])
 
-            # 6. LLM 대사 생성 (Beat 기반 vs Simple)
-            # Beats가 있으면 Beat 기반 대화, 없으면 Simple 대화
-            beats = self.scenario_service.get_beats_for_stage(scenario_id, current_stage.stage_id)
+            # 6. LLM 대사 생성 (Beat 기반 vs Simple vs Hardcoded Intro)
+            # 특수 케이스: intro 스테이지의 첫 턴일 때 하드코딩된 프롤로그
+            if current_stage.stage_id == "intro" and state.get("turn_count", 0) == 0:
+                logger.info("execute", "Using hardcoded intro prologue (no spoilers)")
 
-            if beats and len(beats) > 0:
-                # Beat 기반 대화 생성
-                logger.info("execute", f"Using beat-based dialogue for stage {current_stage.stage_id}", beats_count=len(beats))
+                # 하드코딩된 프롤로그 (스포일러 없이 무한열차 배경 설명)
+                dialogues = [
+                    ChatMessage(
+                        speaker="꺾쇠까마귀",
+                        text=(
+                            "까악! 까악! 임무를 전달한다!\n\n"
+                            "최근 무한열차에서 40명 이상의 승객이 실종되는 사건이 발생했다! "
+                            "귀살대 본부는 염주 렌고쿠 쿄쥬로를 현장에 파견했다!\n\n"
+                            "너는 렌고쿠의 츠구코로서 스승을 보좌하라! "
+                            "무한열차에 탑승하여 실종 사건의 진상을 밝혀내고 승객들을 보호하라!\n\n"
+                            "까악! 출발이다! 까악까악!"
+                        ),
+                        emotion="urgent"
+                    )
+                ]
 
-                dialogues = await self.llm_service.generate_beat_dialogue(
-                    beats=beats,
-                    character_name=character_name,
-                    user_input=user_message,
-                    emotion=emotion,
-                    personality=personality,
-                    conversation_history=conversation_history
-                )
+                # 다음 스테이지로 자동 전환 준비 (사용자가 입력하면 TRAIN_PRELUDE로)
+                next_stage_id = "TRAIN_PRELUDE"
+                stage_complete = True
+
             else:
-                # Simple 대화 생성 (폴백)
-                logger.info("execute", f"Using simple dialogue for stage {current_stage.stage_id} (no beats found)")
+                # Beats가 있으면 Beat 기반 대화, 없으면 Simple 대화
+                beats = self.scenario_service.get_beats_for_stage(scenario_id, current_stage.stage_id)
 
-                dialogues = await self.llm_service.generate_simple_dialogue(
-                    character_name=character_name,
-                    user_input=user_message,
-                    emotion=emotion,
-                    personality=personality,
-                    conversation_history=conversation_history
-                )
+                if beats and len(beats) > 0:
+                    # Beat 기반 대화 생성
+                    logger.info("execute", f"Using beat-based dialogue for stage {current_stage.stage_id}", beats_count=len(beats))
 
-            # 7. 스테이지 완료 확인
-            stage_complete = self.stage_service.check_stage_complete(current_stage, state)
+                    dialogues = await self.llm_service.generate_beat_dialogue(
+                        beats=beats,
+                        character_name=character_name,
+                        user_input=user_message,
+                        emotion=emotion,
+                        personality=personality,
+                        conversation_history=conversation_history
+                    )
+                else:
+                    # Simple 대화 생성 (폴백)
+                    logger.info("execute", f"Using simple dialogue for stage {current_stage.stage_id} (no beats found)")
 
-            # 8. 다음 스테이지 결정
-            next_stage_id = None
-            if stage_complete:
-                next_stage_id = self.stage_service.get_next_stage(current_stage, state)
-                if next_stage_id:
-                    logger.info("execute", f"Stage transition: {current_stage.stage_id} → {next_stage_id}")
+                    dialogues = await self.llm_service.generate_simple_dialogue(
+                        character_name=character_name,
+                        user_input=user_message,
+                        emotion=emotion,
+                        personality=personality,
+                        conversation_history=conversation_history
+                    )
+
+                # 일반 케이스: 스테이지 완료 확인 및 다음 스테이지 결정
+                stage_complete = self.stage_service.check_stage_complete(current_stage, state)
+                next_stage_id = None
+                if stage_complete:
+                    next_stage_id = self.stage_service.get_next_stage(current_stage, state)
+                    if next_stage_id:
+                        logger.info("execute", f"Stage transition: {current_stage.stage_id} → {next_stage_id}")
 
             # 9. State 업데이트
             updated_state = self.state_service.update_state(

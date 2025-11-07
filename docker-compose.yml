@@ -85,6 +85,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      - ./data:/app/data  # 프로젝트 루트 data → 컨테이너 /app/data
       - backend_cache:/app/__pycache__
     depends_on:
       postgres:

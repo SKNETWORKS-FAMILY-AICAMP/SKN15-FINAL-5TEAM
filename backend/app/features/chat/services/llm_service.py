@@ -62,7 +62,14 @@ class LLMService:
         if conversation_history:
             history_lines = []
             for msg in conversation_history[-5:]:  # 최근 5개만
-                history_lines.append(f"{msg.speaker}: {msg.text}")
+                # msg가 dict일 수도 있고 ChatMessage 객체일 수도 있음
+                if isinstance(msg, dict):
+                    speaker = msg.get("speaker", "Unknown")
+                    text = msg.get("text", "")
+                else:
+                    speaker = msg.speaker
+                    text = msg.text
+                history_lines.append(f"{speaker}: {text}")
             history_text = "\n".join(history_lines)
 
         # 프롬프트 생성
@@ -76,7 +83,7 @@ class LLMService:
 
         try:
             # LLM 호출 (JSON 모드)
-            response = self.llm.call_json(
+            response = await self.llm.call_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=0.8  # 창의성 높게
@@ -84,6 +91,10 @@ class LLMService:
 
             # 응답 정규화
             dialogues = self._normalize_llm_response(response)
+
+            if not dialogues:
+                logger.warning("generate_simple_dialogue", "Empty dialogues from LLM, using fallback")
+                return self._get_fallback_response(character_name, user_input, emotion)
 
             logger.info(
                 "generate_simple_dialogue",
@@ -95,30 +106,27 @@ class LLMService:
             return dialogues
 
         except Exception as e:
-            logger.error("generate_simple_dialogue", f"❌ Failed: {e}", character=character_name)
-            # Fallback: 더미 응답
-            return [
-                ChatMessage(
-                    speaker=character_name,
-                    text=f"안녕하세요! (대사 생성 실패: {str(e)[:50]})",
-                    emotion=emotion
-                )
-            ]
+            logger.error("generate_simple_dialogue", f"❌ Failed: {e}", character=character_name, error_type=type(e).__name__)
+            return self._get_fallback_response(character_name, user_input, emotion, error=e)
 
     async def generate_beat_dialogue(
         self,
-        beat_description: str,
-        characters_info: Dict[str, str],
+        beats: List[Dict[str, Any]],
+        character_name: str,
         user_input: str,
-        conversation_history: Optional[List[ChatMessage]] = None
+        emotion: str = "neutral",
+        personality: str = "친근하고 밝음",
+        conversation_history: Optional[List] = None
     ) -> List[ChatMessage]:
         """
         Beat 기반 대사 생성
 
         Args:
-            beat_description: Beat 설명
-            characters_info: 캐릭터 정보 dict (name → description)
+            beats: Beat 리스트 (각 beat은 dict)
+            character_name: 캐릭터 이름
             user_input: 사용자 입력
+            emotion: 감정 상태
+            personality: 성격 설명
             conversation_history: 대화 이력
 
         Returns:
@@ -127,36 +135,45 @@ class LLMService:
         logger.info(
             "generate_beat_dialogue",
             "Generating beat-based dialogue",
-            beat_len=len(beat_description),
-            characters=list(characters_info.keys()),
+            beats_count=len(beats),
+            character=character_name,
             user_input_len=len(user_input)
         )
 
-        # 캐릭터 정보 포맷팅
-        chars_text = "\n".join([
-            f"- {name}: {desc}"
-            for name, desc in characters_info.items()
-        ])
+        # Beat 설명 결합
+        beat_descriptions = []
+        for beat in beats:
+            if isinstance(beat, dict):
+                desc = beat.get("description") or beat.get("text") or str(beat)
+                beat_descriptions.append(desc)
+        beat_text = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
 
         # 대화 이력 포맷팅
         history_text = ""
         if conversation_history:
             history_lines = []
             for msg in conversation_history[-10:]:  # 최근 10개
-                history_lines.append(f"{msg.speaker}: {msg.text}")
+                # msg가 dict일 수도 있고 ChatMessage 객체일 수도 있음
+                if isinstance(msg, dict):
+                    speaker = msg.get("speaker", "Unknown")
+                    text = msg.get("text", "")
+                else:
+                    speaker = msg.speaker
+                    text = msg.text
+                history_lines.append(f"{speaker}: {text}")
             history_text = "\n".join(history_lines)
 
-        # 프롬프트 생성
+        # 프롬프트 생성 (beat 기반)
         system_prompt, user_prompt = get_beat_dialogue_prompt(
-            beat_description=beat_description,
-            characters_info=chars_text,
+            beat_description=beat_text,
+            characters_info=f"- {character_name}: {personality}",
             user_input=user_input,
             conversation_history=history_text
         )
 
         try:
             # LLM 호출 (JSON 모드)
-            response = self.llm.call_json(
+            response = await self.llm.call_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=0.8,
@@ -165,6 +182,10 @@ class LLMService:
 
             # 응답 정규화
             dialogues = self._normalize_llm_response(response)
+
+            if not dialogues:
+                logger.warning("generate_beat_dialogue", "Empty dialogues from LLM, using fallback")
+                return self._get_fallback_response(character_name, user_input, emotion)
 
             logger.info(
                 "generate_beat_dialogue",
@@ -175,16 +196,8 @@ class LLMService:
             return dialogues
 
         except Exception as e:
-            logger.error("generate_beat_dialogue", f"❌ Failed: {e}")
-            # Fallback
-            first_character = list(characters_info.keys())[0] if characters_info else "narrator"
-            return [
-                ChatMessage(
-                    speaker=first_character,
-                    text=f"(대사 생성 실패: {str(e)[:50]})",
-                    emotion="neutral"
-                )
-            ]
+            logger.error("generate_beat_dialogue", f"❌ Failed: {e}", error_type=type(e).__name__)
+            return self._get_fallback_response(character_name, user_input, emotion, error=e)
 
     def _normalize_llm_response(self, response: Dict[str, Any]) -> List[ChatMessage]:
         """
@@ -284,6 +297,64 @@ class LLMService:
                 )
 
         return messages
+
+    def _get_fallback_response(
+        self,
+        character_name: str,
+        user_input: str,
+        emotion: str = "neutral",
+        error: Optional[Exception] = None
+    ) -> List[ChatMessage]:
+        """
+        LLM 실패 시 Fallback 응답 생성
+
+        사용자 입력에 맞춰 contextual한 응답 제공
+
+        Args:
+            character_name: 캐릭터 이름
+            user_input: 사용자 입력
+            emotion: 감정 상태
+            error: 발생한 에러 (있는 경우)
+
+        Returns:
+            Fallback 대사 리스트
+        """
+        from app.core.errors import LLMRateLimitException, LLMTimeoutException
+
+        user_input_lower = user_input.lower().strip()
+
+        # 에러 타입별 특별 메시지
+        if isinstance(error, LLMRateLimitException):
+            text = "잠시만 기다려주세요. 지금 많은 분들이 대화 중이에요."
+        elif isinstance(error, LLMTimeoutException):
+            text = "응답이 조금 늦어지고 있어요. 다시 말씀해주시겠어요?"
+        # 사용자 입력 패턴별 응답
+        elif any(greeting in user_input_lower for greeting in ["안녕", "하이", "헬로", "hello", "hi"]):
+            text = f"안녕하세요! 저는 {character_name}입니다. 어떻게 도와드릴까요?"
+        elif any(question in user_input_lower for question in ["어떻게", "왜", "무엇", "언제", "어디", "누구"]):
+            text = "음... 좋은 질문이네요! 제가 생각해볼게요."
+        elif any(word in user_input_lower for word in ["좋아", "감사", "고마워", "thanks", "thank"]):
+            text = "감사합니다! 더 도와드릴 것이 있을까요?"
+        elif any(word in user_input_lower for word in ["싫어", "아니", "no", "안 돼"]):
+            text = "알겠습니다. 다른 방법을 찾아볼까요?"
+        else:
+            # 기본 fallback
+            text = f"말씀하신 내용에 대해 조금 더 생각해볼 시간이 필요할 것 같아요."
+
+        logger.info(
+            "_get_fallback_response",
+            "Using fallback response",
+            character=character_name,
+            error_type=type(error).__name__ if error else None
+        )
+
+        return [
+            ChatMessage(
+                speaker=character_name,
+                text=text,
+                emotion=emotion
+            )
+        ]
 
     def get_stats(self) -> Dict[str, Any]:
         """

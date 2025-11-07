@@ -643,6 +643,28 @@ export default function ChatInterface({
             const rest = { ...chunk } as Record<string, any>;
             delete rest.type;
             finalResponse = { ...finalResponse, ...rest };
+
+            // Handle dialogues from complete response
+            if (Array.isArray(rest.dialogues)) {
+              tempDialogues.push(...rest.dialogues);
+            }
+
+            // Handle metadata from complete response
+            if (typeof rest.session_id === 'string') {
+              setSessionId(rest.session_id);
+            }
+            if (rest.current_stage) {
+              setCurrentStage(rest.current_stage);
+            }
+            if (rest.affinity_scores) {
+              setAffinityScores(rest.affinity_scores);
+            }
+            if (typeof rest.is_ended === 'boolean') {
+              setIsEnded(rest.is_ended);
+            }
+            if (rest.current_image) {
+              handleBackgroundChange(rest.current_image);
+            }
           } else if (chunk.type === 'error') {
             console.error('Stream error event received:', chunk);
           }

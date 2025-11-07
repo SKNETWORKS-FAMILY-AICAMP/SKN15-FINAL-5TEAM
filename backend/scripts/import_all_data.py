@@ -20,7 +20,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # .env 로드
-load_dotenv()
+load_dotenv(override=True)
 
 # 부모 디렉토리를 path에 추가
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))

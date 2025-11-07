@@ -15,9 +15,13 @@ settings = get_settings()
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,  # SQL 로그 출력 (개발 환경에서만)
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,  # 연결 체크
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_recycle=settings.DB_POOL_RECYCLE,
+    pool_pre_ping=settings.DB_POOL_PRE_PING,
+    # Phase 8: 추가 최적화
+    pool_use_lifo=True,  # LIFO: 최근 사용한 연결 재사용 (캐시 효율성)
 )
 
 # ============================================================
