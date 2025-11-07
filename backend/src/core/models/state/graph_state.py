@@ -114,7 +114,7 @@ def create_initial_graph_state(
             current_stage=None,
             stage_history=[],
             stage_states={},
-            stage_turn=None,
+            stage_turn=0,
             affinity_scores={},
             mission_result=None,
             is_persuasion_successful=None,
