@@ -10,14 +10,13 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies.auth_deps import require_auth
-from ..dependencies.api_deps import get_progression_repository, get_db_manager
+from ..dependencies.api_deps import get_progression_repository
 from ..schemas.api_models import (
     ConsumeCreditsRequest,
     AwardXPRequest,
     UpdateEquipmentRequest,
 )
 from src.core.interfaces.repositories.progression_repository import IProgressionRepository
-from src.infrastructure.database.db_manager import DatabaseManager
 
 # ============================================================
 # 라우터 생성
@@ -165,11 +164,9 @@ async def award_user_experience(
 async def update_user_equipment(
     req: UpdateEquipmentRequest,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자 장비 상태 업데이트
-
-    TODO: Move to IProgressionRepository.update_user_equipment()
+    """사용자 장비 상태 업데이트 - Repository Pattern
 
     Request Body:
         {
@@ -182,7 +179,7 @@ async def update_user_equipment(
     Returns:
         {"success": true}
     """
-    success = db.update_user_equipment(user["user_id"], req.equipment_updates)
+    success = progression_repo.update_user_equipment(user["user_id"], req.equipment_updates)
     if not success:
         raise HTTPException(status_code=400, detail="No valid equipment fields to update")
     return {"success": True}
@@ -190,13 +187,11 @@ async def update_user_equipment(
 @router.get("/me/xp-transactions")
 async def get_user_xp_transactions(
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager),
+    progression_repo: IProgressionRepository = Depends(get_progression_repository),
     limit: int = 50,
     offset: int = 0
 ):
-    """사용자 경험치 거래 내역 조회 (페이지네이션)
-
-    TODO: Move to IProgressionRepository.get_xp_transactions()
+    """사용자 경험치 거래 내역 조회 - Repository Pattern
 
     Query Parameters:
         limit: 조회 개수 (기본 50, 최대 100)
@@ -221,7 +216,7 @@ async def get_user_xp_transactions(
     if limit > 100:
         limit = 100
 
-    transactions = db.get_xp_transactions(user["user_id"], limit, offset)
+    transactions = progression_repo.get_xp_transactions(user["user_id"], limit, offset)
     return transactions
 
 # ============================================================
@@ -231,11 +226,9 @@ async def get_user_xp_transactions(
 @router.get("/me/scenarios")
 async def get_user_scenarios(
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자별 시나리오 조회 (진행도 포함)
-
-    TODO: Move to IProgressionRepository.get_scenarios_with_user_progress()
+    """사용자별 시나리오 조회 - Repository Pattern
 
     인증 필요. 사용자의 진행도 정보가 포함된 시나리오 리스트 반환.
 
@@ -261,18 +254,16 @@ async def get_user_scenarios(
             ...
         ]
     """
-    scenarios = db.get_scenarios_with_user_progress(user["user_id"])
+    scenarios = progression_repo.get_scenarios_with_user_progress(user["user_id"])
     return scenarios
 
 @router.post("/me/scenarios/{scenario_id}/like")
 async def toggle_scenario_like(
     scenario_id: str,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """시나리오 좋아요 토글 (좋아요/취소)
-
-    TODO: Move to IProgressionRepository.toggle_scenario_like()
+    """시나리오 좋아요 토글 - Repository Pattern
 
     Args:
         scenario_id: 시나리오 ID
@@ -284,7 +275,7 @@ async def toggle_scenario_like(
         }
     """
     try:
-        result = db.toggle_scenario_like(user["user_id"], scenario_id)
+        result = progression_repo.toggle_scenario_like(user["user_id"], scenario_id)
         return result
     except Exception as e:
         print(f"❌ Error toggling like: {e}")
@@ -294,11 +285,9 @@ async def toggle_scenario_like(
 async def get_scenario_progress(
     scenario_id: str,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자의 특정 시나리오 진행도 조회
-
-    TODO: Move to IProgressionRepository.get_user_scenario_progress()
+    """사용자의 특정 시나리오 진행도 조회 - Repository Pattern
 
     Args:
         scenario_id: 시나리오 ID
@@ -317,7 +306,7 @@ async def get_scenario_progress(
             "is_liked": bool
         }
     """
-    progress = db.get_user_scenario_progress(user["user_id"], scenario_id)
+    progress = progression_repo.get_user_scenario_progress(user["user_id"], scenario_id)
     if not progress:
         # 기본 진행도 데이터가 없는 경우를 위한 초기 구조 반환
         return {
@@ -337,11 +326,9 @@ async def update_scenario_progress(
     scenario_id: str,
     progress_data: Dict,
     user: Dict = Depends(require_auth),
-    db: DatabaseManager = Depends(get_db_manager)
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
-    """사용자의 시나리오 진행도 업데이트
-
-    TODO: Move to IProgressionRepository.update_user_scenario_progress()
+    """사용자의 시나리오 진행도 업데이트 - Repository Pattern
 
     Args:
         scenario_id: 시나리오 ID
@@ -358,7 +345,7 @@ async def update_scenario_progress(
     Returns:
         {"success": bool}
     """
-    success = db.update_user_scenario_progress(
+    success = progression_repo.update_user_scenario_progress(
         user["user_id"],
         scenario_id,
         progress_data

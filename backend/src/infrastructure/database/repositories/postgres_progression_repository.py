@@ -264,3 +264,162 @@ class PostgresProgressionRepository(IProgressionRepository):
         except Exception as e:
             print(f"Error getting leaderboard: {e}")
             return []
+
+    # ============================================================
+    # User Progression - Credits, XP, Equipment
+    # ============================================================
+
+    def get_user_credits(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 크레딧 조회"""
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT bubble_count, total_purchased, total_consumed, last_updated
+                        FROM auth.user_credits
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            print(f"Error getting user credits for {user_id}: {e}")
+            return None
+
+    def consume_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: str
+    ) -> bool:
+        """크레딧 소비"""
+        try:
+            with self._db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        WITH updated AS (
+                          UPDATE auth.user_credits
+                          SET bubble_count = bubble_count - %s,
+                              total_consumed = total_consumed + %s,
+                              last_updated = NOW()
+                          WHERE user_id = %s AND bubble_count >= %s
+                          RETURNING user_id, bubble_count
+                        )
+                        INSERT INTO auth.credit_transactions
+                          (user_id, amount, transaction_type, description, balance_after, created_at)
+                        SELECT user_id, %s, 'consume', %s, bubble_count, NOW()
+                        FROM updated
+                        RETURNING transaction_id
+                    """, (amount, amount, user_id, amount, -amount, description))
+
+                    result = cur.fetchone()
+                    return result is not None
+        except Exception as e:
+            print(f"Error consuming credits for {user_id}: {e}")
+            return False
+
+    def get_user_progression(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 진행도 조회 (랭크, XP, 레벨, 장비 등)"""
+        # FIXME: Implement proper SQL join for user progression
+        # For now, delegate to DatabaseManager
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_user_progression(user_id)
+
+    def get_user_equipment(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 장비 상태 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_user_equipment(user_id)
+
+    def update_user_equipment(
+        self,
+        user_id: str,
+        equipment_updates: Dict[str, str]
+    ) -> bool:
+        """사용자 장비 상태 업데이트"""
+        # FIXME: Implement proper SQL update
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.update_user_equipment(user_id, equipment_updates)
+
+    def award_experience(
+        self,
+        user_id: str,
+        xp_amount: int,
+        xp_type: str,
+        description: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """사용자에게 경험치 지급"""
+        # FIXME: Implement proper SQL for XP award with level up logic
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.award_experience(user_id, xp_amount, xp_type, description, metadata)
+
+    def get_xp_transactions(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """사용자 경험치 거래 내역 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_xp_transactions(user_id, limit, offset)
+
+    def initialize_user(self, user_id: str) -> bool:
+        """사용자 진행도 초기화"""
+        # FIXME: Implement proper SQL insert for user initialization
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.initialize_user_progression(user_id)
+
+    # ============================================================
+    # Scenario Progress
+    # ============================================================
+
+    def get_scenarios_with_user_progress(
+        self,
+        user_id: str
+    ) -> List[Dict[str, Any]]:
+        """사용자 진행도가 포함된 시나리오 목록 조회"""
+        # FIXME: Implement proper SQL join
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_scenarios_with_user_progress(user_id)
+
+    def toggle_scenario_like(
+        self,
+        user_id: str,
+        scenario_id: str
+    ) -> Dict[str, Any]:
+        """시나리오 좋아요 토글"""
+        # FIXME: Implement proper SQL toggle
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.toggle_scenario_like(user_id, scenario_id)
+
+    def get_user_scenario_progress(
+        self,
+        user_id: str,
+        scenario_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """사용자의 특정 시나리오 진행도 조회"""
+        # FIXME: Implement proper SQL query
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.get_user_scenario_progress(user_id, scenario_id)
+
+    def update_user_scenario_progress(
+        self,
+        user_id: str,
+        scenario_id: str,
+        progress_data: Dict[str, Any]
+    ) -> bool:
+        """사용자의 시나리오 진행도 업데이트"""
+        # FIXME: Implement proper SQL update
+        from src.infrastructure.database.db_manager import DatabaseManager
+        db = DatabaseManager()
+        return db.update_user_scenario_progress(user_id, scenario_id, progress_data)

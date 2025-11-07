@@ -163,3 +163,217 @@ class IProgressionRepository(ABC):
             리더보드 엔트리 리스트
         """
         pass
+
+    # ============================================================
+    # User Progression - Credits, XP, Equipment
+    # ============================================================
+
+    @abstractmethod
+    def get_user_credits(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 크레딧(버블) 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            크레딧 정보 딕셔너리 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def consume_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: str
+    ) -> bool:
+        """
+        사용자 크레딧(버블) 소비
+
+        Args:
+            user_id: 사용자 ID
+            amount: 소비할 크레딧 양
+            description: 소비 사유
+
+        Returns:
+            성공 여부 (잔액 부족 시 False)
+        """
+        pass
+
+    @abstractmethod
+    def get_user_progression(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 진행도 조회 (랭크, XP, 레벨, 장비 등 통합)
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            진행도 정보 딕셔너리 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def get_user_equipment(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 장비 상태 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            장비 정보 딕셔너리 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def update_user_equipment(
+        self,
+        user_id: str,
+        equipment_updates: Dict[str, str]
+    ) -> bool:
+        """
+        사용자 장비 상태 업데이트
+
+        Args:
+            user_id: 사용자 ID
+            equipment_updates: 업데이트할 장비 정보
+
+        Returns:
+            성공 여부
+        """
+        pass
+
+    @abstractmethod
+    def award_experience(
+        self,
+        user_id: str,
+        xp_amount: int,
+        xp_type: str,
+        description: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자에게 경험치 지급
+
+        Args:
+            user_id: 사용자 ID
+            xp_amount: 지급할 경험치
+            xp_type: 경험치 유형
+            description: 설명
+            metadata: 메타데이터
+
+        Returns:
+            경험치 지급 결과 (레벨업 여부 등) 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def get_xp_transactions(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        사용자 경험치 거래 내역 조회
+
+        Args:
+            user_id: 사용자 ID
+            limit: 조회 개수
+            offset: 오프셋
+
+        Returns:
+            경험치 거래 내역 리스트
+        """
+        pass
+
+    @abstractmethod
+    def initialize_user(self, user_id: str) -> bool:
+        """
+        사용자 진행도 초기화 (회원가입 시)
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            성공 여부
+        """
+        pass
+
+    # ============================================================
+    # Scenario Progress
+    # ============================================================
+
+    @abstractmethod
+    def get_scenarios_with_user_progress(
+        self,
+        user_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        사용자 진행도가 포함된 시나리오 목록 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            시나리오 목록 (진행도 포함)
+        """
+        pass
+
+    @abstractmethod
+    def toggle_scenario_like(
+        self,
+        user_id: str,
+        scenario_id: str
+    ) -> Dict[str, Any]:
+        """
+        시나리오 좋아요 토글
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+
+        Returns:
+            {"liked": bool, "total_likes": int}
+        """
+        pass
+
+    @abstractmethod
+    def get_user_scenario_progress(
+        self,
+        user_id: str,
+        scenario_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자의 특정 시나리오 진행도 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+
+        Returns:
+            진행도 정보 딕셔너리 또는 None
+        """
+        pass
+
+    @abstractmethod
+    def update_user_scenario_progress(
+        self,
+        user_id: str,
+        scenario_id: str,
+        progress_data: Dict[str, Any]
+    ) -> bool:
+        """
+        사용자의 시나리오 진행도 업데이트
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+            progress_data: 업데이트할 진행도 데이터
+
+        Returns:
+            성공 여부
+        """
+        pass
