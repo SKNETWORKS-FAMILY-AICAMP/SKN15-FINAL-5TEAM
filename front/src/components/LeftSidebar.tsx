@@ -1,0 +1,86 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { getHistory, Conversation } from '@/utils/storageUtils';
+
+interface LeftSidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
+  const [history, setHistory] = useState<Conversation[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setHistory(getHistory());
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+        onClick={onClose}
+        aria-label="대화 목록 닫기"
+      />
+
+      <div className="fixed top-0 left-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out dark:bg-gray-900 dark:border-r dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-purple-600 text-white dark:bg-gray-800 dark:border-gray-700">
+          <div>
+            <p className="text-xs opacity-80">세션 히스토리</p>
+            <h2 className="text-lg font-bold">대화 목록</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white hover:text-gray-200 transition-colors rounded-lg p-1"
+            aria-label="대화 목록 닫기"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+          {history.length === 0 ? (
+            <div className="p-6 text-center text-gray-500 dark:text-gray-400 space-y-2">
+              <p className="text-base font-semibold">대화 기록이 없습니다</p>
+              <p className="text-xs">채팅을 시작하면 자동으로 저장돼요.</p>
+            </div>
+          ) : (
+            <ul className="p-4 space-y-2">
+              {history.map((conv) => (
+                <li key={conv.sessionId}>
+                  <Link
+                    to={`/history/${conv.sessionId}`}
+                    onClick={onClose}
+                    className="block p-3 rounded-xl border border-gray-100 hover:border-purple-300 hover:bg-purple-50 dark:border-gray-700 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{conv.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{conv.lastMessage}</p>
+                    <p className="text-[10px] text-right text-gray-400 dark:text-gray-500 mt-2">
+                      {new Date(conv.timestamp).toLocaleString()}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700 text-center text-xs text-gray-500 dark:text-gray-400">
+          ⚔️ 귀살대와 함께하는 대화 — 자동 저장 중
+        </div>
+      </div>
+    </>
+  );
+}
