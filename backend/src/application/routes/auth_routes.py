@@ -1,10 +1,10 @@
 """
-인증 라우터
+인증 라우터 - Repository Pattern 기반
 - 회원가입, 로그인, 토큰 갱신, 비밀번호 재설정을 제공한다.
 """
 
 # ============================================================
-# 🔑 인증 라우터 — 회원가입·로그인·토큰 갱신
+# 🔑 인증 라우터 — Repository Pattern 기반
 # ============================================================
 import os
 import secrets
@@ -22,7 +22,7 @@ from ..security.jwt_utils import (
     refresh_access_token,
 )
 from ..middleware import limiter, AUTH_RATE_LIMIT
-from ..dependencies.api_deps import get_db_manager
+from ..dependencies.api_deps import get_user_repository, get_progression_repository
 from ..schemas.api_models import (
     LoginRequest,
     RegisterRequest,
@@ -32,7 +32,8 @@ from ..schemas.api_models import (
     PasswordResetRequest,
     PasswordResetConfirm,
 )
-from src.infrastructure.database.db_manager import DatabaseManager
+from src.core.interfaces.repositories.user_repository import IUserRepository
+from src.core.interfaces.repositories.progression_repository import IProgressionRepository
 
 # ============================================================
 # 라우터 생성
@@ -48,10 +49,11 @@ router = APIRouter()
 async def register(
     req: RegisterRequest,
     request: Request,
-    db: DatabaseManager = Depends(get_db_manager)
+    user_repo: IUserRepository = Depends(get_user_repository),
+    progression_repo: IProgressionRepository = Depends(get_progression_repository)
 ):
     """
-    회원가입 엔드포인트
+    회원가입 엔드포인트 - Repository Pattern
 
     Args:
         req: RegisterRequest (username, password, email, display_name)
@@ -61,7 +63,7 @@ async def register(
     """
     try:
         # 사용자명 중복 체크
-        existing_user = db.get_user_by_username(req.username)
+        existing_user = user_repo.get_by_username(req.username)
         if existing_user:
             return AuthResponse(
                 success=False,
@@ -71,7 +73,7 @@ async def register(
 
         # 이메일 중복 체크 (이메일이 제공된 경우)
         if req.email:
-            existing_email = db.get_user_by_email(req.email)
+            existing_email = user_repo.get_by_email(req.email)
             if existing_email:
                 return AuthResponse(
                     success=False,
@@ -86,7 +88,7 @@ async def register(
         ).decode('utf-8')
 
         # 사용자 생성
-        user_id = db.create_user(
+        user_id = user_repo.create(
             username=req.username,
             password_hash=password_hash,
             email=req.email,
@@ -96,7 +98,7 @@ async def register(
         if user_id:
             # 진행도 초기화 (랭크·장비·세션 통계 초기 상태로 설정)
             try:
-                db.initialize_user_progression(user_id)
+                progression_repo.initialize_user(user_id)
             except Exception as e:
                 print(f"⚠️  Warning: Failed to initialize progression for user {user_id}: {e}")
                 # 진행도 초기화 실패해도 계정은 생성됨 (나중에 수동 초기화 가능)
@@ -138,10 +140,10 @@ async def register(
 async def login(
     req: LoginRequest,
     request: Request,
-    db: DatabaseManager = Depends(get_db_manager)
+    user_repo: IUserRepository = Depends(get_user_repository)
 ):
     """
-    로그인 엔드포인트
+    로그인 엔드포인트 - Repository Pattern
 
     Args:
         req: LoginRequest (username, password)
@@ -151,7 +153,7 @@ async def login(
     """
     try:
         # 사용자 인증
-        user = db.verify_user_password(
+        user = user_repo.verify_password(
             username=req.username,
             password=req.password
         )
@@ -233,10 +235,10 @@ async def get_me(user: Dict = Depends(require_auth)):
 @router.post("/password-reset/request")
 async def request_password_reset(
     req: PasswordResetRequest,
-    db: DatabaseManager = Depends(get_db_manager)
+    user_repo: IUserRepository = Depends(get_user_repository)
 ):
     """
-    비밀번호 재설정 요청 - 이메일로 재설정 링크 전송
+    비밀번호 재설정 요청 - Repository Pattern
 
     Args:
         req: PasswordResetRequest (email)
@@ -247,7 +249,7 @@ async def request_password_reset(
     try:
         from src.domain.services.notification.email_sender import send_email, generate_password_reset_email
         # 이메일로 사용자 찾기
-        user = db.get_user_by_username(req.email)
+        user = user_repo.get_by_username(req.email)
         if not user:
             # 보안상 사용자가 없어도 성공 응답 (이메일 존재 여부 노출 방지)
             return {"success": True, "message": "비밀번호 재설정 이메일이 전송되었습니다."}
@@ -259,7 +261,7 @@ async def request_password_reset(
         expires_at = datetime.utcnow() + timedelta(hours=1)  # 1시간 유효
 
         # 데이터베이스에 토큰 저장
-        token_id = db.create_password_reset_token(
+        token_id = user_repo.create_password_reset_token(
             user_id, reset_token, expires_at.isoformat()
         )
 
@@ -304,10 +306,10 @@ async def request_password_reset(
 @router.post("/password-reset/confirm")
 async def confirm_password_reset(
     req: PasswordResetConfirm,
-    db: DatabaseManager = Depends(get_db_manager)
+    user_repo: IUserRepository = Depends(get_user_repository)
 ):
     """
-    비밀번호 재설정 확인 - 새 비밀번호 설정
+    비밀번호 재설정 확인 - Repository Pattern
 
     Args:
         req: PasswordResetConfirm (token, new_password)
@@ -317,7 +319,7 @@ async def confirm_password_reset(
     """
     try:
         # 토큰 검증
-        token_data = db.get_password_reset_token(req.token)
+        token_data = user_repo.get_password_reset_token(req.token)
         if not token_data:
             raise HTTPException(
                 status_code=400,
@@ -333,11 +335,11 @@ async def confirm_password_reset(
         ).decode('utf-8')
 
         # 비밀번호 업데이트
-        if not db.update_user_password(user_id, new_password_hash):
+        if not user_repo.update_password(user_id, new_password_hash):
             raise HTTPException(status_code=500, detail="비밀번호 업데이트 실패")
 
         # 토큰 사용 처리
-        db.mark_password_reset_token_as_used(req.token)
+        user_repo.mark_password_reset_token_used(req.token)
 
         return {
             "success": True,
