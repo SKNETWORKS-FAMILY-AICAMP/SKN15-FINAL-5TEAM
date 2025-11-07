@@ -604,12 +604,14 @@ export default function ChatInterface({
 
       try {
         // for await...of 루프로 스트림 데이터를 하나씩 받습니다.
+        console.log('🚀 [DEBUG] Starting SSE stream...');
         for await (const chunk of sendChatMessage(
           backendScenarioId,
           '시작',
           initialSessionId,
           '츠구코'
         )) {
+          console.log('📦 [DEBUG] Received chunk:', chunk.type, chunk);
           if (chunk.type === 'metadata') {
             const metadata = { ...chunk } as Record<string, any>;
             delete metadata.type;
@@ -647,7 +649,9 @@ export default function ChatInterface({
         }
 
         // 스트림이 모두 끝나면, 수집된 대화 목록으로 화면을 업데이트합니다.
+        console.log('✅ [DEBUG] Stream finished. Total dialogues:', tempDialogues.length);
         if (tempDialogues.length > 0) {
+          console.log('📝 [DEBUG] First dialogue:', tempDialogues[0]);
           const backendMessages: Message[] = tempDialogues.map((dialogue: any) => ({
             id: generateMessageId(),
             text: dialogue.text || dialogue.content || '',
@@ -657,7 +661,12 @@ export default function ChatInterface({
             isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
             imageIndex: dialogue.image_index,
           }));
+          console.log('💬 [DEBUG] Mapped messages:', backendMessages);
+          console.log('🎬 [DEBUG] Calling addMessagesSequentially...');
           await addMessagesSequentially(backendMessages);
+          console.log('✅ [DEBUG] addMessagesSequentially completed');
+        } else {
+          console.warn('⚠️ [DEBUG] No dialogues received!');
         }
 
         // 추가 대화가 있으면 자동 요청

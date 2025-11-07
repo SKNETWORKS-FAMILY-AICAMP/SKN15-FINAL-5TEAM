@@ -188,6 +188,7 @@ async def chat(
     try:
         request_start = time.perf_counter()
         data = await request.json()
+        print(f"🚀🚀🚀 CHAT ENDPOINT HIT - Request received: {data}")
 
         session_id = data.get("session_id")
         user_input = data.get("user_input", "")
