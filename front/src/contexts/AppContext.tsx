@@ -15,7 +15,7 @@ interface AppContextType {
   userEmail: string;
   currentBubbles: number;
   updateBubbles: (count: number) => void;
-  consumeBubbles: (amount: number) => boolean;
+  consumeBubbles: (amount: number) => Promise<boolean>;
   openSidebar: () => void;
   closeSidebar: () => void;
   toggleSidebar: () => void;
@@ -118,10 +118,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const updateBubbles = (count: number) => {
     setCurrentBubbles(count);
   };
-  const consumeBubbles = (amount: number) => {
+  const consumeBubbles = async (amount: number): Promise<boolean> => {
     if (currentBubbles >= amount) {
-      setCurrentBubbles(prev => prev - amount);
-      return true;
+      try {
+        // Call backend API to consume credits
+        await apiClient.consumeCredits(amount, '대화 참여');
+        setCurrentBubbles(prev => prev - amount);
+        return true;
+      } catch (error) {
+        console.error('Failed to consume bubbles:', error);
+        return false;
+      }
     }
     return false;
   };

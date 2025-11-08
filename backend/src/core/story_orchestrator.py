@@ -28,6 +28,10 @@ class StoryOrchestrator:
         if not self._system_prompt_template or not self._user_prompt_template:
             raise ValueError("Open Narrative prompts missing in configs/prompts.yaml")
 
+        # 🚀 Performance optimization: Cache static data (world_context, tone_profiles)
+        self._world_context_cache = {}  # {world_id: world_context_str}
+        self._tone_profiles_cache = {}  # {cache_key: tone_profiles_dict}
+
     def generate_narrative(
         self,
         state: Dict[str, Any],
@@ -82,7 +86,7 @@ class StoryOrchestrator:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 temperature=0.8,
-                max_tokens=1500,
+                max_tokens=800,  # 🚀 Reduced from 1500 for faster generation
             )
 
             log("story_orchestrator", f"✅ Generated narrative response: {json.dumps(response, ensure_ascii=False)[:200]}...")
@@ -167,7 +171,7 @@ class StoryOrchestrator:
 
     def _load_world_context(self, state: Dict[str, Any]) -> Optional[str]:
         """
-        세계관 정보 로드
+        세계관 정보 로드 (🚀 Cached for performance)
 
         Returns:
             world_context 문자열 (없으면 None)
@@ -183,11 +187,17 @@ class StoryOrchestrator:
                 log("story_orchestrator", "⚠️ No world_id in scenario")
                 return None
 
+            # 🚀 Check cache first (world_context is static data)
+            if world_id in self._world_context_cache:
+                return self._world_context_cache[world_id]
+
             # WorldLoader로 world_context 로드
             world_context = WorldLoader.get_world_context(world_id)
 
             if world_context:
                 log("story_orchestrator", f"🌍 Loaded world context: {world_id}")
+                # 🚀 Cache for future calls
+                self._world_context_cache[world_id] = world_context
                 return world_context
             else:
                 log("story_orchestrator", f"⚠️ Empty world_context for {world_id}")
@@ -203,7 +213,7 @@ class StoryOrchestrator:
         speaker_pool: List[str],
     ) -> Dict[str, Any]:
         """
-        speaker_pool에 있는 캐릭터들의 tone_profiles 로드
+        speaker_pool에 있는 캐릭터들의 tone_profiles 로드 (🚀 Cached for performance)
 
         Returns:
             { "char_id": { "tone": {...}, "relationships": {...} }, ... }
@@ -230,11 +240,18 @@ class StoryOrchestrator:
             tone_meta = metadata.get("tone", {})
             scenario_key = tone_meta.get("scenario_key")
 
+            # 🚀 Create cache key (tone profiles are static per scenario + character combo)
+            cache_key = f"{scenario_key}:{','.join(sorted(speaker_pool))}"
+            if cache_key in self._tone_profiles_cache:
+                return self._tone_profiles_cache[cache_key]
+
             # load_tone_profiles 호출
             tone_profiles = load_tone_profiles(filtered_refs, scenario_key)
 
             if tone_profiles:
                 log("story_orchestrator", f"🎭 Loaded tone profiles for {len(tone_profiles)} characters")
+                # 🚀 Cache for future calls
+                self._tone_profiles_cache[cache_key] = tone_profiles
                 return tone_profiles
             else:
                 log("story_orchestrator", "⚠️ Failed to load tone profiles")
@@ -246,7 +263,7 @@ class StoryOrchestrator:
 
     def _format_tone_profiles(self, tone_profiles: Dict[str, Any]) -> str:
         """
-        tone_profiles를 프롬프트용 문자열로 포맷팅
+        tone_profiles를 프롬프트용 문자열로 포맷팅 (🚀 Simplified for smaller prompts)
 
         Args:
             tone_profiles: { "char_id": { "tone": {...}, "relationships": {...} }, ... }
@@ -262,29 +279,18 @@ class StoryOrchestrator:
         for char_id, profile in tone_profiles.items():
             lines.append(f"\n**{char_id}**")
 
-            # tone 정보
+            # tone 정보 (간단하게만 표시)
             tone_data = profile.get("tone", {})
             if isinstance(tone_data, dict):
                 mid_tone = tone_data.get("mid", {})
                 style = mid_tone.get("style", "")
-                emotion = mid_tone.get("emotion", "")
                 if style:
                     lines.append(f"- 말투: {style}")
-                if emotion:
-                    lines.append(f"- 감정: {emotion}")
             elif tone_data:
                 lines.append(f"- 말투: {tone_data}")
 
-            # relationships 정보
-            relationships = profile.get("relationships", {})
-            if relationships:
-                lines.append("- 관계:")
-                for target, info in relationships.items():
-                    if isinstance(info, dict):
-                        description = info.get("description", "")
-                        rel_type = info.get("type", "")
-                        if description:
-                            lines.append(f"  * {target} ({rel_type}): {description}")
+            # 🚀 relationships 정보 생략 (verbose하고 불필요한 정보)
+            # Open Narrative는 자유 서사이므로 관계 정보는 world_context에 포함되어 있음
 
         return "\n".join(lines)
 

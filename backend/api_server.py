@@ -63,9 +63,10 @@ from src.auth.dependencies import require_auth, optional_auth
 from src.middleware import setup_rate_limiting, limiter, AUTH_RATE_LIMIT
 
 # ------------------------------------------------------------
-# ✅ Monitoring API 로드
+# ✅ API Routers 로드
 # ------------------------------------------------------------
 from src.api.monitoring_api import router as monitoring_router
+from src.api import auth_router, scenario_router, user_router, chat_router, session_router
 
 # ------------------------------------------------------------
 # ✅ FastAPI 인스턴스 생성
@@ -119,6 +120,9 @@ async def add_process_time_header(request: Request, call_next):
 # ✅ API 라우터 등록
 # ------------------------------------------------------------
 app.include_router(monitoring_router)
+
+# TODO: 라우터들에 DB Manager 주입 (db_manager 초기화 후 진행)
+# 이 부분은 db_manager 초기화 후에 실행됩니다 (아래 참조)
 
 
 # ------------------------------------------------------------
@@ -339,6 +343,7 @@ class SessionManagerAdapter:
 # HybridSessionManager 초기화
 _hybrid_manager = None  # Global variable initialization
 db_manager = None  # Global DatabaseManager
+cache_manager = None  # Global CacheManager
 
 try:
     # DatabaseManager를 환경 변수에서 생성
@@ -390,6 +395,53 @@ except Exception as e:
 
     SESSION_MANAGER = InMemorySessionManager()
 
+    # Fallback용 mock managers 생성
+    class MockCacheManager:
+        """In-memory fallback에서 사용할 mock cache manager"""
+        def get_scenarios_cached(self):
+            return None
+        def set_scenarios_cached(self, data, ttl=None):
+            pass
+
+    class MockDbManager:
+        """In-memory fallback에서 사용할 mock db manager"""
+        def get_all_scenarios(self, include_inactive=False):
+            return []
+        def get_user_by_username(self, username):
+            return None
+        def create_user(self, *args, **kwargs):
+            raise Exception("Database not available in fallback mode")
+
+    if db_manager is None:
+        db_manager = MockDbManager()
+    if cache_manager is None:
+        cache_manager = MockCacheManager()
+
+# ------------------------------------------------------------
+# ✅ API 라우터 의존성 주입 및 등록
+# ------------------------------------------------------------
+print("🔧 Injecting dependencies into API routers...")
+
+# Auth Router에 DB Manager 주입
+auth_router.set_db_manager(db_manager)
+app.include_router(auth_router.router)
+print("  ✅ Auth router registered")
+
+# Scenario Router에 Managers 주입
+scenario_router.set_managers(db_manager, cache_manager)
+app.include_router(scenario_router.router)
+print("  ✅ Scenario router registered")
+
+# User Router에 DB Manager 주입
+user_router.set_db_manager(db_manager)
+app.include_router(user_router.router)
+print("  ✅ User router registered")
+
+# Chat Router에 Managers 및 load_scenario 주입 (라우터 등록 뒤에서 수행)
+# Session Router에 Managers 주입 (라우터 등록 뒤에서 수행)
+
+print("✅ All API routers registered successfully")
+
 # ------------------------------------------------------------
 # ✅ Workflow 싱글톤 (LangGraph 파이프라인)
 # ------------------------------------------------------------
@@ -411,9 +463,24 @@ def get_workflow():
 # ------------------------------------------------------------
 def load_scenario(scenario_id: str) -> Optional[Dict]:
     """Frontend ID로 요청받은 시나리오를 JSON으로 로드"""
+    import time  # 🚀 Performance measurement
+    start_time = time.perf_counter()
+
     try:
         if not scenario_id:
             return None
+
+        # 🔄 Scenario ID mapping (frontend → backend)
+        SCENARIO_ID_MAP = {
+            'train': 'cutscene5_llm_driven',
+            'ending': 'cutscene5_llm_driven',
+        }
+
+        # Apply mapping if exists
+        mapped_id = SCENARIO_ID_MAP.get(scenario_id, scenario_id)
+        if mapped_id != scenario_id:
+            print(f"🔄 Mapping scenario: '{scenario_id}' → '{mapped_id}'")
+            scenario_id = mapped_id
 
         candidates = []
         if scenario_id.endswith(".json"):
@@ -421,23 +488,49 @@ def load_scenario(scenario_id: str) -> Optional[Dict]:
         else:
             candidates.extend([scenario_id, f"{scenario_id}.json"])
 
+        # 🚀 Try scenario_loader first (with timing)
+        loader_start = time.perf_counter()
         for candidate in candidates:
             data = scenario_loader.load_scenario(candidate)
             if data:
+                loader_time = (time.perf_counter() - loader_start) * 1000
+                total_time = (time.perf_counter() - start_time) * 1000
+                print(f"⏱️  [scenario_loader] Loaded '{scenario_id}' in {loader_time:.2f}ms (total: {total_time:.2f}ms)")
                 return data
+        loader_time = (time.perf_counter() - loader_start) * 1000
+        print(f"⏱️  [scenario_loader] Not found '{scenario_id}' after {loader_time:.2f}ms")
 
+        # 🚀 Try ScenesRepo as fallback (with timing)
+        repo_start = time.perf_counter()
         repo = ScenesRepo()
         for candidate in candidates:
             result = repo.load(candidate.replace(".json", ""))
             if result:
+                repo_time = (time.perf_counter() - repo_start) * 1000
+                total_time = (time.perf_counter() - start_time) * 1000
+                print(f"⏱️  [ScenesRepo] Loaded '{scenario_id}' in {repo_time:.2f}ms (total: {total_time:.2f}ms)")
                 return result
+        repo_time = (time.perf_counter() - repo_start) * 1000
 
-        print(f"⚠️ Scenario '{scenario_id}' not found")
+        total_time = (time.perf_counter() - start_time) * 1000
+        print(f"⚠️  Scenario '{scenario_id}' not found (total search: {total_time:.2f}ms)")
         return None
     except Exception as e:
-        print(f"❌ Error loading scenario '{scenario_id}': {e}")
+        total_time = (time.perf_counter() - start_time) * 1000
+        print(f"❌ Error loading scenario '{scenario_id}' after {total_time:.2f}ms: {e}")
         return None
 
+
+# ------------------------------------------------------------
+# ✅ Chat & Session Router 등록 (의존성 주입)
+# ------------------------------------------------------------
+chat_router.set_dependencies(SESSION_MANAGER, db_manager, load_scenario)
+app.include_router(chat_router.router)
+print("  ✅ Chat router registered")
+
+session_router.set_dependencies(SESSION_MANAGER, db_manager)
+app.include_router(session_router.router)
+print("  ✅ Session router registered")
 
 # ============================================================
 # 🧩 Request / Response 데이터 모델 정의
@@ -1793,640 +1886,11 @@ async def confirm_password_reset(req: PasswordResetConfirm):
         )
 
 
-# ============================================================
-# 🚀 백그라운드 처리 함수 (응답 지연 방지)
-# ============================================================
-async def process_post_response_tasks(
-    session_id: str,
-    user_id: str,
-    result_state: Dict[str, Any],
-    user_input: str,
-    agent_responses: List[Dict],
-    turn_count: int,
-    current_user: Dict
-):
-    """
-    응답 반환 후 백그라운드에서 실행할 작업들
-
-    ⚡ 성능 최적화: 사용자 응답에 영향을 주지 않는 작업들을 백그라운드에서 처리
-    - 대화 요약 생성
-    - 메모리 추출
-    - 친밀도 추적
-    - 스테이지 추적
-    - Dialogues 저장
-    """
-    print(f"🔄 [Background] Starting post-response tasks for session {session_id}")
-
-    try:
-        # 1. Dialogues 저장
-        try:
-            if agent_responses and len(agent_responses) > 0:
-                dialogues_to_save = []
-
-                # 사용자 입력
-                dialogues_to_save.append({
-                    "speaker": "user",
-                    "content": user_input
-                })
-
-                # 에이전트 응답들
-                for response in agent_responses:
-                    if isinstance(response, dict):
-                        dialogues_to_save.append({
-                            "speaker": response.get("speaker") or response.get("character") or "agent",
-                            "content": response.get("content") or response.get("text") or "",
-                            "emotion": response.get("emotion"),
-                            "emotion_intensity": response.get("emotion_intensity")
-                        })
-
-                # DB에 저장
-                db_manager.save_dialogues(
-                    session_id=session_id,
-                    turn_number=turn_count,
-                    dialogues=dialogues_to_save
-                )
-
-                print(f"✅ [Background] Saved {len(dialogues_to_save)} dialogues")
-        except Exception as e:
-            print(f"⚠️ [Background] Failed to save dialogues: {e}")
-
-        # 2. 친밀도 변경 추적
-        try:
-            old_affinity = result_state.get("_old_affinity", {})  # workflow 실행 전 상태
-            new_affinity = result_state.get("affinity_scores", {})
-
-            for character, new_score in new_affinity.items():
-                old_score = old_affinity.get(character, 0)
-                if old_score != new_score:
-                    change_amount = new_score - old_score
-                    db_manager.save_affinity(
-                        session_id=session_id,
-                        turn_number=turn_count,
-                        character_name=character,
-                        affinity_score=new_score,
-                        change_amount=change_amount
-                    )
-                    print(f"✅ [Background] Affinity tracked: {character} ({old_score} → {new_score})")
-        except Exception as e:
-            print(f"⚠️ [Background] Failed to track affinity: {e}")
-
-        # 3. 스테이지 변경 추적
-        try:
-            old_stage = result_state.get("_old_stage")  # workflow 실행 전 상태
-            new_stage = result_state.get("current_stage")
-
-            if old_stage != new_stage and new_stage:
-                # 이전 스테이지 종료
-                if old_stage:
-                    db_manager.update_stage_exit(session_id, old_stage)
-                    print(f"✅ [Background] Stage exited: {old_stage}")
-
-                # 새 스테이지 진입
-                stage_history = result_state.get("stage_history", [])
-                stage_order = len(stage_history) + 1
-                db_manager.save_stage_entry(session_id, new_stage, stage_order)
-                print(f"✅ [Background] Stage entered: {new_stage}")
-        except Exception as e:
-            print(f"⚠️ [Background] Failed to track stage progression: {e}")
-
-        # 4. 대화 요약 생성 (10턴마다)
-        try:
-            from src.utils.conversation_summarizer import update_conversation_summary
-
-            last_summary_turn = result_state.get("summary_turn_count", 0)
-            should_summarize = (
-                turn_count >= 10 and
-                (turn_count - last_summary_turn) >= 10
-            )
-
-            if should_summarize:
-                print(f"🧠 [Background] Generating conversation summary at turn {turn_count}...")
-
-                # dialogues 테이블에서 대화 내역 조회
-                dialogues = db_manager.get_session_dialogues(session_id)
-
-                if dialogues and len(dialogues) > 0:
-                    # 대화를 message_history 형식으로 변환
-                    message_history = []
-                    for dlg in dialogues:
-                        turn = dlg["turn_number"]
-                        speaker = dlg["speaker"]
-                        content = dlg["content"]
-
-                        # 턴별 데이터 구조 찾기 또는 생성
-                        turn_data = next((msg for msg in message_history if msg.get("turn") == turn), None)
-                        if not turn_data:
-                            turn_data = {
-                                "turn": turn,
-                                "user_input": "",
-                                "agent_responses": []
-                            }
-                            message_history.append(turn_data)
-
-                        # 데이터 추가
-                        if speaker == "user":
-                            turn_data["user_input"] = content
-                        else:
-                            turn_data["agent_responses"].append({
-                                "speaker": speaker,
-                                "text": content
-                            })
-
-                    # 요약 생성
-                    summary_result = await update_conversation_summary(
-                        state=result_state,
-                        message_history=message_history
-                    )
-
-                    if summary_result and summary_result.get("summary"):
-                        # 세션에 요약 저장
-                        db_manager.update_session(
-                            session_id=session_id,
-                            updates={
-                                "conversation_summary": summary_result["summary"],
-                                "summary_turn_count": summary_result["summary_turn_count"]
-                            }
-                        )
-
-                        print(f"✅ [Background] Summary generated: {len(summary_result['summary'])} chars")
-
-                        # 5. 메모리 추출 (요약 생성된 경우에만)
-                        if user_id:
-                            try:
-                                from src.utils.memory_extractor import extract_and_save_memories
-
-                                saved_count = await extract_and_save_memories(
-                                    user_id=user_id,
-                                    session_id=session_id,
-                                    conversation_summary=summary_result["summary"],
-                                    db_manager=db_manager
-                                )
-
-                                if saved_count > 0:
-                                    print(f"✅ [Background] Extracted {saved_count} memories")
-                            except Exception as e:
-                                print(f"⚠️ [Background] Failed to extract memories: {e}")
-        except Exception as e:
-            print(f"⚠️ [Background] Failed to generate summary: {e}")
-
-        print(f"✅ [Background] All post-response tasks completed for session {session_id}")
-
-    except Exception as e:
-        print(f"❌ [Background] Error in post-response tasks: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-@app.post("/api/chat")
-async def chat(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    current_user: Dict = Depends(require_auth)  # 🔐 필수 인증으로 변경 (로그인 필수!)
-):
-    """
-    메인 채팅 엔드포인트 (🔐 로그인 필수)
-    1. JWT 토큰 검증 (로그인하지 않으면 401 에러)
-    2. 세션 생성 or 복원
-    3. 시나리오 로드
-    4. LangGraph 실행
-    5. 결과를 반환
-
-    Args:
-        request: HTTP 요청 객체
-        current_user: 인증된 사용자 정보 (필수, JWT 토큰에서 추출)
-
-    Returns:
-        ChatResponse: 에이전트 응답
-
-    Raises:
-        HTTPException 401: 인증되지 않은 사용자
-    """
-    try:
-        request_start = time.perf_counter()
-        data = await request.json()
-
-        session_id = data.get("session_id")
-        user_input = data.get("user_input", "")
-        scenario_id = data.get("scenario_id")
-        user_name = data.get("user_name") or "여행자"
-
-        # 🔐 인증된 사용자 정보 추출 (필수)
-        user_id = current_user.get('user_id')
-        username = current_user.get('username', 'Unknown')
-        print(f"🔐 Authenticated user: {username} (ID: {user_id})")
-
-        # 📝 General Log: 인증 사용자
-        try:
-            SESSION_MANAGER.save_log(
-                log_level="info",
-                log_message=f"Authenticated user: {username}",
-                session_id=None,  # 아직 session_id 없음
-                metadata={"user_id": user_id, "username": username}
-            )
-        except Exception as e:
-            print(f"⚠️ Failed to save user auth log: {e}")
-
-        print(f"📥 Request received: session_id={session_id}, input='{user_input}'")
-
-        if not session_id:
-            session_id = str(uuid.uuid4())
-            print(f"🆕 Creating new session: {session_id}")
-            # 📝 General Log: 새 세션 생성
-            try:
-                SESSION_MANAGER.save_log(
-                    log_level="info",
-                    log_message="New session created",
-                    session_id=session_id,
-                    metadata={"user_id": user_id, "scenario_id": scenario_id}
-                )
-            except Exception as e:
-                print(f"⚠️ Failed to save session creation log: {e}")
-        else:
-            print(f"🔁 Reusing session: {session_id}")
-            # 📝 General Log: 세션 재사용
-            try:
-                SESSION_MANAGER.save_log(
-                    log_level="info",
-                    log_message="Session reused",
-                    session_id=session_id,
-                    metadata={"user_id": user_id}
-                )
-            except Exception as e:
-                print(f"⚠️ Failed to save session reuse log: {e}")
-
-        state = SESSION_MANAGER.load_or_create(session_id)
-        is_new_session = "messages" not in state
-
-        if is_new_session:
-            if not scenario_id:
-                raise HTTPException(
-                    status_code=400, detail="scenario_id is required to start a session"
-                )
-
-            scenario_data = load_scenario(scenario_id)
-            if not scenario_data:
-                raise HTTPException(
-                    status_code=404, detail=f"Scenario '{scenario_id}' not found"
-                )
-
-            resolved_id = scenario_data.get("scenario_id") or scenario_id
-            state = create_initial_graph_state(
-                session_id=session_id, scenario_id=resolved_id
-            )
-            state["scenario_data"] = scenario_data
-            state["scenario"] = scenario_data
-            state["scenario_id"] = resolved_id
-            state["user_name"] = user_name
-            state["user_id"] = user_id  # ✅ 추가: 사용자 ID 저장
-
-            # 🧠 사용자 장기 기억 로드 (인증된 사용자만)
-            if user_id:
-                try:
-                    memory_context = db_manager.get_user_memory_context(user_id)
-                    if memory_context:
-                        state["user_memory_context"] = memory_context
-
-                        # 로드된 기억 개수 출력
-                        rel_count = len(memory_context.get("relationships", []) or [])
-                        pref_count = len(memory_context.get("preferences", []) or [])
-                        story_count = len(memory_context.get("story_progress", []) or [])
-                        fact_count = len(memory_context.get("facts", []) or [])
-
-                        print(f"🧠 User memories loaded for {current_user.get('username')}:")
-                        print(f"   - Relationships: {rel_count}")
-                        print(f"   - Preferences: {pref_count}")
-                        print(f"   - Story progress: {story_count}")
-                        print(f"   - Facts: {fact_count}")
-
-                        # 📝 General Log: 메모리 로딩 성공
-                        try:
-                            SESSION_MANAGER.save_log(
-                                log_level="info",
-                                log_message=f"User memories loaded: {rel_count + pref_count + story_count + fact_count} total",
-                                session_id=session_id,
-                                metadata={
-                                    "user_id": user_id,
-                                    "username": current_user.get('username'),
-                                    "relationships": rel_count,
-                                    "preferences": pref_count,
-                                    "story_progress": story_count,
-                                    "facts": fact_count
-                                }
-                            )
-                        except Exception as log_err:
-                            print(f"⚠️ Failed to save memory load log: {log_err}")
-                    else:
-                        print(f"🧠 No memories found for user {user_id}")
-
-                        # 📝 General Log: 메모리 없음
-                        try:
-                            SESSION_MANAGER.save_log(
-                                log_level="info",
-                                log_message="No user memories found",
-                                session_id=session_id,
-                                metadata={"user_id": user_id}
-                            )
-                        except Exception as log_err:
-                            print(f"⚠️ Failed to save no-memory log: {log_err}")
-                except Exception as e:
-                    print(f"⚠️ Failed to load user memories: {e}")
-
-            metadata = scenario_data.get("metadata", {}) if isinstance(scenario_data, dict) else {}
-            initial_stage = metadata.get("default_stage")
-            if not initial_stage:
-                stages = scenario_data.get("stages", [])
-                if isinstance(stages, dict):
-                    initial_stage = next(iter(stages.keys()), "intro")
-                elif isinstance(stages, list) and stages:
-                    initial_stage = stages[0].get("tag") or stages[0].get("id") or "intro"
-                else:
-                    initial_stage = "intro"
-            state["current_stage"] = initial_stage
-        else:
-            print(f"🔄 Loading existing session: {session_id}")
-            print(
-                f"📊 Session state: stage={state.get('current_stage')}, stage_turn={state.get('stage_turn')}"
-            )
-            if user_name:
-                state["user_name"] = user_name
-
-        if not state.get("scenario_data") and scenario_id:
-            scenario_data = load_scenario(scenario_id)
-            if scenario_data:
-                state["scenario_data"] = scenario_data
-                state["scenario"] = scenario_data
-                state.setdefault(
-                    "scenario_id", scenario_data.get("scenario_id") or scenario_id
-                )
-
-        state["session_id"] = session_id
-        state["user_input"] = user_input
-        state["user_inputs"] = state.get("user_inputs", []) + [user_input]
-
-        # 🔥 배치 모드 관리: 새 사용자 입력 시 배치 인덱스만 리셋
-        # dialogues_generated_count는 세션 전체에 걸쳐 누적 유지
-        if not user_input.startswith("__AUTO_CONTINUE__"):
-            state["dialogue_batch_index"] = 0
-            # state["dialogues_generated_count"]는 리셋하지 않음 (누적)
-
-        # 스테이지별 대화 카운터 및 이미지 관련 필드 초기화
-        state.setdefault("stage_dialogue_counts", {})
-        state.setdefault("dialogues_generated_count", 0)
-        state.setdefault("event_flags", [])
-        state.setdefault("image_transition_history", [])
-
-        print(f"🤖 Processing: session={session_id}, input='{user_input}'")
-
-        # ⚡ 백그라운드 처리를 위해 workflow 실행 전 상태 저장
-        state["_old_affinity"] = state.get("affinity_scores", {}).copy()
-        state["_old_stage"] = state.get("current_stage")
-
-        workflow_instance = get_workflow()
-        workflow_start = time.perf_counter()
-
-        # 🌊 Real-time Streaming: astream() 사용 준비
-        # invoke() 대신 astream()을 사용하여 각 노드 실행 후 즉시 응답 전송
-        result_state = None
-        workflow_error = None
-
-        try:
-            # astream()은 실시간 스트리밍을 위해 나중에 사용됨
-            # 여기서는 에러 핸들링만 준비
-            pass
-        except Exception as e:
-            workflow_error = e
-            # 🚨 Workflow 실행 실패 에러 로깅
-            try:
-                SESSION_MANAGER.save_error_log(
-                    error_type="workflow_execution_failed",
-                    error_message=str(e),
-                    session_id=session_id,
-                    metadata={
-                        "stage": state.get("current_stage"),
-                        "turn_count": state.get("turn_count"),
-                        "user_input": user_input[:100] if user_input else None
-                    }
-                )
-            except:
-                pass  # 에러 로깅 실패해도 원래 에러는 발생시켜야 함
-
-        workflow_end = time.perf_counter()
-        workflow_duration_ms = (workflow_end - workflow_start) * 1000.0
-        print(f"⏱️ Workflow준비 시간: {workflow_duration_ms:.2f} ms (실제 실행은 스트리밍 중)")
-
-        # 🌊 Real Streaming Response 구현 (실시간 스트리밍)
-        async def generate_stream():
-            """
-            LangGraph의 astream()을 사용하여 각 노드 실행 시 실시간으로 대화 전송
-            - Time-to-First-Token 최소화
-            - 각 노드(parent_agent, children_agent)가 대화를 생성할 때마다 즉시 전송
-            """
-            nonlocal result_state
-            sent_dialogue_count = 0  # 이미 전송한 대화 수
-            final_state = None
-
-            try:
-                # 1. 초기 메타데이터 전송 (세션 정보)
-                init_meta = {
-                    "type": "metadata",
-                    "session_id": session_id,
-                    "current_stage": state.get("current_stage"),
-                }
-                yield f"data: {json.dumps(init_meta, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.01)
-
-                # 2. 🔥 Real-time Streaming: workflow의 각 노드 실행을 실시간으로 스트리밍
-                async for event in workflow_instance.astream(state):
-                    # LangGraph astream 이벤트 형식: {node_name: state_snapshot}
-                    # 예: {"parent_agent": {...state...}}
-
-                    # 이벤트에서 노드 이름과 상태 추출
-                    for node_name, node_state in event.items():
-                        print(f"🌊 Stream event from node: {node_name}")
-
-                        # 최신 상태 업데이트
-                        final_state = node_state
-
-                        # 새로운 대화가 생성되었는지 확인
-                        # agent_response 필드에서 대화 목록 추출
-                        current_responses = []
-                        if isinstance(node_state.get("agent_response"), list):
-                            current_responses = node_state["agent_response"]
-                        elif "messages" in node_state and isinstance(node_state["messages"], list):
-                            # messages에서 AI 메시지만 추출
-                            for msg in node_state["messages"]:
-                                if hasattr(msg, "type") and msg.type == "ai":
-                                    current_responses.append({
-                                        "speaker": "AI",
-                                        "text": msg.content
-                                    })
-
-                        # 새로 추가된 대화만 전송
-                        if len(current_responses) > sent_dialogue_count:
-                            new_dialogues = current_responses[sent_dialogue_count:]
-
-                            for dialogue in new_dialogues:
-                                dialogue_data = {
-                                    "type": "dialogue",
-                                    "index": sent_dialogue_count,
-                                    "dialogue": dialogue
-                                }
-                                yield f"data: {json.dumps(dialogue_data, ensure_ascii=False)}\n\n"
-                                sent_dialogue_count += 1
-                                print(f"✅ Sent dialogue #{sent_dialogue_count}: {dialogue.get('text', '')[:50]}...")
-
-                                # 약간의 타이핑 효과 (선택적)
-                                await asyncio.sleep(0.1)
-
-                        # 이벤트 루프 양보
-                        await asyncio.sleep(0.01)
-
-                # 3. Workflow 완료 - 최종 상태 저장
-                if final_state:
-                    result_state = final_state
-
-                    # turn_count 증가
-                    turn_count = result_state.get("turn_count", 0) + 1
-                    result_state["turn_count"] = turn_count
-
-                    # user_id 보존
-                    if "user_id" not in result_state or result_state.get("user_id") is None:
-                        if user_id:
-                            result_state["user_id"] = user_id
-
-                    # 백그라운드 처리용 old 상태 복사
-                    result_state["_old_affinity"] = state.get("_old_affinity", {})
-                    result_state["_old_stage"] = state.get("_old_stage")
-
-                    # 세션 저장
-                    SESSION_MANAGER.save(session_id, result_state)
-                    print(f"💾 Session saved: {session_id}")
-
-                    # 4. 최종 메타데이터 전송
-                    final_meta = {
-                        "type": "done",
-                        "total_dialogues": sent_dialogue_count,
-                        "turn_count": result_state.get("turn_count", 0),
-                        "current_stage": result_state.get("current_stage"),
-                        "affinity_scores": result_state.get("affinity_scores", {}),
-                        "is_ended": result_state.get("is_ended", False),
-                        "output": result_state.get("output", {}),
-                    }
-                    yield f"data: {json.dumps(final_meta, ensure_ascii=False)}\n\n"
-
-            except Exception as e:
-                print(f"❌ Streaming error: {e}")
-                import traceback
-                traceback.print_exc()
-
-                error_data = {
-                    "type": "error",
-                    "message": str(e),
-                    "traceback": traceback.format_exc()
-                }
-                yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",  # Nginx 버퍼링 비활성화
-                "Connection": "keep-alive",
-            }
-        )
-
-    # ------------------------------------------------------------
-    # (8) 예외 처리
-    # ------------------------------------------------------------
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Error in chat endpoint: {e}")
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ------------------------------------------------------------
 # ✅ 세션 상태 조회 (디버깅용)
 # ------------------------------------------------------------
-@app.get("/api/session/{session_id}", response_model=SessionInfoResponse)
-async def get_session(session_id: str):
-    """특정 세션의 현재 상태(스테이지, 친밀도 등) 반환"""
-    state = SESSION_MANAGER.get(session_id)
-    if not state or "messages" not in state:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return SessionInfoResponse(
-        session_id=session_id,
-        scenario_id=state.get("scenario_id", "unknown"),
-        current_stage=state.get("current_stage"),
-        turn_count=state.get("turn_count", 0),
-        affinity_scores=state.get("affinity_scores", {}),
-    )
-
-
-# ------------------------------------------------------------
-# ✅ 세션 삭제 (테스트용)
-# ------------------------------------------------------------
-@app.delete("/api/session/{session_id}")
-async def delete_session(session_id: str):
-    """세션 강제 삭제"""
-    if SESSION_MANAGER.exists(session_id):
-        SESSION_MANAGER.delete(session_id)
-        return {"status": "deleted", "session_id": session_id}
-    raise HTTPException(status_code=404, detail="Session not found")
-
-
-# ------------------------------------------------------------
-# ✅ 사용자의 마지막 세션 조회 (세션 복원용)
-# ------------------------------------------------------------
-@app.get("/api/session/last")
-async def get_user_last_session(
-    scenario_id: Optional[str] = None,
-    current_user: Dict = Depends(require_auth)
-):
-    """
-    현재 로그인한 사용자의 마지막 세션 조회 (세션 복원용)
-
-    Query Parameters:
-        scenario_id (Optional[str]): 특정 시나리오의 마지막 세션만 조회 (미지정 시 모든 시나리오 중 최신)
-
-    Returns:
-        {
-            "session_id": "...",
-            "scenario_id": "...",
-            "current_stage": "...",
-            "turn_count": 5,
-            "created_at": "...",
-            "updated_at": "...",
-            "conversation_summary": "...",  # 장기기억 요약
-            "has_session": true  # 세션이 존재하는지 여부
-        }
-    """
-    user_id = current_user.get('user_id')
-
-    # 데이터베이스에서 마지막 세션 조회
-    last_session = DB_MANAGER.get_user_last_session(user_id=user_id, scenario_id=scenario_id)
-
-    if not last_session:
-        return {
-            "has_session": False,
-            "message": "저장된 세션이 없습니다"
-        }
-
-    return {
-        "has_session": True,
-        "session_id": str(last_session.get("session_id")),
-        "scenario_id": last_session.get("scenario_id"),
-        "current_stage": last_session.get("current_stage"),
-        "turn_count": last_session.get("turn_count", 0),
-        "created_at": last_session.get("created_at").isoformat() if last_session.get("created_at") else None,
-        "updated_at": last_session.get("updated_at").isoformat() if last_session.get("updated_at") else None,
-        "conversation_summary": last_session.get("conversation_summary")  # 장기기억 요약
-    }
 
 
 # ------------------------------------------------------------

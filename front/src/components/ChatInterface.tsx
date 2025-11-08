@@ -6,6 +6,7 @@ import AffinityPanel from './AffinityPanel';
 import { sendChatMessage, ChatResponse } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
+import { useApp } from '@/contexts/AppContext';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -35,6 +36,9 @@ const SCENARIO_ID_MAP: Record<string, string> = {
 };
 
 export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending', initialSessionId }: ChatInterfaceProps) {
+  // App context (for bubble consumption)
+  const { consumeBubbles } = useApp();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [showCharacterModal, setShowCharacterModal] = useState(false);
@@ -1018,6 +1022,15 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
+    // 🫧 버블 소비 (1회 대화당 1 버블)
+    const bubbleCost = 1;
+    const consumed = await consumeBubbles(bubbleCost);
+
+    if (!consumed) {
+      setBackendError(`버블이 부족합니다. 최소 ${bubbleCost}개의 버블이 필요합니다.`);
+      return;
+    }
+
     // 🔊 오디오 활성화 (브라우저 자동재생 정책 우회) - 비차단 방식
     unlockAudio().catch(err => console.warn('Audio unlock failed:', err));
 
@@ -1446,17 +1459,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
           }}
         />
 
-        {/* 하단 패널: 친밀도 (가로로 넓게) + 버블 (오른쪽) */}
-        <div className="absolute bottom-4 left-4 right-4 z-10 flex gap-3 items-end">
-          {/* 친밀도 패널 - 버블 옆까지 가로로 확장 */}
-          <div className="flex-1">
-            <AffinityPanel affinityScores={affinityScores} />
-          </div>
+        {/* 왼쪽 아래: 친밀도 패널 */}
+        <div className="absolute bottom-4 left-4 z-10">
+          <AffinityPanel affinityScores={affinityScores} />
+        </div>
 
-          {/* 버블 카운터 */}
-          <div className="flex-shrink-0">
-            <BubbleCounter compact />
-          </div>
+        {/* 오른쪽 아래: 버블 카운터 */}
+        <div className="absolute bottom-4 right-4 z-10">
+          <BubbleCounter compact />
         </div>
       </div>
 

@@ -184,6 +184,7 @@ class ApiClient {
 
   /**
    * Send chat message and get response with streaming (SSE)
+   * Requires authentication (JWT token)
    */
   async sendMessage(
     request: ChatRequest,
@@ -191,10 +192,10 @@ class ApiClient {
   ): Promise<ChatResponse> {
     return new Promise((resolve, reject) => {
       try {
-        // Get access token
+        // Get access token (required for authentication)
         const accessToken = localStorage.getItem('access_token')
         if (!accessToken) {
-          reject(new Error('No access token found'))
+          reject(new Error('Authentication required. Please log in.'))
           return
         }
 
@@ -275,7 +276,15 @@ class ApiClient {
                           onDialogue(dialogue, parsed.index)
                         }
                       } else if (parsed.type === 'done') {
-                        // Stream complete
+                        // Stream complete - update metadata with final state including affinity scores
+                        metadata = {
+                          ...metadata,
+                          turn_count: parsed.turn_count,
+                          current_stage: parsed.current_stage,
+                          affinity_scores: parsed.affinity_scores || {},
+                          is_ended: parsed.is_ended || false,
+                          output: parsed.output || {},
+                        }
                       } else if (parsed.type === 'error') {
                         reject(new Error(parsed.message))
                         return

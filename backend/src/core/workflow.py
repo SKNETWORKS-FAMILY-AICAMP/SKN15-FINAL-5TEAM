@@ -216,8 +216,20 @@ class KimeChatWorkflow:
         return await self.graph.ainvoke(state)
 
     def stream(self, state: GraphState):
-        """워크플로우 스트리밍"""
+        """워크플로우 스트리밍 (동기)"""
         for output in self.graph.stream(state):
+            yield output
+
+    async def astream(self, state: GraphState):
+        """워크플로우 스트리밍 (비동기)
+
+        각 노드가 실행될 때마다 이벤트를 yield합니다.
+        진짜 스트리밍을 구현하기 위해 사용됩니다.
+
+        Yields:
+            Dict[str, GraphState]: {node_name: updated_state}
+        """
+        async for output in self.graph.astream(state):
             yield output
 
 
