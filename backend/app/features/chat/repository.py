@@ -9,7 +9,15 @@ from typing import List, Optional, Dict, Any
 from datetime import date, datetime, timedelta
 import json
 
-from .models import DialogueTurn
+from .models import (
+    DialogueTurn,
+    UserCharacterAffinity,
+    AffinityRecord,
+    Entity,
+    EntityRelationship,
+    EntityMention,
+    UserMemory,
+)
 from app.core.logging import get_repository_logger
 
 logger = get_repository_logger("Chat")
@@ -291,3 +299,331 @@ class ChatRepository:
         deleted = result.rowcount > 0
         logger.warning("delete_session", f"Session deleted: {deleted}", session_id=session_id)
         return deleted
+
+    # ============================================================
+    # Affinity Management
+    # ============================================================
+
+    async def save_affinity_record(
+        self,
+        session_id: str,
+        turn_number: int,
+        character_name: str,
+        affinity_score: int,
+        change_amount: Optional[int] = None
+    ) -> AffinityRecord:
+        """
+        세션별 친밀도 변화 기록 저장
+
+        Args:
+            session_id: 세션 ID
+            turn_number: 턴 번호
+            character_name: 캐릭터 이름
+            affinity_score: 현재 친밀도 점수
+            change_amount: 변화량
+
+        Returns:
+            저장된 AffinityRecord
+        """
+        logger.info("save_affinity_record", f"Saving affinity for {character_name}",
+                   session_id=session_id, score=affinity_score)
+
+        record = AffinityRecord(
+            session_id=session_id,
+            turn_number=turn_number,
+            character_name=character_name,
+            affinity_score=affinity_score,
+            change_amount=change_amount
+        )
+        self.db.add(record)
+        await self.db.flush()
+
+        logger.info("save_affinity_record", f"Affinity record saved", record_id=record.id)
+        return record
+
+    async def get_latest_affinity(
+        self,
+        session_id: str,
+        character_name: str
+    ) -> Optional[AffinityRecord]:
+        """
+        세션의 최신 친밀도 기록 조회
+
+        Args:
+            session_id: 세션 ID
+            character_name: 캐릭터 이름
+
+        Returns:
+            최신 AffinityRecord (없으면 None)
+        """
+        logger.debug("get_latest_affinity", f"Fetching latest affinity for {character_name}",
+                    session_id=session_id)
+
+        stmt = (
+            select(AffinityRecord)
+            .where(
+                and_(
+                    AffinityRecord.session_id == session_id,
+                    AffinityRecord.character_name == character_name
+                )
+            )
+            .order_by(AffinityRecord.timestamp.desc())
+            .limit(1)
+        )
+
+        result = await self.db.execute(stmt)
+        record = result.scalar_one_or_none()
+
+        logger.debug("get_latest_affinity", f"Latest affinity: {record.affinity_score if record else None}")
+        return record
+
+    async def upsert_user_character_affinity(
+        self,
+        user_id: str,
+        character_name: str,
+        score_delta: int
+    ) -> UserCharacterAffinity:
+        """
+        사용자별 글로벌 친밀도 UPSERT
+
+        Args:
+            user_id: 사용자 ID
+            character_name: 캐릭터 이름
+            score_delta: 친밀도 변화량
+
+        Returns:
+            업데이트된 UserCharacterAffinity
+        """
+        logger.info("upsert_user_character_affinity", f"Updating global affinity for {character_name}",
+                   user_id=user_id, delta=score_delta)
+
+        # 기존 레코드 조회
+        stmt = select(UserCharacterAffinity).where(
+            and_(
+                UserCharacterAffinity.user_id == user_id,
+                UserCharacterAffinity.character_name == character_name
+            )
+        )
+        result = await self.db.execute(stmt)
+        affinity = result.scalar_one_or_none()
+
+        if affinity:
+            # 업데이트
+            affinity.total_affinity_score = max(0, min(1000, affinity.total_affinity_score + score_delta))
+            affinity.total_interactions += 1
+            affinity.last_interaction_at = datetime.utcnow()
+            affinity.updated_at = datetime.utcnow()
+        else:
+            # 생성
+            affinity = UserCharacterAffinity(
+                user_id=user_id,
+                character_name=character_name,
+                total_affinity_score=max(0, min(1000, score_delta)),
+                affinity_level=1,
+                total_interactions=1
+            )
+            self.db.add(affinity)
+
+        await self.db.flush()
+        logger.info("upsert_user_character_affinity", f"Global affinity updated",
+                   user_id=user_id, new_score=affinity.total_affinity_score)
+        return affinity
+
+    async def get_user_character_affinity(
+        self,
+        user_id: str,
+        character_name: str
+    ) -> Optional[UserCharacterAffinity]:
+        """
+        사용자의 특정 캐릭터 친밀도 조회
+
+        Args:
+            user_id: 사용자 ID
+            character_name: 캐릭터 이름
+
+        Returns:
+            UserCharacterAffinity (없으면 None)
+        """
+        logger.debug("get_user_character_affinity", f"Fetching affinity for {character_name}",
+                    user_id=user_id)
+
+        stmt = select(UserCharacterAffinity).where(
+            and_(
+                UserCharacterAffinity.user_id == user_id,
+                UserCharacterAffinity.character_name == character_name
+            )
+        )
+
+        result = await self.db.execute(stmt)
+        affinity = result.scalar_one_or_none()
+
+        logger.debug("get_user_character_affinity", f"Affinity found: {affinity is not None}")
+        return affinity
+
+    # ============================================================
+    # Entity Management
+    # ============================================================
+
+    async def save_entity(self, entity_data: Dict[str, Any]) -> Entity:
+        """
+        엔티티 저장 (UPSERT)
+
+        Args:
+            entity_data: 엔티티 정보 dict
+
+        Returns:
+            저장된 Entity
+        """
+        logger.info("save_entity", f"Saving entity: {entity_data.get('entity_name')}")
+
+        # 기존 엔티티 조회 (type + canonical_name 기준)
+        canonical_name = entity_data.get('canonical_name', entity_data['entity_name'])
+        stmt = select(Entity).where(
+            and_(
+                Entity.entity_type == entity_data['entity_type'],
+                Entity.canonical_name == canonical_name
+            )
+        )
+        result = await self.db.execute(stmt)
+        entity = result.scalar_one_or_none()
+
+        if entity:
+            # 업데이트
+            entity.mention_count += 1
+            entity.last_updated_at = datetime.utcnow()
+            if entity_data.get('description'):
+                entity.description = entity_data['description']
+            if entity_data.get('properties'):
+                entity.properties = entity_data['properties']
+            if entity_data.get('embedding'):
+                entity.embedding = entity_data['embedding']
+        else:
+            # 생성
+            entity = Entity(**entity_data, canonical_name=canonical_name)
+            self.db.add(entity)
+
+        await self.db.flush()
+        logger.info("save_entity", f"Entity saved", entity_id=entity.entity_id)
+        return entity
+
+    async def save_relationship(self, relationship_data: Dict[str, Any]) -> EntityRelationship:
+        """
+        엔티티 간 관계 저장 (UPSERT)
+
+        Args:
+            relationship_data: 관계 정보 dict
+
+        Returns:
+            저장된 EntityRelationship
+        """
+        logger.info("save_relationship", f"Saving relationship: {relationship_data['relationship_type']}")
+
+        # 기존 관계 조회
+        stmt = select(EntityRelationship).where(
+            and_(
+                EntityRelationship.source_entity_id == relationship_data['source_entity_id'],
+                EntityRelationship.target_entity_id == relationship_data['target_entity_id'],
+                EntityRelationship.relationship_type == relationship_data['relationship_type']
+            )
+        )
+        result = await self.db.execute(stmt)
+        relationship = result.scalar_one_or_none()
+
+        if relationship:
+            # 업데이트
+            relationship.mention_count += 1
+            relationship.last_seen_at = datetime.utcnow()
+            if relationship_data.get('strength'):
+                relationship.strength = relationship_data['strength']
+            if relationship_data.get('context'):
+                relationship.context = relationship_data['context']
+        else:
+            # 생성
+            relationship = EntityRelationship(**relationship_data)
+            self.db.add(relationship)
+
+        await self.db.flush()
+        logger.info("save_relationship", f"Relationship saved", relationship_id=relationship.relationship_id)
+        return relationship
+
+    async def save_entity_mention(self, mention_data: Dict[str, Any]) -> EntityMention:
+        """
+        엔티티 언급 기록 저장
+
+        Args:
+            mention_data: 언급 정보 dict
+
+        Returns:
+            저장된 EntityMention
+        """
+        logger.info("save_entity_mention", f"Saving entity mention")
+
+        mention = EntityMention(**mention_data)
+        self.db.add(mention)
+        await self.db.flush()
+
+        logger.info("save_entity_mention", f"Mention saved", mention_id=mention.mention_id)
+        return mention
+
+    # ============================================================
+    # Memory Management
+    # ============================================================
+
+    async def save_memory(self, memory_data: Dict[str, Any]) -> UserMemory:
+        """
+        사용자 장기 기억 저장
+
+        Args:
+            memory_data: 기억 정보 dict
+
+        Returns:
+            저장된 UserMemory
+        """
+        logger.info("save_memory", f"Saving memory for user {memory_data['user_id']}")
+
+        memory = UserMemory(**memory_data)
+        self.db.add(memory)
+        await self.db.flush()
+
+        logger.info("save_memory", f"Memory saved", memory_id=memory.memory_id)
+        return memory
+
+    async def get_user_memories(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None,
+        memory_type: Optional[str] = None,
+        limit: int = 10
+    ) -> List[UserMemory]:
+        """
+        사용자 기억 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID (선택)
+            memory_type: 기억 유형 (선택)
+            limit: 최대 개수
+
+        Returns:
+            UserMemory 리스트
+        """
+        logger.debug("get_user_memories", f"Fetching memories for user {user_id}")
+
+        conditions = [UserMemory.user_id == user_id]
+        if scenario_id:
+            conditions.append(UserMemory.scenario_id == scenario_id)
+        if memory_type:
+            conditions.append(UserMemory.memory_type == memory_type)
+
+        stmt = (
+            select(UserMemory)
+            .where(and_(*conditions))
+            .order_by(UserMemory.importance_score.desc(), UserMemory.created_at.desc())
+            .limit(limit)
+        )
+
+        result = await self.db.execute(stmt)
+        memories = result.scalars().all()
+
+        logger.debug("get_user_memories", f"Fetched {len(memories)} memories")
+        return list(memories)
