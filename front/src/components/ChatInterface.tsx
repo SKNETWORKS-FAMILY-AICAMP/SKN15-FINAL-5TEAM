@@ -174,10 +174,10 @@ export default function ChatInterface({
 
     // 일관된 순서로 정렬 (우선순위 기준)
     const sortedParticipants = finalParticipants.sort((a, b) => {
-      const orderA = characterOrder[a.toLowerCase()] || 999;
-      const orderB = characterOrder[b.toLowerCase()] || 999;
+      const orderA = characterOrder[a?.toLowerCase() ?? ''] ?? 999;
+      const orderB = characterOrder[b?.toLowerCase() ?? ''] ?? 999;
       return orderA - orderB;
-    });
+    }).filter((char): char is string => char !== undefined);
 
     console.log('✅ Updated invited characters:', sortedParticipants);
     setInvitedCharacters(sortedParticipants);
