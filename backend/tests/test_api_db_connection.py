@@ -30,14 +30,14 @@ with db.get_connection() as conn:
 
     # 테스트: 사용자 수 확인
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM statedb.users")
+        cur.execute("SELECT COUNT(*) FROM users")
         count = cur.fetchone()[0]
-        print(f"\n👥 statedb.users 테이블 사용자 수: {count}")
+        print(f"\n👥 users 테이블 사용자 수: {count}")
 
         # 최근 사용자 5명 조회
         cur.execute("""
             SELECT username, created_at
-            FROM statedb.users
+            FROM users
             ORDER BY created_at DESC
             LIMIT 5
         """)

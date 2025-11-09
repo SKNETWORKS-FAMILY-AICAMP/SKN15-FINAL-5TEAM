@@ -165,7 +165,7 @@ async def backfill_conversation_summaries_async(
                 SELECT
                     session_id, scenario_id, user_name,
                     turn_count, current_stage
-                FROM statedb.sessions
+                FROM sessions
                 WHERE (
                     conversation_summary IS NULL
                     OR conversation_summary = ''

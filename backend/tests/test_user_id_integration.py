@@ -14,7 +14,7 @@ API_URL = "http://localhost:8000"
 def check_db(session_id):
     """PostgreSQL에서 세션의 user_id 확인"""
     import subprocess
-    cmd = f'docker exec kime-postgres psql -U kime -d kimedb -t -c "SELECT user_id, user_name FROM statedb.sessions WHERE session_id = \'{session_id}\';"'
+    cmd = f'docker exec kime-postgres psql -U kime -d kimedb -t -c "SELECT user_id, user_name FROM sessions WHERE session_id = \'{session_id}\';"'
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     return result.stdout.strip()
 

@@ -142,7 +142,7 @@ def seed_scenarios(db: DatabaseManager):
             with db.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "SELECT scenario_id FROM statedb.scenarios WHERE scenario_id = %s",
+                        "SELECT scenario_id FROM scenarios WHERE scenario_id = %s",
                         (scenario_id,)
                     )
                     exists = cur.fetchone()
@@ -153,7 +153,7 @@ def seed_scenarios(db: DatabaseManager):
 
                     # Insert scenario
                     cur.execute("""
-                        INSERT INTO statedb.scenarios (
+                        INSERT INTO scenarios (
                             scenario_id, title, description, image_url, thumbnail_url,
                             tags, card_size, route_path, display_order, is_active
                         )
@@ -196,7 +196,7 @@ def seed_statistics(db: DatabaseManager):
             with db.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "SELECT scenario_id FROM statedb.scenario_statistics WHERE scenario_id = %s",
+                        "SELECT scenario_id FROM scenario_statistics WHERE scenario_id = %s",
                         (scenario_id,)
                     )
                     exists = cur.fetchone()
@@ -207,7 +207,7 @@ def seed_statistics(db: DatabaseManager):
 
                     # Insert statistics
                     cur.execute("""
-                        INSERT INTO statedb.scenario_statistics (
+                        INSERT INTO scenario_statistics (
                             scenario_id, total_likes, total_comments, total_views,
                             total_completions, total_sessions, avg_session_duration
                         )
@@ -240,15 +240,15 @@ def verify_seed(db: DatabaseManager):
         with db.get_connection() as conn:
             with conn.cursor() as cur:
                 # Count scenarios
-                cur.execute("SELECT COUNT(*) FROM statedb.scenarios")
+                cur.execute("SELECT COUNT(*) FROM scenarios")
                 scenario_count = cur.fetchone()[0]
 
                 # Count statistics
-                cur.execute("SELECT COUNT(*) FROM statedb.scenario_statistics")
+                cur.execute("SELECT COUNT(*) FROM scenario_statistics")
                 stats_count = cur.fetchone()[0]
 
                 # Query view
-                cur.execute("SELECT COUNT(*) FROM statedb.v_scenario_cards")
+                cur.execute("SELECT COUNT(*) FROM v_scenario_cards")
                 view_count = cur.fetchone()[0]
 
         print_success(f"Scenarios table: {scenario_count} records")

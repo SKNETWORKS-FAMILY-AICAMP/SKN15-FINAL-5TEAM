@@ -70,7 +70,7 @@ print("-" * 80)
 # 기존 기억 삭제
 with db.get_connection() as conn:
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM statedb.user_memories WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM user_memories WHERE user_id = %s", (user_id,))
 
 # 테스트 기억 저장
 db.save_user_memory(
@@ -151,7 +151,7 @@ with db.get_connection() as conn:
         # 세션 확인
         cur.execute("""
             SELECT user_id, user_name, current_stage, turn_count
-            FROM statedb.sessions
+            FROM sessions
             WHERE session_id = %s
         """, (test_session_id,))
         session = cur.fetchone()
@@ -171,7 +171,7 @@ with db.get_connection() as conn:
 
         # 친밀도 기록 확인
         cur.execute("""
-            SELECT COUNT(*) FROM statedb.affinity_records
+            SELECT COUNT(*) FROM affinity_records
             WHERE session_id = %s
         """, (test_session_id,))
         affinity_count = cur.fetchone()[0]
@@ -179,7 +179,7 @@ with db.get_connection() as conn:
 
         # 스테이지 기록 확인
         cur.execute("""
-            SELECT COUNT(*) FROM statedb.stage_progression
+            SELECT COUNT(*) FROM stage_progression
             WHERE session_id = %s
         """, (test_session_id,))
         stage_count = cur.fetchone()[0]
@@ -187,7 +187,7 @@ with db.get_connection() as conn:
 
         # User Memory 확인
         cur.execute("""
-            SELECT COUNT(*) FROM statedb.user_memories
+            SELECT COUNT(*) FROM user_memories
             WHERE user_id = %s AND is_active = TRUE
         """, (user_id,))
         memory_count = cur.fetchone()[0]

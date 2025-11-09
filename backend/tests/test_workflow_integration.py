@@ -65,7 +65,7 @@ print("-" * 70)
 # 기존 기억 삭제 (깨끗한 테스트)
 with db.get_connection() as conn:
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM statedb.user_memories WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM user_memories WHERE user_id = %s", (user_id,))
         print(f"🗑️ 기존 기억 삭제 완료")
 
 # 테스트 기억 저장
@@ -198,7 +198,7 @@ with db.get_connection() as conn:
     with conn.cursor() as cur:
         cur.execute("""
             SELECT character_name, affinity_score, change_amount, turn_number
-            FROM statedb.affinity_records
+            FROM affinity_records
             WHERE session_id = %s
             ORDER BY turn_number
         """, (test_session_id,))
@@ -225,7 +225,7 @@ with db.get_connection() as conn:
     with conn.cursor() as cur:
         cur.execute("""
             SELECT stage_id, stage_order, entered_at, exited_at
-            FROM statedb.stage_progression
+            FROM stage_progression
             WHERE session_id = %s
             ORDER BY stage_order
         """, (test_session_id,))
@@ -295,5 +295,5 @@ print("=" * 70)
 # Cleanup 안내
 print("\n💡 테스트 데이터 정리:")
 print(f"   - 테스트 세션: {test_session_id}")
-print(f"   - DELETE FROM statedb.sessions WHERE session_id = '{test_session_id}';")
-print(f"   - DELETE FROM statedb.user_memories WHERE user_id = '{user_id}';")
+print(f"   - DELETE FROM sessions WHERE session_id = '{test_session_id}';")
+print(f"   - DELETE FROM user_memories WHERE user_id = '{user_id}';")

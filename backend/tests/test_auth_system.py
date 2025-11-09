@@ -243,7 +243,7 @@ def main():
     print(f"  Display Name: {register_result.get('display_name')}")
 
     print(f"\n💾 DBeaver에서 확인:")
-    print(f"  SELECT * FROM statedb.users WHERE username = '{test_user['username']}';")
+    print(f"  SELECT * FROM users WHERE username = '{test_user['username']}';")
 
     print("\n" + "=" * 70)
 

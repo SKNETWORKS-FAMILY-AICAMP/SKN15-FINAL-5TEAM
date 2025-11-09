@@ -1,75 +1,145 @@
 """
-Chat Feature - Parent Agent
-에이전트 파이프라인 조율 (스테이지 라우팅)
+Parent Agent - 스테이지 라우팅 및 파이프라인 조율
 
-Phase 1: LLM 대사 생성 연동 완료
-Phase 2: State & Stage Management 연동 완료
-Phase 3: Guardrail & Router Agents 연동 완료
-Phase 4: Beat 기반 대화 생성 완료
-Phase 6: Scenario & Character 동적 로드 완료
-TODO: 향후 구현 필요
-- 임베딩 기반 검증/분류
+Features:
+- StageHandlers를 사용한 스테이지별 처리
+- ChildrenAgent를 통한 대화 생성
+- AffinityService를 통한 친밀도 업데이트
+- MemoryService를 통한 메모리 추출
+- DialogueAgent를 통한 대화 검증 (선택적)
+
+Architecture:
+- Layer 3 (Agent)
+- 의존성: Services (State, Stage, Scenario, Affinity, Memory, Context, Dialogue)
+- 의존성: Agents (Children, Dialogue)
+- 의존성: StageHandlers (Mission, Scene, Router, FreeIntent, OpenNarrative)
 """
-from typing import Dict, Any
-from ..schemas import DialogueResult, ChatMessage
-from ..services import LLMService, StateService, StageService, ScenarioService
-from .guards import GuardrailAgent, RouterAgent
-from app.core.logging import get_parent_logger, print_layer_debug
+from typing import Dict, Any, List, Optional
 
-logger = get_parent_logger("Chat")
+from app.core.logging import get_parent_logger
+from app.features.chat.services import (
+    StateService,
+    StageService,
+    ScenarioService,
+    AffinityService,
+    MemoryService,
+    ContextService,
+    DialogueService,
+)
+from app.features.chat.schemas import DialogueResult, ChatMessage
+
+from .stage_handlers import (
+    MissionStageHandler,
+    SceneStageHandler,
+    RouterStageHandler,
+    FreeIntentStageHandler,
+    OpenNarrativeStageHandler,
+)
+from .children import ChildrenAgent
+from .dialogue import DialogueAgent
+
+logger = get_parent_logger("ParentAgent")
 
 
-class ChatParent:
+class ParentAgent:
     """
-    [Layer 3] Parent Agent
-    책임: 에이전트 파이프라인 실행 순서 관리, 스테이지 라우팅
-    금지: DB 접근 (Repository 사용 금지), 트랜잭션 관리
+    Parent Agent - 스테이지 라우팅 및 파이프라인 조율 (Layer 3 - Agent)
 
-    현재 상태:
-    - Phase 1: LLM 대사 생성 ✅
-    - Phase 2: State & Stage Management ✅
-    - Phase 3: Guardrail & Router Agents ✅
-    - Phase 4: Beat 기반 대화 생성 ✅
-    - Phase 6: Scenario & Character 동적 로드 ✅
+    책임:
+    - 현재 스테이지 결정
+    - 적절한 StageHandler 선택 및 실행
+    - ChildrenAgent를 통한 대화 생성
+    - DialogueAgent를 통한 대화 검증 (선택적)
+    - AffinityService를 통한 친밀도 업데이트
+    - MemoryService를 통한 메모리 추출
+    - 스테이지 진행 관리
+
+    금지:
+    - DB 직접 접근 (Repository 사용 금지)
+    - 트랜잭션 관리
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        state_service: Optional[StateService] = None,
+        stage_service: Optional[StageService] = None,
+        scenario_service: Optional[ScenarioService] = None,
+        affinity_service: Optional[AffinityService] = None,
+        memory_service: Optional[MemoryService] = None,
+        context_service: Optional[ContextService] = None,
+        dialogue_service: Optional[DialogueService] = None,
+        mission_handler: Optional[MissionStageHandler] = None,
+        scene_handler: Optional[SceneStageHandler] = None,
+        router_handler: Optional[RouterStageHandler] = None,
+        free_intent_handler: Optional[FreeIntentStageHandler] = None,
+        open_narrative_handler: Optional[OpenNarrativeStageHandler] = None,
+        children_agent: Optional[ChildrenAgent] = None,
+        dialogue_agent: Optional[DialogueAgent] = None,
+        enable_dialogue_validation: bool = False,
+    ):
         """
-        ChatParent 초기화
+        Args:
+            state_service: State 관리 서비스
+            stage_service: Stage 관리 서비스
+            scenario_service: Scenario 관리 서비스
+            affinity_service: 친밀도 관리 서비스
+            memory_service: 메모리 추출 서비스
+            context_service: Context 구성 서비스
+            dialogue_service: 대화 관리 서비스
+            mission_handler: Mission 스테이지 핸들러
+            scene_handler: Scene 스테이지 핸들러
+            router_handler: Router 스테이지 핸들러
+            free_intent_handler: FreeIntent 스테이지 핸들러
+            open_narrative_handler: OpenNarrative 스테이지 핸들러
+            children_agent: Children Agent (대화 생성)
+            dialogue_agent: Dialogue Agent (대화 검증)
+            enable_dialogue_validation: 대화 검증 활성화 여부
         """
-        self.llm_service = LLMService()
-        self.state_service = StateService()
-        self.stage_service = StageService()
-        self.scenario_service = ScenarioService()
-        self.guardrail_agent = GuardrailAgent()
-        self.router_agent = RouterAgent()
-        logger.info("__init__", "ChatParent initialized with all services and agents")
+        # Services
+        self.state_service = state_service or StateService()
+        self.stage_service = stage_service or StageService()
+        self.scenario_service = scenario_service or ScenarioService()
+        self.affinity_service = affinity_service or AffinityService()
+        self.memory_service = memory_service or MemoryService()
+        self.context_service = context_service or ContextService()
+        self.dialogue_service = dialogue_service or DialogueService()
 
-    async def execute(
+        # StageHandlers
+        self.handlers = {
+            "mission": mission_handler or MissionStageHandler(),
+            "scene": scene_handler or SceneStageHandler(),
+            "router": router_handler or RouterStageHandler(),
+            "free_intent": free_intent_handler or FreeIntentStageHandler(),
+            "open_narrative": open_narrative_handler or OpenNarrativeStageHandler(),
+        }
+
+        # Agents
+        self.children_agent = children_agent or ChildrenAgent()
+        self.dialogue_agent = dialogue_agent or DialogueAgent()
+
+        # Options
+        self.enable_dialogue_validation = enable_dialogue_validation
+
+        logger.info("__init__", "ParentAgent initialized with all services and handlers")
+
+    async def run(
         self,
         user_message: str,
         session_state: Dict[str, Any],
-        scenario_id: str
+        scenario_id: str,
     ) -> DialogueResult:
         """
-        에이전트 파이프라인 실행 (Phase 4: Beat 기반 대화 완성)
+        ParentAgent 메인 파이프라인
 
-        현재 구현:
         1. State 준비
-        2. Guardrail Agent로 입력 검증
-        3. Router Agent로 토픽 분류
-        4. Stage Service를 통한 스테이지 진행 관리
-        5. Scenario Service로 시나리오/캐릭터 로드
-        6. LLM Service를 통한 실제 대사 생성
-           - Beat 기반 대화 (Beats 있을 때)
-           - Simple 대화 (Beats 없을 때, 폴백)
-        7. 스테이지 완료 확인
-        8. 다음 스테이지 결정
-        9. State 업데이트
-        10. Result 생성
-
-        TODO: 향후 구현
-        - 임베딩 기반 검증/분류
+        2. 시나리오 및 현재 스테이지 로드
+        3. StageHandler 선택 및 실행 → children_ctx 생성
+        4. ChildrenAgent로 대화 생성
+        5. DialogueAgent로 대화 검증 (선택적)
+        6. AffinityService로 친밀도 업데이트
+        7. MemoryService로 메모리 추출
+        8. State 업데이트
+        9. DialogueResult 반환
 
         Args:
             user_message: 사용자 메시지
@@ -79,192 +149,422 @@ class ChatParent:
         Returns:
             DialogueResult
         """
-        print_layer_debug("PARENT", "Chat", "execute", "🚀 Pipeline started (Phase 4)", user_message_len=len(user_message))
-        logger.info("execute", "Pipeline started", scenario_id=scenario_id, current_stage=session_state.get("current_stage"))
+        logger.info("run", "Pipeline started", scenario_id=scenario_id)
 
         try:
-            # 1. State 준비 (먼저 준비 - 검증에서 state 필요)
+            # 1. State 준비
             state = self.state_service.prepare_state(session_state, scenario_id, user_message)
 
-            # 2. Guardrail: 입력 검증
-            validation_result = self.guardrail_agent.validate(user_message, state)
-            if not validation_result.is_valid:
-                logger.warning(
-                    "execute",
-                    f"❌ Input validation failed: {validation_result.reason}",
-                    severity=validation_result.severity
-                )
-                # 검증 실패 시 에러 메시지 반환
-                error_dialogues = [
-                    ChatMessage(
-                        speaker="시스템",
-                        text=validation_result.message or "입력을 확인해주세요.",
-                        emotion="neutral"
-                    )
-                ]
-                return DialogueResult(
-                    dialogues=error_dialogues,
-                    next_stage=state.get("current_stage", "intro"),
-                    stage_complete=False,
-                    updated_state=state,
-                    affinity_delta={}
-                )
-
-            # 3. Router: 토픽 분류
-            route_result = self.router_agent.classify(user_message, state)
-            response_strategy = self.router_agent.get_response_strategy(route_result)
-            logger.info(
-                "execute",
-                f"Topic: {route_result.topic} (confidence: {route_result.confidence:.2f})",
-                strategy_emotion=response_strategy["emotion"]
-            )
-
-            # 4. 현재 Stage 결정 (State 준비 완료 후)
-            current_stage = self.stage_service.resolve_stage(state)
-            logger.info("execute", f"Current stage: {current_stage.stage_id} ({current_stage.stage_type})")
-
-            # 5. 시나리오 및 캐릭터 로드
+            # 2. 시나리오 로드
             scenario = self.scenario_service.load_scenario(scenario_id)
+            if not scenario:
+                logger.error("run", "Scenario not found", scenario_id=scenario_id)
+                return self._fallback_response(state, "시나리오를 찾을 수 없습니다.")
 
-            # 기본 캐릭터 설정 (폴백)
-            character_id = "tanjiro"
-            character_name = "탄지로"
+            # 3. 현재 스테이지 결정
+            current_stage_tag = self._resolve_current_stage(state, scenario)
+            stage_def = self._get_stage_definition(scenario, current_stage_tag)
 
-            # 시나리오에서 world_id 가져오기
-            world_id = None
-            if scenario:
-                world_id = scenario.get("world_id")
-                logger.info("execute", f"Scenario loaded: {scenario_id}, world: {world_id}")
+            if not stage_def:
+                logger.error("run", "Stage not found", stage_tag=current_stage_tag)
+                return self._fallback_response(state, f"스테이지 '{current_stage_tag}'를 찾을 수 없습니다.")
 
-            # 캐릭터 정보 로드
-            personality = self.scenario_service.get_character_personality(character_id, scenario_id)
+            logger.info("run", f"Current stage: {current_stage_tag} (type: {stage_def.get('type', 'scene')})")
 
-            # 친밀도 (state에서 가져오거나 기본값 사용)
-            affinity = state.get("affinity", {}).get(character_id, 500)
+            # 4. StageHandler 선택 및 실행 → children_ctx 생성
+            stage_result = await self._execute_stage_handler(state, stage_def, scenario)
+            children_ctx = stage_result.children_ctx
 
-            # Router 전략에서 감정 가져오기 (우선순위: Router > Character > Stage)
-            emotion = response_strategy.get("emotion", "neutral")
+            logger.info("run", "StageHandler executed",
+                       stage_type=children_ctx.get("stage_type"),
+                       beats_count=len(children_ctx.get("beats", [])))
 
-            # 캐릭터 친밀도 기반 감정으로 보정
-            if emotion == "neutral":
-                emotion = self.scenario_service.get_character_emotion(character_id, affinity)
+            # 5. ChildrenAgent로 대화 생성
+            state["children_ctx"] = children_ctx
+            state = await self.children_agent.run(state)
+            agent_responses = state.get("agent_responses", [])
 
-            # 스테이지별 감정으로 최종 폴백
-            if emotion == "neutral":
-                emotion_map = {
-                    "intro": "friendly",
-                    "main": "neutral",
-                }
-                emotion = emotion_map.get(current_stage.stage_id, "neutral")
+            logger.info("run", "Dialogues generated", count=len(agent_responses))
 
-            # 대화 이력
-            conversation_history = state.get("conversation_history", [])
+            # 6. DialogueAgent로 대화 검증 (선택적)
+            if self.enable_dialogue_validation and agent_responses:
+                agent_responses = await self._validate_dialogues(agent_responses, state)
+                state["agent_responses"] = agent_responses
 
-            # 6. LLM 대사 생성 (Beat 기반 vs Simple vs Hardcoded Intro)
-            # 특수 케이스: intro 스테이지의 첫 턴일 때 하드코딩된 프롤로그
-            if current_stage.stage_id == "intro" and state.get("turn_count", 0) == 0:
-                logger.info("execute", "Using hardcoded intro prologue (no spoilers)")
+            # 7. 대화 포맷팅 및 ChatMessage 변환
+            dialogues = self._format_dialogues(agent_responses, state)
 
-                # 하드코딩된 프롤로그 (스포일러 없이 무한열차 배경 설명)
-                dialogues = [
-                    ChatMessage(
-                        speaker="꺾쇠까마귀",
-                        text=(
-                            "까악! 까악! 임무를 전달한다!\n\n"
-                            "최근 무한열차에서 40명 이상의 승객이 실종되는 사건이 발생했다! "
-                            "귀살대 본부는 염주 렌고쿠 쿄쥬로를 현장에 파견했다!\n\n"
-                            "너는 렌고쿠의 츠구코로서 스승을 보좌하라! "
-                            "무한열차에 탑승하여 실종 사건의 진상을 밝혀내고 승객들을 보호하라!\n\n"
-                            "까악! 출발이다! 까악까악!"
-                        ),
-                        emotion="urgent"
-                    )
-                ]
+            # 8. AffinityService로 친밀도 업데이트
+            affinity_delta = {}
+            if dialogues and user_message:
+                affinity_delta = await self._update_affinity(state, user_message, agent_responses)
 
-                # 다음 스테이지로 자동 전환 준비 (사용자가 입력하면 TRAIN_PRELUDE로)
-                next_stage_id = "TRAIN_PRELUDE"
-                stage_complete = True
+            # 9. MemoryService로 메모리 추출 (비동기, 논블로킹)
+            # TODO: 실제 구현에서는 백그라운드 태스크로 처리
+            # await self._extract_memories(state, user_message, agent_responses)
 
-            else:
-                # Beats가 있으면 Beat 기반 대화, 없으면 Simple 대화
-                beats = self.scenario_service.get_beats_for_stage(scenario_id, current_stage.stage_id)
+            # 10. 스테이지 진행 관리
+            stage_complete = stage_result.stage_complete
+            next_stage = stage_result.next_stage
 
-                if beats and len(beats) > 0:
-                    # Beat 기반 대화 생성
-                    logger.info("execute", f"Using beat-based dialogue for stage {current_stage.stage_id}", beats_count=len(beats))
-
-                    dialogues = await self.llm_service.generate_beat_dialogue(
-                        beats=beats,
-                        character_name=character_name,
-                        user_input=user_message,
-                        emotion=emotion,
-                        personality=personality,
-                        conversation_history=conversation_history
-                    )
-                else:
-                    # Simple 대화 생성 (폴백)
-                    logger.info("execute", f"Using simple dialogue for stage {current_stage.stage_id} (no beats found)")
-
-                    dialogues = await self.llm_service.generate_simple_dialogue(
-                        character_name=character_name,
-                        user_input=user_message,
-                        emotion=emotion,
-                        personality=personality,
-                        conversation_history=conversation_history
-                    )
-
-                # 일반 케이스: 스테이지 완료 확인 및 다음 스테이지 결정
-                stage_complete = self.stage_service.check_stage_complete(current_stage, state)
-                next_stage_id = None
-                if stage_complete:
-                    next_stage_id = self.stage_service.get_next_stage(current_stage, state)
-                    if next_stage_id:
-                        logger.info("execute", f"Stage transition: {current_stage.stage_id} → {next_stage_id}")
-
-            # 9. State 업데이트
+            # 11. State 업데이트
             updated_state = self.state_service.update_state(
                 state,
-                dialogues=[msg.dict() for msg in dialogues],
-                next_stage=next_stage_id,
+                dialogues=[msg.dict() if hasattr(msg, "dict") else msg for msg in dialogues],
+                next_stage=next_stage,
                 stage_complete=stage_complete
             )
 
-            # 10. Result 생성
+            # 12. DialogueResult 반환
             result = DialogueResult(
                 dialogues=dialogues,
-                next_stage=next_stage_id or updated_state.get("current_stage"),
+                next_stage=next_stage or current_stage_tag,
                 stage_complete=stage_complete,
                 updated_state=updated_state,
-                affinity_delta={}
+                affinity_delta=affinity_delta
             )
 
-            logger.info(
-                "execute",
-                "✅ Pipeline completed",
-                dialogues_count=len(result.dialogues),
-                stage_complete=stage_complete,
-                next_stage=next_stage_id
-            )
-            print_layer_debug("PARENT", "Chat", "execute", "✅ Pipeline completed", dialogues=len(result.dialogues))
+            logger.info("run", "Pipeline completed",
+                       dialogues_count=len(dialogues),
+                       stage_complete=stage_complete,
+                       next_stage=next_stage)
 
             return result
 
         except Exception as e:
-            # Fallback: 에러 발생 시 더미 응답
-            logger.error("execute", f"❌ Pipeline failed: {e}")
+            logger.error("run", f"Pipeline failed: {e}", exc_info=True)
+            return self._fallback_response(session_state, f"오류가 발생했습니다: {str(e)[:50]}")
 
-            fallback_dialogues = [
-                ChatMessage(
-                    speaker="탄지로",
-                    text=f"죄송합니다. 지금은 응답하기 어렵네요. (에러: {str(e)[:50]})",
-                    emotion="apologetic"
-                )
-            ]
+    def _resolve_current_stage(self, state: Dict[str, Any], scenario: Dict[str, Any]) -> str:
+        """
+        현재 스테이지 결정
 
-            return DialogueResult(
-                dialogues=fallback_dialogues,
-                next_stage=session_state.get("current_stage", "intro"),
-                stage_complete=False,
-                updated_state=session_state,
-                affinity_delta={}
+        Args:
+            state: 게임 상태
+            scenario: 시나리오 데이터
+
+        Returns:
+            현재 스테이지 태그
+        """
+        # 1. state에서 current_stage 확인
+        current_stage = state.get("current_stage")
+        if current_stage:
+            return current_stage
+
+        # 2. 시나리오의 첫 스테이지 사용
+        stages = scenario.get("stages", [])
+        if stages:
+            first_stage = stages[0]
+            if isinstance(first_stage, dict):
+                return first_stage.get("tag", "intro")
+            return str(first_stage)
+
+        # 3. 기본값
+        return "intro"
+
+    def _get_stage_definition(
+        self,
+        scenario: Dict[str, Any],
+        stage_tag: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        스테이지 정의 가져오기
+
+        Args:
+            scenario: 시나리오 데이터
+            stage_tag: 스테이지 태그
+
+        Returns:
+            스테이지 정의 dict 또는 None
+        """
+        stages = scenario.get("stages", [])
+        for stage in stages:
+            if isinstance(stage, dict) and stage.get("tag") == stage_tag:
+                return stage
+
+        return None
+
+    async def _execute_stage_handler(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any]
+    ):
+        """
+        StageHandler 실행
+
+        Args:
+            state: 게임 상태
+            stage: 스테이지 정의
+            scenario: 시나리오 데이터
+
+        Returns:
+            StageResult
+        """
+        stage_type = stage.get("type", "scene").lower()
+        handler = self.handlers.get(stage_type, self.handlers["scene"])
+
+        logger.debug("_execute_stage_handler", f"Using handler: {stage_type}")
+
+        # Handler 실행 (async/sync 모두 지원)
+        if hasattr(handler.handle, "__call__"):
+            result = handler.handle(state, stage, scenario)
+            # async handler인 경우
+            if hasattr(result, "__await__"):
+                result = await result
+            return result
+        else:
+            raise ValueError(f"Handler {stage_type} has no handle() method")
+
+    async def _validate_dialogues(
+        self,
+        dialogues: List[Dict[str, Any]],
+        state: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        DialogueAgent를 사용한 대화 검증 및 수정
+
+        Args:
+            dialogues: 대화 리스트
+            state: 게임 상태
+
+        Returns:
+            검증/수정된 대화 리스트
+        """
+        validated_dialogues = []
+
+        for dialogue in dialogues:
+            text = dialogue.get("text", "")
+            speaker = dialogue.get("speaker", "narr")
+
+            if not text:
+                continue
+
+            # DialogueAgent로 검증 및 수정
+            result = await self.dialogue_agent.validate_and_correct(
+                dialogue_text=text,
+                speaker=speaker,
+                state=state,
+                max_retries=1
             )
+
+            if result["is_valid"]:
+                validated_dialogues.append(dialogue)
+            else:
+                # 수정된 대화 사용
+                corrected_text = result.get("corrected_text") or text
+                dialogue["text"] = corrected_text
+                dialogue["validation_issues"] = result.get("issues", [])
+                validated_dialogues.append(dialogue)
+
+        return validated_dialogues
+
+    def _format_dialogues(
+        self,
+        dialogues: List[Dict[str, Any]],
+        state: Dict[str, Any]
+    ) -> List[ChatMessage]:
+        """
+        대화 포맷팅 및 ChatMessage 변환
+
+        Args:
+            dialogues: 대화 리스트 (dict)
+            state: 게임 상태
+
+        Returns:
+            ChatMessage 리스트
+        """
+        # DialogueService를 통한 포맷팅
+        formatted = self.dialogue_service.format_dialogues(dialogues, state)
+
+        # ChatMessage로 변환
+        messages = []
+        for d in formatted:
+            messages.append(ChatMessage(
+                speaker=d.get("speaker", "narr"),
+                text=d.get("text", ""),
+                emotion=d.get("emotion", "neutral"),
+                fx=d.get("fx"),
+                image=d.get("image")
+            ))
+
+        return messages
+
+    async def _update_affinity(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+        dialogues: List[Dict[str, Any]]
+    ) -> Dict[str, int]:
+        """
+        AffinityService를 통한 친밀도 업데이트
+
+        Args:
+            state: 게임 상태
+            user_input: 사용자 입력
+            dialogues: 생성된 대화 리스트
+
+        Returns:
+            친밀도 변화량 (character_id -> delta)
+        """
+        try:
+            # 등장 캐릭터 추출
+            participating_characters = self._extract_participating_characters(dialogues)
+
+            if not participating_characters:
+                logger.debug("_update_affinity", "No participating characters found")
+                return {}
+
+            # AffinityService로 친밀도 업데이트
+            updated_affinity = await self.affinity_service.update_affinity(
+                state=state,
+                user_input=user_input,
+                dialogues=dialogues,
+                participating_characters=participating_characters
+            )
+
+            # 변화량 계산
+            old_affinity = state.get("affinity", {})
+            affinity_delta = {}
+
+            for char, new_score in updated_affinity.items():
+                old_score = old_affinity.get(char, 500)  # 기본값 500
+                delta = new_score - old_score
+                if delta != 0:
+                    affinity_delta[char] = delta
+                    logger.info("_update_affinity", f"{char}: {old_score} → {new_score} ({delta:+d})")
+
+            # state 업데이트
+            state["affinity"] = updated_affinity
+
+            return affinity_delta
+
+        except Exception as e:
+            logger.error("_update_affinity", f"Affinity update failed: {e}", exc_info=True)
+            return {}
+
+    def _extract_participating_characters(self, dialogues: List[Dict[str, Any]]) -> List[str]:
+        """
+        대화에서 등장 캐릭터 추출
+
+        Args:
+            dialogues: 대화 리스트
+
+        Returns:
+            캐릭터 ID 리스트
+        """
+        characters = set()
+
+        for dialogue in dialogues:
+            speaker = dialogue.get("speaker", "")
+            if speaker and speaker != "narr" and speaker != "시스템":
+                characters.add(speaker)
+
+        return list(characters)
+
+    async def _extract_memories(
+        self,
+        state: Dict[str, Any],
+        user_input: str,
+        dialogues: List[Dict[str, Any]]
+    ) -> None:
+        """
+        MemoryService를 통한 메모리 추출
+
+        TODO: 백그라운드 태스크로 처리
+
+        Args:
+            state: 게임 상태
+            user_input: 사용자 입력
+            dialogues: 생성된 대화 리스트
+        """
+        try:
+            # 대화 텍스트 결합
+            combined_text = f"사용자: {user_input}\n"
+            for d in dialogues:
+                speaker = d.get("speaker", "")
+                text = d.get("text", "")
+                combined_text += f"{speaker}: {text}\n"
+
+            # MemoryService로 메모리 추출
+            result = await self.memory_service.process_conversation_turn(
+                user_input=user_input,
+                assistant_response="\n".join([d.get("text", "") for d in dialogues]),
+                context={"scenario_id": state.get("scenario_id")}
+            )
+
+            logger.info("_extract_memories",
+                       entities=len(result["entities"]),
+                       relationships=len(result["relationships"]))
+
+            # TODO: 추출된 메모리를 Repository를 통해 저장
+            # (UseCase 레이어에서 처리해야 함)
+
+        except Exception as e:
+            logger.error("_extract_memories", f"Memory extraction failed: {e}", exc_info=True)
+
+    def _fallback_response(
+        self,
+        state: Dict[str, Any],
+        message: str
+    ) -> DialogueResult:
+        """
+        폴백 응답 생성
+
+        Args:
+            state: 게임 상태
+            message: 오류 메시지
+
+        Returns:
+            DialogueResult
+        """
+        fallback_dialogues = [
+            ChatMessage(
+                speaker="시스템",
+                text=message,
+                emotion="neutral"
+            )
+        ]
+
+        return DialogueResult(
+            dialogues=fallback_dialogues,
+            next_stage=state.get("current_stage", "intro"),
+            stage_complete=False,
+            updated_state=state,
+            affinity_delta={}
+        )
+
+
+# 싱글톤 인스턴스
+_default_parent_agent: Optional[ParentAgent] = None
+
+
+def get_parent_agent() -> ParentAgent:
+    """ParentAgent 싱글톤"""
+    global _default_parent_agent
+    if _default_parent_agent is None:
+        _default_parent_agent = ParentAgent()
+    return _default_parent_agent
+
+
+async def run_parent_agent(
+    user_message: str,
+    session_state: Dict[str, Any],
+    scenario_id: str
+) -> DialogueResult:
+    """
+    ParentAgent 실행 헬퍼
+
+    Args:
+        user_message: 사용자 메시지
+        session_state: 세션 상태
+        scenario_id: 시나리오 ID
+
+    Returns:
+        DialogueResult
+    """
+    agent = get_parent_agent()
+    return await agent.run(user_message, session_state, scenario_id)
+
+
+__all__ = ["ParentAgent", "get_parent_agent", "run_parent_agent"]

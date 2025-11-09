@@ -2,25 +2,25 @@
 
 -- 1. 모든 테이블 구조
 \echo '===== TABLE STRUCTURES ====='
-\d statedb.sessions
-\d statedb.users
-\d statedb.entities
-\d statedb.entity_mentions
-\d statedb.entity_relationships
-\d statedb.dialogues
-\d statedb.user_inputs
-\d statedb.user_memories
-\d statedb.affinity_records
-\d statedb.game_events
-\d statedb.mission_records
-\d statedb.stage_progression
-\d statedb.session_snapshots
-\d statedb.password_reset_tokens
+\d sessions
+\d users
+\d entities
+\d entity_mentions
+\d entity_relationships
+\d dialogues
+\d user_inputs
+\d user_memories
+\d affinity_records
+\d game_events
+\d mission_records
+\d stage_progression
+\d session_snapshots
+\d password_reset_tokens
 \d public.training_logs
 \d public.user_feedback
-\d logdb.logs
-\d logdb.error_logs
-\d logdb.performance_metrics
+\d logs
+\d error_logs
+\d performance_metrics
 
 -- 2. 외래키 관계
 \echo '===== FOREIGN KEY RELATIONSHIPS ====='

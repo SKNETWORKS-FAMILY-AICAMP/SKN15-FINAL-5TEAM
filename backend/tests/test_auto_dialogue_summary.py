@@ -80,7 +80,7 @@ def verify_dialogues(session_id):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT turn_number, speaker, content
-                FROM statedb.dialogues
+                FROM dialogues
                 WHERE session_id = %s
                 ORDER BY turn_number, dialogue_order
             """, (session_id,))
@@ -121,7 +121,7 @@ def verify_summary(session_id):
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT conversation_summary, summary_turn_count, turn_count
-                FROM statedb.sessions
+                FROM sessions
                 WHERE session_id = %s
             """, (session_id,))
 

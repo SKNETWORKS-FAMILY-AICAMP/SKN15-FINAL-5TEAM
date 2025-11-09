@@ -24,7 +24,7 @@ def test_game_event_logging():
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO statedb.sessions 
+                INSERT INTO sessions 
                 (session_id, scenario_id, user_name, current_stage, turn_count, stage_turn, is_active)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (test_session_id, "test_scenario", "test_user", "TEST_STAGE", 0, 0, True))
@@ -93,16 +93,16 @@ def test_game_event_logging():
     
     with db.get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM statedb.affinity_records WHERE session_id = %s;", (test_session_id,))
+            cur.execute("SELECT COUNT(*) FROM affinity_records WHERE session_id = %s;", (test_session_id,))
             affinity_count = cur.fetchone()[0]
             
-            cur.execute("SELECT COUNT(*) FROM statedb.stage_progression WHERE session_id = %s;", (test_session_id,))
+            cur.execute("SELECT COUNT(*) FROM stage_progression WHERE session_id = %s;", (test_session_id,))
             stage_count = cur.fetchone()[0]
             
-            cur.execute("SELECT COUNT(*) FROM statedb.mission_records WHERE session_id = %s;", (test_session_id,))
+            cur.execute("SELECT COUNT(*) FROM mission_records WHERE session_id = %s;", (test_session_id,))
             mission_count = cur.fetchone()[0]
             
-            cur.execute("SELECT COUNT(*) FROM statedb.game_events WHERE session_id = %s;", (test_session_id,))
+            cur.execute("SELECT COUNT(*) FROM game_events WHERE session_id = %s;", (test_session_id,))
             event_count = cur.fetchone()[0]
             
             print(f"✅ Affinity Records: {affinity_count}개")
@@ -124,10 +124,10 @@ def test_game_event_logging():
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT 
-                    (SELECT COUNT(*) FROM statedb.affinity_records) as affinity_total,
-                    (SELECT COUNT(*) FROM statedb.mission_records) as mission_total,
-                    (SELECT COUNT(*) FROM statedb.stage_progression) as stage_total,
-                    (SELECT COUNT(*) FROM statedb.game_events) as event_total;
+                    (SELECT COUNT(*) FROM affinity_records) as affinity_total,
+                    (SELECT COUNT(*) FROM mission_records) as mission_total,
+                    (SELECT COUNT(*) FROM stage_progression) as stage_total,
+                    (SELECT COUNT(*) FROM game_events) as event_total;
             """)
             
             affinity, mission, stage, event = cur.fetchone()

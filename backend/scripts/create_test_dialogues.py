@@ -189,7 +189,7 @@ def create_test_session_with_dialogues(db: DatabaseManager):
                 with db.get_connection() as conn:
                     with conn.cursor() as cur:
                         cur.execute("""
-                            INSERT INTO statedb.dialogues
+                            INSERT INTO dialogues
                             (session_id, turn_number, speaker, content,
                              emotion, emotion_intensity, order_index, timestamp)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
@@ -228,14 +228,14 @@ def verify_dialogues(db: DatabaseManager, session_id: str):
         with conn.cursor() as cur:
             # 총 대화 수
             cur.execute("""
-                SELECT COUNT(*) FROM statedb.dialogues WHERE session_id = %s
+                SELECT COUNT(*) FROM dialogues WHERE session_id = %s
             """, (session_id,))
             total = cur.fetchone()[0]
 
             # 턴별 대화 수
             cur.execute("""
                 SELECT turn_number, COUNT(*)
-                FROM statedb.dialogues
+                FROM dialogues
                 WHERE session_id = %s
                 GROUP BY turn_number
                 ORDER BY turn_number

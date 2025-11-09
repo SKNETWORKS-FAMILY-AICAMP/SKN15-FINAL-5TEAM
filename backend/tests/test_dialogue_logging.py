@@ -67,7 +67,7 @@ try:
 
             # DB 확인 - user_inputs
             user_inputs_query = f"""
-                SELECT COUNT(*) FROM statedb.user_inputs
+                SELECT COUNT(*) FROM user_inputs
                 WHERE session_id = '{session_id}';
             """
             user_inputs_count = check_db(user_inputs_query).strip()
@@ -80,7 +80,7 @@ try:
 
                 # 실제 데이터 조회
                 user_input_data = check_db(f"""
-                    SELECT turn_number, user_input FROM statedb.user_inputs
+                    SELECT turn_number, user_input FROM user_inputs
                     WHERE session_id = '{session_id}' ORDER BY turn_number DESC LIMIT 1;
                 """)
                 print(f"   최근 입력: {user_input_data}")
@@ -89,7 +89,7 @@ try:
 
             # DB 확인 - dialogues
             dialogues_query = f"""
-                SELECT COUNT(*) FROM statedb.dialogues
+                SELECT COUNT(*) FROM dialogues
                 WHERE session_id = '{session_id}';
             """
             dialogues_count = check_db(dialogues_query).strip()
@@ -103,7 +103,7 @@ try:
                 # 실제 대화 데이터 조회
                 dialogue_data = check_db(f"""
                     SELECT turn_number, speaker, LEFT(content, 50) as content_preview
-                    FROM statedb.dialogues
+                    FROM dialogues
                     WHERE session_id = '{session_id}'
                     ORDER BY turn_number DESC, order_index
                     LIMIT 3;
@@ -117,8 +117,8 @@ try:
 
             # 전체 통계
             print(f"\n📊 전체 DB 통계:")
-            total_users = check_db("SELECT COUNT(*) FROM statedb.user_inputs;").strip()
-            total_dialogues = check_db("SELECT COUNT(*) FROM statedb.dialogues;").strip()
+            total_users = check_db("SELECT COUNT(*) FROM user_inputs;").strip()
+            total_dialogues = check_db("SELECT COUNT(*) FROM dialogues;").strip()
 
             print(f"   전체 user_inputs: {total_users}개")
             print(f"   전체 dialogues: {total_dialogues}개")

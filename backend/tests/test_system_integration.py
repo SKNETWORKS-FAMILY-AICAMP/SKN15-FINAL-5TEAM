@@ -130,7 +130,7 @@ try:
         with db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT session_id FROM statedb.sessions
+                    SELECT session_id FROM sessions
                     WHERE session_id = %s
                 """, (test_session_id,))
                 db_session = cur.fetchone()
@@ -188,10 +188,10 @@ try:
     if metric_id:
         print("✅ 성능 메트릭 저장 성공")
 
-    # logdb.logs 테이블 확인
+    # logs 테이블 확인
     with db.get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM logdb.logs")
+            cur.execute("SELECT COUNT(*) FROM logs")
             log_count = cur.fetchone()[0]
             print(f"✅ 전체 로그 수: {log_count}개")
 
@@ -291,13 +291,13 @@ try:
     # 엔티티 통계
     with db.get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM statedb.entities")
+            cur.execute("SELECT COUNT(*) FROM entities")
             entity_count = cur.fetchone()[0]
 
-            cur.execute("SELECT COUNT(*) FROM statedb.entity_mentions")
+            cur.execute("SELECT COUNT(*) FROM entity_mentions")
             mention_count = cur.fetchone()[0]
 
-            cur.execute("SELECT COUNT(*) FROM statedb.entity_relationships")
+            cur.execute("SELECT COUNT(*) FROM entity_relationships")
             relationship_count = cur.fetchone()[0]
 
             print(f"\n📊 Graph RAG 통계:")

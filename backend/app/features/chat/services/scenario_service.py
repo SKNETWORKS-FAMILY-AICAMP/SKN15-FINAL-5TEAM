@@ -7,8 +7,10 @@ import yaml
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from app.core.logging import get_parent_logger
+from app.core.config import get_settings
 
 logger = get_parent_logger("ScenarioService")
+settings = get_settings()
 
 
 class ScenarioService:
@@ -22,13 +24,15 @@ class ScenarioService:
     - 데이터 캐싱
     """
 
-    def __init__(self, data_dir: str = "/app/data"):
+    def __init__(self, data_dir: Optional[str] = None):
         """
         ScenarioService 초기화
 
         Args:
-            data_dir: 데이터 디렉토리 경로
+            data_dir: 데이터 디렉토리 경로 (None이면 settings에서 로드)
         """
+        if data_dir is None:
+            data_dir = settings.DATA_DIR
         self.data_dir = Path(data_dir)
         self.scenarios_dir = self.data_dir / "scenarios"
         self.characters_dir = self.data_dir / "characters"
@@ -316,6 +320,63 @@ class ScenarioService:
 
         logger.info("get_available_beat_stages", f"Beat stages in {scenario_id}: {beat_stages}")
         return beat_stages
+
+    def list_scenarios(self) -> List[Dict[str, Any]]:
+        """
+        사용 가능한 모든 시나리오 목록 조회
+
+        Returns:
+            시나리오 메타데이터 리스트
+            [
+                {
+                    "scenario_id": str,
+                    "title": str,
+                    "description": str,
+                    "difficulty": str,
+                    "tags": list,
+                    ...
+                }
+            ]
+        """
+        logger.info("list_scenarios", f"Listing scenarios from {self.scenarios_dir}")
+
+        scenarios = []
+
+        # scenarios 디렉토리가 없으면 빈 리스트 반환
+        if not self.scenarios_dir.exists():
+            logger.warning("list_scenarios", f"Scenarios directory not found: {self.scenarios_dir}")
+            return scenarios
+
+        # 모든 .json 파일 탐색
+        for scenario_file in self.scenarios_dir.glob("*.json"):
+            try:
+                scenario_id = scenario_file.stem  # 파일명에서 확장자 제거
+
+                # 시나리오 로드
+                scenario_data = self.load_scenario(scenario_id)
+                if not scenario_data:
+                    continue
+
+                # 메타데이터 추출
+                metadata = {
+                    "scenario_id": scenario_id,
+                    "title": scenario_data.get("title", scenario_id),
+                    "description": scenario_data.get("description", ""),
+                    "version": scenario_data.get("version", "1.0"),
+                    "difficulty": scenario_data.get("difficulty", "medium"),
+                    "tags": scenario_data.get("tags", []),
+                    "world_id": scenario_data.get("world_id", ""),
+                    "character_refs": list(scenario_data.get("character_refs", {}).keys()),
+                }
+
+                scenarios.append(metadata)
+
+            except Exception as e:
+                logger.error("list_scenarios", f"Failed to load scenario {scenario_file}: {e}")
+                continue
+
+        logger.info("list_scenarios", f"Found {len(scenarios)} scenarios")
+        return scenarios
 
     def clear_cache(self):
         """캐시 초기화"""

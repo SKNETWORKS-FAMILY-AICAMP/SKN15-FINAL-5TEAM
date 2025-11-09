@@ -103,7 +103,7 @@ with db.get_connection() as conn:
     with conn.cursor() as cur:
         cur.execute("""
             SELECT state_json
-            FROM statedb.session_snapshots
+            FROM session_snapshots
             WHERE session_id = %s
             ORDER BY turn_number DESC
             LIMIT 1
@@ -123,11 +123,11 @@ with db.get_connection() as conn:
 
                 # 스냅샷 업데이트
                 cur.execute("""
-                    UPDATE statedb.session_snapshots
+                    UPDATE session_snapshots
                     SET state_json = %s
                     WHERE session_id = %s AND turn_number = (
                         SELECT MAX(turn_number)
-                        FROM statedb.session_snapshots
+                        FROM session_snapshots
                         WHERE session_id = %s
                     )
                 """, (json.dumps(state), test_session_id, test_session_id))
@@ -186,7 +186,7 @@ with db.get_connection() as conn:
                 change_amount,
                 turn_number,
                 timestamp
-            FROM statedb.affinity_records
+            FROM affinity_records
             WHERE session_id = %s
             ORDER BY timestamp DESC
         """, (test_session_id,))

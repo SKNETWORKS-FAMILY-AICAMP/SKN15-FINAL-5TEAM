@@ -90,7 +90,7 @@ with db.get_connection() as conn:
                 COUNT(*) as count,
                 AVG(importance_score) as avg_importance,
                 SUM(mention_count) as total_mentions
-            FROM statedb.entities
+            FROM entities
             GROUP BY entity_type
             ORDER BY count DESC
         """)
@@ -109,7 +109,7 @@ with db.get_connection() as conn:
         # 모든 엔티티 나열
         cur.execute("""
             SELECT entity_type, entity_name, importance_score, mention_count
-            FROM statedb.entities
+            FROM entities
             ORDER BY mention_count DESC, importance_score DESC
         """)
 
@@ -132,8 +132,8 @@ with db.get_connection() as conn:
                 e.entity_name,
                 e.entity_type,
                 COUNT(em.mention_id) as mention_count
-            FROM statedb.entities e
-            LEFT JOIN statedb.entity_mentions em ON e.entity_id = em.entity_id
+            FROM entities e
+            LEFT JOIN entity_mentions em ON e.entity_id = em.entity_id
             GROUP BY e.entity_id, e.entity_name, e.entity_type
             HAVING COUNT(em.mention_id) > 0
             ORDER BY COUNT(em.mention_id) DESC

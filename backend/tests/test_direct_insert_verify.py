@@ -56,7 +56,7 @@ else:
 print(f"\n🗄️ PostgreSQL 직접 조회 (docker exec)...")
 cmd = [
     "docker", "exec", "kime-postgres", "psql", "-U", "kime", "-d", "kimedb",
-    "-c", f"SELECT user_id, username, email, display_name FROM statedb.users WHERE username = '{username}';"
+    "-c", f"SELECT user_id, username, email, display_name FROM users WHERE username = '{username}';"
 ]
 
 result = subprocess.run(cmd, capture_output=True, text=True)
@@ -69,7 +69,7 @@ else:
     print(f"\n🔍 전체 users 테이블 조회:")
     cmd2 = [
         "docker", "exec", "kime-postgres", "psql", "-U", "kime", "-d", "kimedb",
-        "-c", "SELECT username, created_at FROM statedb.users ORDER BY created_at DESC LIMIT 10;"
+        "-c", "SELECT username, created_at FROM users ORDER BY created_at DESC LIMIT 10;"
     ]
     result2 = subprocess.run(cmd2, capture_output=True, text=True)
     print(result2.stdout)

@@ -45,9 +45,9 @@ class EntityRelationshipAnalyzer:
                 r.evidence_count,
                 r.provenance,
                 r.created_at
-            FROM statedb.entity_relationships r
-            JOIN statedb.entities e1 ON r.source_entity_id = e1.entity_id
-            JOIN statedb.entities e2 ON r.target_entity_id = e2.entity_id
+            FROM entity_relationships r
+            JOIN entities e1 ON r.source_entity_id = e1.entity_id
+            JOIN entities e2 ON r.target_entity_id = e2.entity_id
             ORDER BY r.created_at DESC
         """)
 
@@ -80,13 +80,13 @@ class EntityRelationshipAnalyzer:
                 COUNT(*) as co_occurrence_count,
                 COUNT(DISTINCT m1.session_id) as session_count,
                 ARRAY_AGG(DISTINCT m1.session_id) as sessions
-            FROM statedb.entity_mentions m1
-            JOIN statedb.entity_mentions m2
+            FROM entity_mentions m1
+            JOIN entity_mentions m2
                 ON m1.session_id = m2.session_id
                 AND m1.turn_number = m2.turn_number
                 AND m1.entity_id < m2.entity_id  -- 중복 방지
-            JOIN statedb.entities e1 ON m1.entity_id = e1.entity_id
-            JOIN statedb.entities e2 ON m2.entity_id = e2.entity_id
+            JOIN entities e1 ON m1.entity_id = e1.entity_id
+            JOIN entities e2 ON m2.entity_id = e2.entity_id
             GROUP BY e1.entity_id, e1.entity_name, e1.entity_type,
                      e2.entity_id, e2.entity_name, e2.entity_type
             HAVING COUNT(*) >= %s
@@ -121,7 +121,7 @@ class EntityRelationshipAnalyzer:
                 COUNT(*) as interaction_count,
                 COUNT(DISTINCT a.session_id) as session_count,
                 COUNT(DISTINCT a.user_id) as user_count
-            FROM statedb.affinity_records a
+            FROM affinity_records a
             GROUP BY a.character_name
             HAVING MAX(a.affinity_score) >= %s
             ORDER BY max_affinity DESC, interaction_count DESC
@@ -134,7 +134,7 @@ class EntityRelationshipAnalyzer:
         for aff in affinities:
             cursor.execute("""
                 SELECT entity_id, entity_name
-                FROM statedb.entities
+                FROM entities
                 WHERE entity_type = 'character'
                   AND (LOWER(entity_name) = LOWER(%s)
                        OR LOWER(canonical_name) = LOWER(%s))
@@ -225,12 +225,12 @@ class EntityRelationshipAnalyzer:
 
         cursor.execute("""
             SELECT COUNT(DISTINCT (e1.entity_id, e2.entity_id))
-            FROM statedb.entity_mentions m1
-            JOIN statedb.entity_mentions m2
+            FROM entity_mentions m1
+            JOIN entity_mentions m2
                 ON m1.session_id = m2.session_id
                 AND m1.turn_number = m2.turn_number
-            JOIN statedb.entities e1 ON m1.entity_id = e1.entity_id
-            JOIN statedb.entities e2 ON m2.entity_id = e2.entity_id
+            JOIN entities e1 ON m1.entity_id = e1.entity_id
+            JOIN entities e2 ON m2.entity_id = e2.entity_id
             WHERE e1.entity_type = 'character'
               AND e2.entity_type = 'skill'
         """)

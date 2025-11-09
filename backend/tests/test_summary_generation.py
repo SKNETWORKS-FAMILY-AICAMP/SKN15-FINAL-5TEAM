@@ -93,7 +93,7 @@ if test_session_id:
                     summary_turn_count,
                     LENGTH(conversation_summary) as summary_length,
                     LEFT(conversation_summary, 100) as summary_preview
-                FROM statedb.sessions
+                FROM sessions
                 WHERE session_id = %s
             """, (test_session_id,))
 
@@ -116,7 +116,7 @@ if test_session_id:
 
             # 저장된 대화 수 확인
             cur.execute("""
-                SELECT COUNT(*) FROM statedb.dialogues
+                SELECT COUNT(*) FROM dialogues
                 WHERE session_id = %s
             """, (test_session_id,))
 

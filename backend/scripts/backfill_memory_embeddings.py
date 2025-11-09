@@ -175,7 +175,7 @@ def backfill_memory_embeddings(
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT COUNT(*)
-                FROM statedb.user_memories
+                FROM user_memories
                 WHERE embedding IS NULL AND is_active = TRUE
             """)
             total_count = cur.fetchone()[0]

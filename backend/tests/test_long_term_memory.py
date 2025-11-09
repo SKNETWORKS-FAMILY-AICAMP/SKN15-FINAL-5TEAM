@@ -27,7 +27,7 @@ def test_user_memory_system():
 
     with db.get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT user_id, username FROM statedb.users LIMIT 1;")
+            cur.execute("SELECT user_id, username FROM users LIMIT 1;")
             result = cur.fetchone()
 
             if not result:
@@ -210,7 +210,7 @@ def test_user_memory_system():
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT memory_value, importance, context->>'affinity_score' as affinity
-                    FROM statedb.user_memories
+                    FROM user_memories
                     WHERE id = %s;
                 """, (updated_memory_id,))
                 result = cur.fetchone()
@@ -236,7 +236,7 @@ def test_user_memory_system():
                     COUNT(*) as count,
                     ROUND(AVG(importance)::numeric, 2) as avg_importance,
                     SUM(access_count) as total_accesses
-                FROM statedb.user_memories
+                FROM user_memories
                 WHERE user_id = %s
                   AND is_active = TRUE
                 GROUP BY memory_type

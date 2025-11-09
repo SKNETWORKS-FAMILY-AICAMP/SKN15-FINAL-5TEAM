@@ -92,7 +92,7 @@ class HybridMultihopRAG:
                 description,
                 importance_score,
                 mention_count
-            FROM statedb.entities
+            FROM entities
             WHERE LOWER(entity_name) = ANY(%s)
                OR LOWER(canonical_name) = ANY(%s)
             ORDER BY importance_score DESC, mention_count DESC
@@ -114,7 +114,7 @@ class HybridMultihopRAG:
                     importance_score,
                     mention_count,
                     1 - (embedding <=> %s::vector) as similarity
-                FROM statedb.entities
+                FROM entities
                 WHERE embedding IS NOT NULL
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
@@ -170,9 +170,9 @@ class HybridMultihopRAG:
                 r.confidence,
                 e1.entity_name as source_name,
                 e2.entity_name as target_name
-            FROM statedb.entity_relationships r
-            JOIN statedb.entities e1 ON r.source_entity_id = e1.entity_id
-            JOIN statedb.entities e2 ON r.target_entity_id = e2.entity_id
+            FROM entity_relationships r
+            JOIN entities e1 ON r.source_entity_id = e1.entity_id
+            JOIN entities e2 ON r.target_entity_id = e2.entity_id
             WHERE (r.source_entity_id = ANY(%s) OR r.target_entity_id = ANY(%s))
               AND r.strength >= %s
             ORDER BY r.strength DESC, r.confidence DESC
@@ -200,12 +200,12 @@ class HybridMultihopRAG:
                     r1.relationship_type as relation1,
                     r2.relationship_type as relation2,
                     (r1.strength * r2.strength) as combined_strength
-                FROM statedb.entity_relationships r1
-                JOIN statedb.entity_relationships r2
+                FROM entity_relationships r1
+                JOIN entity_relationships r2
                     ON r1.target_entity_id = r2.source_entity_id
-                JOIN statedb.entities e1 ON r1.source_entity_id = e1.entity_id
-                JOIN statedb.entities e_bridge ON r1.target_entity_id = e_bridge.entity_id
-                JOIN statedb.entities e2 ON r2.target_entity_id = e2.entity_id
+                JOIN entities e1 ON r1.source_entity_id = e1.entity_id
+                JOIN entities e_bridge ON r1.target_entity_id = e_bridge.entity_id
+                JOIN entities e2 ON r2.target_entity_id = e2.entity_id
                 WHERE r1.source_entity_id = ANY(%s)
                   AND r2.target_entity_id NOT IN (SELECT unnest(%s::int[]))
                   AND r1.strength >= %s
@@ -229,7 +229,7 @@ class HybridMultihopRAG:
                 canonical_name,
                 description,
                 importance_score
-            FROM statedb.entities
+            FROM entities
             WHERE entity_id = ANY(%s)
         """, (list(related_ids),))
 
@@ -423,7 +423,7 @@ class HybridMultihopRAG:
                 COUNT(CASE WHEN embedding IS NOT NULL THEN 1 END) as with_embedding,
                 AVG(importance_score) as avg_importance,
                 SUM(mention_count) as total_mentions
-            FROM statedb.entities
+            FROM entities
         """)
         entity_stats = state_cursor.fetchone()
 
@@ -433,7 +433,7 @@ class HybridMultihopRAG:
                 COUNT(*) as total_relationships,
                 AVG(strength) as avg_strength,
                 AVG(confidence) as avg_confidence
-            FROM statedb.entity_relationships
+            FROM entity_relationships
         """)
         rel_stats = state_cursor.fetchone()
 

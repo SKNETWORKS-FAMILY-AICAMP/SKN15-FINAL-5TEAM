@@ -355,6 +355,78 @@ class LLMClient:
 
         return result
 
+    async def generate_image(
+        self,
+        prompt: str,
+        size: str = "1024x1024",
+        quality: str = "standard",
+        style: Optional[str] = None,
+        model: str = "dall-e-3"
+    ) -> Dict[str, Any]:
+        """
+        이미지 생성 (DALL-E)
+
+        Args:
+            prompt: 이미지 생성 프롬프트
+            size: 이미지 크기 (1024x1024, 1024x1792, 1792x1024)
+            quality: 품질 (standard, hd)
+            style: 스타일 (vivid, natural)
+            model: 모델명 (dall-e-2, dall-e-3)
+
+        Returns:
+            생성 결과
+            {
+                "url": str,  # 생성된 이미지 URL
+                "revised_prompt": str,  # OpenAI가 수정한 프롬프트
+                "model": str,  # 사용된 모델명
+            }
+        """
+        logger.info("generate_image", "🎨 Generating image with DALL-E",
+                   model=model, size=size, quality=quality)
+
+        # Rate limiting
+        self.rate_limiter.acquire()
+
+        try:
+            # OpenAI Image Generation API 호출
+            kwargs = {
+                "model": model,
+                "prompt": prompt,
+                "size": size,
+                "quality": quality,
+                "n": 1,
+            }
+
+            if style and model == "dall-e-3":
+                kwargs["style"] = style
+
+            response = self.client.images.generate(**kwargs)
+
+            # 결과 추출
+            image_data = response.data[0]
+            result = {
+                "url": image_data.url,
+                "revised_prompt": getattr(image_data, "revised_prompt", prompt),
+                "model": model
+            }
+
+            self.call_count += 1
+
+            logger.info("generate_image", "✅ Image generated successfully",
+                       model=model, call_count=self.call_count)
+
+            return result
+
+        except RateLimitError as e:
+            logger.error("generate_image", f"❌ Rate limit exceeded: {e}")
+            raise LLMRateLimitException(f"Image generation rate limit exceeded: {e}")
+        except APITimeoutError as e:
+            logger.error("generate_image", f"❌ API timeout: {e}")
+            raise LLMTimeoutException(f"Image generation timeout: {e}")
+        except Exception as e:
+            logger.error("generate_image", f"❌ Image generation failed: {e}")
+            raise LLMException(f"Image generation failed: {e}")
+
     def clear_cache(self):
         """캐시 초기화"""
         self.cache.clear()

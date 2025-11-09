@@ -47,3 +47,11 @@ pytest-asyncio==0.23.3
 
 # === 암호화 ===
 bcrypt==4.1.2
+
+# === 문자열 처리 & 매칭 ===
+fuzzywuzzy==0.18.0  # 퍼지 문자열 매칭 (오타 허용)
+python-Levenshtein==0.25.0  # 레벤슈타인 거리 (fuzzywuzzy 성능 향상)
+py-hanspell==1.1  # 한국어 맞춤법 검사
+
+# === 이미지 처리 ===
+Pillow==10.2.0  # 이미지 처리 (썸네일, 메타데이터)
