@@ -84,6 +84,8 @@ setup_rate_limiting(app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost",  # Docker frontend (port 80)
+        "http://localhost:80",  # Docker frontend (explicit port)
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:5173",
