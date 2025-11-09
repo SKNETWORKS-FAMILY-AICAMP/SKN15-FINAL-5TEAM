@@ -15,6 +15,7 @@ from app.core.db.base import Base
 from app.core.config import get_settings
 
 # Import all models to register them with Base
+from app.core.db.models import Session
 from app.features.chat.models import (
     DialogueTurn,
     UserCharacterAffinity,
