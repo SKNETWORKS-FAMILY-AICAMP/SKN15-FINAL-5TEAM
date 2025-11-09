@@ -15,7 +15,20 @@ from app.core.db.base import Base
 from app.core.config import get_settings
 
 # Import all models to register them with Base
-from app.features.chat.models import DialogueTurn  # ✅ 모든 모델 import
+from app.features.chat.models import (
+    DialogueTurn,
+    UserCharacterAffinity,
+    AffinityRecord,
+    Entity,
+    EntityRelationship,
+    EntityMention,
+    UserMemory,
+)
+from app.features.scenarios.models import (
+    ScenarioComment,
+    ScenarioLike,
+    CommentLike,
+)
 
 # Alembic Config object
 config = context.config
