@@ -160,6 +160,13 @@ class GraphState(TypedDict):
     children_ctx: Optional[Dict[str, Any]]  # Children Agent 컨텍스트
     paths: Optional[Dict[str, Any]]  # 파일 경로 정보
 
+    # ============================================================
+    # 외부 의존성 (External Dependencies)
+    # ============================================================
+    user_id: Optional[str]  # 인증된 사용자 ID (JWT에서 추출)
+    user_memory_context: Optional[Dict[str, Any]]  # 사용자 장기 기억 컨텍스트
+    db_manager: Optional[Any]  # DatabaseManager 인스턴스 (이미지 매핑, 메모리 등)
+
 
 # ============================================================
 # 호환성을 위한 별칭 (기존 코드가 AgentState를 import하는 경우)

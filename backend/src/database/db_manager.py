@@ -13,10 +13,12 @@ from psycopg2 import pool, sql, extensions
 from psycopg2.extras import RealDictCursor, Json
 import logging
 
+from .db_manager_comments import CommentsMixin
+
 logger = logging.getLogger(__name__)
 
 
-class DatabaseManager:
+class DatabaseManager(CommentsMixin):
     """PostgreSQL StateDB/LogDB 관리자"""
 
     def __init__(
@@ -469,6 +471,58 @@ class DatabaseManager:
             logger.error(f"Failed to get last session for user {user_id}: {e}")
             return None
 
+    def get_user_recent_sessions(
+        self,
+        user_id: str,
+        limit: int = 4
+    ) -> list[Dict[str, Any]]:
+        """
+        사용자의 최근 세션 목록 조회 (시나리오 정보 및 마지막 대화 포함)
+
+        Args:
+            user_id: 사용자 ID
+            limit: 조회할 세션 개수 (기본값: 4)
+
+        Returns:
+            List[Dict]: 세션 정보 목록 (시나리오 제목, 업데이트 시간, 마지막 대화 등 포함)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT
+                            s.session_id,
+                            s.scenario_id,
+                            s.current_stage,
+                            s.turn_count,
+                            s.created_at,
+                            s.updated_at,
+                            s.conversation_summary,
+                            sc.title as scenario_title,
+                            sc.thumbnail_url as scenario_thumbnail,
+                            d.speaker as last_message_speaker,
+                            d.content as last_message_content
+                        FROM statedb.sessions s
+                        LEFT JOIN statedb.scenarios sc ON s.scenario_id = sc.scenario_id
+                        LEFT JOIN LATERAL (
+                            SELECT speaker, content
+                            FROM statedb.dialogues
+                            WHERE session_id = s.session_id
+                              AND speaker NOT IN ('user', 'narr')
+                            ORDER BY turn_number DESC, order_index DESC
+                            LIMIT 1
+                        ) d ON true
+                        WHERE s.user_id = %s
+                        ORDER BY s.updated_at DESC
+                        LIMIT %s
+                    """, (user_id, limit))
+
+                    results = cur.fetchall()
+                    return [dict(row) for row in results] if results else []
+        except Exception as e:
+            logger.error(f"Failed to get recent sessions for user {user_id}: {e}")
+            return []
+
     # ========================================
     # StateDB: User Inputs
     # ========================================
@@ -670,6 +724,80 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to load affinity: {e}")
             return {}
+
+    # ========================================
+    # StateDB: Global Character Affinity (최대 1000점)
+    # ========================================
+
+    def upsert_character_affinity(
+        self,
+        user_id: str,
+        character_name: str,
+        affinity_change: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        글로벌 캐릭터 친밀도 업데이트 (UPSERT)
+
+        Args:
+            user_id: 사용자 ID
+            character_name: 캐릭터 이름
+            affinity_change: 친밀도 변화량 (양수/음수)
+
+        Returns:
+            {
+                "character_name": str,
+                "total_affinity_score": int,  # 0~1000
+                "affinity_level": int,  # 1~10
+                "score_change": int
+            }
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.upsert_character_affinity(%s, %s, %s)
+                    """, (user_id, character_name, affinity_change))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to upsert character affinity: {e}")
+            return None
+
+    def get_user_character_affinity(
+        self,
+        user_id: str,
+        character_name: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        특정 캐릭터의 글로벌 친밀도 조회
+
+        Returns:
+            {
+                "character_name": str,
+                "total_affinity_score": int,
+                "affinity_level": int,
+                "total_interactions": int,
+                "last_interaction_at": datetime
+            }
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT
+                            character_name,
+                            total_affinity_score,
+                            affinity_level,
+                            total_interactions,
+                            last_interaction_at
+                        FROM statedb.user_character_affinity
+                        WHERE user_id = %s AND character_name = %s
+                    """, (user_id, character_name))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get character affinity: {e}")
+            return None
 
     # ========================================
     # StateDB: Session Snapshots
@@ -1645,6 +1773,66 @@ class DatabaseManager:
             return False
 
     # ============================================================
+    # User Settings Methods (사용자 설정)
+    # ============================================================
+
+    def get_user_settings(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 설정 조회"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT
+                            sound_enabled, bgm_volume, sfx_volume,
+                            auto_save, language, font_size, animation_speed,
+                            created_at, updated_at
+                        FROM statedb.user_settings
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Failed to get user settings: {e}")
+            return None
+
+    def update_user_settings(self, user_id: str, settings: Dict[str, Any]) -> bool:
+        """사용자 설정 업데이트"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # 업데이트할 필드만 동적으로 구성
+                    update_fields = []
+                    update_values = []
+
+                    allowed_fields = {
+                        'sound_enabled', 'bgm_volume', 'sfx_volume',
+                        'auto_save', 'language', 'font_size', 'animation_speed'
+                    }
+
+                    for field, value in settings.items():
+                        if field in allowed_fields:
+                            update_fields.append(f"{field} = %s")
+                            update_values.append(value)
+
+                    if not update_fields:
+                        logger.warning("No valid fields to update in user settings")
+                        return False
+
+                    update_values.append(user_id)
+
+                    query = f"""
+                        UPDATE statedb.user_settings
+                        SET {', '.join(update_fields)}
+                        WHERE user_id = %s
+                    """
+
+                    cur.execute(query, update_values)
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Failed to update user settings: {e}")
+            return False
+
+    # ============================================================
     # User Progression Methods (사용자 진행도)
     # ============================================================
 
@@ -2031,6 +2219,130 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to record view for scenario {scenario_id}: {e}")
             return False
+
+    def toggle_scenario_like(self, scenario_id: str, user_id: str) -> Dict[str, Any]:
+        """시나리오 좋아요 토글
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID
+
+        Returns:
+            {"liked": bool, "like_count": int}
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # 현재 좋아요 상태 확인
+                    cur.execute("""
+                        SELECT like_id FROM statedb.scenario_likes
+                        WHERE scenario_id = %s AND user_id = %s
+                    """, (scenario_id, user_id))
+                    existing = cur.fetchone()
+
+                    if existing:
+                        # 좋아요 취소
+                        cur.execute("""
+                            DELETE FROM statedb.scenario_likes
+                            WHERE scenario_id = %s AND user_id = %s
+                        """, (scenario_id, user_id))
+                        liked = False
+                    else:
+                        # 좋아요 추가
+                        cur.execute("""
+                            INSERT INTO statedb.scenario_likes (scenario_id, user_id)
+                            VALUES (%s, %s)
+                        """, (scenario_id, user_id))
+                        liked = True
+
+                    # Trigger가 자동으로 scenario_statistics 업데이트
+                    conn.commit()
+
+                    # 현재 좋아요 개수 조회
+                    cur.execute("""
+                        SELECT total_likes FROM statedb.scenario_statistics
+                        WHERE scenario_id = %s
+                    """, (scenario_id,))
+                    result = cur.fetchone()
+                    like_count = result[0] if result else 0
+
+                    return {"liked": liked, "like_count": like_count}
+        except Exception as e:
+            logger.error(f"Failed to toggle like for scenario {scenario_id}: {e}")
+            raise
+
+    def check_scenario_like(self, scenario_id: str, user_id: str) -> bool:
+        """사용자가 시나리오를 좋아요했는지 확인
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID
+
+        Returns:
+            좋아요 여부
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT 1 FROM statedb.scenario_likes
+                        WHERE scenario_id = %s AND user_id = %s
+                    """, (scenario_id, user_id))
+                    return cur.fetchone() is not None
+        except Exception as e:
+            logger.error(f"Failed to check like for scenario {scenario_id}: {e}")
+            return False
+
+    def toggle_comment_like(self, comment_id: int, user_id: str) -> Dict[str, Any]:
+        """댓글 추천 토글
+
+        Args:
+            comment_id: 댓글 ID
+            user_id: 사용자 ID
+
+        Returns:
+            {"liked": bool, "like_count": int}
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # 현재 추천 상태 확인
+                    cur.execute("""
+                        SELECT like_id FROM statedb.comment_likes
+                        WHERE comment_id = %s AND user_id = %s
+                    """, (comment_id, user_id))
+                    existing = cur.fetchone()
+
+                    if existing:
+                        # 추천 취소
+                        cur.execute("""
+                            DELETE FROM statedb.comment_likes
+                            WHERE comment_id = %s AND user_id = %s
+                        """, (comment_id, user_id))
+                        liked = False
+                    else:
+                        # 추천 추가
+                        cur.execute("""
+                            INSERT INTO statedb.comment_likes (comment_id, user_id)
+                            VALUES (%s, %s)
+                        """, (comment_id, user_id))
+                        liked = True
+
+                    # Trigger가 자동으로 comments 테이블의 like_count 업데이트
+                    conn.commit()
+
+                    # 현재 추천 개수 조회
+                    cur.execute("""
+                        SELECT like_count FROM statedb.scenario_comments
+                        WHERE comment_id = %s
+                    """, (comment_id,))
+                    result = cur.fetchone()
+                    like_count = result[0] if result else 0
+
+                    return {"liked": liked, "like_count": like_count}
+        except Exception as e:
+            logger.error(f"Failed to toggle like for comment {comment_id}: {e}")
+            raise
 
     def get_user_scenario_progress(self, user_id: str, scenario_id: str) -> Optional[Dict[str, Any]]:
         """사용자의 특정 시나리오 진행도 조회
@@ -2487,13 +2799,315 @@ class DatabaseManager:
             logger.error(f"Failed to add related session to memory {memory_key} for user {user_id}: {e}")
             return False
 
+    # ========================================
+    # Image Mapping
+    # ========================================
+
+    def get_image_for_stage(
+        self,
+        scenario_id: str,
+        stage_id: str,
+        turn_count: int = 0,
+        dialogue_count: int = 0,
+        event_flags: List[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """현재 state에 맞는 최적의 이미지 선택
+
+        Args:
+            scenario_id: 시나리오 ID (예: 'cutscene5_llm_driven')
+            stage_id: 스테이지 ID (예: 'INTRO', 'HEROES_ARRIVE')
+            turn_count: 턴 카운트
+            dialogue_count: 대화 수
+            event_flags: 이벤트 플래그 리스트
+
+        Returns:
+            이미지 정보 딕셔너리 (image_path, image_name, index_number 등)
+            또는 None (매칭 실패 시)
+        """
+        if event_flags is None:
+            event_flags = []
+
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT *
+                        FROM statedb.get_best_image_for_stage(%s, %s, %s, %s, %s)
+                    """, (scenario_id, stage_id, turn_count, dialogue_count, event_flags))
+                    result = cur.fetchone()
+
+                    if result:
+                        logger.info(f"[ImageMapping] Found image for {scenario_id}/{stage_id}: {result['image_path']} (priority={result['priority']})")
+                        return dict(result)
+                    else:
+                        logger.warning(f"[ImageMapping] No image found for {scenario_id}/{stage_id}, turn={turn_count}, dialogue={dialogue_count}")
+                        return None
+        except Exception as e:
+            logger.error(f"Failed to get image for stage {scenario_id}/{stage_id}: {e}")
+            return None
+
+    def get_user_statistics(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """사용자 통계 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            {
+                "total_play_time_minutes": int,  # 총 플레이 시간 (분)
+                "total_sessions": int,  # 총 세션 수
+                "total_messages": int,  # 총 메시지 수
+                "rank": {  # 계급 정보
+                    "rank_code": str,
+                    "rank_name_ko": str,
+                    "rank_icon": str,
+                    "level": int,
+                    "experience_points": int,
+                    "next_rank_xp": int
+                },
+                "scenario_progress": {  # 시나리오 진행도
+                    "completed_count": int,
+                    "total_count": int,
+                    "total_completions": int
+                },
+                "top_affinity_characters": [  # 친밀도 상위 5 캐릭터
+                    {"character_name": str, "affinity_score": int},
+                    ...
+                ],
+                "frequent_scenarios": [  # 자주 사용한 시나리오 top 5
+                    {"scenario_id": str, "title": str, "play_count": int, "total_messages": int},
+                    ...
+                ]
+            }
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # 1. 총 플레이 시간 및 세션 수 계산
+                    cur.execute("""
+                        SELECT
+                            COUNT(*) as total_sessions,
+                            SUM(turn_count) as total_messages
+                        FROM statedb.sessions
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    session_stats = cur.fetchone()
+
+                    # 2. 계급 정보 조회
+                    cur.execute("""
+                        SELECT
+                            up.rank_code,
+                            rd.rank_name_ko,
+                            rd.icon_emoji as rank_icon,
+                            up.level,
+                            up.experience_points,
+                            (
+                                SELECT min_xp
+                                FROM statedb.rank_definitions
+                                WHERE min_xp > up.experience_points
+                                ORDER BY min_xp ASC
+                                LIMIT 1
+                            ) as next_rank_xp
+                        FROM statedb.user_progression up
+                        LEFT JOIN statedb.rank_definitions rd ON up.rank_code = rd.rank_code
+                        WHERE up.user_id = %s
+                    """, (user_id,))
+                    rank_info = cur.fetchone()
+
+                    # 3. 시나리오 진행도 (완료 개수 / 전체 개수)
+                    cur.execute("""
+                        SELECT
+                            (SELECT COUNT(*) FROM statedb.user_scenario_progress WHERE user_id = %s AND has_completed = true) as completed_count,
+                            (SELECT COUNT(*) FROM statedb.scenarios WHERE is_active = true) as total_count,
+                            COALESCE((SELECT scenarios_completed FROM statedb.user_progression WHERE user_id = %s), 0) as total_completions
+                    """, (user_id, user_id))
+                    scenario_stats = cur.fetchone()
+
+                    # 4. 친밀도 상위 5 캐릭터 (글로벌 친밀도, 최대 1000점)
+                    cur.execute("""
+                        SELECT
+                            character_name,
+                            total_affinity_score as affinity_score,
+                            affinity_level,
+                            total_interactions
+                        FROM statedb.user_character_affinity
+                        WHERE user_id = %s
+                        ORDER BY total_affinity_score DESC, last_interaction_at DESC
+                        LIMIT 5
+                    """, (user_id,))
+                    top_characters = cur.fetchall()
+
+                    # 5. 자주 사용한 시나리오 top 5
+                    cur.execute("""
+                        SELECT
+                            usp.scenario_id,
+                            s.title,
+                            COUNT(DISTINCT sess.session_id) as play_count,
+                            usp.total_messages
+                        FROM statedb.user_scenario_progress usp
+                        LEFT JOIN statedb.scenarios s ON usp.scenario_id = s.scenario_id
+                        LEFT JOIN statedb.sessions sess ON sess.user_id = usp.user_id
+                            AND sess.scenario_id = usp.scenario_id
+                        WHERE usp.user_id = %s
+                        GROUP BY usp.scenario_id, s.title, usp.total_messages
+                        ORDER BY play_count DESC, usp.total_messages DESC
+                        LIMIT 5
+                    """, (user_id,))
+                    frequent_scenarios = cur.fetchall()
+
+                    return {
+                        "total_play_time_minutes": 0,  # TODO: 실제 플레이 시간 계산
+                        "total_sessions": session_stats['total_sessions'] or 0 if session_stats else 0,
+                        "total_messages": session_stats['total_messages'] or 0 if session_stats else 0,
+                        "rank": dict(rank_info) if rank_info else {
+                            "rank_code": "member",
+                            "rank_name_ko": "평대원",
+                            "rank_icon": "⚔️",
+                            "level": 1,
+                            "experience_points": 0,
+                            "next_rank_xp": 2000
+                        },
+                        "scenario_progress": {
+                            "completed_count": scenario_stats['completed_count'] or 0 if scenario_stats else 0,
+                            "total_count": scenario_stats['total_count'] or 0 if scenario_stats else 0,
+                            "total_completions": scenario_stats['total_completions'] or 0 if scenario_stats else 0
+                        },
+                        "top_affinity_characters": [dict(row) for row in top_characters] if top_characters else [],
+                        "frequent_scenarios": [dict(row) for row in frequent_scenarios] if frequent_scenarios else []
+                    }
+
+        except Exception as e:
+            logger.error(f"Failed to get user statistics for {user_id}: {e}")
+            return None
+
+    # ============================================================
+    # 🖼️ Image Gallery Methods
+    # ============================================================
+
+    def unlock_image_for_user(
+        self,
+        user_id: str,
+        image_id: str,
+        scenario_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        stage_id: Optional[str] = None,
+        unlock_method: str = "story_progress"
+    ) -> bool:
+        """
+        사용자에게 이미지 획득 처리
+
+        Args:
+            user_id: 사용자 ID
+            image_id: 이미지 ID
+            scenario_id: 시나리오 ID
+            session_id: 세션 ID
+            stage_id: 스테이지 ID
+            unlock_method: 획득 방법 (story_progress, manual, reward 등)
+
+        Returns:
+            True if newly unlocked, False if already unlocked
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT statedb.unlock_image_for_user(%s, %s, %s, %s, %s, %s)
+                    """, (user_id, image_id, scenario_id, session_id, stage_id, unlock_method))
+                    result = cur.fetchone()
+                    conn.commit()
+                    return result[0] if result else False
+        except Exception as e:
+            logger.error(f"Failed to unlock image {image_id} for user {user_id}: {e}")
+            return False
+
+    def get_user_unlocked_images(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        사용자가 획득한 이미지 목록 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID (선택적)
+
+        Returns:
+            획득한 이미지 목록
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.get_user_unlocked_images(%s, %s)
+                    """, (user_id, scenario_id))
+                    images = cur.fetchall()
+                    return [dict(img) for img in images]
+        except Exception as e:
+            logger.error(f"Failed to get unlocked images for user {user_id}: {e}")
+            return []
+
+    def get_all_images_with_unlock_status(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        모든 이미지 + 사용자 획득 상태 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID (선택적)
+
+        Returns:
+            모든 이미지 목록 (획득 상태 포함)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.get_all_images_with_unlock_status(%s, %s)
+                    """, (user_id, scenario_id))
+                    images = cur.fetchall()
+                    return [dict(img) for img in images]
+        except Exception as e:
+            logger.error(f"Failed to get all images with unlock status for user {user_id}: {e}")
+            return []
+
+    def get_user_gallery_stats(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자 갤러리 통계 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID (선택적)
+
+        Returns:
+            통계 정보 (total_images, unlocked_images, unlock_percentage)
+        """
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM statedb.get_user_gallery_stats(%s, %s)
+                    """, (user_id, scenario_id))
+                    stats = cur.fetchone()
+                    return dict(stats) if stats else None
+        except Exception as e:
+            logger.error(f"Failed to get gallery stats for user {user_id}: {e}")
+            return None
+
 
 # 환경변수 기반 싱글톤 인스턴스 생성 헬퍼
 def create_database_manager_from_env() -> DatabaseManager:
     """환경변수에서 설정을 읽어 DatabaseManager 인스턴스 생성"""
     return DatabaseManager(
         host=os.getenv("DB_HOST", "localhost"),
-        port=int(os.getenv("DB_PORT", "5433")),
+        port=int(os.getenv("DB_PORT", "5432")),  # 🔧 FIX: 기본 포트를 5432로 수정
         dbname=os.getenv("DB_NAME", "kimedb"),
         user=os.getenv("DB_USER", "kime"),
         password=os.getenv("DB_PASSWORD", "dev123"),

@@ -11,8 +11,6 @@ FastAPI Server for KIME Chat Agent
 # ------------------------------------------------------------
 from dotenv import load_dotenv
 load_dotenv(override=True)
-# .env.local도 로드 (로컬 개발용 DB 설정)
-load_dotenv(dotenv_path=".env.local", override=True)
 
 import os
 import uuid
@@ -66,7 +64,7 @@ from src.middleware import setup_rate_limiting, limiter, AUTH_RATE_LIMIT
 # ✅ API Routers 로드
 # ------------------------------------------------------------
 from src.api.monitoring_api import router as monitoring_router
-from src.api import auth_router, scenario_router, user_router, chat_router, session_router
+from src.api import auth_router, scenario_router, user_router, chat_router, session_router, gallery_router
 
 # ------------------------------------------------------------
 # ✅ FastAPI 인스턴스 생성
@@ -472,7 +470,7 @@ def load_scenario(scenario_id: str) -> Optional[Dict]:
 
         # 🔄 Scenario ID mapping (frontend → backend)
         SCENARIO_ID_MAP = {
-            'train': 'cutscene5_llm_driven',
+            'train': 'mugen_train_full',
             'ending': 'cutscene5_llm_driven',
         }
 
@@ -531,6 +529,10 @@ print("  ✅ Chat router registered")
 session_router.set_dependencies(SESSION_MANAGER, db_manager)
 app.include_router(session_router.router)
 print("  ✅ Session router registered")
+
+gallery_router.set_db_manager(db_manager)
+app.include_router(gallery_router.router)
+print("  ✅ Gallery router registered")
 
 # ============================================================
 # 🧩 Request / Response 데이터 모델 정의
@@ -1933,6 +1935,6 @@ if __name__ == "__main__":
         "api_server:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,  # 코드 변경 시 자동 리로드
+        reload=False,  # Auto-reload disabled for stability
         log_level="info",
     )

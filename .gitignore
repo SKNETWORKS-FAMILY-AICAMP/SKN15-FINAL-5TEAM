@@ -4,6 +4,7 @@
 .env.development
 .env.production
 .env.*.local
+backend/.env.local
 
 # Log files
 *.log
@@ -80,6 +81,11 @@ htmlcov/
 *.sqlite
 *.sqlite3
 
+# Database backups (exclude from git)
+backups/
+*.sql
+!backend/database/migrations/*.sql
+
 # OS
 Thumbs.db
 .Spotlight-V100
@@ -117,3 +123,7 @@ restructure_beats.py
 check_aws_resources.sh
 check_language.py
 cleanup_aws.sh
+
+
+
+GIT_PUSH_CHECKLIST.md

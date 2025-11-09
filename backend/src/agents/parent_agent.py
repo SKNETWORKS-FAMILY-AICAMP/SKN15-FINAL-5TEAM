@@ -298,9 +298,58 @@ class ParentAgent:
         return False
 
     # ============================================================
+    # 💜 친밀도 업데이트
+    # ============================================================
+    def _update_affinity(self, state: Dict[str, Any]) -> None:
+        """대화 완료 후 친밀도 업데이트"""
+        try:
+            from src.services import get_affinity_service
+
+            # 사용자 입력과 생성된 대화 추출
+            user_input = state.get("user_input", "")
+
+            # 대화 추출 - agent_responses 우선, output.dialogues 백업
+            output_dialogues = state.get("agent_responses", [])
+            if not output_dialogues:
+                output_dialogues = (state.get("output") or {}).get("dialogues", [])
+
+            # 디버그 로그
+            log("parent", f"[_update_affinity] user_input={bool(user_input)}, dialogues_count={len(output_dialogues)}")
+
+            # 대화가 없으면 스킵
+            if not user_input or not output_dialogues:
+                log("parent", "⚠️ Skipping affinity update: missing user_input or dialogues")
+                return
+
+            # AffinityService를 통해 친밀도 업데이트
+            affinity_service = get_affinity_service()
+            updated_affinity = affinity_service.update_affinity(
+                state=state,
+                user_input=user_input,
+                dialogues=output_dialogues,
+            )
+
+            # state에 업데이트된 친밀도 반영
+            old_affinity = state.get("affinity_scores", {})
+            state["affinity_scores"] = updated_affinity
+
+            # 변화 로그
+            for char, new_score in updated_affinity.items():
+                old_score = old_affinity.get(char, 0)
+                if new_score != old_score:
+                    log("parent", f"💜 {char}: {old_score} → {new_score} (change: {new_score - old_score:+d})")
+
+        except Exception as e:
+            import traceback
+            log("parent", f"⚠️ Affinity update failed: {e}")
+            log("parent", f"Traceback: {traceback.format_exc()}")
+            # 친밀도 업데이트 실패해도 진행은 계속
+
+    # ============================================================
     # 💬 After Dialogue
     # ============================================================
     def after_dialogue(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        log("parent", "🔍 [after_dialogue] CALLED")
         st = get_state_tools()
         temp = st.get_temp_data(state)
         if temp.pop("skip_parent_after_dialogue", False):
@@ -312,6 +361,9 @@ class ParentAgent:
         scenario_id = (scenario or {}).get("scenario_id") or state.get("scenario_id") or ""
         scenario_module = st.load_scenario_module(scenario_id)
         completed_stage = st.consume_completed_stage(state)
+
+        # 💜 친밀도 업데이트 (대화 완료 후)
+        self._update_affinity(state)
 
         # stage turn 증가
         st.increment_stage_turn(state)
@@ -474,6 +526,7 @@ def run_parent_agent(state: Dict[str, Any]) -> Dict[str, Any]:
         raise  # 에러는 다시 발생시켜 상위에서 처리
 
 def parent_after_dialogue(state: Dict[str, Any]) -> Dict[str, Any]:
+    log("parent", "🔍 [parent_after_dialogue] CALLED")
     return DEFAULT_AGENT.after_dialogue(state)
 
 __all__ = ["ParentAgent", "run_parent_agent", "parent_after_dialogue"]

@@ -4,8 +4,10 @@ from typing import Dict, List, Optional
 
 from src.core.graph_state import AgentState, Dialogue
 from src.services import DialogueValidationService, DialogueCorrectionService
+from src.services.dialogue_image_service import get_dialogue_image_service
 from src.utils.llm_client import get_llm_client
 from src.tools.training_logger import log_agent
+from src.database.db_manager import DatabaseManager
 
 # ============================================================
 # 🗣️ DialogueAgent — children_agent가 만든 대사를 검증·미세조정
@@ -15,10 +17,11 @@ class DialogueAgent:
     # ============================================================
     # 🛠️ 초기화
     # ============================================================
-    def __init__(self, use_llm: bool = True, enable_multi_conversation: bool = False):
+    def __init__(self, use_llm: bool = True, enable_multi_conversation: bool = False, db_manager: DatabaseManager = None):
         """Dialogue Agent 초기화"""
         self.use_llm = use_llm
         self.enable_multi_conversation = enable_multi_conversation
+        self.db_manager = db_manager  # 이미지 매핑용 DB 접근
 
         # 🆕 Service layer initialization
         llm_client = None
@@ -162,6 +165,22 @@ def run_dialogue_agent(state: AgentState) -> AgentState:
 
         # agent_responses 초기화 (다음 배치를 위해)
         state["agent_responses"] = []
+
+    # 🖼️ 이미지 선택 (이벤트 감지 + DB 기반 매핑) - Service layer 사용
+    db_manager = state.get("db_manager")
+    if db_manager and state.get("output", {}).get("dialogues"):
+        try:
+            image_service = get_dialogue_image_service(db_manager=db_manager)
+            selected_image = image_service.select_image_for_dialogue(
+                state=state,
+                dialogues=state["output"]["dialogues"]
+            )
+
+            if selected_image:
+                state["current_image"] = selected_image
+                print(f"[DIALOGUE] 🖼️ Image selected: {selected_image}")
+        except Exception as e:
+            print(f"[DIALOGUE] ⚠️ Image selection failed: {e}")
 
     # 엔딩 상태 확인
     current_stage = state.get("current_stage") or ""

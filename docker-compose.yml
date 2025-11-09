@@ -26,7 +26,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev123}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database/migrations:/docker-entrypoint-initdb.d:ro
@@ -113,6 +113,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      # 개발 환경: 소스 코드 실시간 반영 (프로덕션에서는 제거 권장)
+      - ./backend:/app
       - ./backend/logs:/app/logs
       - ./backend/data:/app/data
     networks:
@@ -142,7 +144,7 @@ services:
     networks:
       - kime-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -160,8 +162,8 @@ networks:
 # ============================================================
 volumes:
   postgres_data:
-    name: kime-postgres-data
-    driver: local
+    name: database_postgres_data
+    external: true
   redis_data:
     name: kime-redis-data
     driver: local

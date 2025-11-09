@@ -212,10 +212,20 @@ export const allScenarioBackgrounds: ScenarioBackgrounds[] = [
 ];
 
 /**
+ * 시나리오 ID 매핑 (여러 시나리오 ID가 같은 배경 이미지를 사용할 수 있도록)
+ */
+const SCENARIO_ID_MAPPING: Record<string, string> = {
+  'mugen_train_full': 'mugen_train',  // 무한열차 - 츠구코의 시련 → 무한열차 이미지 사용
+  'train': 'mugen_train',              // train → mugen_train 이미지 사용
+};
+
+/**
  * 시나리오 ID로 배경 이미지 설정을 가져옵니다
  */
 export function getScenarioBackgrounds(scenarioId: string): ScenarioBackgrounds | undefined {
-  return allScenarioBackgrounds.find(scenario => scenario.scenarioId === scenarioId);
+  // ID 매핑이 있으면 매핑된 ID 사용
+  const mappedId = SCENARIO_ID_MAPPING[scenarioId] || scenarioId;
+  return allScenarioBackgrounds.find(scenario => scenario.scenarioId === mappedId);
 }
 
 /**
@@ -232,7 +242,9 @@ export function getBackgroundById(scenarioId: string, backgroundId: string): Bac
  */
 export function getBackgroundImagePath(scenarioId: string, fileName: string): string {
   const cdnUrl = import.meta.env.VITE_CDN_URL || '/images';
-  return `${cdnUrl}/backgrounds/${scenarioId}/${fileName}`;
+  // ID 매핑이 있으면 매핑된 ID로 경로 생성
+  const mappedId = SCENARIO_ID_MAPPING[scenarioId] || scenarioId;
+  return `${cdnUrl}/backgrounds/${mappedId}/${fileName}`;
 }
 
 /**

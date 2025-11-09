@@ -67,10 +67,24 @@ export interface LastSessionInfo {
   conversationSummary?: string
 }
 
+export interface RecentSession {
+  session_id: string
+  scenario_id: string
+  scenario_title?: string
+  scenario_thumbnail?: string
+  current_stage?: string
+  turn_count: number
+  created_at?: string
+  updated_at?: string
+  conversation_summary?: string
+  last_message_speaker?: string
+  last_message_content?: string
+}
+
 export interface UserInfo {
   user_id: string
   username: string
-  display_name: string
+  display_name: string | null
 }
 
 export interface UserCredits {
@@ -169,6 +183,77 @@ export interface ScenarioProgress {
   total_messages: number
   total_play_time: number
   is_liked: boolean
+}
+
+export interface UserSettings {
+  sound_enabled: boolean
+  bgm_volume: number
+  sfx_volume: number
+  auto_save: boolean
+  language: string
+  font_size: 'small' | 'medium' | 'large'
+  animation_speed: 'slow' | 'normal' | 'fast'
+  created_at?: string
+  updated_at?: string
+}
+
+export type UserSettingsUpdate = Partial<Omit<UserSettings, 'created_at' | 'updated_at'>>
+
+// Comment interfaces
+export interface Comment {
+  id: number
+  scenario_id: string
+  user_id: string
+  username: string
+  display_name: string
+  content: string
+  parent_comment_id: number | null
+  like_count: number
+  reply_count: number
+  is_liked: boolean
+  is_edited: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CommentCreate {
+  content: string
+  parent_comment_id?: number | null
+}
+
+export interface CommentUpdate {
+  content: string
+}
+
+export interface UserStatistics {
+  total_play_time_minutes: number
+  total_sessions: number
+  total_messages: number
+  rank: {
+    rank_code: string
+    rank_name_ko: string
+    rank_icon: string
+    level: number
+    experience_points: number
+    next_rank_xp: number | null
+  }
+  scenario_progress: {
+    completed_count: number
+    total_count: number
+    total_completions: number
+  }
+  top_affinity_characters: Array<{
+    character_name: string
+    affinity_score: number  // 글로벌 친밀도 (0~1000)
+    affinity_level: number  // 친밀도 레벨 (1~10)
+    total_interactions: number  // 총 상호작용 횟수
+  }>
+  frequent_scenarios: Array<{
+    scenario_id: string
+    title: string
+    play_count: number
+    total_messages: number
+  }>
 }
 
 // ============================================================
@@ -394,6 +479,21 @@ class ApiClient {
   }
 
   /**
+   * Get user's recent sessions (with JWT authentication)
+   */
+  async getRecentSessions(limit: number = 4): Promise<RecentSession[]> {
+    try {
+      const response = await authenticatedApiClient.get('/api/sessions/recent', {
+        params: { limit }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error getting recent sessions:', error)
+      return []
+    }
+  }
+
+  /**
    * Get current user information (with JWT authentication)
    */
   async getCurrentUser(): Promise<UserInfo> {
@@ -445,6 +545,22 @@ class ApiClient {
     } catch (error) {
       console.error('Error confirming password reset:', error)
       throw error
+    }
+  }
+
+  /**
+   * Change password for logged-in user (requires authentication)
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authenticatedApiClient.post('/api/auth/password-change', {
+        current_password: currentPassword,
+        new_password: newPassword
+      })
+      return response.data
+    } catch (error: any) {
+      console.error('Error changing password:', error)
+      throw new Error(error.response?.data?.detail || '비밀번호 변경에 실패했습니다.')
     }
   }
 
@@ -648,12 +764,25 @@ class ApiClient {
   /**
    * Toggle like for scenario (requires JWT)
    */
-  async toggleScenarioLike(scenarioId: string): Promise<{ liked: boolean, total_likes: number }> {
+  async toggleScenarioLike(scenarioId: string): Promise<{ liked: boolean; like_count: number }> {
     try {
-      const response = await authenticatedApiClient.post(`/api/users/me/scenarios/${scenarioId}/like`)
+      const response = await authenticatedApiClient.post(`/api/scenarios/${scenarioId}/like`)
       return response.data
     } catch (error) {
       console.error(`Error toggling like for scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Check if user has liked a scenario (requires JWT)
+   */
+  async checkScenarioLike(scenarioId: string): Promise<{ liked: boolean }> {
+    try {
+      const response = await authenticatedApiClient.get(`/api/scenarios/${scenarioId}/like`)
+      return response.data
+    } catch (error) {
+      console.error(`Error checking like for scenario ${scenarioId}:`, error)
       throw error
     }
   }
@@ -686,6 +815,234 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error(`Error updating progress for scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  // ============================================================
+  // User Settings Methods
+  // ============================================================
+
+  /**
+   * Get user settings (requires JWT)
+   */
+  async getUserSettings(): Promise<UserSettings> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/settings')
+      return response.data
+    } catch (error) {
+      console.error('Error getting user settings:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update user settings (requires JWT)
+   */
+  async updateUserSettings(settings: UserSettingsUpdate): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authenticatedApiClient.put('/api/users/me/settings', settings)
+      return response.data
+    } catch (error) {
+      console.error('Error updating user settings:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user statistics (requires JWT)
+   */
+  async getUserStatistics(): Promise<UserStatistics> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/statistics')
+      return response.data
+    } catch (error) {
+      console.error('Error getting user statistics:', error)
+      throw error
+    }
+  }
+
+  // ============================================================
+  // Gallery API Methods
+  // ============================================================
+
+  /**
+   * Get unlocked images for the current user
+   */
+  async getUnlockedImages(scenario_id?: string): Promise<any> {
+    try {
+      const params = scenario_id ? { scenario_id } : {}
+      const response = await authenticatedApiClient.get('/api/gallery/my-images', { params })
+      return response.data
+    } catch (error) {
+      console.error('Error getting unlocked images:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get all images with unlock status
+   */
+  async getAllImagesWithStatus(scenario_id?: string): Promise<any> {
+    try {
+      const params = scenario_id ? { scenario_id } : {}
+      const response = await authenticatedApiClient.get('/api/gallery/all-images', { params })
+      return response.data
+    } catch (error) {
+      console.error('Error getting all images:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get gallery statistics
+   */
+  async getGalleryStats(scenario_id?: string): Promise<any> {
+    try {
+      const params = scenario_id ? { scenario_id } : {}
+      const response = await authenticatedApiClient.get('/api/gallery/stats', { params })
+      return response.data
+    } catch (error) {
+      console.error('Error getting gallery stats:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Manually unlock an image (admin/testing)
+   */
+  async unlockImage(image_id: string): Promise<any> {
+    try {
+      const response = await authenticatedApiClient.post(`/api/gallery/unlock/${image_id}`)
+      return response.data
+    } catch (error) {
+      console.error('Error unlocking image:', error)
+      throw error
+    }
+  }
+
+  // ============================================================
+  // Comment API Methods
+  // ============================================================
+
+  /**
+   * Get comments for a scenario (public API, auth optional)
+   */
+  async getScenarioComments(
+    scenarioId: string,
+    sortBy: 'recent' | 'popular' = 'recent',
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<Comment[]> {
+    try {
+      // Try with auth first if user is logged in
+      try {
+        const response = await authenticatedApiClient.get(`/api/scenarios/${scenarioId}/comments`, {
+          params: { sort_by: sortBy, limit, offset }
+        })
+        return response.data
+      } catch (authError) {
+        // Fallback to public API if not authenticated
+        const response = await axios.get(`${this.baseUrl}/api/scenarios/${scenarioId}/comments`, {
+          params: { sort_by: sortBy, limit, offset }
+        })
+        return response.data
+      }
+    } catch (error) {
+      console.error(`Error getting comments for scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Get replies for a comment (public API, auth optional)
+   */
+  async getCommentReplies(scenarioId: string, commentId: number): Promise<Comment[]> {
+    try {
+      // Try with auth first if user is logged in
+      try {
+        const response = await authenticatedApiClient.get(
+          `/api/scenarios/${scenarioId}/comments/${commentId}/replies`
+        )
+        return response.data
+      } catch (authError) {
+        // Fallback to public API if not authenticated
+        const response = await axios.get(
+          `${this.baseUrl}/api/scenarios/${scenarioId}/comments/${commentId}/replies`
+        )
+        return response.data
+      }
+    } catch (error) {
+      console.error(`Error getting replies for comment ${commentId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Create a comment (requires JWT)
+   */
+  async createComment(scenarioId: string, commentData: CommentCreate): Promise<Comment> {
+    try {
+      const response = await authenticatedApiClient.post(
+        `/api/scenarios/${scenarioId}/comments`,
+        commentData
+      )
+      return response.data
+    } catch (error) {
+      console.error(`Error creating comment for scenario ${scenarioId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Update a comment (requires JWT, owner only)
+   */
+  async updateComment(
+    scenarioId: string,
+    commentId: number,
+    commentData: CommentUpdate
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await authenticatedApiClient.put(
+        `/api/scenarios/${scenarioId}/comments/${commentId}`,
+        commentData
+      )
+      return response.data
+    } catch (error) {
+      console.error(`Error updating comment ${commentId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Delete a comment (requires JWT, owner only)
+   */
+  async deleteComment(scenarioId: string, commentId: number): Promise<{ success: boolean }> {
+    try {
+      const response = await authenticatedApiClient.delete(
+        `/api/scenarios/${scenarioId}/comments/${commentId}`
+      )
+      return response.data
+    } catch (error) {
+      console.error(`Error deleting comment ${commentId}:`, error)
+      throw error
+    }
+  }
+
+  /**
+   * Toggle like on a comment (requires JWT)
+   */
+  async toggleCommentLike(
+    scenarioId: string,
+    commentId: number
+  ): Promise<{ liked: boolean; like_count: number }> {
+    try {
+      const response = await authenticatedApiClient.post(
+        `/api/scenarios/${scenarioId}/comments/${commentId}/like`
+      )
+      return response.data
+    } catch (error) {
+      console.error(`Error toggling like for comment ${commentId}:`, error)
       throw error
     }
   }

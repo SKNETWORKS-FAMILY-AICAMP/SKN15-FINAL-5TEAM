@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { isAuthenticated, getUserData, clearTokens } from '@/utils/authUtils';
-import { apiClient } from '@/services/api';
+import { apiClient, UserSettings, UserSettingsUpdate } from '@/services/api';
+import { useSettings } from '@/hooks/useSettings';
 
 interface AppContextType {
   isSidebarOpen: boolean;

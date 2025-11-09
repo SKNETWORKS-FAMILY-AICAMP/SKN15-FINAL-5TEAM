@@ -172,6 +172,17 @@ class KimeChatWorkflow:
             print("[WORKFLOW] → dialogue_agent", flush=True)
         started = time.perf_counter()
         result = run_dialogue_agent(state)
+
+        # 💜 agent_responses를 output.dialogues에도 복사 (친밀도 업데이트용)
+        if result.get("agent_responses") and isinstance(result["agent_responses"], list):
+            if "output" not in result:
+                result["output"] = {}
+            if "dialogues" not in result["output"]:
+                result["output"]["dialogues"] = []
+            # 기존 dialogues가 있으면 유지, 없으면 agent_responses 복사
+            if not result["output"]["dialogues"]:
+                result["output"]["dialogues"] = result["agent_responses"].copy()
+
         # 대화 생성 후 parent_after_dialogue 호출 (스테이지 전환 로직)
         result = parent_after_dialogue(result)
         duration_ms = (time.perf_counter() - started) * 1000.0

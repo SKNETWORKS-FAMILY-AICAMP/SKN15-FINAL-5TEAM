@@ -76,6 +76,16 @@ class SearchMemoriesRequest(BaseModel):
     limit: int = 10
 
 
+class UpdateSettingsRequest(BaseModel):
+    sound_enabled: Optional[bool] = None
+    bgm_volume: Optional[int] = None
+    sfx_volume: Optional[int] = None
+    auto_save: Optional[bool] = None
+    language: Optional[str] = None
+    font_size: Optional[str] = None
+    animation_speed: Optional[str] = None
+
+
 # ============================================================
 # Credits Endpoints
 # ============================================================
@@ -97,6 +107,87 @@ async def consume_user_credits(req: ConsumeCreditsRequest, user: Dict = Depends(
     if not success:
         raise HTTPException(status_code=400, detail="크레딧 잔액이 부족합니다")
     return {"success": True, "message": f"{req.amount} 버블이 차감되었습니다"}
+
+
+# ============================================================
+# Settings Endpoints
+# ============================================================
+
+
+@router.get("/settings")
+async def get_user_settings(user: Dict = Depends(require_auth)):
+    """
+    사용자 설정 조회
+
+    Returns:
+        {
+            "sound_enabled": bool,
+            "bgm_volume": int,
+            "sfx_volume": int,
+            "auto_save": bool,
+            "language": str,
+            "font_size": str,
+            "animation_speed": str,
+            "created_at": str,
+            "updated_at": str
+        }
+    """
+    settings = db_manager.get_user_settings(user["user_id"])
+    if not settings:
+        raise HTTPException(status_code=404, detail="설정 정보를 찾을 수 없습니다")
+    return settings
+
+
+@router.put("/settings")
+async def update_user_settings(req: UpdateSettingsRequest, user: Dict = Depends(require_auth)):
+    """
+    사용자 설정 업데이트
+
+    Args:
+        req: UpdateSettingsRequest (업데이트할 필드만 포함)
+
+    Returns:
+        {"success": bool, "message": str}
+    """
+    # None이 아닌 값들만 딕셔너리로 변환
+    settings_dict = {k: v for k, v in req.dict().items() if v is not None}
+
+    if not settings_dict:
+        raise HTTPException(status_code=400, detail="업데이트할 설정이 없습니다")
+
+    success = db_manager.update_user_settings(user["user_id"], settings_dict)
+    if not success:
+        raise HTTPException(status_code=500, detail="설정 업데이트에 실패했습니다")
+    return {"success": True, "message": "설정이 업데이트되었습니다"}
+
+
+# ============================================================
+# User Statistics Endpoints
+# ============================================================
+
+
+@router.get("/statistics")
+async def get_user_statistics(user: Dict = Depends(require_auth)):
+    """
+    사용자 통계 조회
+
+    Returns:
+        {
+            "total_play_time_minutes": int,
+            "total_sessions": int,
+            "total_messages": int,
+            "top_affinity_characters": [
+                {"character_name": str, "affinity_score": int}
+            ],
+            "frequent_scenarios": [
+                {"scenario_id": str, "title": str, "play_count": int, "total_messages": int}
+            ]
+        }
+    """
+    statistics = db_manager.get_user_statistics(user["user_id"])
+    if not statistics:
+        raise HTTPException(status_code=404, detail="통계 정보를 찾을 수 없습니다")
+    return statistics
 
 
 # ============================================================

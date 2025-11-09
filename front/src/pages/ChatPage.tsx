@@ -1,5 +1,5 @@
-import { useParams, Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate, useBeforeUnload } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import ChatHeader from '@/components/ChatHeader';
 import LoginModal from '@/components/LoginModal';
@@ -8,14 +8,15 @@ import { useApp } from '@/contexts/AppContext';
 import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
 
 const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'cutscene5_llm_driven',
+  train: 'mugen_train_full',
   ending: 'cutscene5_llm_driven',
-  cutscene5_llm_driven: 'cutscene5_llm_driven',
+  mugen_train_full: 'mugen_train_full',
 };
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
   const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
+  const navigate = useNavigate();
 
   // Scenario loading state
   const [scenario, setScenario] = useState<ScenarioCard | null>(null);
@@ -27,6 +28,12 @@ export default function ChatPage() {
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
+
+  // Invited characters state (from ChatInterface)
+  const [invitedCharacters, setInvitedCharacters] = useState<string[]>([]);
+
+  // Track if user has interacted with chat (to show exit warning)
+  const [hasStartedChat, setHasStartedChat] = useState(false);
 
   // Load scenario data from API
   useEffect(() => {
@@ -98,6 +105,29 @@ export default function ChatPage() {
     setSessionCheckDone(true);
   };
 
+  // Warn user before leaving page (browser close/refresh)
+  useBeforeUnload(
+    useCallback((event) => {
+      if (hasStartedChat) {
+        event.preventDefault();
+        // Modern browsers display a generic message, but we set returnValue anyway
+        return (event.returnValue = '정말 나가시겠습니까? 진행 중인 대화가 저장되지 않을 수 있습니다.');
+      }
+    }, [hasStartedChat])
+  );
+
+  // Handle back button navigation with confirmation
+  const handleBackNavigation = useCallback(() => {
+    if (hasStartedChat) {
+      const confirmed = window.confirm('정말 나가시겠습니까? 진행 중인 대화가 저장되지 않을 수 있습니다.');
+      if (confirmed) {
+        navigate('/');
+      }
+    } else {
+      navigate('/');
+    }
+  }, [hasStartedChat, navigate]);
+
   // Loading state for scenario
   if (scenarioLoading) {
     return (
@@ -107,6 +137,7 @@ export default function ChatPage() {
           onOpenSettings={openSettings}
           title="로딩 중..."
           showBackButton={true}
+          onBackClick={handleBackNavigation}
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
           <div className="relative z-10 flex items-center justify-center h-full">
@@ -129,6 +160,7 @@ export default function ChatPage() {
           onOpenSettings={openSettings}
           title="알 수 없는 시나리오"
           showBackButton={true}
+          onBackClick={handleBackNavigation}
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
           <div className="relative z-10 flex items-center justify-center h-full">
@@ -162,6 +194,7 @@ export default function ChatPage() {
           onOpenSettings={openSettings}
           title={scenario.title}
           showBackButton={true}
+          onBackClick={handleBackNavigation}
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
           <div className="relative z-10 flex items-center justify-center h-full">
@@ -195,6 +228,7 @@ export default function ChatPage() {
           onOpenSettings={openSettings}
           title={scenario?.title || '채팅'}
           showBackButton={true}
+          onBackClick={handleBackNavigation}
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
           <div className="relative z-10 flex items-center justify-center h-full">
@@ -226,6 +260,8 @@ export default function ChatPage() {
         onOpenSettings={openSettings}
         title={scenario.title}
         showBackButton={true}
+        invitedCharacters={invitedCharacters}
+        onBackClick={handleBackNavigation}
       />
 
       <main style={{ height: 'calc(100vh - 64px)' }}>
@@ -233,6 +269,8 @@ export default function ChatPage() {
         <ChatInterface
           characterId={characterId || 'ending'}
           initialSessionId={resumeSessionId}
+          onInvitedCharactersChange={setInvitedCharacters}
+          onMessageSent={() => setHasStartedChat(true)}
         />
       </main>
 

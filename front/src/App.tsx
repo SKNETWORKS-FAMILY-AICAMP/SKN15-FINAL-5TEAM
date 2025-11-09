@@ -7,8 +7,12 @@ import ErrorBoundary from './components/ErrorBoundary'
 const HomePage = lazy(() => import('./pages/HomePage'))
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const CharacterPage = lazy(() => import('./pages/CharacterPage'))
+const MyGalleryPage = lazy(() => import('./pages/MyGalleryPage'))
 const PasswordResetConfirmPage = lazy(() => import('./pages/PasswordResetConfirmPage'))
 const PasswordResetModal = lazy(() => import('./components/PasswordResetModal'))
+const SettingsModal = lazy(() => import('./components/SettingsModal'))
+const LeftSidebar = lazy(() => import('./components/LeftSidebar'))
+const MyAccountModal = lazy(() => import('./components/MyAccountModal'))
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -25,7 +29,14 @@ const LoadingFallback = () => (
 )
 
 function App() {
-  const { isPasswordResetModalOpen, closePasswordResetModal } = useApp()
+  const {
+    isPasswordResetModalOpen,
+    closePasswordResetModal,
+    isSettingsModalOpen,
+    closeSettings,
+    isSidebarOpen,
+    toggleSidebar
+  } = useApp()
 
   return (
     <ErrorBoundary>
@@ -34,14 +45,24 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/chat/:characterId" element={<ChatPage />} />
           <Route path="/character/:characterId" element={<CharacterPage />} />
+          <Route path="/gallery" element={<MyGalleryPage />} />
           <Route path="/reset-password" element={<PasswordResetConfirmPage />} />
         </Routes>
 
-        {/* Global Password Reset Modal */}
+        {/* Global Modals and Sidebar */}
         <PasswordResetModal
           isOpen={isPasswordResetModalOpen}
           onClose={closePasswordResetModal}
         />
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={closeSettings}
+        />
+        <LeftSidebar
+          isOpen={isSidebarOpen}
+          onToggle={toggleSidebar}
+        />
+        <MyAccountModal />
       </Suspense>
     </ErrorBoundary>
   )

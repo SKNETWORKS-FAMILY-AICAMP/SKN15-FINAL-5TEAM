@@ -182,6 +182,7 @@ async def chat(
             state["scenario_id"] = resolved_id
             state["user_name"] = user_name
             state["user_id"] = user_id
+            state["db_manager"] = _db_manager  # 이미지 매핑용 DB 접근
 
             # 🧠 사용자 장기 기억 로드
             if user_id:
@@ -365,6 +366,7 @@ async def chat(
                     old_affinity = final_state.get("_old_affinity", {})
                     new_affinity = final_state.get("affinity_scores", {})
                     turn_count = final_state.get("turn_count", 0)
+                    current_user_id = final_state.get("user_id") or user_id
 
                     for character, new_score in new_affinity.items():
                         old_score = old_affinity.get(character, 0)
@@ -372,6 +374,7 @@ async def chat(
 
                         if change != 0:
                             try:
+                                # 세션별 친밀도 기록 저장
                                 _session_manager.save_affinity(
                                     session_id=session_id,
                                     turn_number=turn_count,
@@ -380,6 +383,18 @@ async def chat(
                                     change_amount=change
                                 )
                                 print(f"💜 Affinity saved: {character} {old_score} → {new_score} (change: {change:+d})")
+
+                                # 글로벌 캐릭터 친밀도 업데이트 (최대 1000점)
+                                if current_user_id:
+                                    try:
+                                        _db_manager.upsert_character_affinity(
+                                            user_id=current_user_id,
+                                            character_name=character,
+                                            affinity_change=change
+                                        )
+                                        print(f"🌍 Global affinity updated: {character} ({change:+d})")
+                                    except Exception as global_err:
+                                        print(f"⚠️ Failed to update global affinity for {character}: {global_err}")
                             except Exception as e:
                                 print(f"⚠️ Failed to save affinity for {character}: {e}")
 
@@ -391,6 +406,7 @@ async def chat(
                         "current_stage": final_state.get("current_stage"),
                         "affinity_scores": final_state.get("affinity_scores", {}),
                         "is_ended": final_state.get("is_ended", False),
+                        "current_image": final_state.get("current_image"),
                         "output": final_state.get("output", {}),
                     }
                     yield f"data: {json.dumps(final_meta, ensure_ascii=False)}\n\n"

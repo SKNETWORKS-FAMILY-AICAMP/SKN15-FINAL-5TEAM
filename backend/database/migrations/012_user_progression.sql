@@ -31,14 +31,13 @@ COMMENT ON TABLE statedb.rank_definitions IS '계급 정의 (견습생 → 대�
 COMMENT ON COLUMN statedb.rank_definitions.rank_code IS '계급 코드 (예: novice, member, hashira)';
 COMMENT ON COLUMN statedb.rank_definitions.min_xp IS '해당 계급 도달에 필요한 최소 경험치';
 
--- 초기 계급 데이터 삽입
+-- 초기 계급 데이터 삽입 (귀멸의 칼날 4단계 계급 체계)
 INSERT INTO statedb.rank_definitions (rank_code, rank_name_ko, rank_name_en, rank_name_ja, min_xp, level_range_start, level_range_end, icon_emoji, description_ko)
 VALUES
-    ('novice', '견습생', 'Novice', '見習い', 0, 1, 5, '🌱', '귀살대에 막 입문한 신입 대원'),
-    ('member', '귀살대 대원', 'Demon Slayer', '鬼殺隊隊士', 500, 6, 15, '⚔️', '정식 귀살대 대원으로 인정받음'),
-    ('elite', '정예 대원', 'Elite Slayer', '精鋭隊士', 2000, 16, 30, '🏅', '뛰어난 실력을 인정받은 정예 대원'),
-    ('pillar_candidate', '주 후보', 'Pillar Candidate', '柱候補', 5000, 31, 50, '🌟', '주(柱)에 준하는 실력을 갖춘 강자'),
-    ('hashira', '주 (柱)', 'Hashira (Pillar)', '柱', 10000, 51, 99, '💎', '귀살대 최강의 9명, 각 호흡의 정점')
+    ('member', '평대원', 'Demon Slayer Corps Member', '鬼殺隊隊士', 0, 1, 20, '⚔️', '귀살대 일반 대원'),
+    ('elite', '정예 대원', 'Elite Slayer', '精鋭隊士', 2000, 21, 40, '🏅', '뛰어난 실력을 인정받은 정예 대원'),
+    ('pillar_candidate', '주 후보', 'Pillar Candidate', '柱候補', 8000, 41, 60, '🌟', '주(柱)에 준하는 실력을 갖춘 강자'),
+    ('hashira', '주 (柱)', 'Hashira (Pillar)', '柱', 20000, 61, 99, '💎', '귀살대 최강의 9명, 각 호흡의 정점')
 ON CONFLICT (rank_code) DO NOTHING;
 
 -- ============================================================

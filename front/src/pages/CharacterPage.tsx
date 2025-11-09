@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import ChatHeader from '@/components/ChatHeader';
 import { useApp } from '@/contexts/AppContext';
-import { apiClient, ScenarioCard } from '@/services/api';
+import { apiClient, ScenarioCard, Comment, CommentCreate } from '@/services/api';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -26,6 +26,15 @@ export default function CharacterPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(false);
+
+  // Comment state management
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentSortBy, setCommentSortBy] = useState<'recent' | 'popular'>('recent');
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newCommentContent, setNewCommentContent] = useState('');
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingContent, setEditingContent] = useState('');
 
   // Mock characters data (keep for fallback)
   const mockCharacters: Character[] = [
@@ -95,6 +104,25 @@ export default function CharacterPage() {
     }
   }, [scenario, characterId]);
 
+  // Load comments
+  useEffect(() => {
+    const loadComments = async () => {
+      if (!characterId) return;
+
+      setCommentsLoading(true);
+      try {
+        const data = await apiClient.getScenarioComments(characterId, commentSortBy);
+        setComments(data);
+      } catch (err) {
+        console.error('Failed to load comments:', err);
+      } finally {
+        setCommentsLoading(false);
+      }
+    };
+
+    loadComments();
+  }, [characterId, commentSortBy]);
+
   const handleStartChat = () => {
     if (scenario) {
       navigate(`/chat/${scenario.scenario_id}`);
@@ -118,7 +146,12 @@ export default function CharacterPage() {
     } : null);
 
     try {
-      await apiClient.toggleScenarioLike(scenario.scenario_id);
+      const result = await apiClient.toggleScenarioLike(scenario.scenario_id);
+      // Update with server response for accurate count
+      setScenario(prev => prev ? {
+        ...prev,
+        likes: result.like_count
+      } : null);
     } catch (error) {
       // Revert on error
       setIsLiked(wasLiked);
@@ -128,6 +161,112 @@ export default function CharacterPage() {
       } : null);
       console.error('Failed to toggle like:', error);
       alert('좋아요 처리에 실패했습니다.');
+    }
+  };
+
+  // Comment handlers
+  const handleCreateComment = async () => {
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    if (!characterId || !newCommentContent.trim()) return;
+
+    try {
+      const commentData: CommentCreate = {
+        content: newCommentContent.trim(),
+        parent_comment_id: replyingTo
+      };
+
+      const newComment = await apiClient.createComment(characterId, commentData);
+
+      // Reload comments
+      const updatedComments = await apiClient.getScenarioComments(characterId, commentSortBy);
+      setComments(updatedComments);
+
+      // Reset form
+      setNewCommentContent('');
+      setReplyingTo(null);
+
+      // Update scenario comment count
+      setScenario(prev => prev ? { ...prev, comments: prev.comments + 1 } : null);
+    } catch (error) {
+      console.error('Failed to create comment:', error);
+      alert('댓글 작성에 실패했습니다.');
+    }
+  };
+
+  const handleUpdateComment = async (commentId: number) => {
+    if (!characterId || !editingContent.trim()) return;
+
+    try {
+      await apiClient.updateComment(characterId, commentId, { content: editingContent.trim() });
+
+      // Reload comments
+      const updatedComments = await apiClient.getScenarioComments(characterId, commentSortBy);
+      setComments(updatedComments);
+
+      // Reset editing state
+      setEditingCommentId(null);
+      setEditingContent('');
+    } catch (error) {
+      console.error('Failed to update comment:', error);
+      alert('댓글 수정에 실패했습니다.');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (!characterId || !confirm('댓글을 삭제하시겠습니까?')) return;
+
+    try {
+      await apiClient.deleteComment(characterId, commentId);
+
+      // Reload comments
+      const updatedComments = await apiClient.getScenarioComments(characterId, commentSortBy);
+      setComments(updatedComments);
+
+      // Update scenario comment count
+      setScenario(prev => prev ? { ...prev, comments: Math.max(0, prev.comments - 1) } : null);
+    } catch (error) {
+      console.error('Failed to delete comment:', error);
+      alert('댓글 삭제에 실패했습니다.');
+    }
+  };
+
+  const handleToggleCommentLike = async (commentId: number) => {
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    if (!characterId) return;
+
+    // Optimistic UI update
+    setComments(prev => prev.map(comment =>
+      comment.id === commentId
+        ? {
+            ...comment,
+            is_liked: !comment.is_liked,
+            like_count: comment.is_liked ? comment.like_count - 1 : comment.like_count + 1
+          }
+        : comment
+    ));
+
+    try {
+      const result = await apiClient.toggleCommentLike(characterId, commentId);
+
+      // Update with server response
+      setComments(prev => prev.map(comment =>
+        comment.id === commentId
+          ? { ...comment, is_liked: result.liked, like_count: result.like_count }
+          : comment
+      ));
+    } catch (error) {
+      console.error('Failed to toggle comment like:', error);
+      // Reload comments to get correct state
+      const updatedComments = await apiClient.getScenarioComments(characterId, commentSortBy);
+      setComments(updatedComments);
     }
   };
 
@@ -465,6 +604,214 @@ export default function CharacterPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* 댓글 섹션 */}
+          <div className="mt-6 bg-white rounded-2xl shadow-md overflow-hidden">
+            {/* 댓글 헤더 */}
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  댓글 <span className="text-purple-600">{scenario.comments}</span>
+                </h2>
+
+                {/* 정렬 토글 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCommentSortBy('recent')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      commentSortBy === 'recent'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    최신순
+                  </button>
+                  <button
+                    onClick={() => setCommentSortBy('popular')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      commentSortBy === 'popular'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    인기순
+                  </button>
+                </div>
+              </div>
+
+              {/* 댓글 작성 폼 */}
+              {isLoggedIn ? (
+                <div className="space-y-3">
+                  {replyingTo && (
+                    <div className="flex items-center gap-2 text-sm text-purple-600">
+                      <span>답글 작성 중</span>
+                      <button
+                        onClick={() => {
+                          setReplyingTo(null);
+                          setNewCommentContent('');
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                  <textarea
+                    value={newCommentContent}
+                    onChange={(e) => setNewCommentContent(e.target.value)}
+                    placeholder="댓글을 작성해주세요..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                    rows={3}
+                    maxLength={1000}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {newCommentContent.length} / 1000
+                    </span>
+                    <button
+                      onClick={handleCreateComment}
+                      disabled={!newCommentContent.trim()}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      댓글 작성
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <p className="text-gray-600">로그인 후 댓글을 작성할 수 있습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* 댓글 목록 */}
+            <div className="p-6">
+              {commentsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-2">댓글을 불러오는 중...</p>
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="text-center py-12">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <p className="text-gray-500">첫 번째 댓글을 작성해보세요!</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="border-b border-gray-100 pb-6 last:border-0">
+                      {/* 댓글 헤더 */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                            <span className="text-purple-600 font-bold">
+                              {comment.display_name?.[0] || comment.username[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {comment.display_name || comment.username}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(comment.created_at).toLocaleDateString('ko-KR', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                              {comment.is_edited && <span className="ml-2">(수정됨)</span>}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 댓글 내용 */}
+                      {editingCommentId === comment.id ? (
+                        <div className="space-y-3 ml-13">
+                          <textarea
+                            value={editingContent}
+                            onChange={(e) => setEditingContent(e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                            rows={3}
+                            maxLength={1000}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleUpdateComment(comment.id)}
+                              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                            >
+                              수정 완료
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingCommentId(null);
+                                setEditingContent('');
+                              }}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-gray-700 mb-3 ml-13">{comment.content}</p>
+
+                          {/* 댓글 액션 */}
+                          <div className="flex items-center gap-4 ml-13">
+                            <button
+                              onClick={() => handleToggleCommentLike(comment.id)}
+                              className="flex items-center gap-1 text-sm text-gray-600 hover:text-purple-600 transition-colors"
+                            >
+                              <svg
+                                className={`w-4 h-4 ${comment.is_liked ? 'fill-purple-600 text-purple-600' : ''}`}
+                                fill={comment.is_liked ? 'currentColor' : 'none'}
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                              </svg>
+                              <span>{comment.like_count}</span>
+                            </button>
+
+                            {comment.reply_count > 0 && (
+                              <span className="text-sm text-gray-500">
+                                답글 {comment.reply_count}개
+                              </span>
+                            )}
+
+                            {/* Edit/Delete buttons for own comments */}
+                            {isLoggedIn && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingCommentId(comment.id);
+                                    setEditingContent(comment.content);
+                                  }}
+                                  className="text-sm text-gray-600 hover:text-purple-600"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="text-sm text-gray-600 hover:text-red-600"
+                                >
+                                  삭제
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

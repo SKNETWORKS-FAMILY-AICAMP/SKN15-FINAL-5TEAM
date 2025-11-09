@@ -53,7 +53,8 @@ export default function HomePage() {
           views: scenario.views,
           tags: scenario.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`),
           size: scenario.card_size,
-          link: scenario.route_path
+          // Convert /chat/xxx to /character/xxx for detail page
+          link: `/character/${scenario.scenario_id}`
         }));
 
         setCharacters(transformedCharacters);
@@ -108,7 +109,7 @@ export default function HomePage() {
         // Update likes count with server response
         setCharacters(prev => prev.map(char => {
           if (char.id === cardId) {
-            return { ...char, likes: result.total_likes };
+            return { ...char, likes: result.like_count };
           }
           return char;
         }));

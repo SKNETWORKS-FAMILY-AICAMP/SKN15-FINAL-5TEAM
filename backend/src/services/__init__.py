@@ -18,6 +18,7 @@ from .context_builder_service import ContextBuilderService
 from .mission_logic_service import MissionLogicService
 from .mission_feedback_service import MissionFeedbackService
 from .mission_record_service import MissionRecordService
+from .affinity_service import AffinityService, get_affinity_service
 
 __all__ = [
     "DialogueGenerationService",
@@ -33,4 +34,6 @@ __all__ = [
     "MissionLogicService",
     "MissionFeedbackService",
     "MissionRecordService",
+    "AffinityService",
+    "get_affinity_service",
 ]

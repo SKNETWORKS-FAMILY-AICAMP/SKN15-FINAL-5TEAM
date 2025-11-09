@@ -37,15 +37,21 @@ class CacheManager:
         password = password or os.getenv('REDIS_PASSWORD')
         default_ttl = default_ttl or int(os.getenv('SESSION_TTL', '3600'))
 
-        self.redis_client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            password=password,
-            decode_responses=True,  # 자동으로 문자열 디코딩
-            socket_connect_timeout=2,
-            socket_timeout=5
-        )
+        # Redis 연결 설정
+        redis_config = {
+            'host': host,
+            'port': port,
+            'db': db,
+            'decode_responses': True,
+            'socket_connect_timeout': 2,
+            'socket_timeout': 5
+        }
+
+        # 비밀번호가 설정되어 있을 때만 추가 (빈 문자열 제외)
+        if password and password.strip():
+            redis_config['password'] = password
+
+        self.redis_client = redis.Redis(**redis_config)
         self.default_ttl = default_ttl
 
         # 연결 테스트

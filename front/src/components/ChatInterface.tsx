@@ -25,17 +25,24 @@ interface ChatInterfaceProps {
   onMessageSent?: () => void;
   characterId?: string;
   initialSessionId?: string;  // 세션 복원용 session_id
+  onInvitedCharactersChange?: (characters: string[]) => void;  // 참여 캐릭터 변경 콜백
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
 
 const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'cutscene5_llm_driven',
+  train: 'mugen_train_full',
   ending: 'cutscene5_llm_driven',
-  cutscene5_llm_driven: 'cutscene5_llm_driven',
+  mugen_train_full: 'mugen_train_full',
 };
 
-export default function ChatInterface({ onUserLogin, onMessageSent, characterId = 'ending', initialSessionId }: ChatInterfaceProps) {
+export default function ChatInterface({
+  onUserLogin,
+  onMessageSent,
+  characterId = 'ending',
+  initialSessionId,
+  onInvitedCharactersChange
+}: ChatInterfaceProps) {
   // App context (for bubble consumption)
   const { consumeBubbles } = useApp();
 
@@ -45,7 +52,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [invitedCharacters, setInvitedCharacters] = useState<string[]>(['tanjiro', 'inosuke', 'zenitsu', 'nezuko']); // 현재 참여중인 캐릭터들
+  const [invitedCharacters, setInvitedCharacters] = useState<string[]>([]); // 현재 참여중인 캐릭터들 (백엔드 응답에서 동기화)
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);  // 세션 복원 지원
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +64,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const shouldCancelAutoRequest = useRef(false); // 사용자 중단 플래그
   const messageIdCounter = useRef(0); // 고유한 메시지 ID 생성용 카운터
   const isAddingMessages = useRef(false); // 메시지 추가 중 플래그 (중복 방지)
+  const isSendingRef = useRef(false); // 메시지 전송 중 플래그 (중복 전송 방지)
   const [affinityScores, setAffinityScores] = useState<Record<string, number>>({}); // 친밀도
   const [isTransitioning, setIsTransitioning] = useState(false); // 컷신 전환 효과
   const [isEnded, setIsEnded] = useState(false); // Phase 4: 시나리오 종료 여부
@@ -79,14 +87,22 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     return null;
   }, [messages]);
 
-  // 배경 이미지 관리 (무한열차 시나리오)
+  // 백엔드 시나리오 ID 결정 (매핑 적용)
+  const backendScenarioId = useMemo(() => {
+    if (!characterId) {
+      return 'cutscene5_llm_driven';
+    }
+    return SCENARIO_ID_MAP[characterId] || characterId;
+  }, [characterId]);
+
+  // 배경 이미지 관리 (시나리오별 배경 이미지)
   const {
     currentBackground,
     backgroundImageUrl,
     setBackgroundById,
     setBackgroundByIndex,
     preloadImages
-  } = useBackgroundImage('mugen_train');
+  } = useBackgroundImage(backendScenarioId);
 
   // 소리 효과 관리 (몰입감 향상)
   const {
@@ -96,17 +112,76 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     unlockAudio
   } = useSoundEffects();
 
-  const backendScenarioId = useMemo(() => {
-    if (!characterId) {
-      return 'cutscene5_llm_driven';
-    }
-    return SCENARIO_ID_MAP[characterId] || characterId;
-  }, [characterId]);
-
   // 배경 이미지 프리로드 (성능 최적화)
   useEffect(() => {
     preloadImages();
   }, [preloadImages]);
+
+  // 배경 이미지 변경 추적 (디버깅)
+  useEffect(() => {
+    if (currentBackground) {
+      console.log(`🎨 Background changed to: index=${currentBackground.index}, fileName=${currentBackground.fileName}`);
+      console.log(`🎨 Background URL:`, backgroundImageUrl);
+    }
+  }, [currentBackground, backgroundImageUrl]);
+
+  // 참여 중인 캐릭터 변경 시 부모 컴포넌트에 알림
+  useEffect(() => {
+    if (onInvitedCharactersChange) {
+      onInvitedCharactersChange(invitedCharacters);
+    }
+  }, [invitedCharacters, onInvitedCharactersChange]);
+
+  // 캐릭터 순서 우선순위 정의 (일관된 순서 유지)
+  const characterOrder: Record<string, number> = {
+    tanjiro: 1,
+    nezuko: 2,
+    zenitsu: 3,
+    inosuke: 4,
+    rengoku: 5,
+    shinobu: 6,
+  };
+
+  // 참여 캐릭터 업데이트 헬퍼 함수
+  const updateInvitedCharacters = (
+    dialogues: Array<{ speaker?: string }>,
+    shouldAccumulate: boolean = false // has_more 처리 중에는 true
+  ) => {
+    // dialogues에서 실제 발언한 캐릭터들 추출
+    const newParticipants = Array.from(
+      new Set(
+        dialogues
+          .map(d => d.speaker)
+          .filter(speaker => speaker && speaker !== 'system' && speaker !== 'narr')
+      )
+    );
+
+    // 디버깅: speaker 값 로깅
+    if (newParticipants.length > 0) {
+      console.log('🎭 Detected participants from dialogues:', newParticipants);
+    }
+
+    // 빈 응답 처리: 새 캐릭터가 없으면 이전 상태 유지
+    if (newParticipants.length === 0) {
+      console.log('⚠️ No new participants found, keeping previous state');
+      return;
+    }
+
+    // has_more 처리 중이면 기존 캐릭터와 합침 (깜빡임 방지)
+    const finalParticipants = shouldAccumulate
+      ? Array.from(new Set([...invitedCharacters, ...newParticipants]))
+      : newParticipants;
+
+    // 일관된 순서로 정렬 (우선순위 기준)
+    const sortedParticipants = finalParticipants.sort((a, b) => {
+      const orderA = characterOrder[a.toLowerCase()] || 999;
+      const orderB = characterOrder[b.toLowerCase()] || 999;
+      return orderA - orderB;
+    });
+
+    console.log('✅ Updated invited characters:', sortedParticipants);
+    setInvitedCharacters(sortedParticipants);
+  };
 
   // 백엔드 이미지 파일명 → 프론트엔드 인덱스 매핑
   const backendImageToIndex: Record<string, number> = {
@@ -504,7 +579,11 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       if (message.imageIndex) {
         const imageIndex = parseInt(message.imageIndex);
         console.log(`🖼️ [Frontend] Changing background to image ${imageIndex} for message: ${message.text.substring(0, 30)}...`);
+        console.log(`🖼️ Current background before change:`, currentBackground);
         setBackgroundByIndex(imageIndex);
+        console.log(`🖼️ setBackgroundByIndex(${imageIndex}) called`);
+      } else {
+        console.log(`⚠️ No imageIndex for message: ${message.text.substring(0, 30)}...`);
       }
 
       // 소리 효과 재생 (몰입감 향상)
@@ -625,6 +704,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
     if (retryCount >= 3) {
       console.error('Max retry attempts reached');
       setLoadingMessage(null);
+      setIsAutoRequesting(false); // 🔧 FIX: 최대 재시도 도달 시 상태 초기화
       return;
     }
 
@@ -651,23 +731,37 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       setLoadingMessage(null);
 
       console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
+      console.log('🔍 Full response:', response);
 
       // Update affinity_scores and current_stage from response
-      // Note: background changes are now handled per-dialogue via imageIndex
-      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
       setAffinityScores(response.affinity_scores || {});
       setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
+      // 배경 이미지 변경 (current_image 사용)
+      if (response.current_image) {
+        console.log(`🖼️ [Auto-request] Changing background to: ${response.current_image}`);
+        handleBackgroundChange(response.current_image);
+      }
+
+      // 참여 중인 캐릭터 업데이트 (has_more가 true면 누적, false면 새로고침)
+      updateInvitedCharacters(response.dialogues, response.has_more);
+
       // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
-      const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
-        id: generateMessageId(),
-        text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
-        isUser: false,
-        timestamp: new Date(),
-        characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-      }));
+      const backendMessages: Message[] = response.dialogues.map((dialogue) => {
+        // 디버깅: image_index 값 로깅
+        if (dialogue.image_index) {
+          console.log(`🖼️ Dialogue has image_index: ${dialogue.image_index} for speaker: ${dialogue.speaker}`);
+        }
+        return {
+          id: generateMessageId(),
+          text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
+          isUser: false,
+          timestamp: new Date(),
+          characterId: dialogue.speaker,
+          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
+        };
+      });
 
       // 순차적으로 메시지 표시 (타이핑 효과 포함)
       await addMessagesSequentially(backendMessages);
@@ -685,6 +779,14 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       }
     } catch (error) {
       console.error(`Auto request failed (attempt ${retryCount + 1}/3):`, error);
+      setLoadingMessage(null); // 🔧 FIX: 에러 시 로딩 메시지 제거
+
+      // 최대 재시도 횟수에 도달했는지 확인
+      if (retryCount + 1 >= 3) {
+        console.error('🔥 Max retry attempts reached after error');
+        setIsAutoRequesting(false); // 🔧 FIX: 최대 재시도 도달 시 상태 초기화
+        return;
+      }
 
       // 재시도
       autoRequestTimerRef.current = window.setTimeout(() => {
@@ -712,23 +814,37 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         setSessionId(response.session_id);
 
         console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
+        console.log('🔍 Full response:', response);
 
         // Update affinity_scores and current_stage from response
-        // Note: background changes are now handled per-dialogue via imageIndex
-        // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
         setAffinityScores(response.affinity_scores || {});
         setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
+        // 배경 이미지 변경 (current_image 사용)
+        if (response.current_image) {
+          console.log(`🖼️ [Initial session] Changing background to: ${response.current_image}`);
+          handleBackgroundChange(response.current_image);
+        }
+
+        // 참여 중인 캐릭터 업데이트 (초기 세션이므로 누적 없이 새로 설정)
+        updateInvitedCharacters(response.dialogues, false);
+
         // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
-        const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
-          id: generateMessageId(),
-          text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
-          isUser: false,
-          timestamp: new Date(),
-          characterId: dialogue.speaker,
-          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-        }));
+        const backendMessages: Message[] = response.dialogues.map((dialogue) => {
+          // 디버깅: image_index 값 로깅
+          if (dialogue.image_index) {
+            console.log(`🖼️ Dialogue has image_index: ${dialogue.image_index} for speaker: ${dialogue.speaker}`);
+          }
+          return {
+            id: generateMessageId(),
+            text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
+            isUser: false,
+            timestamp: new Date(),
+            characterId: dialogue.speaker,
+            isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+            imageIndex: dialogue.image_index  // 배경 이미지 인덱스
+          };
+        });
 
         // 순차적으로 메시지 표시 (타이핑 효과 포함)
         await addMessagesSequentially(backendMessages);
@@ -1022,6 +1138,13 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
+    // 🚫 중복 전송 방지
+    if (isSendingRef.current) {
+      console.log('⚠️ [DUPLICATE] Message already sending, ignoring duplicate call');
+      return;
+    }
+
+    isSendingRef.current = true;
     // 🫧 버블 소비 (1회 대화당 1 버블)
     const bubbleCost = 1;
     const consumed = await consumeBubbles(bubbleCost);
@@ -1082,27 +1205,43 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         '츠구코'
       );
 
+      console.log(`📥 User message response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
+      console.log('🔍 Full response:', response);
+
       // Update session ID if it changed
       if (response.session_id !== sessionId) {
         setSessionId(response.session_id);
       }
 
       // Update affinity_scores and current_stage from response
-      // Note: background changes are now handled per-dialogue via imageIndex
-      // handleBackgroundChange(response.current_image || null); // ← REMOVED: current_image is final state, not initial
       setAffinityScores(response.affinity_scores || {});
       setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
+      // 배경 이미지 변경 (current_image 사용)
+      if (response.current_image) {
+        console.log(`🖼️ [User message] Changing background to: ${response.current_image}`);
+        handleBackgroundChange(response.current_image);
+      }
+
+      // 참여 중인 캐릭터 업데이트 (사용자 메시지 응답이므로 누적 없이 새로 설정)
+      updateInvitedCharacters(response.dialogues, false);
+
       // Add backend responses to messages sequentially (고유 ID 사용)
-      const backendMessages: Message[] = response.dialogues.map((dialogue) => ({
-        id: generateMessageId(),
-        text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
-        isUser: false,
-        timestamp: new Date(),
-        characterId: dialogue.speaker,
-        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-        imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-      }));
+      const backendMessages: Message[] = response.dialogues.map((dialogue) => {
+        // 디버깅: image_index 값 로깅
+        if (dialogue.image_index) {
+          console.log(`🖼️ Dialogue has image_index: ${dialogue.image_index} for speaker: ${dialogue.speaker}`);
+        }
+        return {
+          id: generateMessageId(),
+          text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
+          isUser: false,
+          timestamp: new Date(),
+          characterId: dialogue.speaker,
+          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
+        };
+      });
 
       const hasSystemMessageInBackend = backendMessages.some(
         (message) => message.isSystemMessage && message.text.trim().length > 0
@@ -1165,20 +1304,40 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-      setBackendError('메시지 전송에 실패했습니다.');
 
-      // Show error message
+      // 오류 메시지 표시
+      const errorDetail = error instanceof Error ? error.message : '알 수 없는 오류';
+      setBackendError(`메시지 전송에 실패했습니다.\n${errorDetail}`);
+
+      // 시스템 에러 메시지 추가
       const errorMessage: Message = {
         id: Date.now() + 1,
-        text: '⚠️ 메시지 전송에 실패했습니다. 다시 시도해주세요.',
+        text: '⚠️ 메시지 전송에 실패했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.',
         isUser: false,
         timestamp: new Date(),
         characterId: 'system',
         isSystemMessage: true
       };
       setMessages(prev => [...prev, errorMessage]);
+
+      // 모든 진행 중인 상태 초기화 (대화창 복구)
+      setIsTyping(false);
+      setIsAutoRequesting(false);
+      setLoadingMessage(null);
+      shouldCancelAutoRequest.current = true;
+      if (autoRequestTimerRef.current) {
+        clearTimeout(autoRequestTimerRef.current);
+        autoRequestTimerRef.current = null;
+      }
+      isAddingMessages.current = false;
+
+      // 5초 후 에러 메시지 자동 제거
+      setTimeout(() => {
+        setBackendError(null);
+      }, 5000);
     } finally {
       setIsLoading(false);
+      isSendingRef.current = false; // 전송 완료 플래그 리셋
     }
   };
 
@@ -1460,7 +1619,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
         />
 
         {/* 왼쪽 아래: 친밀도 패널 */}
-        <div className="absolute bottom-4 left-4 z-10">
+        <div className="absolute bottom-4 left-4 right-44 z-10">
           <AffinityPanel affinityScores={affinityScores} />
         </div>
 
@@ -1472,38 +1631,6 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
 
       {/* 오른쪽: 채팅 영역 (50%) */}
       <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-white">
-        {/* 채팅 헤더 - 높이 축소 */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-200 bg-white shrink-0 gap-4">
-          {/* 중앙: Kime Chat */}
-          <div className="flex items-center flex-1 justify-center">
-            <span className="text-base font-roboto text-text-primary">
-              🗡️ Kime Chat
-            </span>
-          </div>
-
-          {/* 오른쪽: 참여중인 캐릭터들 */}
-          <div className="flex items-center space-x-1">
-            {invitedCharacters.map((charId, index) => (
-              <div key={charId} className="relative">
-                <img
-                  src={getCharacterProfile(charId)}
-                  alt={getCharacterName(charId)}
-                  className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
-                  style={{ marginLeft: index > 0 ? '-6px' : '0' }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
-                  }}
-                />
-              </div>
-            ))}
-            {invitedCharacters.length > 1 && (
-              <span className="text-xs text-gray-500 ml-2">
-                {invitedCharacters.length}명
-              </span>
-            )}
-          </div>
-        </div>
-
         {/* 메시지 영역 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Backend error banner */}
@@ -1752,6 +1879,7 @@ export default function ChatInterface({ onUserLogin, onMessageSent, characterId 
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
+                    e.preventDefault(); // 이벤트 중복 전파 방지
                     console.log('🔍 [ENTER KEY] Enter pressed!', {
                       inputMessage: inputMessage.substring(0, 20),
                       hasInput: !!inputMessage.trim(),

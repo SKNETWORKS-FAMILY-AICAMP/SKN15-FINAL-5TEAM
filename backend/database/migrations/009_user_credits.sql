@@ -13,8 +13,8 @@
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS statedb.user_credits (
     user_id UUID PRIMARY KEY REFERENCES statedb.users(user_id) ON DELETE CASCADE,
-    bubble_count INTEGER NOT NULL DEFAULT 100,
-    total_purchased INTEGER NOT NULL DEFAULT 100,
+    bubble_count INTEGER NOT NULL DEFAULT 200,
+    total_purchased INTEGER NOT NULL DEFAULT 200,
     total_consumed INTEGER NOT NULL DEFAULT 0,
     last_updated TIMESTAMP DEFAULT NOW(),
     created_at TIMESTAMP DEFAULT NOW(),
@@ -70,13 +70,13 @@ COMMENT ON COLUMN statedb.credit_transactions.description IS '트랜잭션 설�
 CREATE OR REPLACE FUNCTION create_initial_credits()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- 신규 사용자에게 100 버블 지급
+    -- 신규 사용자에게 200 버블 지급
     INSERT INTO statedb.user_credits (user_id, bubble_count, total_purchased, total_consumed)
-    VALUES (NEW.user_id, 100, 100, 0);
+    VALUES (NEW.user_id, 200, 200, 0);
 
     -- 초기 지급 트랜잭션 기록
     INSERT INTO statedb.credit_transactions (user_id, amount, transaction_type, balance_after, description)
-    VALUES (NEW.user_id, 100, 'initial', 100, '신규 가입 환영 버블');
+    VALUES (NEW.user_id, 200, 'initial', 200, '신규 가입 환영 버블');
 
     RETURN NEW;
 END;
@@ -89,7 +89,7 @@ CREATE TRIGGER trigger_create_credits
 AFTER INSERT ON statedb.users
 FOR EACH ROW EXECUTE FUNCTION create_initial_credits();
 
-COMMENT ON FUNCTION create_initial_credits() IS '신규 사용자 가입 시 초기 크레딧(100 버블) 자동 생성';
+COMMENT ON FUNCTION create_initial_credits() IS '신규 사용자 가입 시 초기 크레딧(200 버블) 자동 생성';
 
 -- ------------------------------------------------------------
 -- 4. 기존 사용자에게 초기 크레딧 추가
