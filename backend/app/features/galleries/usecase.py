@@ -39,16 +39,18 @@ class GalleryUseCase:
         user_id: str,
         scenario_id: Optional[str] = None,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        viewer_user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        사용자 이미지 목록 조회
+        사용자 이미지 목록 조회 (통계 정보 포함)
 
         Args:
             user_id: 사용자 ID
             scenario_id: 시나리오 ID 필터 (선택적)
             limit: 페이징 크기
             offset: 페이징 오프셋
+            viewer_user_id: 조회하는 사용자 ID (좋아요 여부 확인용, 선택적)
 
         Returns:
             이미지 목록
@@ -62,7 +64,10 @@ class GalleryUseCase:
                     "image_url": str,
                     "image_type": str,  # "generated", "unlocked", "default"
                     "extra_metadata": Dict,
-                    "created_at": str
+                    "created_at": str,
+                    "like_count": int,
+                    "view_count": int,
+                    "user_liked": bool
                 },
                 ...
             ]
@@ -70,16 +75,25 @@ class GalleryUseCase:
         logger.info("list_user_images", "Listing user images",
                    user_id=user_id, scenario_id=scenario_id, limit=limit)
 
-        # Repository로 이미지 목록 조회
-        images_orm = await self.repository.list_user_images(
+        # Repository로 이미지 목록 조회 (통계 정보 포함)
+        images_with_stats = await self.repository.list_user_images(
             user_id=user_id,
             scenario_id=scenario_id,
             limit=limit,
-            offset=offset
+            offset=offset,
+            viewer_user_id=viewer_user_id
         )
 
-        # ORM → Dict 변환
-        images = [self._image_to_dict(img) for img in images_orm]
+        # Tuple (GalleryImage, like_count, view_count, user_liked) → Dict 변환
+        images = [
+            self._image_to_dict(
+                image=img,
+                like_count=like_count,
+                view_count=view_count,
+                user_liked=user_liked
+            )
+            for img, like_count, view_count, user_liked in images_with_stats
+        ]
 
         logger.info("list_user_images", f"Retrieved {len(images)} images",
                    user_id=user_id)
@@ -289,21 +303,95 @@ class GalleryUseCase:
 
         return unlocked
 
-    def _image_to_dict(self, image: GalleryImage) -> Dict[str, Any]:
+    async def toggle_image_like(
+        self,
+        image_id: str,
+        user_id: str
+    ) -> bool:
+        """
+        이미지 좋아요 토글
+
+        Args:
+            image_id: 이미지 ID
+            user_id: 사용자 ID
+
+        Returns:
+            is_liked (True: 좋아요 추가, False: 좋아요 취소)
+        """
+        logger.info("toggle_image_like", "Toggling image like",
+                   image_id=image_id, user_id=user_id)
+
+        async with self.db.begin():
+            is_liked = await self.repository.toggle_image_like(
+                image_id=image_id,
+                user_id=user_id
+            )
+
+            logger.info("toggle_image_like", f"Like toggled to {is_liked}",
+                       image_id=image_id)
+
+        return is_liked
+
+    async def record_image_view(
+        self,
+        image_id: str,
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None
+    ) -> bool:
+        """
+        이미지 조회 기록
+
+        Args:
+            image_id: 이미지 ID
+            user_id: 사용자 ID (선택)
+            ip_address: IP 주소 (선택)
+
+        Returns:
+            성공 여부
+        """
+        logger.info("record_image_view", "Recording image view",
+                   image_id=image_id, user_id=user_id, ip_address=ip_address)
+
+        async with self.db.begin():
+            success = await self.repository.record_image_view(
+                image_id=image_id,
+                user_id=user_id,
+                ip_address=ip_address
+            )
+
+            if success:
+                logger.info("record_image_view", "View recorded",
+                           image_id=image_id)
+            else:
+                logger.warning("record_image_view", "Failed to record view",
+                              image_id=image_id)
+
+        return success
+
+    def _image_to_dict(
+        self,
+        image: GalleryImage,
+        like_count: int = 0,
+        view_count: int = 0,
+        user_liked: bool = False
+    ) -> Dict[str, Any]:
         """
         GalleryImage ORM → Dict 변환
 
         Args:
             image: GalleryImage ORM 객체
+            like_count: 좋아요 개수
+            view_count: 조회수
+            user_liked: 사용자 좋아요 여부
 
         Returns:
             이미지 dict
         """
         return {
-            "image_id": image.image_id,
-            "user_id": image.user_id,
+            "image_id": str(image.image_id),
+            "user_id": str(image.user_id),
             "scenario_id": image.scenario_id,
-            "session_id": image.session_id,
+            "session_id": str(image.session_id) if image.session_id else None,
             "stage_tag": image.stage_tag,
             "image_url": image.image_url,
             "image_type": image.image_type,
@@ -313,5 +401,8 @@ class GalleryUseCase:
             "is_unlocked": image.is_unlocked,
             "is_favorite": image.is_favorite,
             "created_at": image.created_at.isoformat() if image.created_at else None,
-            "unlocked_at": image.unlocked_at.isoformat() if image.unlocked_at else None
+            "unlocked_at": image.unlocked_at.isoformat() if image.unlocked_at else None,
+            "like_count": like_count,
+            "view_count": view_count,
+            "user_liked": user_liked
         }

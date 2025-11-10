@@ -21,6 +21,9 @@ class ImageResponse(BaseModel):
     image_type: str = Field(..., description="generated, unlocked, default")
     extra_metadata: Optional[Dict[str, Any]]
     created_at: str
+    like_count: int = Field(default=0, description="좋아요 개수")
+    view_count: int = Field(default=0, description="조회수")
+    user_liked: bool = Field(default=False, description="사용자 좋아요 여부")
 
     class Config:
         from_attributes = True

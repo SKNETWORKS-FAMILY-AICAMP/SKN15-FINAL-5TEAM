@@ -2,10 +2,11 @@
 Galleries Feature - Models
 이미지 갤러리 데이터베이스 모델
 """
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, JSON, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, JSON, ForeignKey, Index, text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.sql import func
 import uuid
+from datetime import datetime
 from app.core.db.base import Base
 
 
@@ -52,3 +53,45 @@ class GalleryImage(Base):
 
     def __repr__(self):
         return f"<GalleryImage(image_id={self.image_id}, user_id={self.user_id}, stage_tag={self.stage_tag})>"
+
+
+class GalleryImageLike(Base):
+    """
+    갤러리 이미지 좋아요
+    """
+    __tablename__ = "gallery_image_likes"
+
+    like_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    image_id = Column(UUID(as_uuid=True), ForeignKey("gallery_images.image_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('image_id', 'user_id', name='gallery_image_likes_unique'),
+        Index('idx_gallery_image_likes_image', 'image_id', 'created_at'),
+        Index('idx_gallery_image_likes_user', 'user_id', 'created_at'),
+    )
+
+    def __repr__(self):
+        return f"<GalleryImageLike(image_id={self.image_id}, user_id={self.user_id})>"
+
+
+class GalleryImageView(Base):
+    """
+    갤러리 이미지 조회 기록
+    """
+    __tablename__ = "gallery_image_views"
+
+    view_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    image_id = Column(UUID(as_uuid=True), ForeignKey("gallery_images.image_id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    ip_address = Column(INET, nullable=True)
+    viewed_at = Column(DateTime(timezone=True), nullable=True, server_default=text('now()'))
+
+    __table_args__ = (
+        Index('idx_gallery_image_views_image', 'image_id', 'viewed_at'),
+        Index('idx_gallery_image_views_user', 'user_id', 'viewed_at'),
+    )
+
+    def __repr__(self):
+        return f"<GalleryImageView(image_id={self.image_id}, user_id={self.user_id})>"

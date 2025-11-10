@@ -4,10 +4,10 @@ Galleries Feature - Repository
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, update, delete, func
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 
-from .models import GalleryImage
+from .models import GalleryImage, GalleryImageLike, GalleryImageView
 from app.core.logging import get_repository_logger
 
 logger = get_repository_logger("Gallery")
@@ -93,35 +93,68 @@ class GalleryRepository:
         user_id: str,
         scenario_id: Optional[str] = None,
         limit: int = 50,
-        offset: int = 0
-    ) -> List[GalleryImage]:
+        offset: int = 0,
+        viewer_user_id: Optional[str] = None
+    ) -> List[Tuple[GalleryImage, int, int, bool]]:
         """
-        사용자 이미지 목록 조회
+        사용자 이미지 목록 조회 (통계 정보 포함)
 
         Args:
-            user_id: 사용자 ID
+            user_id: 이미지 소유자 ID
             scenario_id: 시나리오 ID 필터 (선택적)
             limit: 페이징 크기
             offset: 페이징 오프셋
+            viewer_user_id: 조회하는 사용자 ID (좋아요 여부 확인용, 선택적)
 
         Returns:
-            GalleryImage 리스트
+            List[Tuple[GalleryImage, like_count, view_count, user_liked]]
         """
         logger.debug("list_user_images", f"Listing images for user {user_id}",
                     scenario_id=scenario_id, limit=limit)
 
-        stmt = select(GalleryImage).where(GalleryImage.user_id == user_id)
+        # user_liked 계산
+        if viewer_user_id:
+            is_liked_expr = (
+                select(func.count(GalleryImageLike.like_id))
+                .where(
+                    and_(
+                        GalleryImageLike.image_id == GalleryImage.image_id,
+                        GalleryImageLike.user_id == viewer_user_id
+                    )
+                )
+                .scalar_subquery() > 0
+            )
+        else:
+            is_liked_expr = False
+
+        stmt = (
+            select(
+                GalleryImage,
+                func.count(func.distinct(GalleryImageLike.like_id)).label("like_count"),
+                func.count(func.distinct(GalleryImageView.view_id)).label("view_count"),
+                is_liked_expr.label("user_liked")
+            )
+            .outerjoin(GalleryImageLike, GalleryImage.image_id == GalleryImageLike.image_id)
+            .outerjoin(GalleryImageView, GalleryImage.image_id == GalleryImageView.image_id)
+            .where(GalleryImage.user_id == user_id)
+        )
 
         if scenario_id:
             stmt = stmt.where(GalleryImage.scenario_id == scenario_id)
 
-        stmt = stmt.order_by(GalleryImage.created_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt
+            .group_by(GalleryImage.image_id)
+            .order_by(GalleryImage.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
 
         result = await self.db.execute(stmt)
-        images = result.scalars().all()
+        images = result.all()
 
         logger.debug("list_user_images", f"Found {len(images)} images")
-        return list(images)
+        return images
 
     async def get_unlocked_images(
         self,
@@ -293,3 +326,89 @@ class GalleryRepository:
         count = result.scalar_one()
 
         return count
+
+    # ============================================================
+    # Like Management
+    # ============================================================
+
+    async def toggle_image_like(
+        self,
+        image_id: str,
+        user_id: str
+    ) -> bool:
+        """
+        이미지 좋아요 토글
+
+        Args:
+            image_id: 이미지 ID
+            user_id: 사용자 ID
+
+        Returns:
+            is_liked (True: 좋아요 추가, False: 좋아요 취소)
+        """
+        logger.info("toggle_image_like", f"Toggling like for image {image_id}", user_id=user_id)
+
+        # 기존 좋아요 확인
+        stmt = select(GalleryImageLike).where(
+            and_(
+                GalleryImageLike.image_id == image_id,
+                GalleryImageLike.user_id == user_id
+            )
+        )
+        result = await self.db.execute(stmt)
+        existing_like = result.scalar_one_or_none()
+
+        if existing_like:
+            # 좋아요 취소
+            await self.db.delete(existing_like)
+            await self.db.flush()
+
+            logger.info("toggle_image_like", f"Like removed", image_id=image_id)
+            return False
+        else:
+            # 좋아요 추가
+            like = GalleryImageLike(image_id=image_id, user_id=user_id)
+            self.db.add(like)
+            await self.db.flush()
+
+            logger.info("toggle_image_like", f"Like added", image_id=image_id)
+            return True
+
+    # ============================================================
+    # View Management
+    # ============================================================
+
+    async def record_image_view(
+        self,
+        image_id: str,
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None
+    ) -> bool:
+        """
+        이미지 조회 기록
+
+        Args:
+            image_id: 이미지 ID
+            user_id: 사용자 ID (선택)
+            ip_address: IP 주소 (선택)
+
+        Returns:
+            성공 여부
+        """
+        logger.info("record_image_view", f"Recording view for image {image_id}",
+                   user_id=user_id, ip_address=ip_address)
+
+        try:
+            view = GalleryImageView(
+                image_id=image_id,
+                user_id=user_id,
+                ip_address=ip_address
+            )
+            self.db.add(view)
+            await self.db.flush()
+
+            logger.info("record_image_view", f"View recorded", image_id=image_id)
+            return True
+        except Exception as e:
+            logger.error("record_image_view", f"Failed to record view: {e}", image_id=image_id)
+            return False

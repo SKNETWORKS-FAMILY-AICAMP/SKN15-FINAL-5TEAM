@@ -3,7 +3,7 @@ Galleries Controller
 사용자 이미지 갤러리 엔드포인트
 Layer 1: Controller (4-Layer Architecture)
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
@@ -53,7 +53,7 @@ async def list_user_images(
     usecase: GalleryUseCase = Depends(get_gallery_usecase)
 ):
     """
-    사용자 이미지 목록 조회
+    사용자 이미지 목록 조회 (통계 정보 포함)
 
     Controller → UseCase → Repository
     """
@@ -65,7 +65,8 @@ async def list_user_images(
             user_id=user_id,
             scenario_id=scenario_id,
             limit=limit,
-            offset=offset
+            offset=offset,
+            viewer_user_id=user_id  # 현재 사용자의 좋아요 여부 확인
         )
 
         return ImageListResponse(
@@ -182,4 +183,81 @@ async def get_unlocked_images(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("get_unlocked_images", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{image_id}/like")
+async def toggle_image_like(
+    image_id: str,
+    user_id: str = Depends(get_current_user_id),
+    usecase: GalleryUseCase = Depends(get_gallery_usecase)
+):
+    """
+    이미지 좋아요 토글
+
+    Controller → UseCase → Repository
+    """
+    logger.info("toggle_image_like", "Toggling image like",
+               user_id=user_id, image_id=image_id)
+
+    try:
+        is_liked = await usecase.toggle_image_like(
+            image_id=image_id,
+            user_id=user_id
+        )
+
+        return {
+            "image_id": image_id,
+            "is_liked": is_liked,
+            "message": "좋아요가 추가되었습니다." if is_liked else "좋아요가 취소되었습니다."
+        }
+
+    except BusinessException as e:
+        logger.error("toggle_image_like", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("toggle_image_like", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/{image_id}/view")
+async def record_image_view(
+    image_id: str,
+    request: Request,
+    user_id: Optional[str] = Depends(get_current_user_id),
+    usecase: GalleryUseCase = Depends(get_gallery_usecase)
+):
+    """
+    이미지 조회 기록
+
+    Controller → UseCase → Repository
+    """
+    # IP 주소 추출
+    ip_address = request.client.host if request.client else None
+
+    logger.info("record_image_view", "Recording image view",
+               image_id=image_id, user_id=user_id, ip_address=ip_address)
+
+    try:
+        success = await usecase.record_image_view(
+            image_id=image_id,
+            user_id=user_id,
+            ip_address=ip_address
+        )
+
+        if not success:
+            raise HTTPException(status_code=500, detail="조회 기록에 실패했습니다.")
+
+        return {
+            "image_id": image_id,
+            "message": "조회 기록이 저장되었습니다."
+        }
+
+    except HTTPException:
+        raise
+    except BusinessException as e:
+        logger.error("record_image_view", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("record_image_view", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
