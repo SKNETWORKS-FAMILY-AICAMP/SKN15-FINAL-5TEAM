@@ -18,6 +18,7 @@ from app.features.scenarios.controller import router as scenario_router
 from app.features.users.controller import router as user_router
 from app.features.sessions.controller import router as session_router
 from app.features.galleries.controller import router as gallery_router
+from app.features.admin.controller import router as admin_router
 
 settings = get_settings()
 
@@ -79,6 +80,7 @@ app.include_router(scenario_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(session_router, prefix="/api")
 app.include_router(gallery_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")  # 관리자 전용
 
 # ============================================================
 # 헬스 체크
