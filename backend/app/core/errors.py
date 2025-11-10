@@ -220,7 +220,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     # 전체 traceback 로깅
     tb_str = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
 
-    logger.critical(
+    logger.error(
         "generic_exception_handler",
         f"Unhandled exception: {exc}",
         path=str(request.url.path),

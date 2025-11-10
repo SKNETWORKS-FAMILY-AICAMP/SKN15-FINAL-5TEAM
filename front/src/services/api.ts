@@ -278,7 +278,7 @@ class ApiClient {
    */
   async getCurrentUser(): Promise<UserInfo> {
     try {
-      const response = await authenticatedApiClient.get('/api/auth/me')
+      const response = await authenticatedApiClient.get('/api/users/me')
       return response.data
     } catch (error) {
       console.error('Error getting current user:', error)
@@ -472,7 +472,7 @@ class ApiClient {
   async getScenarios(): Promise<ScenarioCard[]> {
     try {
       const response = await axios.get(`${this.baseUrl}/api/scenarios`)
-      return response.data
+      return response.data.scenarios || []
     } catch (error) {
       console.error('Error getting scenarios:', error)
       throw error
@@ -518,7 +518,7 @@ class ApiClient {
   async getUserScenarios(): Promise<ScenarioCard[]> {
     try {
       const response = await authenticatedApiClient.get('/api/users/me/scenarios')
-      return response.data
+      return response.data.scenarios || []
     } catch (error) {
       console.error('Error getting user scenarios:', error)
       throw error

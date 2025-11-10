@@ -80,6 +80,30 @@ class ScenarioService:
             logger.error("load_scenario", f"❌ Failed to load scenario {scenario_id}: {e}")
             return None
 
+    def get_first_stage_tag(self, scenario_id: str) -> str:
+        """
+        시나리오의 첫 번째 스테이지 태그 반환
+
+        Args:
+            scenario_id: 시나리오 ID
+
+        Returns:
+            첫 번째 스테이지 태그 (없으면 'intro')
+        """
+        scenario = self.load_scenario(scenario_id)
+        if not scenario:
+            logger.warning("get_first_stage_tag", f"Scenario not found: {scenario_id}")
+            return "intro"
+
+        stages = scenario.get("stages", [])
+        if not stages:
+            logger.warning("get_first_stage_tag", f"No stages found in scenario: {scenario_id}")
+            return "intro"
+
+        first_stage_tag = stages[0].get("tag", "intro")
+        logger.debug("get_first_stage_tag", f"First stage tag: {first_stage_tag}", scenario_id=scenario_id)
+        return first_stage_tag
+
     def load_character(self, character_id: str) -> Optional[Dict[str, Any]]:
         """
         캐릭터 데이터 로드
@@ -332,8 +356,16 @@ class ScenarioService:
                     "scenario_id": str,
                     "title": str,
                     "description": str,
-                    "difficulty": str,
+                    "image_url": str,
+                    "thumbnail_url": str,
                     "tags": list,
+                    "card_size": str,
+                    "route_path": str,
+                    "display_order": int,
+                    "is_active": bool,
+                    "likes": int,
+                    "comments": int,
+                    "views": int,
                     ...
                 }
             ]
@@ -348,7 +380,7 @@ class ScenarioService:
             return scenarios
 
         # 모든 .json 파일 탐색
-        for scenario_file in self.scenarios_dir.glob("*.json"):
+        for index, scenario_file in enumerate(self.scenarios_dir.glob("*.json")):
             try:
                 scenario_id = scenario_file.stem  # 파일명에서 확장자 제거
 
@@ -357,16 +389,36 @@ class ScenarioService:
                 if not scenario_data:
                     continue
 
-                # 메타데이터 추출
+                # 메타데이터 추출 (프론트엔드 ScenarioCard 인터페이스 호환)
                 metadata = {
                     "scenario_id": scenario_id,
                     "title": scenario_data.get("title", scenario_id),
                     "description": scenario_data.get("description", ""),
+
+                    # 이미지 URL (시나리오 파일에서 가져오거나 기본값 설정)
+                    "image_url": scenario_data.get("image_url", f"/images/scenarios/{scenario_id}.jpg"),
+                    "thumbnail_url": scenario_data.get("thumbnail_url", f"/images/scenarios/{scenario_id}_thumb.jpg"),
+
+                    # 태그
+                    "tags": scenario_data.get("tags", []),
+
+                    # UI 표시 설정
+                    "card_size": scenario_data.get("card_size", "normal"),  # "large" or "normal"
+                    "route_path": f"/character/{scenario_id}",
+                    "display_order": scenario_data.get("display_order", index),
+                    "is_active": scenario_data.get("is_active", True),
+
+                    # 통계 정보 (초기값 0, Repository에서 실제 값으로 덮어씌움)
+                    "likes": 0,
+                    "comments": 0,
+                    "views": 0,
+
+                    # 기타 메타데이터
                     "version": scenario_data.get("version", "1.0"),
                     "difficulty": scenario_data.get("difficulty", "medium"),
-                    "tags": scenario_data.get("tags", []),
                     "world_id": scenario_data.get("world_id", ""),
                     "character_refs": list(scenario_data.get("character_refs", {}).keys()),
+                    "total_completions": 0,  # Repository에서 실제 값으로 덮어씌움
                 }
 
                 scenarios.append(metadata)

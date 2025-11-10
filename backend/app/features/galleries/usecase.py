@@ -61,7 +61,7 @@ class GalleryUseCase:
                     "stage_tag": str,
                     "image_url": str,
                     "image_type": str,  # "generated", "unlocked", "default"
-                    "metadata": Dict,
+                    "extra_metadata": Dict,
                     "created_at": str
                 },
                 ...
@@ -96,7 +96,7 @@ class GalleryUseCase:
         image_type: str = "generated",
         generation_prompt: Optional[str] = None,
         generation_model: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        extra_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         생성된 이미지 저장
@@ -122,7 +122,7 @@ class GalleryUseCase:
                 "stage_tag": str,
                 "image_url": str,
                 "image_type": str,
-                "metadata": Dict,
+                "extra_metadata": Dict,
                 "created_at": str
             }
         """
@@ -138,7 +138,7 @@ class GalleryUseCase:
         image_id = str(uuid.uuid4())
 
         # 메타데이터 기본값
-        metadata = metadata or {}
+        extra_metadata = extra_metadata or {}
 
         async with self.db.begin():
             # Repository로 이미지 저장
@@ -152,7 +152,7 @@ class GalleryUseCase:
                 image_type=image_type,
                 generation_prompt=generation_prompt,
                 generation_model=generation_model,
-                metadata=metadata
+                extra_metadata=extra_metadata
             )
 
             logger.info("save_generated_image", "Image saved",
@@ -309,7 +309,7 @@ class GalleryUseCase:
             "image_type": image.image_type,
             "generation_prompt": image.generation_prompt,
             "generation_model": image.generation_model,
-            "metadata": image.metadata,
+            "extra_metadata": image.extra_metadata,
             "is_unlocked": image.is_unlocked,
             "is_favorite": image.is_favorite,
             "created_at": image.created_at.isoformat() if image.created_at else None,

@@ -1,0 +1,18 @@
+{
+  "scenario_id": "convenience_store",
+  "title": "🏪 편의점 탄지로",
+  "description": "편의점에서 일하는 탄지로와의 일상 대화",
+  "version": "1.0",
+  "mountable": true,
+  "world_id": "modern_au",
+  "image_url": "/images/scenarios/convenience_store.jpg",
+  "thumbnail_url": "/images/scenarios/convenience_store_thumb.jpg",
+  "tags": ["#편의점", "#일상", "#탄지로", "#현대AU"],
+  "card_size": "normal",
+  "display_order": 3,
+  "is_active": true,
+  "difficulty": "easy",
+  "character_refs": {
+    "tanjiro": "backend/data/characters/tanjiro.json"
+  }
+}

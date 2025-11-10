@@ -2,9 +2,10 @@
 Scenarios Feature - SQLAlchemy Models
 시나리오 댓글, 좋아요 등 DB 테이블 정의
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger, Boolean, CheckConstraint, UniqueConstraint, Index, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger, Boolean, CheckConstraint, UniqueConstraint, Index, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
+import uuid
 from app.core.db.base import Base
 
 
@@ -15,7 +16,7 @@ class ScenarioComment(Base):
     __tablename__ = "scenario_comments"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    scenario_id = Column(String(50), ForeignKey("scenarios.scenario_id", ondelete="CASCADE"), nullable=False)
+    scenario_id = Column(String(50), nullable=False, index=True)  # Scenarios are in JSON files, not DB
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)
     parent_comment_id = Column(BigInteger, ForeignKey("scenario_comments.id", ondelete="CASCADE"))
@@ -43,8 +44,8 @@ class ScenarioLike(Base):
     """
     __tablename__ = "scenario_likes"
 
-    like_id = Column(UUID(as_uuid=True), primary_key=True, server_default="gen_random_uuid()")
-    scenario_id = Column(String(50), ForeignKey("scenarios.scenario_id", ondelete="CASCADE"), nullable=False)
+    like_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scenario_id = Column(String(50), nullable=False, index=True)  # Scenarios are in JSON files, not DB
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -30,6 +30,12 @@ from app.features.scenarios.models import (
     ScenarioLike,
     CommentLike,
 )
+from app.features.galleries.models import GalleryImage
+from app.features.logging.models import (
+    Log,
+    ErrorLog,
+    PerformanceMetric,
+)
 
 # Alembic Config object
 config = context.config

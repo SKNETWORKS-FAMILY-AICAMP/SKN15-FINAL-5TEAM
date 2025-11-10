@@ -103,7 +103,7 @@ async def save_generated_image(
             stage_tag=request.stage_tag,
             image_url=request.image_url,
             image_type=request.image_type,
-            metadata=request.metadata
+            extra_metadata=request.extra_metadata
         )
 
         return ImageResponse(**image)

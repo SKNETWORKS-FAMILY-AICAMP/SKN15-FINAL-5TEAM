@@ -37,10 +37,8 @@ export default function HomePage() {
       setLoading(true);
       setError(null);
       try {
-        // Use authenticated endpoint if user is logged in for user-specific data
-        const scenarios: ScenarioCard[] = currentUser
-          ? await apiClient.getUserScenarios()
-          : await apiClient.getScenarios();
+        // Use public scenarios endpoint for all users
+        const scenarios: ScenarioCard[] = await apiClient.getScenarios();
 
         // Transform API data to CharacterCard format
         const transformedCharacters: CharacterCard[] = scenarios.map((scenario) => ({

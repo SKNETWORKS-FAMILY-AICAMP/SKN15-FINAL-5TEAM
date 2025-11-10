@@ -19,7 +19,7 @@ class ImageResponse(BaseModel):
     stage_tag: str
     image_url: str
     image_type: str = Field(..., description="generated, unlocked, default")
-    metadata: Optional[Dict[str, Any]]
+    extra_metadata: Optional[Dict[str, Any]]
     created_at: str
 
     class Config:
@@ -39,7 +39,7 @@ class ImageSaveRequest(BaseModel):
     stage_tag: str = Field(..., description="스테이지 태그")
     image_url: str = Field(..., description="이미지 URL")
     image_type: str = Field(default="generated", description="이미지 타입")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="메타데이터")
+    extra_metadata: Optional[Dict[str, Any]] = Field(None, description="메타데이터")
 
 
 class ImageUnlockResponse(BaseModel):

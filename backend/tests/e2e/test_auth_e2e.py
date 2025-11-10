@@ -21,11 +21,11 @@ async def test_auth_flow(client: AsyncClient):
         "display_name": "E2E Test User"
     }
 
-    signup_response = await client.post("/api/auth/signup", json=signup_data)
+    signup_response = await client.post("/api/auth/register", json=signup_data)
     print(f"Signup response: {signup_response.status_code}")
 
-    # Signup might return 200 or 409 if user exists
-    assert signup_response.status_code in [200, 409]
+    # Signup might return 201 Created or 409 Conflict if user exists
+    assert signup_response.status_code in [201, 409]
 
     # 2. Login
     login_data = {
@@ -74,4 +74,5 @@ async def test_get_user_without_auth(client: AsyncClient):
     E2E: Get user profile without auth should fail
     """
     response = await client.get("/api/users/me")
-    assert response.status_code == 401
+    # HTTPBearer returns 403 when credentials are missing
+    assert response.status_code == 403

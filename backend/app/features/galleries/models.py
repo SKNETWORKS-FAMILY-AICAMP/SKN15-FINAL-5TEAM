@@ -3,7 +3,9 @@ Galleries Feature - Models
 이미지 갤러리 데이터베이스 모델
 """
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, JSON, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+import uuid
 from app.core.db.base import Base
 
 
@@ -15,12 +17,12 @@ class GalleryImage(Base):
     __tablename__ = "gallery_images"
 
     # Primary Key
-    image_id = Column(String(36), primary_key=True)  # UUID
+    image_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Foreign Keys
-    user_id = Column(String(36), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     scenario_id = Column(String(100), nullable=False)
-    session_id = Column(String(36), nullable=True)  # 생성 시 세션 ID
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="SET NULL"), nullable=True)
 
     # Image Info
     stage_tag = Column(String(100), nullable=False)  # 스테이지 태그
@@ -30,7 +32,7 @@ class GalleryImage(Base):
     # Generation Metadata
     generation_prompt = Column(String(2000), nullable=True)  # 생성 프롬프트
     generation_model = Column(String(100), nullable=True)  # 생성 모델 (dall-e-3 등)
-    metadata = Column(JSON, nullable=True)  # 추가 메타데이터 (크기, 스타일 등)
+    extra_metadata = Column(JSON, nullable=True)  # 추가 메타데이터 (크기, 스타일 등)
 
     # Status
     is_unlocked = Column(Boolean, default=False)  # 언락 여부

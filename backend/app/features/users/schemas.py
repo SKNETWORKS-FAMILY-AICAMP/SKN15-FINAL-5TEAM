@@ -16,10 +16,14 @@ class UserProfileResponse(BaseModel):
     user_id: str
     username: str
     display_name: str
-    email: str
-    credits: int
-    created_at: str
-    updated_at: str
+    email: Optional[str] = None
+    role: str = "user"
+    is_active: bool = True
+    total_sessions: int = 0
+    total_bubbles: int = 0
+    last_login_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -46,6 +50,36 @@ class UserStatsResponse(BaseModel):
     rank: str = Field(..., description="사용자 등급")
     created_at: str = Field(..., description="가입일")
     last_active_at: str = Field(..., description="마지막 활동")
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# Credits Schemas
+# ============================================================
+
+class UserCreditsResponse(BaseModel):
+    """사용자 크레딧 조회 응답"""
+    current_credits: int = Field(..., description="현재 보유 크레딧")
+    total_earned: int = Field(default=0, description="총 획득 크레딧")
+    total_consumed: int = Field(default=0, description="총 사용 크레딧")
+
+    class Config:
+        from_attributes = True
+
+
+class ConsumeCreditsRequest(BaseModel):
+    """크레딧 소비 요청"""
+    amount: int = Field(..., ge=1, description="소비할 크레딧 양")
+    description: str = Field(..., min_length=1, max_length=200, description="사용 목적")
+
+
+class ConsumeCreditsResponse(BaseModel):
+    """크레딧 소비 응답"""
+    success: bool = Field(..., description="성공 여부")
+    message: str = Field(..., description="응답 메시지")
+    remaining_credits: int = Field(..., description="남은 크레딧")
 
     class Config:
         from_attributes = True

@@ -76,7 +76,7 @@ async def list_scenarios(
         logger.error("list_scenarios", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("list_scenarios", f"Unexpected error: {e}")
+        logger.exception("list_scenarios", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -119,7 +119,7 @@ async def get_scenario_detail(
         logger.error("get_scenario_detail", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("get_scenario_detail", f"Unexpected error: {e}")
+        logger.exception("get_scenario_detail", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -155,7 +155,7 @@ async def toggle_scenario_like(
         logger.error("toggle_scenario_like", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("toggle_scenario_like", f"Unexpected error: {e}")
+        logger.exception("toggle_scenario_like", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -195,7 +195,7 @@ async def get_comments(
         logger.error("get_comments", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("get_comments", f"Unexpected error: {e}")
+        logger.exception("get_comments", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -235,7 +235,7 @@ async def create_comment(
         logger.error("create_comment", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("create_comment", f"Unexpected error: {e}")
+        logger.exception("create_comment", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -283,7 +283,7 @@ async def update_comment(
         logger.error("update_comment", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("update_comment", f"Unexpected error: {e}")
+        logger.exception("update_comment", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -325,7 +325,7 @@ async def delete_comment(
         logger.error("delete_comment", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("delete_comment", f"Unexpected error: {e}")
+        logger.exception("delete_comment", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -362,5 +362,5 @@ async def toggle_comment_like(
         logger.error("toggle_comment_like", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("toggle_comment_like", f"Unexpected error: {e}")
+        logger.exception("toggle_comment_like", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 from app.core.logging import get_usecase_logger
+from .repository import UserRepository
 
 logger = get_usecase_logger("User")
 
@@ -27,8 +28,7 @@ class UserUseCase:
             db: 데이터베이스 세션 (Controller에서 주입)
         """
         self.db = db
-        # TODO: UserRepository 생성 필요
-        # self.repository = UserRepository(db)
+        self.repository = UserRepository(db)
 
     async def get_user_profile(
         self,
@@ -54,25 +54,14 @@ class UserUseCase:
         """
         logger.info("get_user_profile", "Getting user profile", user_id=user_id)
 
-        # TODO: Repository로 사용자 조회
-        # user = await self.repository.get_user_by_id(user_id)
-        # if not user:
-        #     logger.warning("get_user_profile", "User not found", user_id=user_id)
-        #     return None
-
-        # 임시 응답
-        profile = {
-            "user_id": user_id,
-            "username": "temp_user",
-            "display_name": "임시 사용자",
-            "email": "temp@example.com",
-            "credits": 1000,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
-        }
+        # Repository로 사용자 조회
+        user = await self.repository.get_user_by_id(user_id)
+        if not user:
+            logger.warning("get_user_profile", "User not found", user_id=user_id)
+            return None
 
         logger.info("get_user_profile", "Profile retrieved", user_id=user_id)
-        return profile
+        return user
 
     async def update_user_profile(
         self,
@@ -105,15 +94,19 @@ class UserUseCase:
             logger.warning("update_user_profile", "No fields to update")
             return await self.get_user_profile(user_id)
 
-        async with self.db.begin():
-            # TODO: Repository로 프로필 업데이트
-            # user = await self.repository.update_user(user_id, updates)
-            # if not user:
-            #     logger.warning("update_user_profile", "User not found", user_id=user_id)
-            #     return None
+        # Repository로 프로필 업데이트
+        success = await self.repository.update_user_profile(
+            user_id,
+            display_name=updates.get("display_name"),
+            email=updates.get("email")
+        )
 
-            logger.info("update_user_profile", "Profile updated",
-                       user_id=user_id, fields=list(updates.keys()))
+        if not success:
+            logger.warning("update_user_profile", "Update failed", user_id=user_id)
+            return None
+
+        logger.info("update_user_profile", "Profile updated",
+                   user_id=user_id, fields=list(updates.keys()))
 
         # 업데이트된 프로필 반환
         return await self.get_user_profile(user_id)
@@ -144,24 +137,82 @@ class UserUseCase:
         """
         logger.info("get_user_stats", "Getting user stats", user_id=user_id)
 
-        # TODO: Repository들로 통계 조회
-        # total_dialogues = await self.chat_repository.count_user_dialogues(user_id)
-        # total_sessions = await self.session_repository.count_user_sessions(user_id)
-        # completed_scenarios = await self.scenario_repository.count_completed_scenarios(user_id)
-        # ... 등등
+        # Repository로 통계 조회
+        stats = await self.repository.get_user_stats(user_id)
 
-        # 임시 응답
-        stats = {
-            "total_dialogues": 0,
-            "total_sessions": 0,
-            "completed_scenarios": 0,
-            "total_credits_used": 0,
-            "total_affinity_points": 0,
-            "achievements": [],
-            "rank": "bronze",
-            "created_at": datetime.utcnow().isoformat(),
-            "last_active_at": datetime.utcnow().isoformat()
-        }
+        if not stats:
+            # 사용자가 없으면 기본값 반환
+            stats = {
+                "total_sessions": 0,
+                "total_bubbles": 0,
+                "current_credits": 0,
+                "active_sessions": 0,
+                "last_session_at": None
+            }
 
         logger.info("get_user_stats", "Stats retrieved", user_id=user_id)
         return stats
+
+    async def get_user_credits(
+        self,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        사용자 크레딧 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            크레딧 정보
+        """
+        logger.info("get_user_credits", "Getting user credits", user_id=user_id)
+
+        credits = await self.repository.get_user_credits(user_id)
+
+        logger.info("get_user_credits", "Credits retrieved", user_id=user_id)
+        return credits
+
+    async def consume_user_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: str
+    ) -> Dict[str, Any]:
+        """
+        사용자 크레딧 소비
+
+        Args:
+            user_id: 사용자 ID
+            amount: 소비할 양
+            description: 사용 목적
+
+        Returns:
+            소비 결과
+        """
+        logger.info("consume_user_credits", "Consuming credits",
+                   user_id=user_id, amount=amount)
+
+        # 크레딧 소비
+        success = await self.repository.consume_credits(user_id, amount, description)
+
+        if not success:
+            logger.warning("consume_user_credits", "Failed to consume credits",
+                          user_id=user_id, amount=amount)
+            return {
+                "success": False,
+                "message": "Insufficient credits",
+                "remaining_credits": 0
+            }
+
+        # 남은 크레딧 조회
+        credits = await self.repository.get_user_credits(user_id)
+
+        logger.info("consume_user_credits", "Credits consumed successfully",
+                   user_id=user_id, amount=amount)
+
+        return {
+            "success": True,
+            "message": "Credits consumed successfully",
+            "remaining_credits": credits["current_credits"]
+        }

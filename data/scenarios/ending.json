@@ -1,0 +1,21 @@
+{
+  "scenario_id": "ending",
+  "title": "🌸 엔딩 이후",
+  "description": "최종 결전 후 동료들과 함께하는 평범하지만 소중한 일상",
+  "version": "1.0",
+  "mountable": true,
+  "world_id": "demon_slayer_taisho",
+  "image_url": "/images/scenarios/ending.jpg",
+  "thumbnail_url": "/images/scenarios/ending_thumb.jpg",
+  "tags": ["#엔딩이후", "#일상", "#평화", "#동료애"],
+  "card_size": "normal",
+  "display_order": 1,
+  "is_active": true,
+  "difficulty": "easy",
+  "character_refs": {
+    "tanjiro": "backend/data/characters/tanjiro.json",
+    "nezuko": "backend/data/characters/nezuko.json",
+    "zenitsu": "backend/data/characters/zenitsu.json",
+    "inosuke": "backend/data/characters/inosuke.json"
+  }
+}

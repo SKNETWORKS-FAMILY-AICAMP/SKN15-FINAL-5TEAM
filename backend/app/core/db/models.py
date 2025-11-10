@@ -1,43 +1,42 @@
 """
 Core DB Models
-공통으로 사용되는 DB 모델들
+
+⚠️ DEPRECATED: 이 파일은 더 이상 사용되지 않습니다.
+Gemini 피드백에 따라 모델을 feature별로 재구성했습니다:
+
+- User, PasswordResetToken → app/features/auth/models.py
+- Session → app/features/sessions/models.py
+
+하위 호환성을 위해 re-export를 제공하지만, 새 코드에서는
+각 feature의 models.py를 직접 import하세요.
 """
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, Text, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
-from app.core.db.base import Base
 
+# ============================================================
+# Re-exports for backward compatibility
+# ============================================================
+# 새 코드에서는 아래 imports를 사용하세요:
+# from app.features.auth.models import User, PasswordResetToken
+# from app.features.sessions.models import Session
 
-class Session(Base):
-    """
-    세션 정보 (PostgreSQL 저장용)
-    """
-    __tablename__ = "sessions"
+try:
+    from app.features.auth.models import User, PasswordResetToken
+    from app.features.sessions.models import Session as SessionModel
 
-    session_id = Column(UUID(as_uuid=True), primary_key=True)
-    scenario_id = Column(String(255), nullable=False, index=True)
-    user_name = Column(String(255))
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
-
-    # 세션 상태
-    current_stage = Column(String(255))
-    turn_count = Column(Integer, default=0)
-    stage_turn = Column(Integer, default=0)
-    final_ending = Column(String(255))
-    is_active = Column(Boolean, default=True, index=True)
-
-    # 요약 정보
-    conversation_summary = Column(Text, default="")
-    summary_updated_at = Column(DateTime)
-    summary_turn_count = Column(Integer, default=0)
-
-    # 타임스탬프
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        Index('idx_sessions_created', 'created_at'),
+    # Re-export with deprecation warning
+    import warnings
+    warnings.warn(
+        "Importing models from app.core.db.models is deprecated. "
+        "Use app.features.auth.models or app.features.sessions.models instead.",
+        DeprecationWarning,
+        stacklevel=2
     )
 
-    def __repr__(self):
-        return f"<Session(id={self.session_id}, scenario={self.scenario_id}, user={self.user_name})>"
+    # For backward compatibility
+    Session = SessionModel
+
+except ImportError:
+    # Fallback: Import 실패 시 경고
+    raise ImportError(
+        "Failed to import models from feature modules. "
+        "Please ensure app/features/auth/models.py and app/features/sessions/models.py exist."
+    )

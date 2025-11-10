@@ -33,7 +33,7 @@ class GalleryRepository:
         image_type: str = "generated",
         generation_prompt: Optional[str] = None,
         generation_model: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        extra_metadata: Optional[Dict[str, Any]] = None
     ) -> GalleryImage:
         """
         이미지 생성
@@ -48,7 +48,7 @@ class GalleryRepository:
             image_type: 이미지 타입 (generated, unlocked, default)
             generation_prompt: AI 생성 프롬프트
             generation_model: AI 생성 모델명
-            metadata: 추가 메타데이터
+            extra_metadata: 추가 메타데이터
 
         Returns:
             생성된 GalleryImage
@@ -65,7 +65,7 @@ class GalleryRepository:
             image_type=image_type,
             generation_prompt=generation_prompt,
             generation_model=generation_model,
-            metadata=metadata
+            extra_metadata=extra_metadata
         )
 
         self.db.add(image)

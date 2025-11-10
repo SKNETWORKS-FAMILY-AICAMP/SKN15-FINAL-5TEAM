@@ -212,9 +212,10 @@ class ChatRepository:
         logger.debug("get_session", "Fetching session", session_id=session_id)
 
         stmt = text("""
-            SELECT id, user_id, scenario_id, state, created_at, updated_at, last_interaction_at
-            FROM chat_sessions
-            WHERE id = :session_id AND is_active = TRUE
+            SELECT session_id, user_id, scenario_id, user_name, current_stage, turn_count,
+                   stage_turn, is_active, conversation_summary, created_at, updated_at
+            FROM sessions
+            WHERE session_id = :session_id AND is_active = TRUE
         """)
 
         result = await self.db.execute(stmt, {"session_id": session_id})
@@ -224,14 +225,23 @@ class ChatRepository:
             logger.debug("get_session", "Session not found", session_id=session_id)
             return None
 
+        # Build state dict from individual columns
+        state = {
+            "current_stage": row.current_stage,
+            "turn_count": row.turn_count or 0,
+            "stage_turn": row.stage_turn or 0,
+            "conversation_summary": row.conversation_summary,
+        }
+
         session_data = {
-            "session_id": row.id,
-            "user_id": row.user_id,
+            "session_id": str(row.session_id),
+            "user_id": str(row.user_id) if row.user_id else None,
             "scenario_id": row.scenario_id,
-            "state": row.state if isinstance(row.state, dict) else json.loads(row.state),
+            "user_name": row.user_name,
+            "state": state,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
-            "last_interaction_at": row.last_interaction_at,
+            "last_interaction_at": row.updated_at,  # Use updated_at as last_interaction_at
         }
 
         logger.debug("get_session", "Session found", session_id=session_id)
@@ -255,21 +265,36 @@ class ChatRepository:
         """
         logger.info("save_session", "Saving session", session_id=session_id)
 
+        # Extract state fields
+        current_stage = state.get("current_stage")
+        turn_count = state.get("turn_count", 0)
+        stage_turn = state.get("stage_turn", 0)
+        conversation_summary = state.get("conversation_summary")
+        user_name = state.get("user_name")
+
         stmt = text("""
-            INSERT INTO chat_sessions (id, user_id, scenario_id, state, created_at, updated_at, last_interaction_at)
-            VALUES (:session_id, :user_id, :scenario_id, CAST(:state AS jsonb), NOW(), NOW(), NOW())
-            ON CONFLICT (id)
+            INSERT INTO sessions (session_id, user_id, scenario_id, user_name, current_stage, turn_count,
+                                 stage_turn, is_active, conversation_summary, created_at, updated_at)
+            VALUES (:session_id, :user_id, :scenario_id, :user_name, :current_stage, :turn_count,
+                    :stage_turn, TRUE, :conversation_summary, NOW(), NOW())
+            ON CONFLICT (session_id)
             DO UPDATE SET
-                state = CAST(:state AS jsonb),
-                updated_at = NOW(),
-                last_interaction_at = NOW()
+                current_stage = :current_stage,
+                turn_count = :turn_count,
+                stage_turn = :stage_turn,
+                conversation_summary = :conversation_summary,
+                updated_at = NOW()
         """)
 
         await self.db.execute(stmt, {
             "session_id": session_id,
             "user_id": user_id,
             "scenario_id": scenario_id,
-            "state": json.dumps(state)
+            "user_name": user_name,
+            "current_stage": current_stage,
+            "turn_count": turn_count,
+            "stage_turn": stage_turn,
+            "conversation_summary": conversation_summary
         })
 
         await self.db.flush()

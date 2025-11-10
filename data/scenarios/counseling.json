@@ -1,0 +1,18 @@
+{
+  "scenario_id": "counseling",
+  "title": "💬 귀칼 상담소",
+  "description": "귀살대원들이 운영하는 고민상담소",
+  "version": "1.0",
+  "mountable": true,
+  "world_id": "modern_au",
+  "image_url": "/images/scenarios/counseling.jpg",
+  "thumbnail_url": "/images/scenarios/counseling_thumb.jpg",
+  "tags": ["#상담소", "#힐링AU", "#감정공감"],
+  "card_size": "normal",
+  "display_order": 4,
+  "is_active": true,
+  "difficulty": "easy",
+  "character_refs": {
+    "tanjiro": "backend/data/characters/tanjiro.json"
+  }
+}

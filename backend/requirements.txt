@@ -26,6 +26,7 @@ sqlalchemy==2.0.25
 asyncpg==0.29.0  # PostgreSQL async driver
 aiosqlite==0.19.0
 psycopg2-binary==2.9.9
+pgvector==0.2.4  # PostgreSQL vector extension for embeddings
 redis==5.0.1
 alembic==1.13.1  # Database migrations
 
@@ -33,6 +34,7 @@ alembic==1.13.1  # Database migrations
 python-dotenv==1.0.0
 pyyaml==6.0.1
 python-jose[cryptography]==3.5.0  # JWT token handling
+email-validator==2.1.0  # Pydantic EmailStr support
 
 # === 날짜/시간 ===
 python-dateutil==2.8.2
@@ -51,7 +53,7 @@ bcrypt==4.1.2
 # === 문자열 처리 & 매칭 ===
 fuzzywuzzy==0.18.0  # 퍼지 문자열 매칭 (오타 허용)
 python-Levenshtein==0.25.0  # 레벤슈타인 거리 (fuzzywuzzy 성능 향상)
-py-hanspell==1.1  # 한국어 맞춤법 검사
+# py-hanspell==1.1  # 한국어 맞춤법 검사 (최신 pip과 호환 문제로 주석 처리)
 
 # === 이미지 처리 ===
 Pillow==10.2.0  # 이미지 처리 (썸네일, 메타데이터)

@@ -44,7 +44,7 @@ class StateService:
         state = {
             "scenario_id": scenario_id,
             "user_input": user_input,
-            "current_stage": session_state.get("current_stage", "intro"),
+            "current_stage": session_state.get("current_stage", session_state.get("current_stage", "TRAIN_PRELUDE")),
             "stage_turn": session_state.get("stage_turn", 0),
             "turn_count": session_state.get("turn_count", 0),
             "game": session_state.get("game", {}),

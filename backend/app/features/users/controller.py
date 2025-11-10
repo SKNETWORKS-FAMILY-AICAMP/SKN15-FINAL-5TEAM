@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.logging import get_controller_logger
+from app.core.auth import get_current_user_id, CurrentUser, get_current_user
 from app.shared.exceptions import BusinessException
 
 from .usecase import UserUseCase
@@ -16,6 +17,9 @@ from .schemas import (
     UserProfileResponse,
     UserProfileUpdateRequest,
     UserStatsResponse,
+    UserCreditsResponse,
+    ConsumeCreditsRequest,
+    ConsumeCreditsResponse,
 )
 
 logger = get_controller_logger("User")
@@ -30,13 +34,6 @@ router = APIRouter(prefix="/users", tags=["users"])
 def get_user_usecase(db: AsyncSession = Depends(get_db)) -> UserUseCase:
     """UserUseCase 의존성"""
     return UserUseCase(db)
-
-
-# TODO: 인증 의존성 (임시로 고정 user_id)
-async def get_current_user_id() -> str:
-    """현재 사용자 ID (임시)"""
-    # 실제로는 JWT 토큰에서 추출
-    return "temp_user_id"
 
 
 # ============================================================
@@ -69,7 +66,7 @@ async def get_my_profile(
         logger.error("get_my_profile", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("get_my_profile", f"Unexpected error: {e}")
+        logger.error("get_my_profile", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -130,4 +127,59 @@ async def get_my_stats(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("get_my_stats", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/me/credits", response_model=UserCreditsResponse)
+async def get_my_credits(
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 크레딧 조회
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_my_credits", "Getting user credits", user_id=user_id)
+
+    try:
+        credits = await usecase.get_user_credits(user_id)
+        return UserCreditsResponse(**credits)
+
+    except BusinessException as e:
+        logger.error("get_my_credits", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.error("get_my_credits", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/me/credits/consume", response_model=ConsumeCreditsResponse)
+async def consume_my_credits(
+    request: ConsumeCreditsRequest,
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    크레딧 소비
+
+    Controller → UseCase → Repository
+    """
+    logger.info("consume_my_credits", "Consuming credits",
+               user_id=user_id, amount=request.amount)
+
+    try:
+        result = await usecase.consume_user_credits(
+            user_id=user_id,
+            amount=request.amount,
+            description=request.description
+        )
+
+        return ConsumeCreditsResponse(**result)
+
+    except BusinessException as e:
+        logger.error("consume_my_credits", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.error("consume_my_credits", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

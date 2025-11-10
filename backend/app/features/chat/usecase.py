@@ -100,13 +100,16 @@ class ChatUseCase:
             else:
                 # 신규 세션 생성
                 logger.info("create_dialogue", "Creating new session", session_id=session_id)
+                # Get first stage from scenario
+                first_stage = self.scenario_service.get_first_stage_tag(scenario_id)
+
                 session_state = {
                     "session_id": session_id,
                     "scenario_id": scenario_id,
                     "user_id": user_id,
                     "user_name": user_name,
                     "turn_count": 0,
-                    "current_stage": "intro",
+                    "current_stage": first_stage,
                     "affinity_scores": {},
                 }
 
