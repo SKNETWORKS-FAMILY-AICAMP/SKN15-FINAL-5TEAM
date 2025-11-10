@@ -12,7 +12,10 @@ TODO: 향후 구현 필요
 """
 from typing import Dict, Any
 from ..schemas import DialogueResult, ChatMessage
-from ..services import LLMService, StateService, StageService, ScenarioService
+from ..services.llm_service import LLMService
+from ..services.state_service import StateService
+from ..services.stage_service import StageService
+from ..services.scenario_service import ScenarioService
 from .guards import GuardrailAgent, RouterAgent
 from app.core.logging import get_parent_logger, print_layer_debug
 

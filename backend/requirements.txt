@@ -33,6 +33,10 @@ alembic==1.13.1  # Database migrations
 python-dotenv==1.0.0
 pyyaml==6.0.1
 python-jose[cryptography]==3.5.0  # JWT token handling
+fuzzywuzzy==0.18.0
+python-levenshtein==0.25.0
+Pillow==10.3.0  # 이미지 처리
+py-hanspell==1.1  # 한국어 맞춤법 검사
 
 # === 날짜/시간 ===
 python-dateutil==2.8.2

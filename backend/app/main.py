@@ -92,64 +92,6 @@ async def health_check():
         "environment": settings.ENVIRONMENT
     }
 
-# ============================================================
-# 임시 더미 API (Frontend 동작용)
-# ============================================================
-@app.get("/api/scenarios")
-async def get_scenarios():
-    """시나리오 목록 조회 (실제 데이터)"""
-    return [
-        {
-            "scenario_id": "cutscene5_llm_driven",
-            "title": "🔥 무한열차",
-            "description": "갈림길→전략 개입→동료 규합→보스 퇴장 시네마틱→판정→히든/기본 엔딩",
-            "image_url": "/images/scenarios/mugen_train.jpg",
-            "thumbnail_url": "/images/scenarios/mugen_train_thumb.jpg",
-            "tags": ["전투", "스토리", "다이쇼 시대"],
-            "card_size": "large",
-            "route_path": "/character/cutscene5_llm_driven",
-            "display_order": 1,
-            "is_active": True,
-            "likes": 256,
-            "comments": 89,
-            "views": 3420,
-            "total_completions": 147,
-            "is_liked": False,
-            "has_started": False,
-            "has_completed": False
-        }
-    ]
-
-@app.get("/api/session/last")
-async def get_last_session(scenario_id: str = None):
-    """마지막 세션 조회 (더미)"""
-    return {"has_session": False}
-
-@app.get("/api/users/me/scenarios")
-async def get_user_scenarios():
-    """사용자 시나리오 목록 (더미)"""
-    # 로그인한 사용자도 전체 시나리오 목록 반환
-    return await get_scenarios()
-
-@app.get("/api/auth/me")
-async def get_current_user():
-    """현재 사용자 정보 (더미)"""
-    return {
-        "user_id": "1",
-        "username": "admin",
-        "email": "admin@kimechat.com",
-        "display_name": "관리자"
-    }
-
-@app.get("/api/users/me/credits")
-async def get_user_credits():
-    """사용자 크레딧 조회 (더미)"""
-    return {
-        "credits": 1000,
-        "total_credits": 1000,
-        "used_credits": 0,
-        "bubble_count": 1000  # 프론트엔드가 기대하는 필드
-    }
 
 # ============================================================
 # 시작/종료 이벤트
