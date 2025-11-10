@@ -3,7 +3,7 @@ Users Controller
 사용자 프로필 및 통계 엔드포인트
 Layer 1: Controller (4-Layer Architecture)
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
@@ -21,6 +21,7 @@ from .schemas import (
     ConsumeCreditsRequest,
     ConsumeCreditsResponse,
 )
+from app.features.galleries.schemas import ImageResponse, ImageListResponse
 
 logger = get_controller_logger("User")
 
@@ -182,4 +183,41 @@ async def consume_my_credits(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.error("consume_my_credits", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/me/gallery", response_model=ImageListResponse)
+async def get_my_gallery_images(
+    limit: int = Query(50, ge=1, le=100, description="페이징 크기"),
+    offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 갤러리 이미지 목록 조회 (마이페이지)
+
+    모든 시나리오의 이미지를 통계 정보와 함께 반환합니다.
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_my_gallery_images", "Getting gallery images",
+               user_id=user_id, limit=limit, offset=offset)
+
+    try:
+        images = await usecase.get_my_gallery_images(
+            user_id=user_id,
+            limit=limit,
+            offset=offset
+        )
+
+        return ImageListResponse(
+            images=[ImageResponse(**img) for img in images],
+            total=len(images)
+        )
+
+    except BusinessException as e:
+        logger.error("get_my_gallery_images", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("get_my_gallery_images", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

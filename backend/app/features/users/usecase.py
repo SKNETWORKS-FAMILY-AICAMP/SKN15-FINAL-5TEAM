@@ -4,11 +4,13 @@ Users Feature - UseCase
 Layer 2: UseCase (4-Layer Architecture)
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from app.core.logging import get_usecase_logger
 from .repository import UserRepository
+from app.features.chat.repository import ChatRepository
+from app.features.galleries.repository import GalleryRepository
 
 logger = get_usecase_logger("User")
 
@@ -29,13 +31,15 @@ class UserUseCase:
         """
         self.db = db
         self.repository = UserRepository(db)
+        self.chat_repository = ChatRepository(db)
+        self.gallery_repository = GalleryRepository(db)
 
     async def get_user_profile(
         self,
         user_id: str
     ) -> Optional[Dict[str, Any]]:
         """
-        사용자 프로필 조회
+        사용자 프로필 조회 (캐릭터 호감도 포함)
 
         Args:
             user_id: 사용자 ID
@@ -49,7 +53,8 @@ class UserUseCase:
                 "email": str,
                 "credits": int,
                 "created_at": str,
-                "updated_at": str
+                "updated_at": str,
+                "affinities": List[Dict]  # 캐릭터 호감도 목록
             }
         """
         logger.info("get_user_profile", "Getting user profile", user_id=user_id)
@@ -60,7 +65,25 @@ class UserUseCase:
             logger.warning("get_user_profile", "User not found", user_id=user_id)
             return None
 
-        logger.info("get_user_profile", "Profile retrieved", user_id=user_id)
+        # ChatRepository로 모든 캐릭터 호감도 조회
+        affinities = await self.chat_repository.get_all_user_affinities(user_id)
+
+        # 호감도 정보를 Dict 리스트로 변환
+        affinity_list = []
+        for affinity in affinities:
+            affinity_list.append({
+                "character_name": affinity.character_name,
+                "total_affinity_score": affinity.total_affinity_score,
+                "affinity_level": affinity.affinity_level,
+                "total_interactions": affinity.total_interactions,
+                "last_interaction_at": affinity.last_interaction_at.isoformat() if affinity.last_interaction_at else None
+            })
+
+        # 사용자 프로필에 호감도 정보 추가
+        user["affinities"] = affinity_list
+
+        logger.info("get_user_profile", "Profile retrieved with affinities",
+                   user_id=user_id, affinity_count=len(affinity_list))
         return user
 
     async def update_user_profile(
@@ -216,3 +239,76 @@ class UserUseCase:
             "message": "Credits consumed successfully",
             "remaining_credits": credits["current_credits"]
         }
+
+    async def get_my_gallery_images(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        내 갤러리 이미지 목록 조회 (마이페이지)
+
+        Args:
+            user_id: 사용자 ID
+            limit: 페이징 크기
+            offset: 페이징 오프셋
+
+        Returns:
+            이미지 목록 (통계 정보 포함)
+            [
+                {
+                    "image_id": str,
+                    "user_id": str,
+                    "scenario_id": str,
+                    "session_id": str,
+                    "stage_tag": str,
+                    "image_url": str,
+                    "image_type": str,
+                    "extra_metadata": Dict,
+                    "created_at": str,
+                    "like_count": int,
+                    "view_count": int,
+                    "user_liked": bool
+                },
+                ...
+            ]
+        """
+        logger.info("get_my_gallery_images", "Getting gallery images",
+                   user_id=user_id, limit=limit, offset=offset)
+
+        # Repository로 이미지 목록 조회 (통계 정보 포함)
+        images_with_stats = await self.gallery_repository.get_images_by_user_id(
+            user_id=user_id,
+            limit=limit,
+            offset=offset
+        )
+
+        # Tuple (GalleryImage, like_count, view_count, user_liked) → Dict 변환
+        images = []
+        for img, like_count, view_count, user_liked in images_with_stats:
+            image_dict = {
+                "image_id": str(img.image_id),
+                "user_id": str(img.user_id),
+                "scenario_id": img.scenario_id,
+                "session_id": str(img.session_id) if img.session_id else None,
+                "stage_tag": img.stage_tag,
+                "image_url": img.image_url,
+                "image_type": img.image_type,
+                "generation_prompt": img.generation_prompt,
+                "generation_model": img.generation_model,
+                "extra_metadata": img.extra_metadata,
+                "is_unlocked": img.is_unlocked,
+                "is_favorite": img.is_favorite,
+                "created_at": img.created_at.isoformat() if img.created_at else None,
+                "unlocked_at": img.unlocked_at.isoformat() if img.unlocked_at else None,
+                "like_count": like_count,
+                "view_count": view_count,
+                "user_liked": user_liked
+            }
+            images.append(image_dict)
+
+        logger.info("get_my_gallery_images", f"Retrieved {len(images)} images",
+                   user_id=user_id)
+
+        return images

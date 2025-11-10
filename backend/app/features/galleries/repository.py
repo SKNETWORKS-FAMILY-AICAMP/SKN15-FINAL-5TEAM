@@ -327,6 +327,36 @@ class GalleryRepository:
 
         return count
 
+    async def get_images_by_user_id(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Tuple[GalleryImage, int, int, bool]]:
+        """
+        사용자의 모든 갤러리 이미지 조회 (통계 정보 포함)
+        마이페이지용 - 모든 시나리오의 이미지를 조회
+
+        Args:
+            user_id: 사용자 ID
+            limit: 페이징 크기
+            offset: 페이징 오프셋
+
+        Returns:
+            List[Tuple[GalleryImage, like_count, view_count, user_liked]]
+        """
+        logger.debug("get_images_by_user_id", f"Getting all images for user {user_id}",
+                    limit=limit, offset=offset)
+
+        # list_user_images 메서드를 재사용 (scenario_id 필터 없이, viewer는 본인)
+        return await self.list_user_images(
+            user_id=user_id,
+            scenario_id=None,  # 모든 시나리오
+            limit=limit,
+            offset=offset,
+            viewer_user_id=user_id  # 본인의 좋아요 여부 확인
+        )
+
     # ============================================================
     # Like Management
     # ============================================================
