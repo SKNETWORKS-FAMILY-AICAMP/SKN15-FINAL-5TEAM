@@ -97,18 +97,22 @@ class DialogueService:
     def __init__(
         self,
         llm_client: Optional[LLMClient] = None,
-        enable_llm: bool = True
+        enable_llm: bool = True,
+        chat_repository: Optional[Any] = None
     ):
         """
         Args:
             llm_client: LLM 클라이언트
             enable_llm: LLM 사용 여부
+            chat_repository: ChatRepository (이미지 조회용, 선택적)
         """
         self.llm_client = llm_client or LLMClient()
         self.enable_llm = enable_llm
+        self.chat_repository = chat_repository
 
         logger.info("__init__", "DialogueService initialized",
-                   enable_llm=enable_llm)
+                   enable_llm=enable_llm,
+                   has_repository=chat_repository is not None)
 
     # ========== 1. Validation ==========
 
@@ -391,9 +395,14 @@ JSON 형식으로 응답:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
+            # 텍스트 치환
             text = entry.get("text")
             if isinstance(text, str):
                 entry["text"] = self._render_text(state, text)
+            # 화자 이름 치환 (예: {user} → 츠구코)
+            speaker = entry.get("speaker")
+            if isinstance(speaker, str):
+                entry["speaker"] = self._render_text(state, speaker)
             rendered.append(entry)
         return rendered
 
@@ -454,24 +463,56 @@ JSON 형식으로 응답:
 
     # ========== 5. Image Selection ==========
 
-    def select_image(
+    async def select_image(
         self,
         state: Dict[str, Any],
         detected_events: Optional[List[str]] = None
     ) -> Optional[str]:
         """
-        이벤트 기반 이미지 선택 (현재는 기본 로직만)
+        스테이지 기반 이미지 선택 (DB 조회)
+
+        state에서 scenario_id, current_stage, turn_count를 추출하여
+        DB에서 최적의 이미지를 조회합니다.
 
         Args:
-            state: 게임 상태
-            detected_events: 감지된 이벤트 (None이면 state에서 가져옴)
+            state: 게임 상태 (scenario_id, current_stage, turn_count 포함)
+            detected_events: 감지된 이벤트 (호환성 유지용, 사용 안 함)
 
         Returns:
-            이미지 경로 또는 None
+            이미지 URL/경로 또는 None
         """
-        events = detected_events or state.get("event_flags", [])
+        # DB 기반 조회 (ChatRepository 사용)
+        if self.chat_repository:
+            scenario_id = state.get("scenario_id")
+            stage_id = state.get("current_stage") or state.get("stage_tag")
+            turn_count = state.get("turn_count", 0)
 
-        # 간단한 이벤트 → 이미지 매핑
+            if scenario_id and stage_id:
+                try:
+                    image_data = await self.chat_repository.get_best_image_for_stage(
+                        scenario_id=scenario_id,
+                        stage_id=stage_id,
+                        turn_count=turn_count
+                    )
+
+                    if image_data:
+                        image_url = image_data.get("image_url")
+                        logger.info("select_image",
+                                   f"Image selected from DB: {image_url}",
+                                   scenario=scenario_id,
+                                   stage=stage_id,
+                                   priority=image_data.get("priority"))
+                        return image_url
+                    else:
+                        logger.warning("select_image",
+                                      f"No image found in DB for scenario={scenario_id}, stage={stage_id}")
+                except Exception as e:
+                    logger.error("select_image",
+                                f"Error fetching image from DB: {e}",
+                                exc_info=True)
+
+        # Fallback: 이벤트 기반 하드코딩 매핑 (하위 호환성)
+        events = detected_events or state.get("event_flags", [])
         event_image_mapping = {
             "battle_started": "battle_scene.jpg",
             "victory_moment": "victory.jpg",
@@ -481,7 +522,8 @@ JSON 형식으로 응답:
         for event in events:
             if event in event_image_mapping:
                 image_path = event_image_mapping[event]
-                logger.info("select_image", f"Image selected: {image_path}",
+                logger.info("select_image",
+                           f"Image selected from fallback mapping: {image_path}",
                            event=event)
                 return image_path
 
