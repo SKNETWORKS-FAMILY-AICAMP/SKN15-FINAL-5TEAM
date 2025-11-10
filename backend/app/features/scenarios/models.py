@@ -3,7 +3,7 @@ Scenarios Feature - SQLAlchemy Models
 시나리오 댓글, 좋아요 등 DB 테이블 정의
 """
 from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger, Boolean, CheckConstraint, UniqueConstraint, Index, ForeignKey, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, INET
 from datetime import datetime
 import uuid
 from app.core.db.base import Base
@@ -85,16 +85,11 @@ class ScenarioView(Base):
     __tablename__ = "scenario_views"
 
     view_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    scenario_id = Column(String(50), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
-    ip_address = Column(String(45), nullable=True)  # IPv6 max length
+    scenario_id = Column(String(50), nullable=True)
+    user_id = Column(UUID(as_uuid=True), nullable=True)
+    ip_address = Column(INET, nullable=True)
     user_agent = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        Index('idx_scenario_views_scenario', 'scenario_id', 'created_at'),
-        Index('idx_scenario_views_user', 'user_id', 'created_at'),
-    )
+    viewed_at = Column(DateTime(timezone=True), nullable=True, server_default=text('now()'))
 
     def __repr__(self):
         return f"<ScenarioView(scenario={self.scenario_id}, user={self.user_id})>"
