@@ -3,7 +3,7 @@ Scenarios Controller
 시나리오 목록, 상세, 댓글, 좋아요 엔드포인트
 Layer 1: Controller (4-Layer Architecture)
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
@@ -123,6 +123,43 @@ async def get_scenario_detail(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/{scenario_id}/view")
+async def record_scenario_view(
+    scenario_id: str,
+    request: Request,
+    user_id: Optional[str] = Depends(get_current_user_id),
+    usecase: ScenarioUseCase = Depends(get_scenario_usecase)
+):
+    """
+    시나리오 조회 기록 (Public API - 인증 선택적)
+
+    Controller → UseCase → Repository
+    """
+    # IP 주소 및 User Agent 추출
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    logger.info("record_scenario_view", "Recording scenario view",
+               scenario_id=scenario_id, user_id=user_id, ip_address=ip_address)
+
+    try:
+        success = await usecase.record_scenario_view(
+            scenario_id=scenario_id,
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+
+        return {"success": success}
+
+    except BusinessException as e:
+        logger.error("record_scenario_view", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("record_scenario_view", "Unexpected error", e)
+        raise HTTPException(status_code=500, detail="Failed to record view")
+
+
 @router.post("/{scenario_id}/like", response_model=LikeResponse)
 async def toggle_scenario_like(
     scenario_id: str,
@@ -156,6 +193,39 @@ async def toggle_scenario_like(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("toggle_scenario_like", "Unexpected error", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{scenario_id}/like")
+async def check_scenario_like(
+    scenario_id: str,
+    user_id: Optional[str] = Depends(get_current_user_id),
+    usecase: ScenarioUseCase = Depends(get_scenario_usecase)
+):
+    """
+    시나리오 좋아요 상태 확인 (로그인 필수)
+
+    Controller → UseCase → Repository
+    """
+    # 인증 체크 (임시)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    logger.info("check_scenario_like", "Checking like status", scenario_id=scenario_id, user_id=user_id)
+
+    try:
+        liked = await usecase.check_scenario_like(
+            scenario_id=scenario_id,
+            user_id=user_id
+        )
+
+        return {"liked": liked}
+
+    except BusinessException as e:
+        logger.error("check_scenario_like", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("check_scenario_like", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -196,6 +266,46 @@ async def get_comments(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("get_comments", "Unexpected error", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{scenario_id}/comments/{comment_id}/replies", response_model=CommentListResponse)
+async def get_comment_replies(
+    scenario_id: str,
+    comment_id: int,
+    limit: int = Query(20, ge=1, le=100, description="페이징 크기"),
+    offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    usecase: ScenarioUseCase = Depends(get_scenario_usecase)
+):
+    """
+    대댓글 목록 조회 (Public API - 인증 선택적)
+
+    Controller → UseCase → Repository
+
+    Args:
+        scenario_id: 시나리오 ID (URL 일관성을 위해 포함)
+        comment_id: 부모 댓글 ID
+    """
+    logger.info("get_comment_replies", "Getting comment replies",
+               scenario_id=scenario_id, comment_id=comment_id)
+
+    try:
+        replies = await usecase.get_comment_replies(
+            parent_comment_id=comment_id,
+            limit=limit,
+            offset=offset
+        )
+
+        return CommentListResponse(
+            comments=[CommentResponse(**r) for r in replies],
+            total=len(replies)
+        )
+
+    except BusinessException as e:
+        logger.error("get_comment_replies", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("get_comment_replies", "Unexpected error", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

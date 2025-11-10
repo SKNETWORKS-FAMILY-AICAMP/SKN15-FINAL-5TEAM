@@ -76,3 +76,25 @@ class CommentLike(Base):
 
     def __repr__(self):
         return f"<CommentLike(comment={self.comment_id}, user={self.user_id})>"
+
+
+class ScenarioView(Base):
+    """
+    시나리오 조회 기록
+    """
+    __tablename__ = "scenario_views"
+
+    view_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scenario_id = Column(String(50), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    ip_address = Column(String(45), nullable=True)  # IPv6 max length
+    user_agent = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_scenario_views_scenario', 'scenario_id', 'created_at'),
+        Index('idx_scenario_views_user', 'user_id', 'created_at'),
+    )
+
+    def __repr__(self):
+        return f"<ScenarioView(scenario={self.scenario_id}, user={self.user_id})>"

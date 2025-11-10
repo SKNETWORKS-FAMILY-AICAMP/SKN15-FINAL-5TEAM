@@ -188,6 +188,34 @@ class ScenarioUseCase:
             "like_count": like_count
         }
 
+    async def check_scenario_like(
+        self,
+        scenario_id: str,
+        user_id: str
+    ) -> bool:
+        """
+        시나리오 좋아요 상태 확인
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID
+
+        Returns:
+            좋아요 여부
+        """
+        logger.info("check_scenario_like", "Checking scenario like status",
+                   scenario_id=scenario_id, user_id=user_id)
+
+        liked = await self.repository.check_user_liked_scenario(
+            scenario_id=scenario_id,
+            user_id=user_id
+        )
+
+        logger.info("check_scenario_like", f"Like status: {liked}",
+                   scenario_id=scenario_id)
+
+        return liked
+
     async def create_comment(
         self,
         scenario_id: str,
@@ -425,6 +453,41 @@ class ScenarioUseCase:
                    parent_comment_id=parent_comment_id)
 
         return result
+
+    async def record_scenario_view(
+        self,
+        scenario_id: str,
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> bool:
+        """
+        시나리오 조회 기록
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID (선택)
+            ip_address: IP 주소 (선택)
+            user_agent: User Agent (선택)
+
+        Returns:
+            성공 여부
+        """
+        logger.info("record_scenario_view", "Recording scenario view",
+                   scenario_id=scenario_id, user_id=user_id)
+
+        async with self.db.begin():
+            success = await self.repository.record_scenario_view(
+                scenario_id=scenario_id,
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+
+        logger.info("record_scenario_view", f"View record result: {success}",
+                   scenario_id=scenario_id)
+
+        return success
 
     def _comment_to_dict(self, comment: ScenarioComment) -> Dict[str, Any]:
         """

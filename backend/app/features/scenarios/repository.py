@@ -7,7 +7,7 @@ from sqlalchemy import select, func, and_, delete, update
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 
-from .models import ScenarioComment, ScenarioLike, CommentLike
+from .models import ScenarioComment, ScenarioLike, CommentLike, ScenarioView
 from app.core.logging import get_repository_logger
 
 logger = get_repository_logger("Scenario")
@@ -380,3 +380,45 @@ class ScenarioRepository:
         count = result.scalar_one()
 
         return count > 0
+
+    # ============================================================
+    # View Management
+    # ============================================================
+
+    async def record_scenario_view(
+        self,
+        scenario_id: str,
+        user_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> bool:
+        """
+        시나리오 조회 기록 (조회수 증가)
+
+        Args:
+            scenario_id: 시나리오 ID
+            user_id: 사용자 ID (선택, 익명 가능)
+            ip_address: IP 주소 (선택)
+            user_agent: User Agent (선택)
+
+        Returns:
+            성공 여부
+        """
+        logger.info("record_scenario_view", f"Recording view for scenario {scenario_id}",
+                   user_id=user_id, ip_address=ip_address)
+
+        try:
+            view = ScenarioView(
+                scenario_id=scenario_id,
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            self.db.add(view)
+            await self.db.flush()
+
+            logger.info("record_scenario_view", f"View recorded", scenario_id=scenario_id)
+            return True
+        except Exception as e:
+            logger.error("record_scenario_view", f"Failed to record view: {e}", scenario_id=scenario_id)
+            return False
