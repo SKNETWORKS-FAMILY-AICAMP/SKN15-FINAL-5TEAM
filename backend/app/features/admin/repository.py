@@ -10,7 +10,7 @@ from datetime import datetime
 
 from app.features.sessions.models import Session
 from app.features.chat.models import DialogueTurn
-from app.features.users.models import User
+from app.features.auth.models import User
 from app.core.logging import get_repository_logger
 
 logger = get_repository_logger("Admin")
@@ -165,6 +165,78 @@ class AdminRepository:
             세션 개수
         """
         stmt = select(func.count(Session.session_id))
+        result = await self.db.execute(stmt)
+        count = result.scalar_one()
+        return count
+
+    # ============================================================
+    # User Management
+    # ============================================================
+
+    async def list_all_users(
+        self,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[User]:
+        """
+        모든 사용자 목록 조회 (관리자용)
+
+        Args:
+            limit: 페이징 크기
+            offset: 페이징 오프셋
+
+        Returns:
+            사용자 ORM 객체 리스트
+        """
+        logger.info("list_all_users", f"Fetching users (limit={limit}, offset={offset})")
+
+        stmt = (
+            select(User)
+            .order_by(desc(User.created_at))
+            .limit(limit)
+            .offset(offset)
+        )
+
+        result = await self.db.execute(stmt)
+        users = result.scalars().all()
+
+        logger.info("list_all_users", f"Retrieved {len(users)} users")
+        return list(users)
+
+    async def get_user_details_by_id(
+        self,
+        user_id: str
+    ) -> Optional[User]:
+        """
+        특정 사용자 상세 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            사용자 ORM 객체 또는 None
+        """
+        logger.info("get_user_details_by_id", f"Fetching user details: {user_id}")
+
+        stmt = select(User).where(User.user_id == user_id)
+        result = await self.db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if user:
+            logger.info("get_user_details_by_id", f"User found: {user.username}")
+        else:
+            logger.warning("get_user_details_by_id", f"User not found: {user_id}")
+
+        return user
+
+    async def get_user_count(self) -> int:
+        """
+        전체 사용자 개수 조회
+
+        Returns:
+            사용자 개수
+        """
+        stmt = select(func.count(User.user_id))
         result = await self.db.execute(stmt)
         count = result.scalar_one()
         return count

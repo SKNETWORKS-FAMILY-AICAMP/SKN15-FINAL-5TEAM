@@ -60,3 +60,36 @@ class DialogueTurnListResponse(BaseModel):
     session_id: str = Field(..., description="세션 ID")
     turns: List[DialogueTurnResponse] = Field(..., description="턴 목록")
     total: int = Field(..., description="총 턴 개수")
+
+
+# ============================================================
+# User Management Schemas
+# ============================================================
+
+class AdminUserResponse(BaseModel):
+    """
+    사용자 정보 응답 (관리자용)
+    """
+    user_id: str = Field(..., description="사용자 ID")
+    username: str = Field(..., description="사용자명")
+    display_name: str = Field(..., description="표시 이름")
+    email: Optional[str] = Field(None, description="이메일")
+    role: str = Field(..., description="역할 (user, admin, moderator)")
+    is_active: bool = Field(..., description="활성 계정 여부")
+    is_verified: bool = Field(..., description="이메일 인증 여부")
+    total_sessions: int = Field(default=0, description="총 세션 수")
+    total_bubbles: int = Field(default=0, description="총 버블 수")
+    last_login_at: Optional[datetime] = Field(None, description="마지막 로그인 시간")
+    created_at: datetime = Field(..., description="가입 시간")
+    updated_at: datetime = Field(..., description="수정 시간")
+
+    class Config:
+        from_attributes = True
+
+
+class AdminUserListResponse(BaseModel):
+    """
+    사용자 목록 응답
+    """
+    users: List[AdminUserResponse] = Field(..., description="사용자 목록")
+    total: int = Field(..., description="총 사용자 개수")

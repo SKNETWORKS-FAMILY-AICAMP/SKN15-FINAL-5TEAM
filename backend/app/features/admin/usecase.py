@@ -94,3 +94,72 @@ class AdminUseCase:
             "turns": turns,
             "total": len(turns)
         }
+
+    # ============================================================
+    # User Management
+    # ============================================================
+
+    async def list_users(
+        self,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        모든 사용자 목록 조회
+
+        Args:
+            limit: 페이징 크기
+            offset: 페이징 오프셋
+
+        Returns:
+            {
+                "users": List[User ORM],
+                "total": int
+            }
+        """
+        logger.info("list_users", f"Listing users (limit={limit}, offset={offset})")
+
+        # Repository로 사용자 목록 조회
+        users = await self.repository.list_all_users(
+            limit=limit,
+            offset=offset
+        )
+
+        # 전체 개수 조회 (페이징 정보용)
+        total = await self.repository.get_user_count()
+
+        logger.info("list_users", f"Retrieved {len(users)} users (total={total})")
+
+        return {
+            "users": users,
+            "total": total
+        }
+
+    async def get_user_details(
+        self,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        특정 사용자 상세 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            User ORM 객체 또는 None
+
+        Raises:
+            ValueError: 사용자를 찾을 수 없는 경우
+        """
+        logger.info("get_user_details", f"Getting user details: {user_id}")
+
+        # Repository로 사용자 조회
+        user = await self.repository.get_user_details_by_id(user_id)
+
+        if not user:
+            logger.warning("get_user_details", f"User not found: {user_id}")
+            raise ValueError(f"User not found: {user_id}")
+
+        logger.info("get_user_details", f"User retrieved: {user.username}")
+
+        return user

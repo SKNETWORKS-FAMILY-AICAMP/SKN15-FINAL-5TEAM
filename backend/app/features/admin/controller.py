@@ -16,6 +16,8 @@ from .schemas import (
     DialogueSessionInfoResponse,
     DialogueTurnListResponse,
     DialogueTurnResponse,
+    AdminUserResponse,
+    AdminUserListResponse,
 )
 
 logger = get_controller_logger("Admin")
@@ -95,4 +97,69 @@ async def get_dialogue_session_detail(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("get_dialogue_session_detail", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================
+# User Management Endpoints
+# ============================================================
+
+@router.get("/users", response_model=AdminUserListResponse)
+async def list_users(
+    limit: int = Query(100, ge=1, le=500, description="페이징 크기"),
+    offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    usecase: AdminUseCase = Depends(get_admin_usecase)
+):
+    """
+    모든 사용자 목록 조회 (관리자 전용)
+
+    Controller → UseCase → Repository
+    """
+    logger.info("list_users", "Listing all users",
+               limit=limit, offset=offset)
+
+    try:
+        result = await usecase.list_users(
+            limit=limit,
+            offset=offset
+        )
+
+        return AdminUserListResponse(
+            users=[AdminUserResponse.model_validate(user) for user in result["users"]],
+            total=result["total"]
+        )
+
+    except BusinessException as e:
+        logger.error("list_users", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("list_users", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/users/{user_id}", response_model=AdminUserResponse)
+async def get_user_details(
+    user_id: str,
+    usecase: AdminUseCase = Depends(get_admin_usecase)
+):
+    """
+    특정 사용자 상세 조회 (관리자 전용)
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_user_details", f"Getting user details: {user_id}")
+
+    try:
+        user = await usecase.get_user_details(user_id)
+
+        return AdminUserResponse.model_validate(user)
+
+    except ValueError as e:
+        logger.warning("get_user_details", f"User not found: {user_id}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessException as e:
+        logger.error("get_user_details", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("get_user_details", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
