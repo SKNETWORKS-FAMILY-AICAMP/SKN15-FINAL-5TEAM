@@ -209,55 +209,67 @@
   },
   "cutscene5_llm_driven": {
     "id": "cutscene5_llm_driven",
-    "title": "무한열차",
-    "emoji": "🚂",
-    "description": "무한열차에서 펼쳐지는 치열한 전투와 동료애",
-    "detailDescription": "열차 안에서 벌어지는 악몽과 현실의 경계. 엔무와의 대결, 그리고 상현의 삼(參)과의 조우까지. 탄지로와 동료들이 승객들을 지키기 위해 싸우는 이야기",
-    "image": "/images/무한열차.jpeg",
+    "title": "무한열차 - 츠구코의 시련",
+    "emoji": "🚂🔥",
+    "description": "염주 렌고쿠의 제자로서 무한열차에서 펼쳐지는 생사를 건 시련",
+    "detailDescription": "당신은 염주 렌고쿠 쿄쥬로의 츠구코(継子, 직속 제자)입니다. 무한열차 임무에서 40명 이상의 실종자가 발생했고, 렌고쿠와 함께 조사에 나섭니다. 열차 안에서는 하현 일(壱) 엔무의 꿈 혈귀술이 승객들을 잠들게 하고, 격렬한 전투 끝에 엔무를 쓰러뜨립니다. 그러나 진짜 시련은 그 후에 찾아옵니다. 상현 삼(參) 아카자가 나타나 스승 렌고쿠와 대결하게 되고, 당신은 선택의 기로에 서게 됩니다. 동료들을 모아 함께 싸울 것인가, 아니면 스승과 함께 바로 전장에 뛰어들 것인가. 당신의 선택에 따라 렌고쿠의 운명이, 그리고 불의 계승자로서의 당신의 미래가 결정됩니다.",
+    "image": "/images/scenarios/cutscene5_llm_driven.jpg",
     "implemented": true,
     "type": "character",
     "tags": [
+      "#츠구코",
+      "#렌고쿠제자",
       "#무한열차",
+      "#불의호흡",
+      "#엔무",
       "#아카자",
-      "#엔무"
+      "#멀티엔딩"
     ],
-    "category": "액션 · 감동",
+    "category": "액션 · 성장 · 감동",
     "mood": [
-      "역동적",
       "긴박함",
-      "감동적"
+      "성장",
+      "감동적",
+      "선택의순간"
     ],
-    "likes": 98,
-    "comments": 32,
-    "views": 890,
+    "likes": 245,
+    "comments": 89,
+    "views": 2340,
     "characters": [
       {
-        "name": "탄지로",
-        "image": "/images/프로필_탄지로.png",
-        "greeting": "안녕하세요! 함께 평화로운 시간을 보내세요.",
-        "status": "대화 가능",
-        "color": "bg-orange-100"
-      },
-      {
-        "name": "렌고쿠",
+        "name": "렌고쿠 쿄쥬로",
         "image": "/images/프로필_렌고쿠.png",
-        "greeting": "불같은 열정으로 함께하겠습니다!",
-        "status": "대화 가능",
+        "greeting": "마음을 불태워라! 내 제자여, 함께 싸우자!",
+        "status": "스승",
         "color": "bg-red-100"
       },
       {
-        "name": "젠이츠",
+        "name": "카마도 탄지로",
+        "image": "/images/프로필_탄지로.png",
+        "greeting": "렌고쿠 님의 제자라니... 함께 힘을 모아요!",
+        "status": "동료",
+        "color": "bg-orange-100"
+      },
+      {
+        "name": "아가츠마 젠이츠",
         "image": "/images/프로필_젠이츠.png",
-        "greeting": "우와! 정말 즐거운 시간이 될 것 같아요!",
-        "status": "대화 가능",
+        "greeting": "렌고쿠 님의 제자면 저도 지켜주실 거죠?",
+        "status": "동료",
         "color": "bg-yellow-100"
       },
       {
-        "name": "이노스케",
+        "name": "하시비라 이노스케",
         "image": "/images/프로필_이노스케.png",
-        "greeting": "이야! 재미있는 모험을 시작해보자구!",
-        "status": "대화 가능",
+        "greeting": "너도 강한 놈이냐? 나랑 붙어보자!",
+        "status": "동료",
         "color": "bg-green-100"
+      },
+      {
+        "name": "아카자 (상현 삼)",
+        "image": "/images/프로필_아카자.png",
+        "greeting": "염주인가... 좋은 냄새가 나는군.",
+        "status": "상현",
+        "color": "bg-purple-900"
       }
     ]
   }
