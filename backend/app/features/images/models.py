@@ -5,7 +5,7 @@ Layer 4: Models (4-Layer Architecture)
 """
 from sqlalchemy import Column, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
-from app.core.db.models import Base
+from app.core.db.base import Base
 
 
 class ImageMapping(Base):
