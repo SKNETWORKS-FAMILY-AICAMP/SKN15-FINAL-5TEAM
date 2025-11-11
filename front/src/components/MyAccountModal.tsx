@@ -80,12 +80,12 @@ export default function MyAccountModal() {
               <div className="flex items-center space-x-4 mb-8">
                 <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
                   <span className="text-purple-600 text-xl font-bold">
-                    {userInfo.display_name.charAt(0).toUpperCase()}
+                    {(userInfo.display_name || userInfo.username).charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-gray-800">내 계정</h2>
-                  <p className="text-gray-600">{userInfo.display_name}</p>
+                  <p className="text-gray-600">{userInfo.display_name || userInfo.username}</p>
                 </div>
               </div>
 

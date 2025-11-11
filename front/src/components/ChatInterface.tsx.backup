@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useMemo } from 'react';
 import CharacterSelectionModal from './CharacterSelectionModal';
 import BubbleCounter from './BubbleCounter';
@@ -7,6 +6,8 @@ import { sendChatMessage, ChatResponse } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
+
+import { addConversation } from '@/utils/storageUtils';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -25,53 +26,43 @@ interface ChatInterfaceProps {
   onMessageSent?: () => void;
   characterId?: string;
   initialSessionId?: string;  // 세션 복원용 session_id
-  onInvitedCharactersChange?: (characters: string[]) => void;  // 참여 캐릭터 변경 콜백
+  scenarioTitle?: string;
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
-
-const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'mugen_train_full',
-  ending: 'cutscene5_llm_driven',
-  mugen_train_full: 'mugen_train_full',
-};
 
 export default function ChatInterface({
   onUserLogin,
   onMessageSent,
   characterId = 'ending',
   initialSessionId,
-  onInvitedCharactersChange
+  scenarioTitle
 }: ChatInterfaceProps) {
-  // App context (for bubble consumption and user info)
-  const { consumeBubbles, currentUser } = useApp();
-
+  const { fontSize, chatWindowSize } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [showCharacterModal, setShowCharacterModal] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [invitedCharacters, setInvitedCharacters] = useState<string[]>([]); // 현재 참여중인 캐릭터들 (백엔드 응답에서 동기화)
+  const [invitedCharacters, setInvitedCharacters] = useState<string[]>(['tanjiro', 'inosuke', 'zenitsu', 'nezuko']); // 현재 참여중인 캐릭터들
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);  // 세션 복원 지원
   const [isLoading, setIsLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false); // 타이핑 중 표시
-  const [loadingMessage, setLoadingMessage] = useState<string | null>(null); // 로딩 메시지
   const [isAutoRequesting, setIsAutoRequesting] = useState(false); // 자동 요청 중
   const autoRequestTimerRef = useRef<number | null>(null); // 자동 요청 타이머
   const shouldCancelAutoRequest = useRef(false); // 사용자 중단 플래그
   const messageIdCounter = useRef(0); // 고유한 메시지 ID 생성용 카운터
   const isAddingMessages = useRef(false); // 메시지 추가 중 플래그 (중복 방지)
-  const isSendingRef = useRef(false); // 메시지 전송 중 플래그 (중복 전송 방지)
   const [affinityScores, setAffinityScores] = useState<Record<string, number>>({}); // 친밀도
   const [isTransitioning, setIsTransitioning] = useState(false); // 컷신 전환 효과
   const [isEnded, setIsEnded] = useState(false); // Phase 4: 시나리오 종료 여부
   const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
   const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
   const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
-
   // Skip 기능을 위한 ref
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
   const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
@@ -87,22 +78,14 @@ export default function ChatInterface({
     return null;
   }, [messages]);
 
-  // 백엔드 시나리오 ID 결정 (매핑 적용)
-  const backendScenarioId = useMemo(() => {
-    if (!characterId) {
-      return 'cutscene5_llm_driven';
-    }
-    return SCENARIO_ID_MAP[characterId] || characterId;
-  }, [characterId]);
-
-  // 배경 이미지 관리 (시나리오별 배경 이미지)
+  // 배경 이미지 관리 (무한열차 시나리오)
   const {
     currentBackground,
     backgroundImageUrl,
     setBackgroundById,
     setBackgroundByIndex,
     preloadImages
-  } = useBackgroundImage(backendScenarioId);
+  } = useBackgroundImage('mugen_train');
 
   // 소리 효과 관리 (몰입감 향상)
   const {
@@ -112,76 +95,14 @@ export default function ChatInterface({
     unlockAudio
   } = useSoundEffects();
 
+  const backendScenarioId = useMemo(() => {
+    return characterId || 'mugen-train';
+  }, [characterId]);
+
   // 배경 이미지 프리로드 (성능 최적화)
   useEffect(() => {
     preloadImages();
   }, [preloadImages]);
-
-  // 배경 이미지 변경 추적 (디버깅)
-  useEffect(() => {
-    if (currentBackground) {
-      console.log(`🎨 Background changed to: index=${currentBackground.index}, fileName=${currentBackground.fileName}`);
-      console.log(`🎨 Background URL:`, backgroundImageUrl);
-    }
-  }, [currentBackground, backgroundImageUrl]);
-
-  // 참여 중인 캐릭터 변경 시 부모 컴포넌트에 알림
-  useEffect(() => {
-    if (onInvitedCharactersChange) {
-      onInvitedCharactersChange(invitedCharacters);
-    }
-  }, [invitedCharacters, onInvitedCharactersChange]);
-
-  // 캐릭터 순서 우선순위 정의 (일관된 순서 유지)
-  const characterOrder: Record<string, number> = {
-    tanjiro: 1,
-    nezuko: 2,
-    zenitsu: 3,
-    inosuke: 4,
-    rengoku: 5,
-    shinobu: 6,
-  };
-
-  // 참여 캐릭터 업데이트 헬퍼 함수
-  const updateInvitedCharacters = (
-    dialogues: Array<{ speaker?: string }>,
-    shouldAccumulate: boolean = false // has_more 처리 중에는 true
-  ) => {
-    // dialogues에서 실제 발언한 캐릭터들 추출
-    const newParticipants = Array.from(
-      new Set(
-        dialogues
-          .map(d => d.speaker)
-          .filter(speaker => speaker && speaker !== 'system' && speaker !== 'narr')
-      )
-    );
-
-    // 디버깅: speaker 값 로깅
-    if (newParticipants.length > 0) {
-      console.log('🎭 Detected participants from dialogues:', newParticipants);
-    }
-
-    // 빈 응답 처리: 새 캐릭터가 없으면 이전 상태 유지
-    if (newParticipants.length === 0) {
-      console.log('⚠️ No new participants found, keeping previous state');
-      return;
-    }
-
-    // has_more 처리 중이면 기존 캐릭터와 합침 (깜빡임 방지)
-    const finalParticipants = shouldAccumulate
-      ? Array.from(new Set([...invitedCharacters, ...newParticipants]))
-      : newParticipants;
-
-    // 일관된 순서로 정렬 (우선순위 기준)
-    const sortedParticipants = finalParticipants.sort((a, b) => {
-      const orderA = characterOrder[a?.toLowerCase() ?? ''] ?? 999;
-      const orderB = characterOrder[b?.toLowerCase() ?? ''] ?? 999;
-      return orderA - orderB;
-    }).filter((char): char is string => char !== undefined);
-
-    console.log('✅ Updated invited characters:', sortedParticipants);
-    setInvitedCharacters(sortedParticipants);
-  };
 
   // 백엔드 이미지 파일명 → 프론트엔드 인덱스 매핑
   const backendImageToIndex: Record<string, number> = {
@@ -194,7 +115,7 @@ export default function ChatInterface({
   };
 
   // 백엔드 응답에서 받은 current_image를 처리하여 배경 변경 (페이드 효과 포함)
-  const handleBackgroundChange = (currentImage: string | null) => {
+  const handleBackgroundChange = (currentImage: string | null | undefined) => {
     if (!currentImage) return;
 
     console.log(`🖼️ handleBackgroundChange called with: "${currentImage}"`);
@@ -261,7 +182,7 @@ export default function ChatInterface({
     }
 
     // 2. 시스템/특수 캐릭터
-    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어')) {
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
       return `${CDN_URL}/기본이미지.png`;
     }
     if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
@@ -269,19 +190,19 @@ export default function ChatInterface({
     }
 
     // 3. 역무원/차장 관련
-    if (lowerCharId.includes('conductor') || lowerCharId.includes('역무원') || lowerCharId.includes('차장') ||
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('역무원') || lowerCharId.includes('차장') || 
         lowerCharId.includes('station')) {
       return `${CDN_URL}/역무원.jpg`;
     }
 
     // 4. 여성 캐릭터 관련 (woman을 man보다 먼저 체크 - 충돌 방지)
-    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
+    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') || 
         lowerCharId.includes('female') || lowerCharId.includes('girl')) {
       return `${CDN_URL}/일반인_여성.png`;
     }
 
     // 5. 남성 캐릭터 관련
-    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
+    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') || 
         lowerCharId.includes('male') || lowerCharId.includes('boy')) {
       return `${CDN_URL}/일반인_남성.png`;
     }
@@ -334,8 +255,8 @@ export default function ChatInterface({
     }
 
     // 2. 시스템/특수 캐릭터
-    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어')) {
-      return currentUser || 'Player';  // 로그인한 사용자 이름 표시
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
+      return '츠구코';
     }
     if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
       return '내레이터';
@@ -360,11 +281,11 @@ export default function ChatInterface({
     }
 
     // 6. 여성/남성 관련 (woman을 man보다 먼저 체크)
-    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') ||
+    if (lowerCharId.includes('woman') || lowerCharId.includes('여자') || lowerCharId.includes('여성') || 
         lowerCharId.includes('female') || lowerCharId.includes('girl')) {
       return '승객';
     }
-    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') ||
+    if (lowerCharId.includes('man') || lowerCharId.includes('남자') || lowerCharId.includes('남성') || 
         lowerCharId.includes('male') || lowerCharId.includes('boy')) {
       return '승객';
     }
@@ -443,7 +364,7 @@ export default function ChatInterface({
     }
 
     // 2. 시스템/특수 캐릭터
-    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어')) {
+    if (lowerCharId.includes('user') || lowerCharId.includes('플레이어') || lowerCharId.includes('츠구코')) {
       return {
         primary: '#F97316',
         shadow: 'rgba(249, 115, 22, 0.6)',
@@ -452,7 +373,7 @@ export default function ChatInterface({
     }
 
     // 3. 역무원/차장 관련 - 중립 회색
-    if (lowerCharId.includes('conductor') || lowerCharId.includes('station') ||
+    if (lowerCharId.includes('conductor') || lowerCharId.includes('station') || 
         lowerCharId.includes('역무원') || lowerCharId.includes('차장')) {
       return {
         primary: '#6B7280',
@@ -462,12 +383,12 @@ export default function ChatInterface({
     }
 
     // 4. 승객, NPC, 일반인 관련 - 밝은 회색 (woman을 man보다 먼저 체크)
-    if (lowerCharId.includes('passenger') || lowerCharId.includes('npc') ||
-        lowerCharId.includes('woman') || lowerCharId.includes('man') ||
-        lowerCharId.includes('승객') || lowerCharId.includes('일반인') ||
-        lowerCharId.includes('male') || lowerCharId.includes('female') ||
-        lowerCharId.includes('남자') || lowerCharId.includes('여자') ||
-        lowerCharId.includes('남성') || lowerCharId.includes('여성') ||
+    if (lowerCharId.includes('passenger') || lowerCharId.includes('npc') || 
+        lowerCharId.includes('woman') || lowerCharId.includes('man') || 
+        lowerCharId.includes('승객') || lowerCharId.includes('일반인') || 
+        lowerCharId.includes('male') || lowerCharId.includes('female') || 
+        lowerCharId.includes('남자') || lowerCharId.includes('여자') || 
+        lowerCharId.includes('남성') || lowerCharId.includes('여성') || 
         lowerCharId.includes('boy') || lowerCharId.includes('girl')) {
       return {
         primary: '#9CA3AF',
@@ -482,37 +403,6 @@ export default function ChatInterface({
       shadow: 'rgba(107, 114, 128, 0.4)',
       bg: 'linear-gradient(135deg, rgba(107, 114, 128, 0.05), rgba(107, 114, 128, 0.02))'
     };
-  };
-
-  // 캐릭터별 대사 생성 로딩 메시지 (각 캐릭터당 3개씩)
-  const getRandomLoadingMessage = () => {
-    const loadingMessages = [
-      // 탄지로 (3개) - 후각에 특화
-      '탄지로가 냄새를 맡는 중입니다...',
-      '탄지로가 상황의 냄새를 분석하고 있어요...',
-      '탄지로가 주변의 기운을 감지하고 있어요...',
-
-      // 아카자 (3개) - 투지/전투에 특화
-      '아카자가 투지를 감지하는 중입니다...',
-      '아카자가 상대의 강함을 측정하고 있어요...',
-      '아카자가 전투 의지를 불태우고 있어요...',
-
-      // 렌고쿠 (3개) - 열정/결의에 특화
-      '렌고쿠가 마음을 불태우고 있습니다...',
-      '렌고쿠가 굳은 결의를 다지고 있어요...',
-      '렌고쿠가 동료를 지키기 위해 고민하고 있어요...',
-
-      // 젠이츠 (3개) - 공포/용기에 특화
-      '젠이츠가 떨면서도 용기를 내고 있어요...',
-      '젠이츠가 위험을 감지하고 경계하고 있어요...',
-      '젠이츠가 번개같은 판단을 하려 하고 있어요...',
-
-      // 이노스케 (3개) - 야성/직감에 특화
-      '이노스케가 야생의 직감으로 상황을 파악하고 있어요...',
-      '이노스케가 돌격할 기회를 엿보고 있어요...',
-      '이노스케가 멧돼지처럼 코를 벌름거리며 냄새를 맡고 있어요...',
-    ];
-    return loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
   };
 
   // INTRO 스테이지 판별 함수 (빠른 출력 적용용)
@@ -577,13 +467,8 @@ export default function ChatInterface({
     return new Promise((resolve) => {
       // 이 메시지에 배경 이미지 변경 요청이 있으면 먼저 처리
       if (message.imageIndex) {
-        const imageIndex = parseInt(message.imageIndex);
-        console.log(`🖼️ [Frontend] Changing background to image ${imageIndex} for message: ${message.text.substring(0, 30)}...`);
-        console.log(`🖼️ Current background before change:`, currentBackground);
-        setBackgroundByIndex(imageIndex);
-        console.log(`🖼️ setBackgroundByIndex(${imageIndex}) called`);
-      } else {
-        console.log(`⚠️ No imageIndex for message: ${message.text.substring(0, 30)}...`);
+        console.log(`🖼️ [Frontend] Background update requested: ${message.imageIndex} for message: ${message.text.substring(0, 30)}...`);
+        handleBackgroundChange(message.imageIndex);
       }
 
       // 소리 효과 재생 (몰입감 향상)
@@ -599,8 +484,8 @@ export default function ChatInterface({
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
 
-      // INTRO 스테이지 판별하여 타이핑 속도 결정 (하드코딩에 가깝게 빠르게)
-      const typingSpeed = isIntroStage(currentStage) ? 1 : TYPING_INTERVAL_MS;
+      // INTRO 스테이지 판별하여 타이핑 속도 결정 (인트로: 15ms로 한글자씩 보이도록, 일반: 10ms)
+      const typingSpeed = isIntroStage(currentStage) ? 15 : TYPING_INTERVAL_MS;
       if (isIntroStage(currentStage)) {
         console.log(`⚡ [INTRO] Fast typing enabled (${typingSpeed}ms) for stage: ${currentStage}`);
       }
@@ -682,9 +567,9 @@ export default function ChatInterface({
         // 타이핑 효과로 메시지 표시
         await addMessageWithTypingEffect(newMessages[i]);
 
-        // 마지막 메시지가 아니면 50ms 대기 (빠른 흐름) - Phase 1 개선: 800ms → 50ms (16배 빠르게)
+        // 마지막 메시지가 아니면 400ms 대기 (적절한 간격으로 조정)
         if (i < newMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 50)); // 0.05 seconds
+          await new Promise(resolve => setTimeout(resolve, 400)); // 0.4 seconds
         }
       }
 
@@ -698,183 +583,193 @@ export default function ChatInterface({
     }
   };
 
-  // 자동 요청 함수 (has_more가 true일 때 호출)
-  const handleAutoRequest = async (currentSessionId: string, retryCount: number = 0) => {
-    // 최대 재시도 횟수 체크
-    if (retryCount >= 3) {
-      console.error('Max retry attempts reached');
-      setLoadingMessage(null);
-      setIsAutoRequesting(false); // 🔧 FIX: 최대 재시도 도달 시 상태 초기화
-      return;
-    }
-
-    // 사용자가 중단을 원하면 취소
-    if (shouldCancelAutoRequest.current) {
-      shouldCancelAutoRequest.current = false;
-      setLoadingMessage(null);
-      setIsAutoRequesting(false);
-      return;
-    }
-
-    try {
-      setIsAutoRequesting(true);
-      setLoadingMessage(getRandomLoadingMessage());
-
-      // 자동 요청 시에는 "__AUTO_CONTINUE__"를 user_input으로 전송
-      const response: ChatResponse = await sendChatMessage(
-        backendScenarioId,
-        '__AUTO_CONTINUE__',
-        currentSessionId,
-        currentUser || 'Player'  // 로그인한 사용자 이름 사용
-      );
-
-      setLoadingMessage(null);
-
-      console.log(`📥 Received ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
-      console.log('🔍 Full response:', response);
-
-      // Update affinity_scores and current_stage from response
-      setAffinityScores(response.affinity_scores || {});
-      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
-
-      // 배경 이미지 변경 (current_image 사용)
-      if (response.current_image) {
-        console.log(`🖼️ [Auto-request] Changing background to: ${response.current_image}`);
-        handleBackgroundChange(response.current_image);
-      }
-
-      // 참여 중인 캐릭터 업데이트 (has_more가 true면 누적, false면 새로고침)
-      updateInvitedCharacters(response.dialogues, response.has_more);
-
-      // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
-      const backendMessages: Message[] = response.dialogues.map((dialogue) => {
-        // 디버깅: image_index 값 로깅
-        if (dialogue.image_index) {
-          console.log(`🖼️ Dialogue has image_index: ${dialogue.image_index} for speaker: ${dialogue.speaker}`);
-        }
-        return {
-          id: generateMessageId(),
-          text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
-          isUser: false,
-          timestamp: new Date(),
-          characterId: dialogue.speaker,
-          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-        };
-      });
-
-      // 순차적으로 메시지 표시 (타이핑 효과 포함)
-      await addMessagesSequentially(backendMessages);
-
-      // has_more가 true이면 계속 자동 요청
-      if (response.has_more && !shouldCancelAutoRequest.current) {
-        console.log('🔄 has_more is true, scheduling next auto-request in 1s...');
-        // 1초 후 다음 배치 요청
-        autoRequestTimerRef.current = window.setTimeout(() => {
-          handleAutoRequest(response.session_id, 0); // 성공 시 재시도 카운트 리셋
-        }, 1000);
-      } else {
-        console.log(`✅ Auto-request complete. has_more: ${response.has_more}, cancelled: ${shouldCancelAutoRequest.current}`);
-        setIsAutoRequesting(false);
-      }
-    } catch (error) {
-      console.error(`Auto request failed (attempt ${retryCount + 1}/3):`, error);
-      setLoadingMessage(null); // 🔧 FIX: 에러 시 로딩 메시지 제거
-
-      // 최대 재시도 횟수에 도달했는지 확인
-      if (retryCount + 1 >= 3) {
-        console.error('🔥 Max retry attempts reached after error');
-        setIsAutoRequesting(false); // 🔧 FIX: 최대 재시도 도달 시 상태 초기화
-        return;
-      }
-
-      // 재시도
-      autoRequestTimerRef.current = window.setTimeout(() => {
-        handleAutoRequest(currentSessionId, retryCount + 1);
-      }, 1000 * (retryCount + 1)); // Exponential backoff: 1s, 2s, 3s
-    }
-  };
+  // 무한열차 시나리오 하드코딩 인트로 메시지
+  const MUGEN_TRAIN_INTRO_MESSAGES: Message[] = [
+    {
+      id: 1,
+      text: '🍱 우마이! 우마이! 우마이!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'rengoku',
+      isSystemMessage: false,
+    },
+    {
+      id: 2,
+      text: '렌고쿠 선배님! 식사 중이시네요!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'tanjiro',
+      isSystemMessage: false,
+    },
+    {
+      id: 3,
+      text: '탄지로! 함께 도시락을 먹자! 역무원이 가져다준 도시락이 정말 맛있다!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'rengoku',
+      isSystemMessage: false,
+    },
+    {
+      id: 4,
+      text: '감사합니다! 저희도 같이 먹겠습니다!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'tanjiro',
+      isSystemMessage: false,
+    },
+    {
+      id: 5,
+      text: '으아... 이 열차는 언제 도착하는 거야... 배고파...',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'zenitsu',
+      isSystemMessage: false,
+    },
+    {
+      id: 6,
+      text: '약해 빠진 놈! 나는 전혀 배고프지 않다! 으하하!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'inosuke',
+      isSystemMessage: false,
+    },
+    {
+      id: 7,
+      text: '여러분, 이제 무한열차가 곧 출발합니다. 귀살대원 여러분은 승객들을 보호하는 임무를 잊지 마십시오.',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'system',
+      isSystemMessage: true,
+    },
+  ];
 
   // 초기 시나리오 로드 (백엔드 연결)
   useEffect(() => {
     const initializeChat = async () => {
       setIsLoading(true);
       setBackendError(null);
+      setMessages([]); // 초기화 시 메시지 목록 비우기
+
+      // 🚀 무한열차 시나리오인 경우 하드코딩된 인트로 메시지를 먼저 표시
+      if (backendScenarioId === 'mugen-train' && !initialSessionId) {
+        console.log('🎬 [INTRO] Displaying hardcoded intro messages for mugen-train...');
+
+        // INTRO 스테이지로 설정하여 빠른 타이핑 효과 적용 (15ms)
+        setCurrentStage('INTRO');
+
+        // 하드코딩된 메시지를 즉시 표시 (타이핑 효과 포함)
+        await addMessagesSequentially(MUGEN_TRAIN_INTRO_MESSAGES);
+
+        console.log('✅ [INTRO] Hardcoded intro messages displayed');
+      }
+
+      let tempDialogues: any[] = [];
+      let finalResponse: any = {};
 
       try {
-        // 첫 메시지로 대화 시작 (시나리오 초기화)
-        const response: ChatResponse = await sendChatMessage(
+        // for await...of 루프로 스트림 데이터를 하나씩 받습니다.
+        console.log('🚀 [DEBUG] Starting SSE stream...');
+        for await (const chunk of sendChatMessage(
           backendScenarioId,
-          '시작',  // Initial trigger message
-          undefined,
-          currentUser || 'Player'  // 로그인한 사용자 이름 사용
-        );
+          '시작',
+          initialSessionId,
+          '츠구코'
+        )) {
+          console.log('📦 [DEBUG] Received chunk:', chunk.type, chunk);
+          if (chunk.type === 'metadata') {
+            const metadata = { ...chunk } as Record<string, any>;
+            delete metadata.type;
+            finalResponse = { ...finalResponse, ...metadata };
 
-        // 세션 ID 저장
-        setSessionId(response.session_id);
+            if (typeof metadata.session_id === 'string') {
+              setSessionId(metadata.session_id);
+            }
+            if (metadata.current_stage) {
+              setCurrentStage(metadata.current_stage);
+            }
+            if (metadata.affinity_scores) {
+              setAffinityScores(metadata.affinity_scores);
+            }
+            if (typeof metadata.is_ended === 'boolean') {
+              setIsEnded(metadata.is_ended);
+            }
+            if (metadata.current_image) {
+              handleBackgroundChange(metadata.current_image);
+            }
+          } else if (chunk.type === 'dialogue') {
+            if (chunk.dialogue) {
+              tempDialogues.push(chunk.dialogue);
+              if (chunk.dialogue.image_index) {
+                handleBackgroundChange(chunk.dialogue.image_index);
+              }
+            }
+          } else if (chunk.type === 'complete') {
+            const rest = { ...chunk } as Record<string, any>;
+            delete rest.type;
+            finalResponse = { ...finalResponse, ...rest };
 
-        console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
-        console.log('🔍 Full response:', response);
+            // Handle dialogues from complete response
+            if (Array.isArray(rest.dialogues)) {
+              tempDialogues.push(...rest.dialogues);
+            }
 
-        // Update affinity_scores and current_stage from response
-        setAffinityScores(response.affinity_scores || {});
-        setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
-
-        // 배경 이미지 변경 (current_image 사용)
-        if (response.current_image) {
-          console.log(`🖼️ [Initial session] Changing background to: ${response.current_image}`);
-          handleBackgroundChange(response.current_image);
+            // Handle metadata from complete response
+            if (typeof rest.session_id === 'string') {
+              setSessionId(rest.session_id);
+            }
+            if (rest.current_stage) {
+              setCurrentStage(rest.current_stage);
+            }
+            if (rest.affinity_scores) {
+              setAffinityScores(rest.affinity_scores);
+            }
+            if (typeof rest.is_ended === 'boolean') {
+              setIsEnded(rest.is_ended);
+            }
+            if (rest.current_image) {
+              handleBackgroundChange(rest.current_image);
+            }
+          } else if (chunk.type === 'error') {
+            console.error('Stream error event received:', chunk);
+          }
         }
 
-        // 참여 중인 캐릭터 업데이트 (초기 세션이므로 누적 없이 새로 설정)
-        updateInvitedCharacters(response.dialogues, false);
-
-        // 백엔드 응답을 메시지로 변환 (고유 ID 사용)
-        const backendMessages: Message[] = response.dialogues.map((dialogue) => {
-          // 디버깅: image_index 값 로깅
-          if (dialogue.image_index) {
-            console.log(`🖼️ Dialogue has image_index: ${dialogue.image_index} for speaker: ${dialogue.speaker}`);
-          }
-          return {
+        // 스트림이 모두 끝나면, 수집된 대화 목록으로 화면을 업데이트합니다.
+        console.log('✅ [DEBUG] Stream finished. Total dialogues:', tempDialogues.length);
+        if (tempDialogues.length > 0) {
+          console.log('📝 [DEBUG] First dialogue:', tempDialogues[0]);
+          const backendMessages: Message[] = tempDialogues.map((dialogue: any) => ({
             id: generateMessageId(),
-            text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
+            text: dialogue.text || dialogue.content || '',
             isUser: false,
             timestamp: new Date(),
             characterId: dialogue.speaker,
             isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-            imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-          };
-        });
-
-        // 순차적으로 메시지 표시 (타이핑 효과 포함)
-        await addMessagesSequentially(backendMessages);
-
-        // has_more가 true이면 자동 요청 시작
-        if (response.has_more) {
-          console.log('🔄 Starting auto-request chain...');
-          handleAutoRequest(response.session_id);
+            imageIndex: dialogue.image_index,
+          }));
+          console.log('💬 [DEBUG] Mapped messages:', backendMessages);
+          console.log('🎬 [DEBUG] Calling addMessagesSequentially...');
+          await addMessagesSequentially(backendMessages);
+          console.log('✅ [DEBUG] addMessagesSequentially completed');
+        } else {
+          console.warn('⚠️ [DEBUG] No dialogues received!');
         }
+
+        // 추가 대화가 있으면 자동 요청
+        if (finalResponse.has_more) {
+          handleAutoRequest(finalResponse.session_id);
+        }
+
       } catch (error) {
         console.error('Failed to initialize chat:', error);
         setBackendError('백엔드 연결에 실패했습니다. 서버가 실행 중인지 확인해주세요.');
-
-        // Fallback: Show error message
-        const errorMessage: Message = {
-          id: Date.now(),
-          text: '⚠️ 백엔드 서버에 연결할 수 없습니다. http://localhost:8000 에서 서버를 시작해주세요.',
-          isUser: false,
-          timestamp: new Date(),
-          characterId: 'system',
-          isSystemMessage: true
-        };
-        setMessages([errorMessage]);
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeChat();
-  }, [characterId]); // Re-initialize when characterId changes
+  }, [characterId, initialSessionId]);
 
   // Old hardcoded scenario (removed)
   /*
@@ -1005,7 +900,7 @@ export default function ChatInterface({
       },
       {
         characterId: 'zenitsu',
-        text: '이제 정말 평화로운 일상이 시작된 것 같아요. 무서운 전투는 이제 그만...',
+        text: '이제 정말 평화로운 일상이 시작된 것 같아요. 무서운 전투는 이제 그만...', 
         delay: 21600
       },
       {
@@ -1057,7 +952,7 @@ export default function ChatInterface({
       },
       {
         characterId: 'tanjiro',
-        text: '정말 그래요. 이제는 웃을 수 있고, 서로를 걱정할 여유도 생겼고...',
+        text: '정말 그래요. 이제는 웃을 수 있고, 서로를 걱정할 여유도 생겼고...', 
         delay: 29600
       },
       {
@@ -1135,52 +1030,108 @@ export default function ChatInterface({
     }
   };
 
+  // 자동 요청 함수 (has_more가 true일 때 호출)
+  const handleAutoRequest = async (currentSessionId: string, retryCount: number = 0) => {
+    if (retryCount >= 3) {
+      console.error('Max retry attempts reached');
+      return;
+    }
+
+    if (shouldCancelAutoRequest.current) {
+      shouldCancelAutoRequest.current = false;
+      setIsAutoRequesting(false);
+      return;
+    }
+
+    try {
+      setIsAutoRequesting(true);
+
+      let tempDialogues: any[] = [];
+      let finalResponse: any = {};
+
+      for await (const chunk of sendChatMessage(
+        backendScenarioId,
+        '__AUTO_CONTINUE__',
+        currentSessionId,
+        '츠구코'
+      )) {
+        if (chunk.type === 'metadata') {
+          const metadata = { ...chunk } as Record<string, any>;
+          delete metadata.type;
+          finalResponse = { ...finalResponse, ...metadata };
+
+          if (metadata.current_stage) {
+            setCurrentStage(metadata.current_stage);
+          }
+          if (metadata.affinity_scores) {
+            setAffinityScores(metadata.affinity_scores);
+          }
+          if (typeof metadata.is_ended === 'boolean') {
+            setIsEnded(metadata.is_ended);
+          }
+          if (metadata.current_image) {
+            handleBackgroundChange(metadata.current_image);
+          }
+        } else if (chunk.type === 'dialogue') {
+          if (chunk.dialogue) {
+            tempDialogues.push(chunk.dialogue);
+            if (chunk.dialogue.image_index) {
+              handleBackgroundChange(chunk.dialogue.image_index);
+            }
+          }
+        } else if (chunk.type === 'complete') {
+          const rest = { ...chunk } as Record<string, any>;
+          delete rest.type;
+          finalResponse = { ...finalResponse, ...rest };
+        } else if (chunk.type === 'error') {
+          console.error('Stream error event received:', chunk);
+        }
+      }
+
+      const backendMessages: Message[] = tempDialogues.map((dialogue: any) => ({
+        id: generateMessageId(),
+        text: dialogue.text || dialogue.content || '',
+        isUser: false,
+        timestamp: new Date(),
+        characterId: dialogue.speaker,
+        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+        imageIndex: dialogue.image_index
+      }));
+
+      await addMessagesSequentially(backendMessages);
+
+      if (finalResponse.has_more && !shouldCancelAutoRequest.current) {
+        autoRequestTimerRef.current = window.setTimeout(() => {
+          handleAutoRequest(finalResponse.session_id, 0);
+        }, 1000);
+      } else {
+        setIsAutoRequesting(false);
+      }
+    } catch (error) {
+      console.error(`Auto request failed (attempt ${retryCount + 1}/3):`, error);
+      autoRequestTimerRef.current = window.setTimeout(() => {
+        handleAutoRequest(currentSessionId, retryCount + 1);
+      }, 1000 * (retryCount + 1));
+    }
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
-    // 🚫 중복 전송 방지
-    if (isSendingRef.current) {
-      console.log('⚠️ [DUPLICATE] Message already sending, ignoring duplicate call');
-      return;
-    }
+    unlockAudio().catch(err => console.warn('Audio unlock failed:', err));
 
-    isSendingRef.current = true;
-    // 🫧 버블 소비 (1회 대화당 1 버블)
-    const bubbleCost = 1;
-    const consumed = await consumeBubbles(bubbleCost);
-
-    if (!consumed) {
-      setBackendError(`버블이 부족합니다. 최소 ${bubbleCost}개의 버블이 필요합니다.`);
-      return;
-    }
-
-    // 🔊 오디오 활성화 (브라우저 자동재생 정책 우회) - 비차단 방식
-    unlockAudio();
-
-    // 🔥 디버깅: 현재 상태 출력
-    console.log('🔍 [DEBUG] sendMessage called:', {
-      isLoading,
-      isTyping,
-      isAutoRequesting,
-      text: text.substring(0, 20)
-    });
-
-    // 🔥 자동 요청 중일 때는 사용자 입력 차단
     if (isAutoRequesting) {
       console.log('⚠️ Auto-requesting in progress, user input blocked');
       return;
     }
 
-    // 사용자가 메시지를 보내면 진행 중인 자동 요청을 중단
     shouldCancelAutoRequest.current = true;
     if (autoRequestTimerRef.current) {
       clearTimeout(autoRequestTimerRef.current);
       autoRequestTimerRef.current = null;
     }
     setIsAutoRequesting(false);
-    setLoadingMessage(null);
 
-    // Add user message to UI
     const newMessage: Message = {
       id: Date.now(),
       text,
@@ -1188,156 +1139,117 @@ export default function ChatInterface({
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, newMessage]);
+
+    // Save conversation to local storage
+    if (sessionId && characterId) {
+      addConversation({
+        sessionId: sessionId,
+        characterId: characterId,
+        title: text, // The first message will be used as the title
+        lastMessage: text,
+      });
+    }
+
     setInputMessage('');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
-    // Call message sent callback
     onMessageSent?.();
-
-    // Send to backend
     setIsLoading(true);
     setBackendError(null);
 
     try {
-      const response: ChatResponse = await sendChatMessage(
-        backendScenarioId,
-        text,
-        sessionId,
-        currentUser || 'Player'  // 로그인한 사용자 이름 사용
-      );
+      let tempDialogues: any[] = [];
+      let finalResponse: any = {};
 
-      console.log(`📥 User message response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
-      console.log('🔍 Full response:', response);
+      for await (const chunk of sendChatMessage(backendScenarioId, text, sessionId, '츠구코')) {
+        if (chunk.type === 'metadata') {
+          const metadata = { ...chunk } as Record<string, any>;
+          delete metadata.type;
+          finalResponse = { ...finalResponse, ...metadata };
 
-      // Update session ID if it changed
-      if (response.session_id !== sessionId) {
-        setSessionId(response.session_id);
-      }
-
-      // Update affinity_scores and current_stage from response
-      setAffinityScores(response.affinity_scores || {});
-      setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
-
-      // 배경 이미지 변경 (current_image 사용)
-      if (response.current_image) {
-        console.log(`🖼️ [User message] Changing background to: ${response.current_image}`);
-        handleBackgroundChange(response.current_image);
-      }
-
-      // 참여 중인 캐릭터 업데이트 (사용자 메시지 응답이므로 누적 없이 새로 설정)
-      updateInvitedCharacters(response.dialogues, false);
-
-      // Add backend responses to messages sequentially (고유 ID 사용)
-      const backendMessages: Message[] = response.dialogues.map((dialogue) => {
-        // 디버깅: image_index 값 로깅
-        if (dialogue.image_index) {
-          console.log(`🖼️ Dialogue has image_index: ${dialogue.image_index} for speaker: ${dialogue.speaker}`);
+          if (typeof metadata.session_id === 'string' && metadata.session_id !== sessionId) {
+            setSessionId(metadata.session_id);
+          }
+          if (metadata.current_stage) {
+            setCurrentStage(metadata.current_stage);
+          }
+          if (metadata.affinity_scores) {
+            setAffinityScores(metadata.affinity_scores);
+          }
+          if (typeof metadata.is_ended === 'boolean') {
+            setIsEnded(metadata.is_ended);
+          }
+          if (metadata.current_image) {
+            handleBackgroundChange(metadata.current_image);
+          }
+        } else if (chunk.type === 'dialogue') {
+          if (chunk.dialogue) {
+            tempDialogues.push(chunk.dialogue);
+            if (chunk.dialogue.image_index) {
+              handleBackgroundChange(chunk.dialogue.image_index);
+            }
+          }
+        } else if (chunk.type === 'complete') {
+          const rest = { ...chunk } as Record<string, any>;
+          delete rest.type;
+          finalResponse = { ...finalResponse, ...rest };
+        } else if (chunk.type === 'error') {
+          console.error('Stream error event received:', chunk);
         }
-        return {
-          id: generateMessageId(),
-          text: dialogue.text || dialogue.content || '',  // 백엔드는 text 필드 사용
-          isUser: false,
-          timestamp: new Date(),
-          characterId: dialogue.speaker,
-          isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
-          imageIndex: dialogue.image_index  // 배경 이미지 인덱스
-        };
-      });
+      }
 
-      const hasSystemMessageInBackend = backendMessages.some(
-        (message) => message.isSystemMessage && message.text.trim().length > 0
-      );
-      const systemDialogue = response.dialogues.find(
-        (dialogue) =>
-          dialogue.speaker &&
-          dialogue.speaker.toLowerCase() === 'system' &&
-          (dialogue.text || dialogue.content)
-      );
-      const fallbackSystemMessage =
-        response.system_message ||
-        systemDialogue?.text ||
-        systemDialogue?.content ||
-        '';
-
-      // 시스템 메시지와 종료 메시지를 백엔드 메시지에 추가
+      const backendMessages: Message[] = tempDialogues.map((dialogue: any) => ({
+        id: generateMessageId(),
+        text: dialogue.text || dialogue.content || '',
+        isUser: false,
+        timestamp: new Date(),
+        characterId: dialogue.speaker,
+        isSystemMessage: dialogue.speaker === 'system' || dialogue.speaker === 'narr',
+        imageIndex: dialogue.image_index,
+      }));
+      
       const allMessages = [...backendMessages];
-      let extraMessageOffset = 1;
 
-      const pushSystemMessage = (text: string) => {
+      if (finalResponse.is_ended) {
         allMessages.push({
-          id: Date.now() + backendMessages.length + extraMessageOffset,
-          text,
+          id: generateMessageId(),
+          text: '🎬 시나리오가 종료되었습니다.',
           isUser: false,
           timestamp: new Date(),
           characterId: 'system',
           isSystemMessage: true
         });
-        extraMessageOffset += 1;
-      };
+        setIsEnded(true);
+        setBackgroundByIndex(21);
 
-      // Show system message if provided
-      if (response.system_message) {
-        pushSystemMessage(response.system_message);
-      } else if (!hasSystemMessageInBackend && fallbackSystemMessage) {
-        pushSystemMessage(fallbackSystemMessage);
-      }
-
-      // Check if chat has ended - Phase 4 개선 + 엔딩 리워드
-      if (response.is_ended) {
-        pushSystemMessage('🎬 시나리오가 종료되었습니다.');
-        setIsEnded(true); // Phase 4: 엔딩 상태 설정
-        setBackgroundByIndex(21); // Phase 4: 엔딩 이미지 표시 (무한열차 마지막 이미지)
-
-        // 엔딩 리워드: 대화 요약 생성 및 모달 표시
         setTimeout(() => {
           const summary = generateConversationSummary();
           setEndingSummary(summary);
           setShowEndingReward(true);
-        }, 2000); // 2초 후 리워드 모달 표시
+        }, 2000);
       }
 
-      // 순차적으로 메시지 표시 (타이핑 효과 포함)
       await addMessagesSequentially(allMessages);
 
-      // has_more가 true이면 자동 요청 시작
-      if (response.has_more) {
-        handleAutoRequest(response.session_id);
+      if (finalResponse.has_more) {
+        handleAutoRequest(finalResponse.session_id);
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-
-      // 오류 메시지 표시
-      const errorDetail = error instanceof Error ? error.message : '알 수 없는 오류';
-      setBackendError(`메시지 전송에 실패했습니다.\n${errorDetail}`);
-
-      // 시스템 에러 메시지 추가
+      setBackendError('메시지 전송에 실패했습니다.');
       const errorMessage: Message = {
         id: Date.now() + 1,
-        text: '⚠️ 메시지 전송에 실패했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.',
+        text: '⚠️ 메시지 전송에 실패했습니다. 다시 시도해주세요.',
         isUser: false,
         timestamp: new Date(),
         characterId: 'system',
         isSystemMessage: true
       };
       setMessages(prev => [...prev, errorMessage]);
-
-      // 모든 진행 중인 상태 초기화 (대화창 복구)
-      setIsTyping(false);
-      setIsAutoRequesting(false);
-      setLoadingMessage(null);
-      shouldCancelAutoRequest.current = true;
-      if (autoRequestTimerRef.current) {
-        clearTimeout(autoRequestTimerRef.current);
-        autoRequestTimerRef.current = null;
-      }
-      isAddingMessages.current = false;
-
-      // 5초 후 에러 메시지 자동 제거
-      setTimeout(() => {
-        setBackendError(null);
-      }, 5000);
     } finally {
       setIsLoading(false);
-      isSendingRef.current = false; // 전송 완료 플래그 리셋
     }
   };
 
@@ -1602,13 +1514,22 @@ export default function ChatInterface({
     setIsListening(false);
   };
 
+  const chatWidthClass = {
+    compact: 'max-w-4xl mx-auto',
+    cozy: 'max-w-5xl mx-auto',
+    spacious: 'max-w-6xl mx-auto'
+  } as const;
+
   return (
-    <div className="w-full h-full flex flex-col md:flex-row bg-gray-100">
+    <div
+      className={`${chatWidthClass[chatWindowSize]} w-full h-full flex flex-col md:flex-row bg-gray-100 dark:bg-gray-900`}
+      data-font-size={fontSize}
+    >
       {/* 왼쪽: 컷신 이미지 영역 (50%) */}
       <div className="relative w-full md:w-1/2 h-[40vh] md:h-full overflow-hidden">
         {/* 컷신 배경 이미지 */}
         <div
-          className={`w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-500 ${
+          className={`w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-500 ${ 
             isTransitioning ? 'opacity-0' : 'opacity-100'
           }`}
           style={{
@@ -1618,21 +1539,56 @@ export default function ChatInterface({
           }}
         />
 
-        {/* 왼쪽 아래: 친밀도 패널 */}
-        <div className="absolute bottom-4 left-4 right-44 z-10">
-          <AffinityPanel affinityScores={affinityScores} />
-        </div>
+        {/* 하단 패널: 친밀도 (가로로 넓게) + 버블 (오른쪽) */}
+        <div className="absolute bottom-4 left-4 right-4 z-10 flex gap-3 items-end">
+          {/* 친밀도 패널 - 버블 옆까지 가로로 확장 */}
+          <div className="flex-1">
+            <AffinityPanel affinityScores={affinityScores} />
+          </div>
 
-        {/* 오른쪽 아래: 버블 카운터 */}
-        <div className="absolute bottom-4 right-4 z-10">
-          <BubbleCounter compact />
+          {/* 버블 카운터 */}
+          <div className="flex-shrink-0">
+            <BubbleCounter compact />
+          </div>
         </div>
       </div>
 
       {/* 오른쪽: 채팅 영역 (50%) */}
-      <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-white">
+      <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-theme-surface-strong border-l border-theme-card">
+        {/* 채팅 헤더 - 높이 축소 */}
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-theme-card bg-theme-surface-strong shrink-0 gap-4">
+          {/* 중앙: 시나리오 타이틀 */}
+          <div className="flex items-center flex-1 justify-center">
+            <span className="text-xl font-display-chat text-text-primary leading-none tracking-[0.05em]">
+              🗡️ {scenarioTitle || 'KIME CHAT'}
+            </span>
+          </div>
+
+          {/* 오른쪽: 참여중인 캐릭터들 */}
+          <div className="flex items-center space-x-1">
+            {invitedCharacters.map((charId, index) => (
+              <div key={charId} className="relative">
+                <img
+                  src={getCharacterProfile(charId)}
+                  alt={getCharacterName(charId)}
+                  className="w-6 h-6 rounded-full border-2 border-theme-card shadow-sm bg-theme-surface"
+                  style={{ marginLeft: index > 0 ? '-6px' : '0' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `${CDN_URL}/프로필_탄지로.png`;
+                  }}
+                />
+              </div>
+            ))}
+            {invitedCharacters.length > 1 && (
+              <span className="text-xs text-theme-secondary ml-2">
+                {invitedCharacters.length}명
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
         {/* Backend error banner */}
         {backendError && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -1644,7 +1600,7 @@ export default function ChatInterface({
         {isLoading && messages.length === 0 && (
           <div className="flex justify-center items-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
-            <span className="ml-3 text-gray-500">시나리오를 불러오는 중...</span>
+            <span className="ml-3 text-gray-500 dark:text-gray-400">시나리오를 불러오는 중...</span>
           </div>
         )}
 
@@ -1668,20 +1624,20 @@ export default function ChatInterface({
                   }}
                 >
                 <div className="max-w-lg">
-                  <div className={`rounded-xl px-4 py-3 shadow-lg border-2 ${
+                  <div className={`rounded-xl px-4 py-3 shadow-lg border-2 ${ 
                     isWarning
                       ? 'bg-gradient-to-r from-red-50 via-red-100 to-red-50 border-red-300'
-                      : 'bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 border-purple-200'
-                  }`}>
-                    <p className={`text-center text-sm leading-relaxed font-medium ${
-                      isWarning ? 'text-red-700' : 'text-gray-700 italic'
-                    }`}>
+                      : 'bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 border-purple-200 dark:from-gray-700 dark:via-gray-800 dark:to-gray-700 dark:border-purple-900'
+                  }`}> 
+                    <p className={`text-center text-sm leading-relaxed font-medium ${ 
+                      isWarning ? 'text-red-700' : 'text-gray-700 italic dark:text-gray-300'
+                    }`}> 
                       {isWarning && <span className="font-bold">⚠️ 꺾쇄까마귀: </span>}
                       {message.text}
                     </p>
-                    <div className={`text-xs text-center mt-1 ${
-                      isWarning ? 'text-red-400' : 'text-gray-400'
-                    }`}>
+                    <div className={`text-xs text-center mt-1 ${ 
+                      isWarning ? 'text-red-400' : 'text-gray-400 dark:text-gray-500'
+                    }`}> 
                       {message.timestamp.toLocaleTimeString('ko-KR', {
                         hour: '2-digit',
                         minute: '2-digit'
@@ -1700,8 +1656,7 @@ export default function ChatInterface({
           return (
             <div
               key={message.id}
-              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isFirstMessage ? 'mb-8' : 'mb-32'} ${!message.isUser ? 'animate-slide-in-fade' : ''}`}
-            >
+              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isFirstMessage ? 'mb-8' : 'mb-32'} ${!message.isUser ? 'animate-slide-in-fade' : ''}`}>
               <div
                 style={{
                   transform: isLatestMessage ? 'scale(1.35)' : 'scale(1)',
@@ -1713,38 +1668,38 @@ export default function ChatInterface({
               {!message.isUser && (
                 <div
                   className={`w-16 h-16 rounded-full mr-3 flex-shrink-0 transition-all duration-500`}
-                  style={isLatestMessage && !message.isUser ? {
+                  style={isLatestMessage && !message.isUser ? { 
                     boxShadow: `0 0 20px ${glowColors.shadow}, 0 0 40px ${glowColors.shadow.replace('0.6', '0.3')}, 0 0 60px ${glowColors.shadow.replace('0.6', '0.15')}`
                   } : {}}
                 >
                   <img
                     src={getCharacterProfile(message.characterId || characterId)}
                     alt="Character"
-                    className="w-full h-full rounded-full object-cover border-2 border-gray-200"
+                    className="w-full h-full rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = '/images/프로필_탄지로.png';
                     }}
                   />
                 </div>
               )}
-              <div className={`flex flex-col transition-all duration-500 ${
+              <div className={`flex flex-col transition-all duration-500 ${ 
                 message.isUser
                   ? 'max-w-md lg:max-w-lg'
                   : 'max-w-xs lg:max-w-md'
-              }`}>
+              }`}> 
                 {/* 화자 표시 */}
-                <div className={`text-xs mb-1 ${message.isUser ? 'text-right text-gray-500' : 'text-left text-gray-500'}`}>
+                <div className={`text-xs mb-1 ${message.isUser ? 'text-right text-gray-500 dark:text-gray-400' : 'text-left text-gray-500 dark:text-gray-400'}`}> 
                   {message.isUser ? '사용자' : getCharacterName(message.characterId || characterId)}
                 </div>
 
                 <div className="flex items-start">
                   <div
-                    className={`px-4 py-3 rounded-2xl flex-1 transition-all duration-500 ${
+                    className={`px-4 py-3 rounded-2xl flex-1 transition-all duration-500 ${ 
                       message.isUser
                         ? `bg-purple-500 text-white rounded-br-md ${isLatestMessage ? 'shadow-lg' : ''}`
-                        : `text-gray-800 border border-gray-200 rounded-bl-md ${isLatestMessage ? '' : 'bg-white shadow-sm'}`
+                        : `text-gray-800 border border-gray-200 rounded-bl-md dark:border-gray-700 dark:text-gray-200 ${isLatestMessage ? '' : 'bg-white dark:bg-gray-800 shadow-sm'}`
                     }`}
-                    style={!message.isUser && isLatestMessage ? {
+                    style={!message.isUser && isLatestMessage ? { 
                       background: `${glowColors.bg}, white`,
                       boxShadow: `0 4px 20px ${glowColors.shadow.replace('0.6', '0.25')}, 0 8px 40px ${glowColors.shadow.replace('0.6', '0.15')}`
                     } : message.isUser && isLatestMessage ? {
@@ -1752,7 +1707,7 @@ export default function ChatInterface({
                     } : {}}
                   >
                     <p className="text-sm leading-relaxed">{message.text}</p>
-                    <div className={`text-xs mt-1 ${message.isUser ? 'text-purple-100' : 'text-gray-400'}`}>
+                    <div className={`text-xs mt-1 ${message.isUser ? 'text-purple-100' : 'text-gray-400 dark:text-gray-500'}`}> 
                       {message.timestamp.toLocaleTimeString('ko-KR', {
                         hour: '2-digit',
                         minute: '2-digit'
@@ -1764,7 +1719,7 @@ export default function ChatInterface({
                   {!message.isUser && (
                     <button
                       onClick={() => handlePlayAudio(message.text)}
-                      className="ml-2 p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
+                      className="ml-2 p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 dark:hover:bg-gray-700 dark:text-gray-500 dark:hover:text-gray-300"
                       aria-label="음성으로 듣기"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1792,17 +1747,17 @@ export default function ChatInterface({
         {isTyping && (
           <div className="flex justify-start mb-4">
             <div className="w-16 h-16 rounded-full mr-3 flex-shrink-0">
-              <div className="w-full h-full rounded-full bg-gray-200 flex items-center justify-center">
-                <svg className="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+              <div className="w-full h-full rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
                 </svg>
               </div>
             </div>
             <div className="flex flex-col max-w-xs lg:max-w-md">
-              <div className="text-xs mb-1 text-left text-gray-500">
-                {loadingMessage || '입력 중...'}
+              <div className="text-xs mb-1 text-left text-gray-500 dark:text-gray-400">
+                입력 중...
               </div>
-              <div className="px-4 py-3 rounded-2xl bg-white border border-gray-200 rounded-bl-md shadow-sm">
+              <div className="px-4 py-3 rounded-2xl bg-white border border-gray-200 rounded-bl-md shadow-sm dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -1818,11 +1773,11 @@ export default function ChatInterface({
         </div>
 
         {/* 메시지 입력 영역 */}
-        <div className="p-4 border-t border-gray-200 bg-white shrink-0">
+        <div className="p-4 border-t border-gray-200 bg-white shrink-0 dark:bg-gray-900 dark:border-gray-700">
           <div className="flex items-center space-x-3">
             <button
               onClick={handleAddClick}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500 dark:hover:bg-gray-800 dark:text-gray-400"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1830,7 +1785,7 @@ export default function ChatInterface({
             </button>
             <button
               onClick={handleMicClick}
-              className="p-2 hover:bg-purple-100 rounded-full transition-colors text-purple-500 hover:text-purple-600"
+              className="p-2 hover:bg-purple-100 rounded-full transition-colors text-purple-500 hover:text-purple-600 dark:hover:bg-purple-900 dark:text-purple-400 dark:hover:text-purple-300"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -1840,7 +1795,7 @@ export default function ChatInterface({
             {isTyping && !isAutoRequesting && (
               <button
                 onClick={handleSkip}
-                className="p-2 hover:bg-blue-100 rounded-full transition-colors text-blue-500 hover:text-blue-600 animate-pulse"
+                className="p-2 hover:bg-blue-100 rounded-full transition-colors text-blue-500 hover:text-blue-600 animate-pulse dark:hover:bg-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                 title="대화 건너뛰기 (Skip)"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1856,7 +1811,6 @@ export default function ChatInterface({
                   setIsAutoRequesting(false);
                   setIsTyping(false);
                   setIsLoading(false);
-                  setLoadingMessage(null);
                   shouldCancelAutoRequest.current = true;
                   if (autoRequestTimerRef.current) {
                     clearTimeout(autoRequestTimerRef.current);
@@ -1864,7 +1818,7 @@ export default function ChatInterface({
                   }
                   isAddingMessages.current = false;
                 }}
-                className="p-2 hover:bg-red-100 rounded-full transition-colors text-red-500 hover:text-red-600"
+                className="p-2 hover:bg-red-100 rounded-full transition-colors text-red-500 hover:text-red-600 dark:hover:bg-red-900 dark:text-red-400 dark:hover:text-red-300"
                 title="입력 활성화 (긴급 리셋)"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1873,13 +1827,21 @@ export default function ChatInterface({
               </button>
             )}
             <div className="flex-1 relative">
-              <input
-                type="text"
+              <textarea
+                ref={inputRef}
+                rows={1}
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
+                onChange={(e) => {
+                  setInputMessage(e.target.value);
+                  if (inputRef.current) {
+                    inputRef.current.style.height = 'auto';
+                    inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 160)}px`;
+                  }
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // 이벤트 중복 전파 방지
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+
                     console.log('🔍 [ENTER KEY] Enter pressed!', {
                       inputMessage: inputMessage.substring(0, 20),
                       hasInput: !!inputMessage.trim(),
@@ -1909,13 +1871,18 @@ export default function ChatInterface({
                     console.log('🔧 [FIX] Resetting stuck states');
                     setIsAutoRequesting(false);
                     setIsTyping(false);
-                    setLoadingMessage(null);
                     shouldCancelAutoRequest.current = true;
                   }
                 }}
-                placeholder={isEnded ? "시나리오가 종료되었습니다" : (isAutoRequesting ? "대화가 자동으로 진행 중입니다..." : "메시지를 입력하세요...")}
+                placeholder={
+                  isEnded
+                    ? "시나리오가 종료되었습니다"
+                    : isAutoRequesting
+                      ? "대화가 자동으로 진행 중입니다..."
+                      : "메시지를 입력하세요..."
+                }
                 disabled={isLoading || isTyping || isAutoRequesting || isEnded}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed resize-none pr-12 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
               />
               <button
                 onClick={() => {
@@ -1950,7 +1917,7 @@ export default function ChatInterface({
                   console.log('✅ [BUTTON] All checks passed, calling sendMessage');
                   sendMessage(inputMessage);
                 }}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-purple-500 hover:text-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:text-purple-400 dark:hover:text-purple-300"
                 disabled={!inputMessage.trim() || isLoading || isTyping || isAutoRequesting || isEnded}
               >
                 {isLoading ? (
@@ -2056,11 +2023,11 @@ export default function ChatInterface({
                 )}
 
                 {/* 마이크 아이콘 */}
-                <div className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
+                <div className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${ 
                   isListening
                     ? 'bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/30'
                     : 'bg-gradient-to-br from-gray-400 to-gray-500'
-                }`}>
+                }`}> 
                   <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                   </svg>
@@ -2071,7 +2038,7 @@ export default function ChatInterface({
             {/* 인식된 텍스트 */}
             <div className="mb-6">
               <div className="min-h-[60px] p-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                <p className={`text-center ${transcript ? 'text-gray-800' : 'text-gray-400'}`}>
+                <p className={`text-center ${transcript ? 'text-gray-800' : 'text-gray-400'}`}> 
                   {transcript || '음성을 입력해주세요...'}
                 </p>
               </div>
@@ -2088,12 +2055,11 @@ export default function ChatInterface({
               <button
                 onClick={handleVoiceComplete}
                 disabled={!transcript.trim()}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${ 
                   transcript.trim()
                     ? 'bg-purple-500 text-white hover:bg-purple-600'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
+                }`}> 
                 전송
               </button>
             </div>
