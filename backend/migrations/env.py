@@ -15,26 +15,51 @@ from app.core.db.base import Base
 from app.core.config import get_settings
 
 # Import all models to register them with Base
-from app.core.db.models import Session
+from app.features.sessions.models import Session
 from app.features.chat.models import (
     DialogueTurn,
-    UserCharacterAffinity,
-    AffinityRecord,
-    Entity,
-    EntityRelationship,
-    EntityMention,
+    ConversationSummary,
     UserMemory,
+    Entity,
+    Relationship,
+    EntityMention,
 )
 from app.features.scenarios.models import (
+    Scenarios,
     ScenarioComment,
     ScenarioLike,
     CommentLike,
+    ScenarioView,
+    ScenarioStage,
+    ScenarioMicroBeat,
+    ScenarioMission,
+    ScenarioRouter,
+    ScenarioIntentMapping,
 )
 from app.features.galleries.models import GalleryImage
+from app.features.images.models import ImageMapping
+from app.features.images.legacy_models import (
+    ImageAsset, ScenarioStageImage, ScenarioDefaultImage,
+    ImageMappingRule
+)
+from app.features.auth.models import User
+from app.features.users.models.xp_transaction import XPTransaction
+from app.features.game.models import (
+    UserEquipment, UserUnlockedImage, RankDefinition,
+    GameEvent, MissionRecord
+)
+from app.features.progression.models import (
+    UserInput, UserProgression, UserScenarioProgress,
+    StageProgression
+)
+from app.features.misc.models import (
+    SessionSnapshot, ScenarioStatistics, UserFeedback, UserCredits
+)
 from app.features.logging.models import (
     Log,
     ErrorLog,
     PerformanceMetric,
+    TrainingLog,
 )
 
 # Alembic Config object

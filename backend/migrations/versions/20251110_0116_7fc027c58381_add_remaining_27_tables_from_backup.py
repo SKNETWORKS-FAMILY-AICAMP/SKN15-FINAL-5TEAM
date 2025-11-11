@@ -68,8 +68,8 @@ def upgrade() -> None:
     op.execute("""
     CREATE TABLE user_credits (
         user_id uuid PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
-        bubble_count integer NOT NULL DEFAULT 100 CHECK (bubble_count >= 0),
-        total_purchased integer NOT NULL DEFAULT 100 CHECK (total_purchased >= 0),
+        bubble_count integer NOT NULL DEFAULT 200 CHECK (bubble_count >= 0),
+        total_purchased integer NOT NULL DEFAULT 200 CHECK (total_purchased >= 0),
         total_consumed integer NOT NULL DEFAULT 0 CHECK (total_consumed >= 0),
         last_updated timestamptz DEFAULT now(),
         created_at timestamptz DEFAULT now()
