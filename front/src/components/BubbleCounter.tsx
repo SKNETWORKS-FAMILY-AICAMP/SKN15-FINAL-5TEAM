@@ -12,14 +12,17 @@ export default function BubbleCounter({ showEmergencyRefill = true, compact = fa
   const { currentBubbles, updateBubbles, openPaymentModal } = useApp();
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // Safety check: currentBubbles가 undefined일 경우 0으로 처리
+  const bubbleCount = currentBubbles ?? 0;
+
   // 버블 감소 애니메이션
   useEffect(() => {
-    if (currentBubbles < 1000) {
+    if (bubbleCount < 1000) {
       setIsAnimating(true);
       const timer = setTimeout(() => setIsAnimating(false), 500);
       return () => clearTimeout(timer);
     }
-  }, [currentBubbles]);
+  }, [bubbleCount]);
 
   // 움직이는 버블들 생성
   const renderFloatingBubbles = () => {
@@ -51,12 +54,12 @@ export default function BubbleCounter({ showEmergencyRefill = true, compact = fa
           <div className="flex flex-col">
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold text-gray-600">버블</span>
-              <span className={`text-3xl font-bold ${getBubbleColor(currentBubbles)} ${isAnimating ? 'animate-bounce' : ''}`}>
-                {currentBubbles.toLocaleString()}
+              <span className={`text-3xl font-bold ${getBubbleColor(bubbleCount)} ${isAnimating ? 'animate-bounce' : ''}`}>
+                {bubbleCount.toLocaleString()}
               </span>
             </div>
             <span className="text-xs text-gray-500">
-              {getBubbleStatus(currentBubbles)}
+              {getBubbleStatus(bubbleCount)}
             </span>
           </div>
         </div>
@@ -83,38 +86,38 @@ export default function BubbleCounter({ showEmergencyRefill = true, compact = fa
         <div className="flex flex-col">
           <div className="flex items-center space-x-2">
             <span className="text-sm font-semibold text-gray-600">버블</span>
-            <span className={`text-2xl font-bold ${getBubbleColor(currentBubbles)} ${isAnimating ? 'animate-bounce' : ''} transition-all duration-300`}>
-              {currentBubbles.toLocaleString()}
+            <span className={`text-2xl font-bold ${getBubbleColor(bubbleCount)} ${isAnimating ? 'animate-bounce' : ''} transition-all duration-300`}>
+              {bubbleCount.toLocaleString()}
             </span>
           </div>
 
           {/* 진행 바 */}
           <div className="w-24 h-2 bg-gray-200 rounded-full mt-1 overflow-hidden">
             <div
-              className={`h-full ${getBubbleColor(currentBubbles).replace('text-', 'bg-')} rounded-full transition-all duration-500 ease-out`}
-              style={{ width: `${Math.min(100, (currentBubbles / 1000) * 100)}%` }}
+              className={`h-full ${getBubbleColor(bubbleCount).replace('text-', 'bg-')} rounded-full transition-all duration-500 ease-out`}
+              style={{ width: `${Math.min(100, (bubbleCount / 1000) * 100)}%` }}
             ></div>
           </div>
 
           {/* 상태 텍스트 */}
           <span className="text-xs text-gray-500 mt-1">
-            {getBubbleStatus(currentBubbles)}
+            {getBubbleStatus(bubbleCount)}
           </span>
         </div>
       </div>
 
       {/* 경고 메시지 */}
-      {currentBubbles <= 100 && (
+      {bubbleCount <= 100 && (
         <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded animate-pulse">
           ⚠️ 버블이 부족합니다! 대화를 줄여주세요.
         </div>
       )}
 
       {/* 보충 버튼 */}
-      {showEmergencyRefill && currentBubbles <= 50 && (
+      {showEmergencyRefill && bubbleCount <= 50 && (
         <div className="mt-2 space-y-1">
           <button
-            onClick={() => updateBubbles(currentBubbles + 1000)}
+            onClick={() => updateBubbles(bubbleCount + 1000)}
             className="w-full px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors animate-bounce"
           >
             🔄 응급 충전 (1000개)

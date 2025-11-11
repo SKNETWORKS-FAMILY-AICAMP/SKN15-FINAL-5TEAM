@@ -127,14 +127,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             console.error('Failed to load credits:', error);
             setCurrentBubbles(0);
           }
-        } catch (error) {
-          // Token is invalid or expired, clear it
+        } catch (error: any) {
+          // Only clear tokens if it's a 401 (unauthorized) error
+          // Network errors or other issues shouldn't log the user out
           console.error('Token validation failed:', error);
-          clearTokens();
-          setIsLoggedIn(false);
-          setUserEmail('');
-          setCurrentUser(null);
-          setCurrentUserId(null);
+
+          if (error?.response?.status === 401) {
+            // Token is actually invalid
+            console.warn('Token is invalid (401), clearing tokens');
+            clearTokens();
+            setIsLoggedIn(false);
+            setUserEmail('');
+            setCurrentUser(null);
+            setCurrentUserId(null);
+          } else {
+            // Network error or other issue - keep user logged in with stored data
+            console.warn('API call failed but not 401, keeping user logged in with stored data');
+            const storedUser = getUserData();
+            if (storedUser) {
+              setIsLoggedIn(true);
+              setUserEmail(storedUser.display_name || storedUser.username);
+              setCurrentUser(storedUser.display_name || storedUser.username || null);
+              setCurrentUserId(storedUser.user_id || null);
+            }
+          }
         }
       } else {
         setIsLoggedIn(false);

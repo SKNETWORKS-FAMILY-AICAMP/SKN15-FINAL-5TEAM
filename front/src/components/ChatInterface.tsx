@@ -31,12 +31,6 @@ interface ChatInterfaceProps {
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
 
-const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'cutscene5_llm_driven',
-  ending: 'cutscene5_llm_driven',
-  cutscene5_llm_driven: 'cutscene5_llm_driven',
-};
-
 export default function ChatInterface({
   onUserLogin,
   onMessageSent,
@@ -102,10 +96,7 @@ export default function ChatInterface({
   } = useSoundEffects();
 
   const backendScenarioId = useMemo(() => {
-    if (!characterId) {
-      return 'cutscene5_llm_driven';
-    }
-    return SCENARIO_ID_MAP[characterId] || characterId;
+    return characterId || 'mugen-train';
   }, [characterId]);
 
   // 배경 이미지 프리로드 (성능 최적화)
@@ -493,8 +484,8 @@ export default function ChatInterface({
       const messageId = message.id;
       setMessages(prev => [...prev, { ...message, text: '' }]);
 
-      // INTRO 스테이지 판별하여 타이핑 속도 결정 (하드코딩에 가깝게 빠르게)
-      const typingSpeed = isIntroStage(currentStage) ? 1 : TYPING_INTERVAL_MS;
+      // INTRO 스테이지 판별하여 타이핑 속도 결정 (인트로: 15ms로 한글자씩 보이도록, 일반: 10ms)
+      const typingSpeed = isIntroStage(currentStage) ? 15 : TYPING_INTERVAL_MS;
       if (isIntroStage(currentStage)) {
         console.log(`⚡ [INTRO] Fast typing enabled (${typingSpeed}ms) for stage: ${currentStage}`);
       }
@@ -576,9 +567,9 @@ export default function ChatInterface({
         // 타이핑 효과로 메시지 표시
         await addMessageWithTypingEffect(newMessages[i]);
 
-        // 마지막 메시지가 아니면 50ms 대기 (빠른 흐름) - Phase 1 개선: 800ms → 50ms (16배 빠르게)
+        // 마지막 메시지가 아니면 400ms 대기 (적절한 간격으로 조정)
         if (i < newMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 50)); // 0.05 seconds
+          await new Promise(resolve => setTimeout(resolve, 400)); // 0.4 seconds
         }
       }
 
@@ -592,12 +583,85 @@ export default function ChatInterface({
     }
   };
 
+  // 무한열차 시나리오 하드코딩 인트로 메시지
+  const MUGEN_TRAIN_INTRO_MESSAGES: Message[] = [
+    {
+      id: 1,
+      text: '🍱 우마이! 우마이! 우마이!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'rengoku',
+      isSystemMessage: false,
+    },
+    {
+      id: 2,
+      text: '렌고쿠 선배님! 식사 중이시네요!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'tanjiro',
+      isSystemMessage: false,
+    },
+    {
+      id: 3,
+      text: '탄지로! 함께 도시락을 먹자! 역무원이 가져다준 도시락이 정말 맛있다!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'rengoku',
+      isSystemMessage: false,
+    },
+    {
+      id: 4,
+      text: '감사합니다! 저희도 같이 먹겠습니다!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'tanjiro',
+      isSystemMessage: false,
+    },
+    {
+      id: 5,
+      text: '으아... 이 열차는 언제 도착하는 거야... 배고파...',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'zenitsu',
+      isSystemMessage: false,
+    },
+    {
+      id: 6,
+      text: '약해 빠진 놈! 나는 전혀 배고프지 않다! 으하하!',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'inosuke',
+      isSystemMessage: false,
+    },
+    {
+      id: 7,
+      text: '여러분, 이제 무한열차가 곧 출발합니다. 귀살대원 여러분은 승객들을 보호하는 임무를 잊지 마십시오.',
+      isUser: false,
+      timestamp: new Date(),
+      characterId: 'system',
+      isSystemMessage: true,
+    },
+  ];
+
   // 초기 시나리오 로드 (백엔드 연결)
   useEffect(() => {
     const initializeChat = async () => {
       setIsLoading(true);
       setBackendError(null);
       setMessages([]); // 초기화 시 메시지 목록 비우기
+
+      // 🚀 무한열차 시나리오인 경우 하드코딩된 인트로 메시지를 먼저 표시
+      if (backendScenarioId === 'mugen-train' && !initialSessionId) {
+        console.log('🎬 [INTRO] Displaying hardcoded intro messages for mugen-train...');
+
+        // INTRO 스테이지로 설정하여 빠른 타이핑 효과 적용 (15ms)
+        setCurrentStage('INTRO');
+
+        // 하드코딩된 메시지를 즉시 표시 (타이핑 효과 포함)
+        await addMessagesSequentially(MUGEN_TRAIN_INTRO_MESSAGES);
+
+        console.log('✅ [INTRO] Hardcoded intro messages displayed');
+      }
 
       let tempDialogues: any[] = [];
       let finalResponse: any = {};

@@ -30,12 +30,6 @@ interface ScenarioData {
   characters?: Character[];
 }
 
-const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'cutscene5_llm_driven',
-  ending: 'cutscene5_llm_driven',
-  cutscene5_llm_driven: 'cutscene5_llm_driven'
-};
-
 const TAG_BADGE_STYLES = {
   intense:
     'bg-gradient-to-r from-rose-500/25 via-rose-500/10 to-transparent border border-rose-400/35 text-rose-100 shadow-[0_0_25px_rgba(244,63,94,0.25)]',
@@ -91,11 +85,7 @@ export default function CharacterPage() {
   const [detailExpanded, setDetailExpanded] = useState(false);
 
   const scenarios = scenariosData as Record<string, ScenarioData>;
-  const scenarioLookupKey =
-    characterId && !scenarios[characterId]
-      ? SCENARIO_ID_MAP[characterId] || characterId
-      : characterId || null;
-  const scenario = scenarioLookupKey ? scenarios[scenarioLookupKey] : null;
+  const scenario = characterId ? scenarios[characterId] : null;
 
   if (!scenario) {
     return (

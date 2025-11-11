@@ -51,7 +51,7 @@ export default function HomePage() {
           views: scenario.views,
           tags: scenario.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`),
           size: scenario.card_size,
-          link: `/character/${scenario.scenario_id}`  // Always navigate to detail page first
+          link: `/character/${scenario.scenario_id}`
         }));
 
         setCharacters(transformedCharacters);

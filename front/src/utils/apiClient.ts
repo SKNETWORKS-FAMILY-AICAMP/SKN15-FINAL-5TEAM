@@ -42,7 +42,8 @@ const addRefreshSubscriber = (callback: (token: string) => void) => {
 const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
-    throw new Error('No refresh token available');
+    console.warn('리프레시 토큰이 없습니다');
+    return null;
   }
 
   try {
@@ -59,8 +60,8 @@ const refreshAccessToken = async (): Promise<string | null> => {
     return null;
   } catch (error) {
     console.error('토큰 갱신 실패:', error);
-    clearTokens();
-    window.location.href = '/'; // 로그인 페이지로 리다이렉트
+    // 토큰 갱신 실패 시 clearTokens는 호출하지 않음
+    // 401 응답 인터셉터에서 처리하도록 함
     return null;
   }
 };
@@ -71,23 +72,25 @@ apiClient.interceptors.request.use(
     const accessToken = getAccessToken();
 
     if (accessToken) {
-      // 토큰이 곧 만료되는지 확인
-      if (isTokenExpiringSoon(accessToken) && !isRefreshing) {
+      // 토큰이 만료되었거나 곧 만료될 예정이면 갱신
+      if ((isTokenExpired(accessToken) || isTokenExpiringSoon(accessToken)) && !isRefreshing) {
         isRefreshing = true;
         try {
           const newToken = await refreshAccessToken();
           if (newToken) {
             config.headers.Authorization = `${getTokenType()} ${newToken}`;
             onTokenRefreshed(newToken);
+          } else {
+            // 토큰 갱신 실패 시 기존 토큰이라도 사용 시도
+            config.headers.Authorization = `${getTokenType()} ${accessToken}`;
           }
         } catch (error) {
           console.error('토큰 갱신 실패:', error);
+          // 갱신 실패해도 기존 토큰으로 시도 (401 에러는 응답 인터셉터에서 처리)
+          config.headers.Authorization = `${getTokenType()} ${accessToken}`;
         } finally {
           isRefreshing = false;
         }
-      } else if (!isTokenExpired(accessToken)) {
-        // 만료되지 않은 토큰 사용
-        config.headers.Authorization = `${getTokenType()} ${accessToken}`;
       } else if (isRefreshing) {
         // 토큰 갱신 중이면 대기
         return new Promise((resolve) => {
@@ -96,6 +99,9 @@ apiClient.interceptors.request.use(
             resolve(config);
           });
         });
+      } else {
+        // 유효한 토큰 사용
+        config.headers.Authorization = `${getTokenType()} ${accessToken}`;
       }
     }
 

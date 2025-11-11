@@ -19,12 +19,6 @@ interface ScenarioData {
   implemented: boolean;
 }
 
-const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'cutscene5_llm_driven',
-  ending: 'cutscene5_llm_driven',
-  cutscene5_llm_driven: 'cutscene5_llm_driven',
-};
-
 export default function ChatPage() {
   const { characterId: routeCharacterId, sessionId: routeSessionId } = useParams<{ characterId?: string; sessionId?: string }>();
   const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId } = useApp();
@@ -92,10 +86,13 @@ export default function ChatPage() {
   }, [isLoggedIn, routeCharacterId, routeSessionId, sessionCheckDone]);
 
   const checkLastSession = async () => {
-    if (!initialCharacterId) return;
+    if (!initialCharacterId) {
+      // initialCharacterId가 없으면 세션 체크를 완료한 것으로 처리
+      setSessionCheckDone(true);
+      return;
+    }
     try {
-      const backendScenarioId = SCENARIO_ID_MAP[initialCharacterId] || initialCharacterId;
-      const session = await apiClient.getUserLastSession(backendScenarioId);
+      const session = await apiClient.getUserLastSession(initialCharacterId);
 
       if (session) {
         setLastSession(session);
@@ -129,11 +126,7 @@ export default function ChatPage() {
 
   // Load scenario data dynamically
   const scenarios = scenariosData as Record<string, ScenarioData>;
-  const scenarioLookupKey =
-    initialCharacterId && !scenarios[initialCharacterId]
-      ? SCENARIO_ID_MAP[initialCharacterId] || initialCharacterId
-      : initialCharacterId || null;
-  const scenario = scenarioLookupKey ? scenarios[scenarioLookupKey] : null;
+  const scenario = initialCharacterId ? scenarios[initialCharacterId] : null;
 
   useEffect(() => {
     if(scenario) {
