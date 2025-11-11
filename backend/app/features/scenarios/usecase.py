@@ -123,20 +123,13 @@ class ScenarioUseCase:
                           scenario_id=scenario_id)
             return None
 
-        # 3개의 DB 쿼리를 asyncio.gather로 병렬 실행
+        # DB 쿼리를 순차적으로 실행 (세션 충돌 방지)
+        like_count = await self.repository.get_scenario_like_count(scenario_id)
+        comment_count = await self.repository.get_scenario_comment_count(scenario_id)
+
         if user_id:
-            # 사용자가 로그인한 경우: 좋아요 수, 사용자 좋아요 여부, 댓글 수
-            like_count, user_liked, comment_count = await asyncio.gather(
-                self.repository.get_scenario_like_count(scenario_id),
-                self.repository.check_user_liked_scenario(scenario_id, user_id),
-                self.repository.get_scenario_comment_count(scenario_id)
-            )
+            user_liked = await self.repository.check_user_liked_scenario(scenario_id, user_id)
         else:
-            # 비로그인 사용자: 좋아요 수, 댓글 수만 조회
-            like_count, comment_count = await asyncio.gather(
-                self.repository.get_scenario_like_count(scenario_id),
-                self.repository.get_scenario_comment_count(scenario_id)
-            )
             user_liked = False
 
         # 시나리오 정보에 추가 정보 추가

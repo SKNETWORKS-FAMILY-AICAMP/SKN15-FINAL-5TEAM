@@ -160,8 +160,8 @@ class UserRepository:
         """
         query = text("""
             SELECT
-                COALESCE(bubble_count, 0) as current_credits,
-                COALESCE(total_purchased, 0) as total_earned,
+                COALESCE(bubble_count, 0) as bubble_count,
+                COALESCE(total_purchased, 0) as total_purchased,
                 COALESCE(total_consumed, 0) as total_consumed
             FROM user_credits
             WHERE user_id = :user_id
@@ -173,14 +173,14 @@ class UserRepository:
         if not row:
             # 크레딧 레코드가 없으면 기본값 반환
             return {
-                "current_credits": 0,
-                "total_earned": 0,
+                "bubble_count": 0,
+                "total_purchased": 0,
                 "total_consumed": 0
             }
 
         return {
-            "current_credits": row.current_credits,
-            "total_earned": row.total_earned,
+            "bubble_count": row.bubble_count,
+            "total_purchased": row.total_purchased,
             "total_consumed": row.total_consumed,
         }
 

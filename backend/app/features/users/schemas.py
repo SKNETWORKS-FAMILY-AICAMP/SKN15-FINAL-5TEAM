@@ -78,9 +78,9 @@ class UserStatsResponse(BaseModel):
 
 class UserCreditsResponse(BaseModel):
     """사용자 크레딧 조회 응답"""
-    current_credits: int = Field(..., description="현재 보유 크레딧")
-    total_earned: int = Field(default=0, description="총 획득 크레딧")
-    total_consumed: int = Field(default=0, description="총 사용 크레딧")
+    bubble_count: int = Field(..., description="현재 보유 버블")
+    total_purchased: int = Field(default=0, description="총 구매 버블")
+    total_consumed: int = Field(default=0, description="총 사용 버블")
 
     class Config:
         from_attributes = True

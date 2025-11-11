@@ -74,6 +74,7 @@ class ScenarioDetailResponse(BaseModel):
     title: str
     description: Optional[str]
     world_id: Optional[str]
+    is_active: Optional[bool] = True
     like_count: int
     user_liked: bool
     comment_count: int

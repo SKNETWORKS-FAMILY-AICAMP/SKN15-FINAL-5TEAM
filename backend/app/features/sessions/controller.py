@@ -76,6 +76,45 @@ async def list_user_sessions(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/last")
+async def get_last_session_endpoint(
+    scenario_id: Optional[str] = Query(None, description="시나리오 ID 필터"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: SessionUseCase = Depends(get_session_usecase)
+):
+    """
+    사용자의 마지막 세션 조회
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_last_session", "Getting last session",
+               user_id=user_id, scenario_id=scenario_id)
+
+    try:
+        session = await usecase.get_last_session(user_id, scenario_id)
+
+        if not session:
+            return {"has_session": False}
+
+        return {
+            "has_session": True,
+            "session_id": session["session_id"],
+            "scenario_id": session["scenario_id"],
+            "current_stage": session.get("current_stage"),
+            "turn_count": session.get("turn_count", 0),
+            "created_at": session.get("created_at"),
+            "updated_at": session.get("updated_at"),
+            "conversation_summary": session.get("conversation_summary")
+        }
+
+    except BusinessException as e:
+        logger.error("get_last_session", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.error("get_last_session", f"Unexpected error: {e}", exc=e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{session_id}", response_model=SessionDetailResponse)
 async def get_session_detail(
     session_id: str,

@@ -15,7 +15,7 @@ class XPTransaction(Base):
 
     transaction_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("game_sessions.session_id"))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"))
 
     xp_amount = Column(Integer, nullable=False)  # 양수: 획득, 음수: 소비
     xp_type = Column(String(50), nullable=False)  # message, scenario_complete, achievement, etc.
@@ -31,4 +31,4 @@ class XPTransaction(Base):
 
     # Relationships
     user = relationship("User", back_populates="xp_transactions")
-    session = relationship("GameSession")
+    # session = relationship("Session")  # commented out - Session model doesn't have back_populates

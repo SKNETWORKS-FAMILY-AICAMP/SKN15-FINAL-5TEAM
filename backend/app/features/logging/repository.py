@@ -4,7 +4,7 @@ LoggingRepository - 시스템 로그 저장/조회
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from .models import SystemLog
+from .models import Log as SystemLog  # Alias for backward compatibility
 
 
 class LoggingRepository:

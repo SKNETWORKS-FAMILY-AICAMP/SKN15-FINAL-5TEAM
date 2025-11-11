@@ -20,7 +20,10 @@ from app.features.sessions.controller import router as session_router
 from app.features.galleries.controller import router as gallery_router
 from app.features.admin.controller import router as admin_router
 from app.features.images.controller import router as images_router
-# from app.features.entities.controller import router as entities_router
+from app.features.game.controller import router as game_router
+from app.features.progression.controller import router as progression_router
+from app.features.misc.controller import router as misc_router
+# from app.features.entities.controller import router as entities_router  # TODO: Docker 캐시 문제로 보류
 
 settings = get_settings()
 
@@ -82,9 +85,12 @@ app.include_router(scenario_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(session_router, prefix="/api")
 app.include_router(gallery_router, prefix="/api")
+app.include_router(game_router, prefix="/api")  # 게임 요소 (장비, 이미지 획득, 미션 등)
+app.include_router(progression_router, prefix="/api")  # 진행도 (XP, 레벨, 시나리오 진행)
+app.include_router(misc_router, prefix="/api")  # 기타 (스냅샷, 통계, 피드백)
 app.include_router(admin_router, prefix="/api")  # 관리자 전용
 app.include_router(images_router)  # 이미지 매핑 (이미 prefix 포함)
-# app.include_router(entities_router)  # Graph RAG 엔티티 (이미 prefix 포함)
+# app.include_router(entities_router)  # Graph RAG 엔티티 (Docker 캐시 문제로 보류)
 
 # ============================================================
 # 헬스 체크

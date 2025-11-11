@@ -14,6 +14,7 @@ from app.shared.exceptions import BusinessException
 
 from .usecase import UserUseCase
 from .schemas import (
+    AffinityResponse,
     UserProfileResponse,
     UserProfileUpdateRequest,
     UserStatsResponse,
@@ -59,11 +60,36 @@ async def get_my_profile(
 
     try:
         profile = await usecase.get_user_profile(user_id)
+        logger.info("get_my_profile", f"Profile received: {profile is not None}")
 
         if not profile:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return UserProfileResponse(**profile)
+        logger.info("get_my_profile", f"Profile keys: {list(profile.keys()) if profile else 'None'}")
+
+        # Convert affinities dict list to AffinityResponse objects
+        affinities_data = profile.pop("affinities", [])
+        logger.info("get_my_profile", f"Affinities data count: {len(affinities_data)}")
+        logger.info("get_my_profile", f"Affinities data: {affinities_data}")
+
+        affinities = []
+        for i, aff in enumerate(affinities_data):
+            logger.info("get_my_profile", f"Converting affinity {i}: {aff}")
+            try:
+                affinity_obj = AffinityResponse(**aff)
+                affinities.append(affinity_obj)
+                logger.info("get_my_profile", f"Successfully converted affinity {i}")
+            except Exception as aff_error:
+                logger.error("get_my_profile", f"Error converting affinity {i}: {type(aff_error).__name__}: {aff_error}")
+                logger.error("get_my_profile", f"Problematic affinity data: {aff}")
+                raise
+
+        logger.info("get_my_profile", f"All affinities converted. Total: {len(affinities)}")
+        logger.info("get_my_profile", f"Profile data before UserProfileResponse: {profile}")
+
+        response = UserProfileResponse(**profile, affinities=affinities)
+        logger.info("get_my_profile", "UserProfileResponse created successfully")
+        return response
 
     except HTTPException:
         raise
@@ -71,7 +97,9 @@ async def get_my_profile(
         logger.error("get_my_profile", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.error("get_my_profile", f"Unexpected error: {e}")
+        import traceback
+        logger.error("get_my_profile", f"Unexpected error: {type(e).__name__}: {e}")
+        logger.error("get_my_profile", f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -371,3 +399,135 @@ async def update_my_settings(
     except Exception as e:
         logger.error("update_my_settings", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================
+# 게임 요소 엔드포인트 (프론트엔드 호환성)
+# ============================================================
+
+@router.get("/me/equipment")
+async def get_my_equipment(
+    current_user: CurrentUser = Depends(get_current_user),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 장비 상태 조회 (프론트엔드 호환)
+
+    /api/game/equipment로 프록시
+    """
+    from uuid import UUID
+    from app.features.game.repository import GameRepository
+    from app.features.game.usecase import GameUseCase
+
+    logger.info("get_my_equipment", "Getting user equipment", user_id=current_user.user_id)
+
+    try:
+        # Game feature UseCase 사용
+        db = usecase.db  # UserUseCase의 db 세션 재사용
+        game_repo = GameRepository(db)
+        game_usecase = GameUseCase(game_repo)
+
+        equipment = await game_usecase.get_user_equipment(UUID(current_user.user_id))
+
+        if not equipment:
+            raise HTTPException(status_code=404, detail="Equipment not found")
+
+        return equipment
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("get_my_equipment", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/me/equipment")
+async def update_my_equipment(
+    equipment_updates: dict,
+    current_user: CurrentUser = Depends(get_current_user),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    장비 상태 업데이트 (프론트엔드 호환)
+
+    /api/game/equipment로 프록시
+    """
+    from uuid import UUID
+    from app.features.game.repository import GameRepository
+    from app.features.game.usecase import GameUseCase
+    from app.features.game.schemas import UserEquipmentUpdateRequest
+
+    logger.info("update_my_equipment", "Updating user equipment", user_id=current_user.user_id)
+
+    try:
+        # 프론트엔드가 보내는 equipment_updates 키 처리
+        updates = equipment_updates.get('equipment_updates', equipment_updates)
+        update_request = UserEquipmentUpdateRequest(**updates)
+
+        # Game feature UseCase 사용
+        db = usecase.db
+        game_repo = GameRepository(db)
+        game_usecase = GameUseCase(game_repo)
+
+        equipment = await game_usecase.update_user_equipment(
+            UUID(current_user.user_id),
+            update_request
+        )
+
+        if not equipment:
+            raise HTTPException(status_code=404, detail="Equipment not found")
+
+        return {"success": True, "equipment": equipment}
+
+    except ValueError as e:
+        logger.error("update_my_equipment", f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("update_my_equipment", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/me/progression/award-xp")
+async def award_my_xp(
+    request: dict,
+    current_user: CurrentUser = Depends(get_current_user),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    경험치 지급 (프론트엔드 호환)
+
+    Phase 2 구현 전까지는 임시 응답
+    """
+    logger.info("award_my_xp", "Awarding XP", user_id=current_user.user_id)
+
+    # TODO: Phase 2에서 실제 구현
+    xp_amount = request.get('xp_amount', 0)
+
+    return {
+        "user_id": current_user.user_id,
+        "experience_points": 0,  # TODO: 실제 XP 조회
+        "level": 1,  # TODO: 실제 레벨 조회
+        "level_before": 1,
+        "level_after": 1,
+        "did_level_up": False
+    }
+
+
+@router.get("/me/xp-transactions")
+async def get_my_xp_transactions(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: CurrentUser = Depends(get_current_user),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    경험치 거래 내역 조회 (프론트엔드 호환)
+
+    Phase 2 구현 전까지는 빈 배열 반환
+    """
+    logger.info("get_my_xp_transactions", "Getting XP transactions", user_id=current_user.user_id)
+
+    # TODO: Phase 2에서 실제 구현
+    return []
