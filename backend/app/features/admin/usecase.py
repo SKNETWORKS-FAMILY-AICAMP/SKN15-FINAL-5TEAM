@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 
 from app.core.logging import get_usecase_logger
 from .repository import AdminRepository
-from app.features.entities.repository import EntitiesRepository
+from app.features.chat.repositories.entity_repository import EntityRepository
 
 logger = get_usecase_logger("Admin")
 
@@ -29,7 +29,7 @@ class AdminUseCase:
         """
         self.db = db
         self.repository = AdminRepository(db)
-        self.entity_repository = EntitiesRepository(db)
+        self.entity_repository = EntityRepository(db)
 
     async def list_dialogue_sessions(
         self,

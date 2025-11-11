@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional, Dict, Any
 
-from app.features.chat.models import ImageMapping
+from .models import ImageMapping
 from app.core.logging import get_repository_logger
 
 logger = get_repository_logger("Images")

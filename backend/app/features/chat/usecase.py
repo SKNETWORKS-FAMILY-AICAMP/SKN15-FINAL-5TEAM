@@ -16,14 +16,14 @@ from .models import DialogueTurn
 from .schemas import DialogueResult, ChatMessage
 from app.core.logging import get_usecase_logger, print_layer_debug
 from app.shared.exceptions import DailyLimitExceededException
-from app.features.memories.repository import MemoriesRepository
-from app.features.progression.repository import ProgressionRepository
+from .repositories.memory_repository import MemoryRepository
+from app.features.users.repository import UserRepository
 from app.core.llm.client import LLMClient
 
 # LangGraph imports (optional - only used if USE_LANGGRAPH=true)
 try:
-    from app.core.graph.workflow import get_workflow
-    from app.core.graph.graph_state import GraphState
+    from .agent.workflow import get_workflow
+    from .agent.graph_state import GraphState
     LANGGRAPH_AVAILABLE = True
 except ImportError:
     LANGGRAPH_AVAILABLE = False
@@ -53,8 +53,8 @@ class ChatUseCase:
         self.db = db
         # UseCase 내부에서 Repository, Agent, Service 생성
         self.repository = ChatRepository(db)
-        self.memories_repository = MemoriesRepository(db)
-        self.progression_repository = ProgressionRepository(db)
+        self.memory_repository = MemoryRepository(db)
+        self.user_repository = UserRepository(db)
         self.parent = ParentAgent()
         self.affinity_service = AffinityService()
         self.memory_service = MemoryService()
@@ -388,7 +388,7 @@ class ChatUseCase:
 
                         # Memory로 저장
                         if embedding:
-                            await self.memories_repository.create_memory(
+                            await self.memory_repository.create_memory(
                                 user_id=user_id,
                                 content=summary_result["summary"],
                                 memory_type="episodic",
@@ -419,18 +419,21 @@ class ChatUseCase:
             if user_id:
                 try:
                     # 메시지 작성 XP 추가
-                    progression = await self.progression_repository.add_message_xp(
+                    xp_transaction = await self.user_repository.add_xp(
                         user_id=user_id,
-                        message_count=1
+                        xp_amount=5,  # 메시지 작성당 5 XP
+                        xp_type="message",
+                        session_id=result.get("session_id"),
+                        metadata={"message_length": len(user_input)}
                     )
                     logger.info("create_dialogue", "XP added",
                                user_id=user_id,
-                               xp=progression.experience_points,
-                               level=progression.level,
-                               rank=progression.rank_code)
+                               xp_amount=5,
+                               xp_type="message",
+                               transaction_id=xp_transaction.get("transaction_id") if xp_transaction else None)
 
                 except Exception as e:
-                    logger.error("create_dialogue", f"Progression update failed: {e}", exc=e)
+                    logger.error("create_dialogue", f"XP update failed: {e}", exc=e)
 
             # ============================================================
             # 7. 결과 반환

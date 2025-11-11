@@ -11,14 +11,33 @@ import json
 
 from .models import (
     DialogueTurn,
-    UserCharacterAffinity,
-    AffinityRecord,
     Entity,
-    EntityRelationship,
-    EntityMention,
     UserMemory,
-    ImageMapping,
+    Relationship,
+    EntityMention,
 )
+
+# EntityRelationship는 Relationship의 별칭
+EntityRelationship = Relationship
+
+# 임시: 아직 분리하지 않은 모델들은 기존 models.py에서 import
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    # models.py 파일을 직접 import
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("legacy_models", os.path.join(os.path.dirname(__file__), "models.py"))
+    legacy_models = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(legacy_models)
+    UserCharacterAffinity = legacy_models.UserCharacterAffinity
+    AffinityRecord = legacy_models.AffinityRecord
+    ImageMapping = legacy_models.ImageMapping
+except Exception as e:
+    # Fallback: 모델이 없으면 None
+    UserCharacterAffinity = None
+    AffinityRecord = None
+    ImageMapping = None
 from app.core.logging import get_repository_logger
 
 logger = get_repository_logger("Chat")

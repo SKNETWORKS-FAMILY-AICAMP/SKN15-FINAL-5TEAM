@@ -25,7 +25,7 @@ from .schemas import (
     UserSettingsResponse,
 )
 from app.features.galleries.schemas import ImageResponse, ImageListResponse
-from app.features.memories.schemas import MemoryResponse
+from app.features.chat.schemas import MemoryResponse
 
 logger = get_controller_logger("User")
 

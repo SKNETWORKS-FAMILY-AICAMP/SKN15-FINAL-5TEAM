@@ -640,3 +640,128 @@ class UserRepository:
 
         logger.info("upsert_user_settings", "Settings upserted", user_id=user_id)
         return True
+
+    # ========================================
+    # XP 관련 메서드 (progression에서 이동)
+    # ========================================
+
+    async def add_xp(
+        self,
+        user_id: str,
+        xp_amount: int,
+        xp_type: str,
+        session_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        XP 추가 + 트랜잭션 로그
+
+        Args:
+            user_id: 사용자 ID
+            xp_amount: XP 양 (양수: 획득, 음수: 소비)
+            xp_type: XP 타입 (message, scenario_complete, achievement)
+            session_id: 세션 ID (선택)
+            metadata: 추가 메타데이터
+
+        Returns:
+            XPTransaction dict
+        """
+        from app.features.users.models.xp_transaction import XPTransaction
+
+        # 사용자 조회
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            raise ValueError(f"User not found: {user_id}")
+
+        # 레벨 계산 (현재)
+        level_before = self._calculate_level(user.get("total_xp", 0))
+
+        # XP 업데이트
+        new_xp = user.get("total_xp", 0) + xp_amount
+
+        # 레벨 계산 (업데이트 후)
+        level_after = self._calculate_level(new_xp)
+        did_level_up = level_after > level_before
+
+        # 사용자 테이블 XP 업데이트
+        update_query = text("""
+            UPDATE users
+            SET total_xp = :new_xp, updated_at = :updated_at
+            WHERE user_id = :user_id
+        """)
+        await self.db.execute(update_query, {
+            "new_xp": new_xp,
+            "updated_at": datetime.utcnow(),
+            "user_id": user_id
+        })
+
+        # 트랜잭션 로그 생성
+        import uuid
+        transaction_id = str(uuid.uuid4())
+        insert_query = text("""
+            INSERT INTO xp_transactions (
+                transaction_id, user_id, session_id,
+                xp_amount, xp_type, xp_balance_after,
+                level_before, level_after, did_level_up,
+                extra_metadata, created_at
+            ) VALUES (
+                :transaction_id, :user_id, :session_id,
+                :xp_amount, :xp_type, :xp_balance_after,
+                :level_before, :level_after, :did_level_up,
+                :extra_metadata, :created_at
+            )
+        """)
+
+        await self.db.execute(insert_query, {
+            "transaction_id": transaction_id,
+            "user_id": user_id,
+            "session_id": session_id,
+            "xp_amount": xp_amount,
+            "xp_type": xp_type,
+            "xp_balance_after": new_xp,
+            "level_before": level_before,
+            "level_after": level_after,
+            "did_level_up": did_level_up,
+            "extra_metadata": metadata or {},
+            "created_at": datetime.utcnow()
+        })
+
+        await self.db.commit()
+
+        return {
+            "transaction_id": transaction_id,
+            "user_id": user_id,
+            "xp_amount": xp_amount,
+            "xp_balance_after": new_xp,
+            "level_before": level_before,
+            "level_after": level_after,
+            "did_level_up": did_level_up
+        }
+
+    def _calculate_level(self, xp: int) -> int:
+        """XP로부터 레벨 계산"""
+        import math
+        return math.floor(math.sqrt(xp / 100))
+
+    async def get_xp_transactions(
+        self,
+        user_id: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """XP 트랜잭션 조회"""
+        query = text("""
+            SELECT
+                transaction_id, user_id, session_id,
+                xp_amount, xp_type, xp_balance_after,
+                level_before, level_after, did_level_up,
+                extra_metadata, created_at
+            FROM xp_transactions
+            WHERE user_id = :user_id
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """)
+
+        result = await self.db.execute(query, {"user_id": user_id, "limit": limit})
+        rows = result.fetchall()
+
+        return [dict(row._mapping) for row in rows]

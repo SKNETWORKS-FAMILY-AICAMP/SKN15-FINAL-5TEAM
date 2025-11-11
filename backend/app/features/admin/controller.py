@@ -19,7 +19,7 @@ from .schemas import (
     AdminUserResponse,
     AdminUserListResponse,
 )
-from app.features.entities.schemas import (
+from app.features.chat.schemas_entity import (
     EntityResponse,
     EntityListResponse,
     RelationshipResponse,

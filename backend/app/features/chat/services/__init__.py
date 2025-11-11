@@ -11,6 +11,8 @@ from .memory_service import MemoryService
 from .dialogue_service import DialogueService
 from .mission_service import MissionService, MAX_ATTEMPTS, VALID_TARGETS, CHARACTER_NAMES_KR
 from .context_service import ContextService
+from .progression_service import ProgressionService, get_progression_service
+from .image_mapping_service import ImageMappingService
 
 # Extractors
 from .extractors import (
@@ -40,6 +42,9 @@ __all__ = [
     "VALID_TARGETS",
     "CHARACTER_NAMES_KR",
     "ContextService",
+    "ProgressionService",
+    "get_progression_service",
+    "ImageMappingService",
     # Extractors
     "EntityExtractor",
     "Entity",
