@@ -35,6 +35,10 @@ class RegisterResponse(BaseModel):
     username: str
     display_name: str
     message: str = "Registration successful"
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    role: str
 
 
 class PasswordResetRequest(BaseModel):
