@@ -6,6 +6,7 @@ import MyAccountModal from '@/components/MyAccountModal';
 import LoginModal from '@/components/LoginModal';
 import { useApp } from '@/contexts/AppContext';
 import { apiClient, type ScenarioCard } from '@/services/api';
+import scenariosData from '@/data/scenarios.json';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -31,37 +32,40 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const { toggleSidebar, openSettings, currentUser } = useApp();
 
-  // Load scenarios from API
+  // Load scenarios from JSON file
   useEffect(() => {
     const loadScenarios = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Use public scenarios endpoint for all users
-        const scenarios: ScenarioCard[] = await apiClient.getScenarios();
-
-        // Transform API data to CharacterCard format
-        const transformedCharacters: CharacterCard[] = scenarios.map((scenario) => ({
-          id: scenario.scenario_id,
+        // Convert JSON data to CharacterCard format
+        const transformedCharacters: CharacterCard[] = Object.entries(scenariosData).map(([key, scenario]: [string, any]) => ({
+          id: scenario.id,
           title: scenario.title,
           description: scenario.description,
-          image: scenario.image_url,
+          image: scenario.image, // Use image path from JSON directly
           likes: scenario.likes,
           comments: scenario.comments,
           views: scenario.views,
-          tags: scenario.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`),
-          size: scenario.card_size,
-          link: `/character/${scenario.scenario_id}`
+          tags: scenario.tags,
+          size: key === 'mugen-train' || key === 'ending' ? 'large' : 'normal', // Set size based on scenario
+          link: `/character/${scenario.id}`
         }));
 
         setCharacters(transformedCharacters);
 
-        // Set initial liked cards from user progress (if authenticated)
+        // Optionally try to fetch user's liked scenarios from API (if authenticated)
         if (currentUser) {
-          const likedScenarioIds = scenarios
-            .filter(s => s.is_liked)
-            .map(s => s.scenario_id);
-          setLikedCards(new Set(likedScenarioIds));
+          try {
+            const scenarios: ScenarioCard[] = await apiClient.getScenarios();
+            const likedScenarioIds = scenarios
+              .filter(s => s.is_liked)
+              .map(s => s.scenario_id);
+            setLikedCards(new Set(likedScenarioIds));
+          } catch (apiErr) {
+            // If API fails, just continue with empty liked set
+            console.log('Could not load user liked scenarios from API, continuing with local data');
+          }
         }
       } catch (err) {
         console.error('Failed to load scenarios:', err);
@@ -106,7 +110,7 @@ export default function HomePage() {
         // Update likes count with server response
         setCharacters(prev => prev.map(char => {
           if (char.id === cardId) {
-            return { ...char, likes: result.total_likes };
+            return { ...char, likes: result.like_count };
           }
           return char;
         }));

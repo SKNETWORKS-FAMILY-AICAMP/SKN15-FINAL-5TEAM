@@ -1,98 +1,85 @@
-import { useParams, Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate, useBeforeUnload } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import ChatHeader from '@/components/ChatHeader';
 import LoginModal from '@/components/LoginModal';
 import SessionResumeModal from '@/components/SessionResumeModal';
-import TutorialOverlay from '@/components/TutorialOverlay';
 import { useApp } from '@/contexts/AppContext';
-import { apiClient, LastSessionInfo } from '@/services/api';
-import { getHistory } from '@/utils/storageUtils';
-import scenariosData from '@/data/scenarios.json';
+import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
 
-interface ScenarioData {
-  id: string;
-  title: string;
-  image: string;
-  description: string;
-  detailDescription: string;
-  implemented: boolean;
-}
+const SCENARIO_ID_MAP: Record<string, string> = {
+  train: 'mugen_train_full',
+  ending: 'cutscene5_llm_driven',
+  mugen_train_full: 'mugen_train_full',
+};
 
 export default function ChatPage() {
-  const { characterId: routeCharacterId, sessionId: routeSessionId } = useParams<{ characterId?: string; sessionId?: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId } = useApp();
+  const { characterId } = useParams<{ characterId: string }>();
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal } = useApp();
+  const navigate = useNavigate();
 
-  const [initialCharacterId, setInitialCharacterId] = useState<string | undefined>();
-  const [initialSessionId, setInitialSessionId] = useState<string | undefined>();
-  const [scenarioTitle, setScenarioTitle] = useState<string>('KIME CHAT');
-  const [isReady, setIsReady] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
+  // Scenario loading state
+  const [scenario, setScenario] = useState<ScenarioCard | null>(null);
+  const [scenarioLoading, setScenarioLoading] = useState(true);
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
 
   // Session restoration state
   const [lastSession, setLastSession] = useState<LastSessionInfo | null>(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
+  const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
   const [sessionCheckDone, setSessionCheckDone] = useState(false);
 
-  useEffect(() => {
-    // Determine if loading from history or starting a new chat
-    if (routeSessionId) {
-      // Loading from history
-      const history = getHistory();
-      const conversation = history.find(c => c.sessionId === routeSessionId);
-      if (conversation) {
-        setInitialCharacterId(conversation.characterId);
-        setInitialSessionId(conversation.sessionId);
-      } else {
-        // Handle case where session ID is not in history
-        console.error(`Session ${routeSessionId} not found in local history.`);
-        // Maybe redirect to an error page or home
-      }
-    } else if (routeCharacterId) {
-      // Starting a new chat
-      setInitialCharacterId(routeCharacterId);
-      setInitialSessionId(undefined); // Ensure it's a new session unless resumed
-    }
-  }, [routeCharacterId, routeSessionId]);
+  // Invited characters state (from ChatInterface)
+  const [invitedCharacters, setInvitedCharacters] = useState<string[]>([]);
 
-  // Authentication guard & Tutorial check
-  useEffect(() => {
-    if (!isAuthLoading) {
-      if (!isLoggedIn) {
-        openLoginModal();
-        setSessionCheckDone(false);
-      } else {
-        // Show tutorial if user is logged in and hasn't completed it
-        const tutorialKey = currentUserId ? `tutorialCompleted:${currentUserId}` : null;
-        if (tutorialKey && !localStorage.getItem(tutorialKey)) {
-          setShowTutorial(true);
-        } else if (!tutorialKey && !localStorage.getItem('tutorialCompleted:guest')) {
-          // Fallback for 정보 없음
-          setShowTutorial(true);
-        }
-      }
-    }
-  }, [isLoggedIn, isAuthLoading, openLoginModal, currentUserId]);
+  // Track if user has interacted with chat (to show exit warning)
+  const [hasStartedChat, setHasStartedChat] = useState(false);
 
-  // Check for last session after login (only for new chats)
+  // Load scenario data from API
   useEffect(() => {
-    if (isLoggedIn && routeCharacterId && !routeSessionId && !sessionCheckDone) {
+    const loadScenario = async () => {
+      if (!characterId) {
+        setScenarioError('시나리오 ID가 필요합니다.');
+        setScenarioLoading(false);
+        return;
+      }
+
+      setScenarioLoading(true);
+      setScenarioError(null);
+
+      try {
+        const data = await apiClient.getScenario(characterId);
+        setScenario(data);
+      } catch (err) {
+        console.error('Failed to load scenario:', err);
+        setScenarioError('시나리오를 불러올 수 없습니다.');
+      } finally {
+        setScenarioLoading(false);
+      }
+    };
+
+    loadScenario();
+  }, [characterId]);
+
+  // Authentication guard: show login modal if not authenticated (after auth loading completes)
+  useEffect(() => {
+    if (!isAuthLoading && !isLoggedIn) {
+      openLoginModal();
+      setSessionCheckDone(false);
+    }
+  }, [isAuthLoading, isLoggedIn, openLoginModal]);
+
+  // Check for last session after login (only after auth loading completes)
+  useEffect(() => {
+    if (!isAuthLoading && isLoggedIn && characterId && !sessionCheckDone) {
       checkLastSession();
     }
-    // If loading from history, we don't need to check for resumable sessions
-    if (routeSessionId) {
-        setSessionCheckDone(true);
-    }
-  }, [isLoggedIn, routeCharacterId, routeSessionId, sessionCheckDone]);
+  }, [isAuthLoading, isLoggedIn, characterId, sessionCheckDone]);
 
   const checkLastSession = async () => {
-    if (!initialCharacterId) {
-      // initialCharacterId가 없으면 세션 체크를 완료한 것으로 처리
-      setSessionCheckDone(true);
-      return;
-    }
     try {
-      const session = await apiClient.getUserLastSession(initialCharacterId);
+      const backendScenarioId = SCENARIO_ID_MAP[characterId || ''] || characterId;
+      const session = await apiClient.getUserLastSession(backendScenarioId);
 
       if (session) {
         setLastSession(session);
@@ -107,57 +94,121 @@ export default function ChatPage() {
 
   const handleResume = (sessionId: string) => {
     console.log('Resuming session:', sessionId);
-    setInitialSessionId(sessionId);
+    setResumeSessionId(sessionId);
     setShowResumeModal(false);
   };
 
   const handleNewSession = () => {
     console.log('Starting new session');
-    setInitialSessionId(undefined);
+    setResumeSessionId(undefined);
     setShowResumeModal(false);
     setSessionCheckDone(true);
   };
 
-  const handleCompleteTutorial = () => {
-    const tutorialKey = currentUserId ? `tutorialCompleted:${currentUserId}` : 'tutorialCompleted:guest';
-    localStorage.setItem(tutorialKey, 'true');
-    setShowTutorial(false);
-  };
+  // Warn user before leaving page (browser close/refresh)
+  useBeforeUnload(
+    useCallback((event) => {
+      if (hasStartedChat) {
+        event.preventDefault();
+        // Modern browsers display a generic message, but we set returnValue anyway
+        return (event.returnValue = '정말 나가시겠습니까? 진행 중인 대화가 저장되지 않을 수 있습니다.');
+      }
+    }, [hasStartedChat])
+  );
 
-  // Load scenario data dynamically
-  const scenarios = scenariosData as Record<string, ScenarioData>;
-  const scenario = initialCharacterId ? scenarios[initialCharacterId] : null;
-
-  useEffect(() => {
-    if(scenario) {
-        setScenarioTitle(scenario.title);
+  // Handle back button navigation with confirmation
+  const handleBackNavigation = useCallback(() => {
+    if (hasStartedChat) {
+      const confirmed = window.confirm('정말 나가시겠습니까? 진행 중인 대화가 저장되지 않을 수 있습니다.');
+      if (confirmed) {
+        navigate('/');
+      }
+    } else {
+      navigate('/');
     }
-    // Mark as ready to render once we have a characterId and session check is done
-    if (initialCharacterId && (sessionCheckDone || routeSessionId)) {
-        setIsReady(true);
-    }
-  }, [initialCharacterId, sessionCheckDone, routeSessionId, scenario]);
+  }, [hasStartedChat, navigate]);
 
-  // Fallback for unknown scenarios
-  if (!scenario && isReady) {
+  // Loading state for scenario
+  if (scenarioLoading) {
     return (
-      <div className="min-h-screen bg-[#f5f2ff]">
+      <div className="min-h-screen bg-gray-50">
+        <ChatHeader
+          onToggleSidebar={toggleSidebar}
+          onOpenSettings={openSettings}
+          title="로딩 중..."
+          showBackButton={true}
+          onBackClick={handleBackNavigation}
+        />
+        <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
+          <div className="relative z-10 flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+              <p className="mt-4 text-gray-600">시나리오를 불러오는 중...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Error state or scenario not found
+  if (scenarioError || !scenario) {
+    return (
+      <div className="min-h-screen bg-gray-50">
         <ChatHeader
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
           title="알 수 없는 시나리오"
           showBackButton={true}
-          titleClassName="font-display-main text-theme-primary"
+          onBackClick={handleBackNavigation}
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
-          <div className="relative z-10 flex items-center justify-center h-full px-4">
-            <div className="text-center card-surface p-8 rounded-2xl max-w-md w-full">
+          <div className="relative z-10 flex items-center justify-center h-full">
+            <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
               <div className="text-6xl mb-6">❓</div>
-              <h1 className="text-3xl font-bold mb-4 text-theme-primary">존재하지 않는 시나리오</h1>
-              <p className="text-theme-secondary mb-6">요청하신 시나리오를 찾을 수 없습니다.</p>
+              <h1 className="text-3xl font-bold mb-4 text-gray-800">
+                {scenarioError ? '시나리오 로딩 실패' : '존재하지 않는 시나리오'}
+              </h1>
+              <p className="text-gray-600 mb-6">
+                {scenarioError || '요청하신 시나리오를 찾을 수 없습니다.'}
+              </p>
               <Link
                 to="/"
-                className="inline-block px-6 py-3 bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] text-white rounded-lg transition-transform hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)]"
+                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                홈으로 돌아가기
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Check if implemented (is_active: true means active, false means not yet available)
+  if (!scenario.is_active) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <ChatHeader
+          onToggleSidebar={toggleSidebar}
+          onOpenSettings={openSettings}
+          title={scenario.title}
+          showBackButton={true}
+          onBackClick={handleBackNavigation}
+        />
+        <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
+          <div className="relative z-10 flex items-center justify-center h-full">
+            <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
+              <div className="text-6xl mb-6">🚧</div>
+              <h1 className="text-3xl font-bold mb-4 text-gray-800">준비 중입니다</h1>
+              <p className="text-gray-600 mb-2">
+                <span className="font-semibold text-purple-600">{scenario.title}</span>
+                {' '}시나리오는 현재 개발 중입니다.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">곧 만나보실 수 있습니다!</p>
+              <Link
+                to="/"
+                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
               >
                 홈으로 돌아가기
               </Link>
@@ -171,25 +222,25 @@ export default function ChatPage() {
   // Authentication lock screen for unauthenticated users
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#f5f2ff]">
+      <div className="min-h-screen bg-gray-50">
         <ChatHeader
           onToggleSidebar={toggleSidebar}
           onOpenSettings={openSettings}
           title={scenario?.title || '채팅'}
           showBackButton={true}
-          titleClassName="font-display-main text-theme-primary"
+          onBackClick={handleBackNavigation}
         />
         <main className="relative" style={{ height: 'calc(100vh - 64px)' }}>
-          <div className="relative z-10 flex items-center justify-center h-full px-4">
-            <div className="text-center card-surface p-8 rounded-2xl max-w-md w-full">
+          <div className="relative z-10 flex items-center justify-center h-full">
+            <div className="text-center bg-white bg-opacity-90 p-8 rounded-xl shadow-xl max-w-md">
               <div className="text-6xl mb-6">🔐</div>
-              <h1 className="text-3xl font-bold mb-4 text-theme-primary">로그인이 필요합니다</h1>
-              <p className="text-theme-secondary mb-6">
+              <h1 className="text-3xl font-bold mb-4 text-gray-800">로그인이 필요합니다</h1>
+              <p className="text-gray-600 mb-6">
                 채팅을 시작하려면 로그인해주세요.
               </p>
               <button
                 onClick={openLoginModal}
-                className="inline-block px-6 py-3 bg-gradient-to-r from-[#2f1d83] via-[#4331c5] to-[#7a1fb9] text-white rounded-lg transition-transform hover:scale-[1.02] hover:shadow-[0_16px_32px_rgba(67,49,197,0.35)]"
+                className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
               >
                 로그인하기
               </button>
@@ -201,33 +252,26 @@ export default function ChatPage() {
     );
   }
 
-  // Render Chat now that we are ready
+  // Implemented scenario - ChatInterface handles full layout
   return (
-    <div className="min-h-screen bg-[#f5f2ff]">
-      {showTutorial && <TutorialOverlay onComplete={handleCompleteTutorial} />}
+    <div className="min-h-screen bg-gray-50">
       <ChatHeader
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
-        title="KIME CHAT"
+        title={scenario.title}
         showBackButton={true}
-        titleClassName="font-display-main text-theme-primary"
+        invitedCharacters={invitedCharacters}
+        onBackClick={handleBackNavigation}
       />
 
       <main style={{ height: 'calc(100vh - 64px)' }}>
-        {isReady ? (
-            <ChatInterface
-                characterId={initialCharacterId}
-                initialSessionId={initialSessionId}
-                scenarioTitle={scenarioTitle}
-            />
-        ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4331c5] mx-auto mb-4"></div>
-                <p className="text-theme-secondary">로딩 중...</p>
-              </div>
-            </div>
-        )}
+        {/* ChatInterface handles full layout (left background + right chat) */}
+        <ChatInterface
+          characterId={characterId || 'ending'}
+          initialSessionId={resumeSessionId}
+          onInvitedCharactersChange={setInvitedCharacters}
+          onMessageSent={() => setHasStartedChat(true)}
+        />
       </main>
 
       <LoginModal />
