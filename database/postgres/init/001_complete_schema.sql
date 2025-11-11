@@ -787,7 +787,7 @@ COMMENT ON TABLE content.rank_definitions IS '계급 정의 (견습생 → 대�
 -- Name: COLUMN rank_definitions.rank_code; Type: COMMENT; Schema: content; Owner: kime
 --
 
-COMMENT ON COLUMN content.rank_definitions.rank_code IS '계급 코드 (예: novice, member, hashira)';
+COMMENT ON COLUMN content.rank_definitions.rank_code IS '계급 코드 (예: MIZUNOTO, KINOE, HASHIRA)';
 
 
 --
@@ -2268,7 +2268,7 @@ COMMENT ON COLUMN progression.user_equipment.crow_status IS '까마귀 상태: w
 
 CREATE TABLE progression.user_progression (
     user_id uuid NOT NULL,
-    rank_code character varying(50) DEFAULT 'novice'::character varying,
+    rank_code character varying(50) DEFAULT 'MIZUNOTO'::character varying,
     experience_points integer DEFAULT 0,
     level integer DEFAULT 1,
     total_messages integer DEFAULT 0,
@@ -2280,7 +2280,7 @@ CREATE TABLE progression.user_progression (
     updated_at timestamp without time zone DEFAULT now(),
     CONSTRAINT user_progression_achievements_count_check CHECK ((achievements_count >= 0)),
     CONSTRAINT user_progression_experience_points_check CHECK ((experience_points >= 0)),
-    CONSTRAINT user_progression_level_check CHECK (((level >= 1) AND (level <= 99))),
+    CONSTRAINT user_progression_level_check CHECK (((level >= 1) AND (level <= 999))),
     CONSTRAINT user_progression_scenarios_completed_check CHECK ((scenarios_completed >= 0)),
     CONSTRAINT user_progression_total_messages_check CHECK ((total_messages >= 0)),
     CONSTRAINT user_progression_total_play_minutes_check CHECK ((total_play_minutes >= 0)),
@@ -2308,7 +2308,7 @@ COMMENT ON COLUMN progression.user_progression.experience_points IS '총 획득 
 -- Name: COLUMN user_progression.level; Type: COMMENT; Schema: progression; Owner: kime
 --
 
-COMMENT ON COLUMN progression.user_progression.level IS '현재 레벨 (1-99)';
+COMMENT ON COLUMN progression.user_progression.level IS '현재 레벨 (1-999, 주급은 101+)';
 
 
 --
@@ -3815,7 +3815,7 @@ BEGIN
 
     -- 초기 XP 거래 기록
     INSERT INTO progression.xp_transactions (user_id, xp_amount, xp_type, xp_balance_after, level_before, level_after, description)
-    VALUES (NEW.user_id, 0, 'event', 0, 1, 1, '귀살대 입문 - 계십 계급 부여');
+    VALUES (NEW.user_id, 0, 'event', 0, 1, 1, '귀살대 입문 - 계급 계(癸) 부여');
 
     RETURN NEW;
 END;
