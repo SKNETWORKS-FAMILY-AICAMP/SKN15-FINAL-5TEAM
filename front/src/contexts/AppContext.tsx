@@ -110,7 +110,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const validateToken = async () => {
       if (isAuthenticated()) {
         try {
-          // Validate token by calling /api/auth/me
+          // Validate token by calling /api/users/me
           const userInfo = await apiClient.getCurrentUser();
 
           // Token is valid, set logged in state
@@ -196,6 +196,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setUserEmail('');
     setCurrentUser(null);
     setCurrentUserId(null);
+    setCurrentBubbles(0);
   };
   const updateBubbles = (count: number) => {
     setCurrentBubbles(count);

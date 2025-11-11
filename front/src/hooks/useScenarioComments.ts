@@ -80,12 +80,12 @@ export function useScenarioComments(
   );
 
   const removeComment = useCallback(
-    async (commentId: string) => {
+    async (commentId: number) => {
       if (!scenarioId) {
         return;
       }
       await apiClient.deleteScenarioComment(scenarioId, commentId);
-      setComments((prev) => prev.filter((comment) => comment.comment_id !== commentId));
+      setComments((prev) => prev.filter((comment) => comment.id !== commentId));
       setTotalCount((prev) => Math.max(0, prev - 1));
     },
     [scenarioId]
