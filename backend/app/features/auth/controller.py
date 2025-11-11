@@ -15,6 +15,7 @@ from .schemas import (
 )
 from .repository import AuthRepository
 from .usecase import AuthUseCase
+from app.features.users.repository import UserRepository
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -28,11 +29,17 @@ def get_auth_repository(db: AsyncSession = Depends(get_db)) -> AuthRepository:
     return AuthRepository(db)
 
 
+def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
+    """UserRepository 의존성"""
+    return UserRepository(db)
+
+
 def get_auth_usecase(
-    repository: AuthRepository = Depends(get_auth_repository)
+    repository: AuthRepository = Depends(get_auth_repository),
+    user_repository: UserRepository = Depends(get_user_repository)
 ) -> AuthUseCase:
     """AuthUseCase 의존성"""
-    return AuthUseCase(repository)
+    return AuthUseCase(repository, user_repository)
 
 
 # ============================================================
@@ -84,7 +91,10 @@ async def register(
             user_id=result.user_id,
             username=result.username,
             display_name=result.display_name,
-            message="Registration successful"
+            message="Registration successful",
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            role=result.role
         )
 
     except BusinessException as e:

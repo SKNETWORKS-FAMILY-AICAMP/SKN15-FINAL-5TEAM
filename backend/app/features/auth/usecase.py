@@ -11,9 +11,13 @@ from app.core.config import get_settings
 from app.core.logging import get_parent_logger
 from app.shared.exceptions import BusinessException
 from .repository import AuthRepository
+from app.features.users.repository import UserRepository
 
 logger = get_parent_logger("AuthUseCase")
 settings = get_settings()
+
+# 회원가입 시 지급할 초기 크레딧
+INITIAL_CREDITS = 200
 
 
 class AuthResult:
@@ -28,10 +32,14 @@ class AuthResult:
 
 class RegisterResult:
     """회원가입 결과 DTO"""
-    def __init__(self, user_id: str, username: str, display_name: str):
+    def __init__(self, user_id: str, username: str, display_name: str,
+                 access_token: str = None, refresh_token: str = None, role: str = "user"):
         self.user_id = user_id
         self.username = username
         self.display_name = display_name
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+        self.role = role
 
 
 class AuthUseCase:
@@ -40,8 +48,9 @@ class AuthUseCase:
     Layer 2: UseCase
     """
 
-    def __init__(self, repository: AuthRepository):
+    def __init__(self, repository: AuthRepository, user_repository: Optional[UserRepository] = None):
         self.repository = repository
+        self.user_repository = user_repository
 
     async def authenticate_user(self, username: str, password: str) -> AuthResult:
         """
@@ -162,10 +171,53 @@ class AuthUseCase:
 
         logger.info("register_user", "User registered successfully", user_id=user_id, username=username)
 
+        # 4. 초기 크레딧 지급 (200 버블)
+        if self.user_repository:
+            try:
+                await self.user_repository.add_credits(
+                    user_id=user_id,
+                    amount=INITIAL_CREDITS,
+                    transaction_type="initial",
+                    description="회원가입 축하 크레딧"
+                )
+                logger.info("register_user", f"Initial credits granted", user_id=user_id, amount=INITIAL_CREDITS)
+            except Exception as e:
+                logger.error("register_user", f"Failed to grant initial credits: {e}", user_id=user_id)
+                # 크레딧 지급 실패해도 회원가입은 완료되도록 함
+
+        # 5. JWT 토큰 생성 (자동 로그인)
+        access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = jwt.encode(
+            {
+                "user_id": user_id,
+                "username": username,
+                "role": "user",
+                "exp": datetime.utcnow() + access_token_expires
+            },
+            settings.JWT_SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM
+        )
+
+        refresh_token_expires = timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+        refresh_token = jwt.encode(
+            {
+                "user_id": user_id,
+                "type": "refresh",
+                "exp": datetime.utcnow() + refresh_token_expires
+            },
+            settings.JWT_SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM
+        )
+
+        logger.info("register_user", "Auto-login tokens generated", user_id=user_id)
+
         return RegisterResult(
             user_id=user_id,
             username=username,
-            display_name=display_name
+            display_name=display_name,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            role="user"
         )
 
     async def request_password_reset(self, email: str) -> str:
