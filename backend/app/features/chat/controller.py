@@ -4,15 +4,20 @@ HTTP/WS 입출력, 인증, DTO 검증
 Layer 1: Controller (4-Layer Architecture)
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any
+from typing import Dict, Any, AsyncGenerator
+import json
+import asyncio
 
 from .schemas import ChatRequest, ChatResponse, ChatMessage
 from .usecase import ChatUseCase
 from .services.dialogue_service import DialogueService
+from .sse_helper import sse_generator
 from app.core.db.session import get_db
 from app.core.logging import get_controller_logger, print_layer_debug
 from app.core.errors import AppException
+from app.core.auth import get_current_user_id
 
 logger = get_controller_logger("Chat")
 
@@ -37,12 +42,12 @@ def get_chat_usecase(db: AsyncSession = Depends(get_db)) -> ChatUseCase:
 # 엔드포인트
 # ============================================================
 
-@router.post("", response_model=ChatResponse)
+@router.post("")
 async def create_chat(
     request: ChatRequest,
-    usecase: ChatUseCase = Depends(get_chat_usecase),
-    # current_user: Dict = Depends(get_current_user)  # TODO: 인증 추가
-) -> ChatResponse:
+    user_id: str = Depends(get_current_user_id),
+    usecase: ChatUseCase = Depends(get_chat_usecase)
+):
     """
     [Layer 1] Controller
     책임: HTTP 입출력, 인증, DTO 검증, UseCase 호출
@@ -79,15 +84,10 @@ async def create_chat(
     )
 
     try:
-        # ============================================================
-        # 1. 인증 (TODO: 실제 인증 구현)
-        # ============================================================
-        # user_id = current_user.get("user_id")
-        # 임시: 인증 없이 게스트로 처리 (sessions 테이블의 user_id는 NULL 허용)
-        user_id = None
+        # user_id는 JWT에서 이미 가져옴 (Depends(get_current_user_id))
 
         # ============================================================
-        # 2. 세션 ID 생성 (없으면)
+        # 1. 세션 ID 생성 (없으면)
         # ============================================================
         session_id = request.session_id
         if not session_id:
@@ -127,30 +127,32 @@ async def create_chat(
             for d in rendered_dialogues
         ]
 
-        response = ChatResponse(
-            session_id=session_id,
-            turn_count=dialogue_result.updated_state.get("turn_count", 1),
-            dialogues=rendered_chat_messages,
-            current_stage=dialogue_result.next_stage or dialogue_result.updated_state.get("current_stage", "intro"),
-            affinity_scores=dialogue_result.updated_state.get("affinity_scores", {}),
-            is_ended=False,  # TODO: 시나리오 종료 체크
-            has_more=False,
-        )
-
+        # SSE 스트리밍으로 응답
         logger.info(
             "create_chat",
-            "Response sent",
+            "Streaming response",
             session_id=session_id,
-            dialogues_count=len(response.dialogues),
-            status=200
-        )
-        print_layer_debug(
-            "CONTROLLER", "Chat", "create_chat",
-            "✅ Response sent",
-            dialogues=len(response.dialogues)
+            dialogues_count=len(rendered_chat_messages)
         )
 
-        return response
+        return StreamingResponse(
+            sse_generator(
+                session_id=session_id,
+                dialogues=rendered_chat_messages,
+                turn_count=dialogue_result.updated_state.get("turn_count", 1),
+                current_stage=dialogue_result.next_stage or dialogue_result.updated_state.get("current_stage", "intro"),
+                affinity_scores=dialogue_result.updated_state.get("affinity_scores", {}),
+                is_ended=False,
+                has_more=False,
+                current_image=None,
+                output={}
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no"
+            }
+        )
 
     except AppException as e:
         # 애플리케이션 예외는 그대로 전파 (에러 핸들러가 처리)

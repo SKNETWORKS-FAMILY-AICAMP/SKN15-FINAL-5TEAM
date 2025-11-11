@@ -59,15 +59,33 @@ class SceneStageHandler:
             "character_refs": scenario.get("character_refs", {}),
         }
 
-        # 씬은 기본적으로 완료되지 않음 (사용자 입력 대기)
+        # 스테이지 완료 체크
         stage_complete = False
         next_stage = None
 
-        # Auto-advance 옵션이 있으면 자동 완료
+        stage_turn = state.get("stage_turn", 0)
+        max_turns = stage.get("max_turns")
+        loop_mode = stage.get("loop_mode", "micro_beat")
+
+        # 1. Auto-advance 옵션이 있으면 자동 완료
         if stage.get("auto_advance"):
             stage_complete = True
             next_stage = stage.get("next")
             logger.info("handle", "Auto-advancing to next stage", next_stage=next_stage)
+
+        # 2. loop_mode가 "none"이고 max_turns 도달 시 완료
+        elif loop_mode == "none" and max_turns and stage_turn >= max_turns:
+            stage_complete = True
+            next_stage = stage.get("next")
+            logger.info("handle", "Stage completed (loop_mode=none, max_turns reached)",
+                       stage_turn=stage_turn, max_turns=max_turns, next_stage=next_stage)
+
+        # 3. max_turns만 설정되어 있고 도달 시 완료
+        elif max_turns and stage_turn >= max_turns:
+            stage_complete = True
+            next_stage = stage.get("next")
+            logger.info("handle", "Stage completed (max_turns reached)",
+                       stage_turn=stage_turn, max_turns=max_turns, next_stage=next_stage)
 
         return StageResult(
             children_ctx=children_ctx,

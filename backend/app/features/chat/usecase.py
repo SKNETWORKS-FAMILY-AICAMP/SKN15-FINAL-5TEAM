@@ -9,7 +9,7 @@ from datetime import datetime
 import os
 
 from .repository import ChatRepository
-from .agent import ParentAgent
+from .agent.parent import ParentAgent  # Legacy ParentAgent (not LangGraph)
 from .services import AffinityService, MemoryService, MissionService, ScenarioService
 from .services.extractors.conversation_summarizer import ConversationSummarizer
 from .models import DialogueTurn
@@ -18,6 +18,7 @@ from app.core.logging import get_usecase_logger, print_layer_debug
 from app.shared.exceptions import DailyLimitExceededException
 from .repositories.memory_repository import MemoryRepository
 from app.features.users.repository import UserRepository
+from app.features.progression.repository import ProgressionRepository
 from app.core.llm.client import LLMClient
 
 # LangGraph imports (optional - only used if USE_LANGGRAPH=true)
@@ -55,6 +56,7 @@ class ChatUseCase:
         self.repository = ChatRepository(db)
         self.memory_repository = MemoryRepository(db)
         self.user_repository = UserRepository(db)
+        self.progression_repository = ProgressionRepository(db)
         self.parent = ParentAgent()
         self.affinity_service = AffinityService()
         self.memory_service = MemoryService()
@@ -299,10 +301,12 @@ class ChatUseCase:
                         user_name=user_name
                     )
 
-                    # 워크플로우 실행
-                    result_state = await self.workflow.ainvoke(graph_state)
+                    # 워크플로우 실행 (thread_id 필수)
+                    config = {"configurable": {"thread_id": session_id}}
+                    result_state = await self.workflow.ainvoke(graph_state, config)
 
                     # DialogueResult로 변환
+                    logger.info("create_dialogue", "Graph state output", output=result_state.get("output"))
                     dialogue_result = self._convert_from_graph_state(
                         graph_state=result_state,
                         original_state=session_state
@@ -414,26 +418,70 @@ class ChatUseCase:
             )
 
             # ============================================================
-            # 6. 사용자 진행 (XP) 업데이트
+            # 6. 사용자 진행 (Progression) 업데이트
             # ============================================================
             if user_id:
                 try:
-                    # 메시지 작성 XP 추가
-                    xp_transaction = await self.user_repository.add_xp(
-                        user_id=user_id,
-                        xp_amount=5,  # 메시지 작성당 5 XP
-                        xp_type="message",
-                        session_id=result.get("session_id"),
-                        metadata={"message_length": len(user_input)}
+                    from uuid import UUID
+
+                    # 1. 사용자 입력 저장
+                    await self.progression_repository.save_user_input(
+                        session_id=UUID(session_id),
+                        turn_number=turn_count,
+                        user_input=user_message
                     )
-                    logger.info("create_dialogue", "XP added",
+
+                    # 2. 메시지 카운트 증가
+                    await self.progression_repository.increment_user_stat(
+                        user_id=UUID(user_id),
+                        stat_name="total_messages",
+                        increment_by=1
+                    )
+
+                    # 3. 시나리오 진행도 업데이트
+                    scenario_progress = await self.progression_repository.get_scenario_progress(
+                        UUID(user_id), scenario_id
+                    )
+                    if scenario_progress:
+                        await self.progression_repository.update_scenario_progress(
+                            user_id=UUID(user_id),
+                            scenario_id=scenario_id,
+                            updates={
+                                "total_messages": scenario_progress.total_messages + 1,
+                                "last_session_id": session_id,
+                                "has_started": True
+                            }
+                        )
+                    else:
+                        # 새 시나리오 시작
+                        await self.progression_repository.update_scenario_progress(
+                            user_id=UUID(user_id),
+                            scenario_id=scenario_id,
+                            updates={
+                                "has_started": True,
+                                "total_messages": 1,
+                                "last_session_id": session_id
+                            }
+                        )
+
+                    # 4. XP 지급 (메시지당 5 XP)
+                    xp_result = await self.progression_repository.award_experience(
+                        user_id=UUID(user_id),
+                        xp_amount=5,
+                        xp_type="message",
+                        description=f"Message in {scenario_id}",
+                        metadata={"message_length": len(user_message)}
+                    )
+
+                    logger.info("create_dialogue", "Progression updated",
                                user_id=user_id,
-                               xp_amount=5,
-                               xp_type="message",
-                               transaction_id=xp_transaction.get("transaction_id") if xp_transaction else None)
+                               xp_awarded=5,
+                               level_before=xp_result.get("level_before"),
+                               level_after=xp_result.get("level_after"),
+                               did_level_up=xp_result.get("did_level_up"))
 
                 except Exception as e:
-                    logger.error("create_dialogue", f"XP update failed: {e}", exc=e)
+                    logger.error("create_dialogue", f"Progression update failed: {e}", exc=e)
 
             # ============================================================
             # 7. 결과 반환

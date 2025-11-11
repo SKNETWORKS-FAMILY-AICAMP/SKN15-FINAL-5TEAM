@@ -59,6 +59,9 @@ class GraphState(TypedDict):
     speaker: Optional[str]
     emotion: Optional[str]
 
+    # Output (DialogueResult로 변환될 데이터)
+    output: Optional[Dict[str, Any]]
+
     # 이미지 정보
     image_url: Optional[str]
     thumbnail_url: Optional[str]
