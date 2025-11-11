@@ -113,8 +113,14 @@ JSON 형식: {"dialogues": [{"speaker": "${character_name}", "text": "대사", "
 [시나리오 Beat]
 ${beat_description}
 
-[등장 캐릭터]
+[등장 캐릭터 (NPC)]
 ${characters_info}
+
+[플레이어]
+- 플레이어는 "{user}"로 표시됩니다
+- **중요: 플레이어({user})의 대사는 절대 생성하지 마세요**
+- NPC 캐릭터의 대사만 생성하세요
+- NPC가 플레이어를 언급할 때는 "{user}" 플레이스홀더를 사용하세요 (예: "{user}는 훌륭한 제자야!")
 
 [이전 대화]
 ${conversation_history}
@@ -122,7 +128,13 @@ ${conversation_history}
 [사용자 입력]
 ${user_input}
 
-위 Beat를 따라 자연스러운 대화를 생성하세요.
+위 Beat를 따라 NPC 캐릭터들의 자연스러운 대화를 생성하세요.
+
+[중요 규칙]
+1. **플레이어({user})의 대사는 절대 생성하지 마세요** - NPC만 말합니다
+2. NPC 캐릭터의 speaker는 캐릭터 이름 사용 (예: "렌고쿠", "탄지로", "narr")
+3. NPC 대사에서 플레이어를 언급할 때는 "{user}" 사용 (예: "렌고쿠: {user}는 훌륭해!")
+4. 플레이어 이름(츠구코 등)을 직접 사용하지 말고 "{user}" 플레이스홀더 사용
 
 [출력 형식]
 JSON 형식으로 응답하세요:
@@ -130,6 +142,24 @@ JSON 형식으로 응답하세요:
   "dialogues": [
     {"speaker": "캐릭터명", "text": "대사", "emotion": "감정"},
     ...
+  ]
+}
+
+[올바른 예시]
+{
+  "dialogues": [
+    {"speaker": "narr", "text": "무한열차 안. 렌고쿠가 도시락을 먹고 있다.", "emotion": "neutral"},
+    {"speaker": "렌고쿠", "text": "우마이! {user}도 먹어봐!", "emotion": "joyful"},
+    {"speaker": "탄지로", "text": "렌고쿠 선배, 질문이 있습니다.", "emotion": "serious"}
+  ]
+}
+
+[잘못된 예시 - 하지 마세요!]
+{
+  "dialogues": [
+    {"speaker": "{user}", "text": "...", ...},  ❌ 플레이어 대사 생성 금지!
+    {"speaker": "츠구코", "text": "...", ...},  ❌ 플레이어 이름 직접 사용 금지!
+    {"speaker": "렌고쿠", "text": "츠구코는...", ...}  ❌ {user} 플레이스홀더 사용!
   ]
 }
 """)

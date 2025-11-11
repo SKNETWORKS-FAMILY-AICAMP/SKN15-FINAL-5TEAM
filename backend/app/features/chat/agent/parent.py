@@ -232,7 +232,9 @@ class ParentAgent:
             return result
 
         except Exception as e:
-            logger.error("run", f"Pipeline failed: {e}", exc_info=True)
+            import traceback
+            tb_str = traceback.format_exc()
+            logger.error("run", f"Pipeline failed: {e}\n{tb_str}")
             return self._fallback_response(session_state, f"오류가 발생했습니다: {str(e)[:50]}")
 
     def _resolve_current_stage(self, state: Dict[str, Any], scenario: Dict[str, Any]) -> str:
@@ -280,6 +282,19 @@ class ParentAgent:
         stages = scenario.get("stages", [])
         for stage in stages:
             if isinstance(stage, dict) and stage.get("tag") == stage_tag:
+                # beats_i18n이 있으면 i18n에서 beats를 로드
+                if "beats_i18n" in stage and "beats" not in stage:
+                    beats_key = stage["beats_i18n"]
+                    scenario_id = scenario.get("scenario_id", "unknown")
+                    beats = self.scenario_service.get_beats_for_stage(scenario_id, stage_tag.lower())
+                    if beats:
+                        stage = dict(stage)  # 원본 수정 방지
+                        stage["beats"] = beats
+                        logger.debug("_get_stage_definition",
+                                   f"Loaded {len(beats)} beats from i18n key: {beats_key}")
+                    else:
+                        logger.warning("_get_stage_definition",
+                                     f"No beats found for i18n key: {beats_key}")
                 return stage
 
         return None
@@ -367,19 +382,20 @@ class ParentAgent:
         """
         대화 포맷팅 및 ChatMessage 변환
 
+        Note: 렌더링({user} → 실제 이름)은 하지 않음!
+        DB에는 {user} 플레이스홀더가 저장되어야 함.
+        렌더링은 Controller에서 응답 반환 시에만 수행.
+
         Args:
-            dialogues: 대화 리스트 (dict)
+            dialogues: 대화 리스트 (dict, {user} 플레이스홀더 포함)
             state: 게임 상태
 
         Returns:
-            ChatMessage 리스트
+            ChatMessage 리스트 ({user} 플레이스홀더 유지)
         """
-        # DialogueService를 통한 포맷팅
-        formatted = self.dialogue_service.format_dialogues(dialogues, state)
-
-        # ChatMessage로 변환
+        # ChatMessage로 변환만 수행 (렌더링 없음)
         messages = []
-        for d in formatted:
+        for d in dialogues:
             messages.append(ChatMessage(
                 speaker=d.get("speaker", "narr"),
                 text=d.get("text", ""),

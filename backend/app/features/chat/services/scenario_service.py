@@ -100,7 +100,8 @@ class ScenarioService:
             logger.warning("get_first_stage_tag", f"No stages found in scenario: {scenario_id}")
             return "intro"
 
-        first_stage_tag = stages[0].get("tag", "intro")
+        # Support both "tag" (old format) and "id" (new format)
+        first_stage_tag = stages[0].get("tag") or stages[0].get("id", "intro")
         logger.debug("get_first_stage_tag", f"First stage tag: {first_stage_tag}", scenario_id=scenario_id)
         return first_stage_tag
 

@@ -109,6 +109,54 @@ class LLMService:
             logger.error("generate_simple_dialogue", f"❌ Failed: {e}", character=character_name, error_type=type(e).__name__)
             return self._get_fallback_response(character_name, user_input, emotion, error=e)
 
+    async def generate_with_prompt(
+        self,
+        prompt: str,
+        temperature: float = 0.8,
+        max_tokens: int = 2000
+    ) -> List[ChatMessage]:
+        """
+        외부에서 제공한 프롬프트로 대화 생성 (Layer 4)
+
+        Args:
+            prompt: 완성된 프롬프트 (PromptService에서 생성)
+            temperature: LLM temperature
+            max_tokens: 최대 토큰 수
+
+        Returns:
+            생성된 대사 리스트
+        """
+        logger.info("generate_with_prompt", "Generating dialogue with custom prompt",
+                   prompt_len=len(prompt))
+
+        try:
+            # System prompt (JSON 모드 사용을 위해 "json" 단어 포함 필수)
+            system_prompt = "당신은 창의적인 시나리오 작가입니다. 주어진 지시사항을 정확히 따르고 JSON 형식으로 응답하세요."
+
+            # LLM 호출 (JSON 모드)
+            response = await self.llm.call_json(
+                system_prompt=system_prompt,
+                user_prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+
+            # 응답 정규화
+            dialogues = self._normalize_llm_response(response)
+
+            if not dialogues:
+                logger.warning("generate_with_prompt", "Empty dialogues from LLM")
+                return []
+
+            logger.info("generate_with_prompt", "✅ Dialogue generated",
+                       dialogues_count=len(dialogues))
+
+            return dialogues
+
+        except Exception as e:
+            logger.error("generate_with_prompt", f"❌ Failed: {e}", exc_info=True)
+            return []
+
     async def generate_beat_dialogue(
         self,
         beats: List[Dict[str, Any]],
@@ -144,8 +192,10 @@ class LLMService:
         beat_descriptions = []
         for beat in beats:
             if isinstance(beat, dict):
-                desc = beat.get("description") or beat.get("text") or str(beat)
+                desc = beat.get("goal") or beat.get("description") or beat.get("text") or str(beat)
                 beat_descriptions.append(desc)
+            elif isinstance(beat, str):
+                beat_descriptions.append(beat)
         beat_text = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
 
         # 대화 이력 포맷팅

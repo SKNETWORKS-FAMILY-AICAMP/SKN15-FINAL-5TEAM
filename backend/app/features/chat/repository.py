@@ -271,19 +271,28 @@ class ChatRepository:
         turn_count = state.get("turn_count", 0)
         stage_turn = state.get("stage_turn", 0)
         conversation_summary = state.get("conversation_summary")
+        summary_turn_count = state.get("summary_turn_count", 0)
         user_name = state.get("user_name")
 
         stmt = text("""
             INSERT INTO sessions (session_id, user_id, scenario_id, user_name, current_stage, turn_count,
-                                 stage_turn, is_active, conversation_summary, created_at, updated_at)
+                                 stage_turn, is_active, conversation_summary, summary_turn_count,
+                                 summary_updated_at, created_at, updated_at)
             VALUES (:session_id, :user_id, :scenario_id, :user_name, :current_stage, :turn_count,
-                    :stage_turn, TRUE, :conversation_summary, NOW(), NOW())
+                    :stage_turn, TRUE, :conversation_summary, :summary_turn_count,
+                    NOW(), NOW(), NOW())
             ON CONFLICT (session_id)
             DO UPDATE SET
                 current_stage = :current_stage,
                 turn_count = :turn_count,
                 stage_turn = :stage_turn,
                 conversation_summary = :conversation_summary,
+                summary_turn_count = :summary_turn_count,
+                summary_updated_at = CASE
+                    WHEN :conversation_summary IS NOT NULL AND :conversation_summary != ''
+                    THEN NOW()
+                    ELSE sessions.summary_updated_at
+                END,
                 updated_at = NOW()
         """)
 
@@ -295,7 +304,8 @@ class ChatRepository:
             "current_stage": current_stage,
             "turn_count": turn_count,
             "stage_turn": stage_turn,
-            "conversation_summary": conversation_summary
+            "conversation_summary": conversation_summary,
+            "summary_turn_count": summary_turn_count
         })
 
         await self.db.flush()

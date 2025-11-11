@@ -9,6 +9,7 @@ from typing import Dict, Any
 
 from .schemas import ChatRequest, ChatResponse, ChatMessage
 from .usecase import ChatUseCase
+from .services.dialogue_service import DialogueService
 from app.core.db.session import get_db
 from app.core.logging import get_controller_logger, print_layer_debug
 from app.core.errors import AppException
@@ -108,12 +109,28 @@ async def create_chat(
         )
 
         # ============================================================
-        # 5. 응답 구성
+        # 5. 응답 구성 (대사 렌더링 - {user} 플레이스홀더 치환)
         # ============================================================
+        dialogue_service = DialogueService()
+        # State 준비 (렌더링에 필요한 user_name)
+        render_state = {
+            "user_name": request.user_name or dialogue_result.updated_state.get("user_name") or "여행자"
+        }
+        # 대사 렌더링 ({user} → 실제 사용자 이름)
+        rendered_dialogues = dialogue_service.format_dialogues(
+            [{"speaker": d.speaker, "text": d.text, "emotion": d.emotion} for d in dialogue_result.dialogues],
+            render_state
+        )
+        # dict → ChatMessage 변환
+        rendered_chat_messages = [
+            ChatMessage(speaker=d["speaker"], text=d["text"], emotion=d.get("emotion", "neutral"))
+            for d in rendered_dialogues
+        ]
+
         response = ChatResponse(
             session_id=session_id,
             turn_count=dialogue_result.updated_state.get("turn_count", 1),
-            dialogues=dialogue_result.dialogues,
+            dialogues=rendered_chat_messages,
             current_stage=dialogue_result.next_stage or dialogue_result.updated_state.get("current_stage", "intro"),
             affinity_scores=dialogue_result.updated_state.get("affinity_scores", {}),
             is_ended=False,  # TODO: 시나리오 종료 체크

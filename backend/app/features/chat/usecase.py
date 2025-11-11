@@ -6,14 +6,27 @@ Layer 2: UseCase (4-Layer Architecture)
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import os
 
 from .repository import ChatRepository
 from .agent import ParentAgent
-from .services import AffinityService, MemoryService, MissionService
+from .services import AffinityService, MemoryService, MissionService, ScenarioService
+from .services.extractors.conversation_summarizer import ConversationSummarizer
 from .models import DialogueTurn
 from .schemas import DialogueResult, ChatMessage
 from app.core.logging import get_usecase_logger, print_layer_debug
 from app.shared.exceptions import DailyLimitExceededException
+from app.features.memories.repository import MemoriesRepository
+from app.features.progression.repository import ProgressionRepository
+from app.core.llm.client import LLMClient
+
+# LangGraph imports (optional - only used if USE_LANGGRAPH=true)
+try:
+    from app.core.graph.workflow import get_workflow
+    from app.core.graph.graph_state import GraphState
+    LANGGRAPH_AVAILABLE = True
+except ImportError:
+    LANGGRAPH_AVAILABLE = False
 
 logger = get_usecase_logger("Chat")
 
@@ -40,10 +53,157 @@ class ChatUseCase:
         self.db = db
         # UseCase 내부에서 Repository, Agent, Service 생성
         self.repository = ChatRepository(db)
+        self.memories_repository = MemoriesRepository(db)
+        self.progression_repository = ProgressionRepository(db)
         self.parent = ParentAgent()
         self.affinity_service = AffinityService()
         self.memory_service = MemoryService()
         self.mission_service = MissionService()
+        self.scenario_service = ScenarioService()
+
+        # Conversation Summarizer (LLM 기반 요약)
+        try:
+            llm_client = LLMClient()
+            self.summarizer = ConversationSummarizer(llm_client=llm_client)
+            logger.info("__init__", "ConversationSummarizer initialized")
+        except Exception as e:
+            logger.warning("__init__", f"Failed to initialize ConversationSummarizer: {e}")
+            self.summarizer = None
+
+        # LangGraph 워크플로우 (feature flag)
+        self.use_langgraph = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+        self.workflow = None
+
+        if self.use_langgraph and LANGGRAPH_AVAILABLE:
+            try:
+                self.workflow = get_workflow()
+                logger.info("__init__", "LangGraph workflow enabled")
+            except Exception as e:
+                logger.warning("__init__", f"Failed to initialize LangGraph workflow: {e}", exc=e)
+                self.use_langgraph = False
+        elif self.use_langgraph and not LANGGRAPH_AVAILABLE:
+            logger.warning("__init__", "USE_LANGGRAPH=true but LangGraph not available")
+            self.use_langgraph = False
+
+    def _convert_to_graph_state(
+        self,
+        session_state: Dict[str, Any],
+        user_message: str,
+        user_name: str
+    ) -> GraphState:
+        """
+        session_state dict를 GraphState로 변환
+
+        Args:
+            session_state: 세션 상태
+            user_message: 사용자 메시지
+            user_name: 사용자 이름
+
+        Returns:
+            GraphState
+        """
+        graph_state = GraphState(
+            # Session info
+            session_id=session_state.get("session_id", ""),
+            user_id=session_state.get("user_id", ""),
+            scenario_id=session_state.get("scenario_id", ""),
+            user_name=user_name,
+
+            # User input
+            user_input=user_message,
+
+            # Scenario state
+            current_stage=session_state.get("current_stage"),
+            stage_tag=session_state.get("current_stage"),
+            turn_count=session_state.get("turn_count", 0),
+            stage_turn=session_state.get("stage_turn", 0),
+
+            # Scenario data (optional - will be loaded by agents)
+            scenario=session_state.get("scenario"),
+
+            # Agent communication
+            agent_inputs={},
+            agent_responses=[],
+
+            # Workflow control
+            next_node=None,
+
+            # Context
+            children_ctx=None,
+            temp_data={},
+
+            # Game state
+            game=session_state.get("game", {}),
+            scene=session_state.get("scene", {}),
+
+            # Output
+            output={},
+
+            # Summary and memory
+            conversation_summary=session_state.get("conversation_summary"),
+            summary_turn_count=session_state.get("summary_turn_count", 0),
+
+            # Affinity
+            affinity_scores=session_state.get("affinity_scores", {}),
+
+            # Ending
+            final_ending=session_state.get("final_ending"),
+            is_active=session_state.get("is_active", True)
+        )
+
+        return graph_state
+
+    def _convert_from_graph_state(
+        self,
+        graph_state: GraphState,
+        original_state: Dict[str, Any]
+    ) -> DialogueResult:
+        """
+        GraphState를 DialogueResult로 변환
+
+        Args:
+            graph_state: LangGraph 워크플로우 결과
+            original_state: 원본 세션 상태 (병합용)
+
+        Returns:
+            DialogueResult
+        """
+        # Dialogues 변환 (Dict → ChatMessage)
+        dialogues_raw = graph_state.get("output", {}).get("dialogues", [])
+        dialogues = [
+            ChatMessage(
+                speaker=d.get("speaker", "narr"),
+                text=d.get("text", ""),
+                emotion=d.get("emotion", "neutral")
+            )
+            for d in dialogues_raw
+        ]
+
+        # Updated state 병합
+        updated_state = original_state.copy()
+        updated_state.update({
+            "current_stage": graph_state.get("current_stage") or graph_state.get("stage_tag"),
+            "turn_count": graph_state.get("turn_count", 0),
+            "stage_turn": graph_state.get("stage_turn", 0),
+            "conversation_summary": graph_state.get("conversation_summary"),
+            "summary_turn_count": graph_state.get("summary_turn_count", 0),
+            "affinity_scores": graph_state.get("affinity_scores", {}),
+            "final_ending": graph_state.get("final_ending"),
+            "is_active": graph_state.get("is_active", True),
+            "game": graph_state.get("game", {}),
+            "scene": graph_state.get("scene", {}),
+        })
+
+        # DialogueResult 생성
+        result = DialogueResult(
+            dialogues=dialogues,
+            next_stage=graph_state.get("output", {}).get("next_stage"),
+            stage_complete=graph_state.get("output", {}).get("stage_complete", False),
+            updated_state=updated_state,
+            affinity_delta=graph_state.get("output", {}).get("affinity_delta")
+        )
+
+        return result
 
     async def create_dialogue(
         self,
@@ -124,21 +284,50 @@ class ChatUseCase:
                 raise DailyLimitExceededException(MAX_DAILY_CHATS)
 
             # ============================================================
-            # 2. Parent Agent 파이프라인 실행
+            # 2. Agent 파이프라인 실행 (LangGraph 또는 Legacy)
             # ============================================================
-            logger.info("create_dialogue", "Calling parent agent", user_message=user_message[:50])
-            print_layer_debug("USECASE", "Chat", "create_dialogue", "→ Calling Parent Agent")
+            if self.use_langgraph and self.workflow:
+                # LangGraph 워크플로우 사용
+                logger.info("create_dialogue", "Calling LangGraph workflow", user_message=user_message[:50])
+                print_layer_debug("USECASE", "Chat", "create_dialogue", "→ Calling LangGraph Workflow")
 
-            try:
-                dialogue_result = await self.parent.run(
-                    user_message=user_message,
-                    session_state=session_state,
-                    scenario_id=scenario_id
-                )
-                logger.info("create_dialogue", "Parent agent completed", dialogues_count=len(dialogue_result.dialogues))
-            except Exception as e:
-                logger.exception("create_dialogue", "Parent agent failed", exc=e)
-                raise
+                try:
+                    # GraphState로 변환
+                    graph_state = self._convert_to_graph_state(
+                        session_state=session_state,
+                        user_message=user_message,
+                        user_name=user_name
+                    )
+
+                    # 워크플로우 실행
+                    result_state = await self.workflow.ainvoke(graph_state)
+
+                    # DialogueResult로 변환
+                    dialogue_result = self._convert_from_graph_state(
+                        graph_state=result_state,
+                        original_state=session_state
+                    )
+
+                    logger.info("create_dialogue", "LangGraph workflow completed",
+                               dialogues_count=len(dialogue_result.dialogues))
+                except Exception as e:
+                    logger.exception("create_dialogue", "LangGraph workflow failed", exc=e)
+                    raise
+            else:
+                # Legacy Parent Agent 사용
+                logger.info("create_dialogue", "Calling legacy parent agent", user_message=user_message[:50])
+                print_layer_debug("USECASE", "Chat", "create_dialogue", "→ Calling Legacy Parent Agent")
+
+                try:
+                    dialogue_result = await self.parent.run(
+                        user_message=user_message,
+                        session_state=session_state,
+                        scenario_id=scenario_id
+                    )
+                    logger.info("create_dialogue", "Parent agent completed", dialogues_count=len(dialogue_result.dialogues))
+                except Exception as e:
+                    logger.exception("create_dialogue", "Parent agent failed", exc=e)
+                    raise
 
             # ============================================================
             # 3. 대화 저장
@@ -164,7 +353,57 @@ class ChatUseCase:
             await self.repository.save_dialogues_batch(dialogue_models)
 
             # ============================================================
-            # 4. 세션 상태 저장
+            # 4. 대화 요약 생성 및 Memory 저장
+            # ============================================================
+            if self.summarizer and user_id:
+                try:
+                    # 최근 대화 조회
+                    recent_dialogues = await self.repository.get_recent_dialogues(session_id, limit=50)
+
+                    # 대화 히스토리 구성
+                    message_history = []
+                    for dlg in recent_dialogues:
+                        message_history.append({
+                            "turn": dlg.turn_count,
+                            "user_input": "",  # 사용자 입력은 별도 저장 필요
+                            "agent_responses": [{
+                                "speaker": dlg.speaker,
+                                "text": dlg.text
+                            }]
+                        })
+
+                    # 요약 업데이트 체크
+                    summary_result = await self.summarizer.update_summary(
+                        state=dialogue_result.updated_state,
+                        message_history=message_history
+                    )
+
+                    # 새 요약이 생성되었으면 저장
+                    if summary_result["summary"] != dialogue_result.updated_state.get("conversation_summary"):
+                        dialogue_result.updated_state["conversation_summary"] = summary_result["summary"]
+                        dialogue_result.updated_state["summary_turn_count"] = summary_result["summary_turn_count"]
+
+                        # 임베딩 생성
+                        embedding = await self.summarizer.generate_embedding(summary_result["summary"])
+
+                        # Memory로 저장
+                        if embedding:
+                            await self.memories_repository.create_memory(
+                                user_id=user_id,
+                                content=summary_result["summary"],
+                                memory_type="episodic",
+                                embedding=embedding,
+                                scenario_id=scenario_id,
+                                importance_score=0.8  # 요약은 높은 중요도
+                            )
+                            logger.info("create_dialogue", "Summary saved to memories",
+                                       session_id=session_id, summary_length=len(summary_result["summary"]))
+
+                except Exception as e:
+                    logger.error("create_dialogue", f"Summary generation failed: {e}", exc=e)
+
+            # ============================================================
+            # 5. 세션 상태 저장
             # ============================================================
             logger.info("create_dialogue", "Saving session state")
             await self.repository.save_session(
@@ -175,7 +414,26 @@ class ChatUseCase:
             )
 
             # ============================================================
-            # 5. 결과 반환
+            # 6. 사용자 진행 (XP) 업데이트
+            # ============================================================
+            if user_id:
+                try:
+                    # 메시지 작성 XP 추가
+                    progression = await self.progression_repository.add_message_xp(
+                        user_id=user_id,
+                        message_count=1
+                    )
+                    logger.info("create_dialogue", "XP added",
+                               user_id=user_id,
+                               xp=progression.experience_points,
+                               level=progression.level,
+                               rank=progression.rank_code)
+
+                except Exception as e:
+                    logger.error("create_dialogue", f"Progression update failed: {e}", exc=e)
+
+            # ============================================================
+            # 7. 결과 반환
             # ============================================================
             logger.info("create_dialogue", "Transaction committed", dialogues_saved=len(dialogue_models))
             print_layer_debug("USECASE", "Chat", "create_dialogue", "✅ Completed", dialogues=len(dialogue_models))

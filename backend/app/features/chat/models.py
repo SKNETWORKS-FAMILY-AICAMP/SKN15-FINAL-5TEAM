@@ -14,7 +14,7 @@ class ImageMapping(Base):
     이미지 매핑 테이블 (content.image_mappings)
 
     스테이지별 이미지 매핑 정보
-    metadata JSONB 필드에 priority, stage_id, turn_range 등 저장 가능
+    extra_data JSONB 필드에 priority, stage_id, turn_range 등 저장 가능
     """
     __tablename__ = "image_mappings"
     __table_args__ = {"schema": "content"}
@@ -24,7 +24,7 @@ class ImageMapping(Base):
     mapping_category = Column(String(50), nullable=False)  # 'character', 'bg', 'cutscene', 'stage'
     image_key = Column(String(255), nullable=False)        # 'rengoku_normal', 'train_bg_1', 'stage_intro'
     image_url = Column(Text, nullable=False)                # S3 URL or local path
-    metadata = Column(JSONB, default={})                    # Additional data: priority, stage_id, turn_range, etc.
+    extra_data = Column("metadata", JSONB, default={})      # Maps to DB column 'metadata', Python attribute 'extra_data' (avoid SQLAlchemy reserved word)
 
     def __repr__(self):
         return f"<ImageMapping(id={self.id}, scenario={self.scenario_id}, key={self.image_key})>"
@@ -205,32 +205,6 @@ class EntityMention(Base):
         return f"<EntityMention(entity={self.entity_id}, session={self.session_id}, turn={self.turn_number})>"
 
 
-class UserMemory(Base):
-    """
-    사용자별 장기 기억
-    """
-    __tablename__ = "user_memories"
-
-    memory_id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    scenario_id = Column(String(50))
-    memory_type = Column(String(50), nullable=False)
-    content = Column(Text, nullable=False)
-    embedding = Column(Vector(1536))
-    importance_score = Column(Float, default=0.5)
-    access_count = Column(Integer, default=0)
-    last_accessed_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        CheckConstraint("memory_type IN ('episodic', 'semantic', 'procedural')", name='valid_memory_type'),
-        CheckConstraint('importance_score >= 0.0 AND importance_score <= 1.0', name='valid_memory_importance'),
-        Index('idx_memories_user', 'user_id', 'created_at'),
-        Index('idx_memories_type', 'memory_type'),
-        Index('idx_memories_importance', 'importance_score'),
-        Index('idx_memories_scenario', 'scenario_id'),
-    )
-
-    def __repr__(self):
-        return f"<UserMemory(id={self.memory_id}, user={self.user_id}, type={self.memory_type})>"
+# UserMemory 모델은 app.features.memories.models로 이동되었습니다.
+# 하위 호환성을 위해 re-export
+from app.features.memories.models import UserMemory
