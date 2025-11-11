@@ -10,6 +10,7 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.logging import get_controller_logger
 from app.shared.exceptions import BusinessException
+from app.core.auth import get_current_user_id
 
 from .usecase import SessionUseCase
 from .schemas import (
@@ -32,13 +33,6 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 def get_session_usecase(db: AsyncSession = Depends(get_db)) -> SessionUseCase:
     """SessionUseCase 의존성"""
     return SessionUseCase(db)
-
-
-# TODO: 인증 의존성 (임시로 고정 user_id)
-async def get_current_user_id() -> str:
-    """현재 사용자 ID (임시)"""
-    # 실제로는 JWT 토큰에서 추출
-    return "temp_user_id"
 
 
 # ============================================================
@@ -78,7 +72,7 @@ async def list_user_sessions(
         logger.error("list_user_sessions", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("list_user_sessions", f"Unexpected error: {e}")
+        logger.error("list_user_sessions", f"Unexpected error: {e}", exc=e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -113,7 +107,7 @@ async def get_session_detail(
         logger.error("get_session_detail", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("get_session_detail", f"Unexpected error: {e}")
+        logger.error("get_session_detail", f"Unexpected error: {e}", exc=e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -151,7 +145,7 @@ async def delete_session(
         logger.error("delete_session", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("delete_session", f"Unexpected error: {e}")
+        logger.error("delete_session", f"Unexpected error: {e}", exc=e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -181,5 +175,5 @@ async def create_session(
         logger.error("create_session", f"Business error: {e.message}")
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
-        logger.exception("create_session", f"Unexpected error: {e}")
+        logger.error("create_session", f"Unexpected error: {e}", exc=e)
         raise HTTPException(status_code=500, detail="Internal server error")

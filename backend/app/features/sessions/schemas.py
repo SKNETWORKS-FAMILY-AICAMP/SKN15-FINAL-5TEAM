@@ -14,10 +14,13 @@ class SessionListItemResponse(BaseModel):
     """세션 목록 아이템 응답"""
     session_id: str
     scenario_id: str
-    scenario_title: str
+    scenario_title: Optional[str] = None
+    scenario_thumbnail: Optional[str] = None
     current_stage: str
     turn_count: int
-    last_dialogue: str
+    last_message_speaker: Optional[str] = None
+    last_message_content: Optional[str] = None
+    last_dialogue: str  # 하위 호환성 유지
     created_at: str
     updated_at: str
 

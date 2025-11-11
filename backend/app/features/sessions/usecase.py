@@ -6,7 +6,11 @@ Layer 2: UseCase (4-Layer Architecture)
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import uuid
 
+from .repository import SessionRepository
+from .models import Session
+from app.features.chat.repository import ChatRepository
 from app.core.logging import get_usecase_logger
 
 logger = get_usecase_logger("Session")
@@ -27,9 +31,8 @@ class SessionUseCase:
             db: 데이터베이스 세션 (Controller에서 주입)
         """
         self.db = db
-        # TODO: SessionRepository, ChatRepository 생성 필요
-        # self.repository = SessionRepository(db)
-        # self.chat_repository = ChatRepository(db)
+        self.repository = SessionRepository(db)
+        self.chat_repository = ChatRepository(db)
 
     async def list_user_sessions(
         self,
@@ -66,26 +69,38 @@ class SessionUseCase:
         logger.info("list_user_sessions", "Listing user sessions",
                    user_id=user_id, limit=limit)
 
-        # TODO: Repository로 세션 목록 조회
-        # sessions = await self.repository.list_user_sessions(
-        #     user_id=user_id,
-        #     limit=limit,
-        #     offset=offset,
-        #     scenario_id=scenario_id
-        # )
+        # Repository로 세션 목록 조회
+        sessions_db = await self.repository.list_user_sessions(
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            scenario_id=scenario_id,
+            is_active=True
+        )
 
-        # 각 세션에 대해 추가 정보 조회
-        # for session in sessions:
-        #     # 마지막 대화 조회
-        #     last_dialogue = await self.chat_repository.get_last_dialogue(
-        #         session["session_id"]
-        #     )
-        #     session["last_dialogue"] = last_dialogue.text if last_dialogue else ""
-
-        # 임시 응답
         sessions = []
+        for session_tuple in sessions_db:
+            # 튜플 언패킹: (Session, title, thumbnail_url, last_speaker, last_content)
+            session, scenario_title, scenario_thumbnail, last_speaker, last_content = session_tuple
 
-        logger.info("list_user_sessions", f"Retrieved {len(sessions)} sessions",
+            # last_dialogue는 하위 호환성을 위해 유지
+            last_dialogue = last_content if last_content else ""
+
+            sessions.append({
+                "session_id": str(session.session_id),
+                "scenario_id": session.scenario_id,
+                "scenario_title": scenario_title if scenario_title else session.scenario_id,
+                "scenario_thumbnail": scenario_thumbnail,
+                "current_stage": session.current_stage or "intro",
+                "turn_count": session.turn_count or 0,
+                "last_message_speaker": last_speaker,
+                "last_message_content": last_content,
+                "last_dialogue": last_dialogue,  # 하위 호환성
+                "created_at": session.created_at.isoformat() if session.created_at else "",
+                "updated_at": session.updated_at.isoformat() if session.updated_at else ""
+            })
+
+        logger.info("list_user_sessions", f"Retrieved {len(sessions)} sessions with scenario info",
                    user_id=user_id)
 
         return sessions
@@ -120,36 +135,51 @@ class SessionUseCase:
         logger.info("get_session_detail", "Getting session detail",
                    session_id=session_id, user_id=user_id)
 
-        # TODO: Repository로 세션 조회
-        # session = await self.repository.get_session(session_id)
-        # if not session:
-        #     logger.warning("get_session_detail", "Session not found",
-        #                   session_id=session_id)
-        #     return None
+        # Repository로 세션 조회
+        session = await self.repository.get_session(session_id)
+        if not session:
+            logger.warning("get_session_detail", "Session not found",
+                          session_id=session_id)
+            return None
 
         # 권한 체크
-        # if session.user_id != user_id:
-        #     logger.warning("get_session_detail", "Permission denied",
-        #                   session_id=session_id, user_id=user_id)
-        #     return None
+        if str(session.user_id) != user_id:
+            logger.warning("get_session_detail", "Permission denied",
+                          session_id=session_id, user_id=user_id)
+            return None
 
         # 최근 대화 조회
-        # dialogues = await self.chat_repository.get_recent_dialogues(
-        #     session_id, limit=10
-        # )
+        dialogues_db = await self.chat_repository.get_recent_dialogues(
+            session_id=session_id,
+            limit=10
+        )
 
-        # 임시 응답
+        dialogues = [
+            {
+                "speaker": d.speaker,
+                "text": d.text,
+                "emotion": d.emotion,
+                "created_at": d.created_at.isoformat() if d.created_at else ""
+            }
+            for d in dialogues_db
+        ]
+
         session_detail = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "scenario_id": "mugen_train",
-            "scenario_title": "무한열차",
-            "current_stage": "intro",
-            "turn_count": 0,
-            "state": {},
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
-            "dialogues": []
+            "session_id": str(session.session_id),
+            "user_id": str(session.user_id),
+            "scenario_id": session.scenario_id,
+            "scenario_title": session.scenario_id,  # TODO: scenarios 테이블 조인 필요
+            "current_stage": session.current_stage or "intro",
+            "turn_count": session.turn_count or 0,
+            "state": {
+                "current_stage": session.current_stage,
+                "turn_count": session.turn_count,
+                "stage_turn": session.stage_turn,
+                "conversation_summary": session.conversation_summary
+            },
+            "created_at": session.created_at.isoformat() if session.created_at else "",
+            "updated_at": session.updated_at.isoformat() if session.updated_at else "",
+            "dialogues": dialogues
         }
 
         logger.info("get_session_detail", "Session detail retrieved",
@@ -175,23 +205,22 @@ class SessionUseCase:
         logger.warning("delete_session", "Deleting session",
                       session_id=session_id, user_id=user_id)
 
-        # TODO: Repository로 세션 조회
-        # session = await self.repository.get_session(session_id)
-        # if not session:
-        #     logger.warning("delete_session", "Session not found",
-        #                   session_id=session_id)
-        #     return False
+        # Repository로 세션 조회
+        session = await self.repository.get_session(session_id)
+        if not session:
+            logger.warning("delete_session", "Session not found",
+                          session_id=session_id)
+            return False
 
         # 권한 체크
-        # if session.user_id != user_id:
-        #     logger.warning("delete_session", "Permission denied",
-        #                   session_id=session_id, user_id=user_id)
-        #     return False
+        if str(session.user_id) != user_id:
+            logger.warning("delete_session", "Permission denied",
+                          session_id=session_id, user_id=user_id)
+            return False
 
         async with self.db.begin():
-            # TODO: Repository로 세션 및 대화 삭제
-            # await self.chat_repository.delete_session_dialogues(session_id)
-            # await self.repository.delete_session(session_id)
+            # Repository로 세션 삭제 (CASCADE로 대화도 함께 삭제됨)
+            await self.repository.delete_session(session_id)
 
             logger.warning("delete_session", "Session deleted",
                           session_id=session_id)
@@ -223,37 +252,65 @@ class SessionUseCase:
         logger.info("create_session", "Creating session",
                    user_id=user_id, scenario_id=scenario_id)
 
-        # 세션 ID 생성
-        import uuid
-        session_id = str(uuid.uuid4())
-
-        # 초기 상태
-        initial_state = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "scenario_id": scenario_id,
-            "turn_count": 0,
-            "current_stage": "intro",
-            "affinity": {},
-            "created_at": datetime.utcnow().isoformat()
-        }
+        # 세션 객체 생성
+        session_id = uuid.uuid4()
+        new_session = Session(
+            session_id=session_id,
+            user_id=user_id,
+            scenario_id=scenario_id,
+            current_stage="intro",
+            turn_count=0,
+            stage_turn=0,
+            is_active=True
+        )
 
         async with self.db.begin():
-            # TODO: Repository로 세션 저장
-            # await self.repository.save_session(
-            #     session_id=session_id,
-            #     user_id=user_id,
-            #     scenario_id=scenario_id,
-            #     state=initial_state
-            # )
+            # Repository로 세션 저장
+            saved_session = await self.repository.save_session(new_session)
 
             logger.info("create_session", "Session created",
-                       session_id=session_id)
+                       session_id=str(session_id))
 
         return {
-            "session_id": session_id,
-            "user_id": user_id,
-            "scenario_id": scenario_id,
-            "state": initial_state,
-            "created_at": initial_state["created_at"]
+            "session_id": str(saved_session.session_id),
+            "user_id": str(saved_session.user_id),
+            "scenario_id": saved_session.scenario_id,
+            "state": {
+                "current_stage": saved_session.current_stage,
+                "turn_count": saved_session.turn_count,
+                "stage_turn": saved_session.stage_turn
+            },
+            "created_at": saved_session.created_at.isoformat() if saved_session.created_at else ""
+        }
+
+    async def get_last_session(
+        self,
+        user_id: str,
+        scenario_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자의 특정 시나리오 최근 세션 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID
+
+        Returns:
+            최근 세션 정보 또는 None
+        """
+        logger.info("get_last_session", "Getting last session",
+                   user_id=user_id, scenario_id=scenario_id)
+
+        session = await self.repository.get_last_session(user_id, scenario_id)
+
+        if not session:
+            logger.info("get_last_session", "No last session found")
+            return None
+
+        return {
+            "session_id": str(session.session_id),
+            "scenario_id": session.scenario_id,
+            "current_stage": session.current_stage or "intro",
+            "turn_count": session.turn_count or 0,
+            "updated_at": session.updated_at.isoformat() if session.updated_at else ""
         }
