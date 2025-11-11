@@ -5,7 +5,7 @@ Layer 1: Controller (4-Layer Architecture)
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Optional, List
 
 from app.core.database import get_db
 from app.core.logging import get_controller_logger
@@ -20,8 +20,12 @@ from .schemas import (
     UserCreditsResponse,
     ConsumeCreditsRequest,
     ConsumeCreditsResponse,
+    UserProgressionResponse,
+    UserSettingsBase,
+    UserSettingsResponse,
 )
 from app.features.galleries.schemas import ImageResponse, ImageListResponse
+from app.features.memories.schemas import MemoryResponse
 
 logger = get_controller_logger("User")
 
@@ -220,4 +224,150 @@ async def get_my_gallery_images(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("get_my_gallery_images", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/me/progression", response_model=UserProgressionResponse)
+async def get_my_progression(
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 진행도 조회 (XP/Level/Rank)
+
+    사용자의 레벨, 경험치, 계급 정보를 반환합니다.
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_my_progression", "Getting user progression", user_id=user_id)
+
+    try:
+        progression = await usecase.get_my_progression(user_id)
+
+        if not progression:
+            raise HTTPException(status_code=404, detail="Progression not found")
+
+        return UserProgressionResponse(**progression)
+
+    except HTTPException:
+        raise
+    except BusinessException as e:
+        logger.error("get_my_progression", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("get_my_progression", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/me/memories", response_model=List[MemoryResponse])
+async def get_my_memories(
+    scenario_id: Optional[str] = Query(None, description="시나리오 ID 필터"),
+    memory_type: Optional[str] = Query(None, description="기억 유형 필터 (episodic/semantic/procedural)"),
+    limit: int = Query(50, ge=1, le=100, description="최대 개수"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 기억 조회
+
+    사용자의 모든 기억을 조회합니다.
+    scenario_id와 memory_type으로 필터링할 수 있습니다.
+
+    Controller → UseCase → ChatRepository
+    """
+    logger.info("get_my_memories", "Getting user memories",
+               user_id=user_id, scenario_id=scenario_id, memory_type=memory_type)
+
+    try:
+        memories = await usecase.get_my_memories(
+            user_id=user_id,
+            scenario_id=scenario_id,
+            memory_type=memory_type,
+            limit=limit
+        )
+
+        return [MemoryResponse(**memory) for memory in memories]
+
+    except BusinessException as e:
+        logger.error("get_my_memories", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("get_my_memories", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/me/settings", response_model=UserSettingsResponse)
+async def get_my_settings(
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 설정 조회
+
+    사용자의 설정 정보를 조회합니다.
+    설정이 없으면 기본값으로 자동 생성됩니다.
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_my_settings", "Getting user settings", user_id=user_id)
+
+    try:
+        settings = await usecase.get_my_settings(user_id)
+
+        if not settings:
+            raise HTTPException(status_code=404, detail="Settings not found")
+
+        return UserSettingsResponse(**settings)
+
+    except HTTPException:
+        raise
+    except BusinessException as e:
+        logger.error("get_my_settings", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.error("get_my_settings", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/me/settings", response_model=UserSettingsResponse)
+async def update_my_settings(
+    request: UserSettingsBase,
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    설정 수정
+
+    사용자의 설정 정보를 수정합니다.
+    부분 업데이트를 지원합니다 (None이 아닌 필드만 업데이트).
+
+    Controller → UseCase → Repository
+    """
+    logger.info("update_my_settings", "Updating user settings", user_id=user_id)
+
+    try:
+        # None이 아닌 필드만 추출
+        settings_update = request.model_dump(exclude_none=True)
+
+        if not settings_update:
+            logger.warning("update_my_settings", "No fields to update")
+            # 업데이트할 것이 없으면 현재 설정 반환
+            settings = await usecase.get_my_settings(user_id)
+            return UserSettingsResponse(**settings)
+
+        # 설정 업데이트
+        settings = await usecase.update_my_settings(user_id, settings_update)
+
+        if not settings:
+            raise HTTPException(status_code=404, detail="Settings not found")
+
+        return UserSettingsResponse(**settings)
+
+    except HTTPException:
+        raise
+    except BusinessException as e:
+        logger.error("update_my_settings", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.error("update_my_settings", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

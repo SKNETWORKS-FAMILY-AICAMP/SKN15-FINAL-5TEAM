@@ -2,8 +2,8 @@
 Auth Feature - Models
 사용자 인증 관련 데이터베이스 모델
 """
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, Index, Text, CheckConstraint
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 import uuid
 from app.core.db.base import Base, TimestampMixin
@@ -86,3 +86,65 @@ class PasswordResetToken(Base):
 
     def __repr__(self):
         return f"<PasswordResetToken(id={self.token_id}, user_id={self.user_id}, used={self.is_used})>"
+
+
+class UserSettings(Base):
+    """
+    사용자 설정
+
+    사운드, 볼륨, 언어 등 개인 설정 정보를 관리합니다.
+    """
+    __tablename__ = "user_settings"
+
+    # Primary Key & Foreign Key
+    user_id = Column(UUID(as_uuid=True), primary_key=True)
+
+    # Sound Settings
+    sound_enabled = Column(Boolean, default=True, nullable=False)
+    bgm_volume = Column(Integer, default=80, nullable=False)
+    sfx_volume = Column(Integer, default=100, nullable=False)
+
+    # Language Settings
+    language = Column(String(10), default='ko', nullable=False)
+
+    # Timestamps
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<UserSettings(user_id={self.user_id}, language={self.language})>"
+
+
+class CreditTransaction(Base):
+    """
+    크레딧 변동 기록
+
+    Features:
+    - 모든 크레딧 획득/소비 이력 추적
+    - 거래 타입별 분류 (purchase, consume, refund, bonus, initial)
+    - 변동 후 잔액 기록
+    """
+    __tablename__ = "credit_transactions"
+
+    transaction_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+
+    # 크레딧 변동 정보
+    amount = Column(Integer, nullable=False)  # 양수: 획득, 음수: 소비
+    transaction_type = Column(String(50), nullable=False)  # purchase, consume, refund, bonus, initial
+    balance_after = Column(Integer, nullable=False)
+
+    # 추가 정보
+    description = Column(Text)
+
+    # 타임스탬프
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "transaction_type IN ('purchase', 'consume', 'refund', 'bonus', 'initial')",
+            name='credit_transactions_transaction_type_check'
+        ),
+    )
+
+    def __repr__(self):
+        return f"<CreditTransaction(user={self.user_id}, amount={self.amount}, type={self.transaction_type})>"

@@ -312,3 +312,165 @@ class UserUseCase:
                    user_id=user_id)
 
         return images
+
+    async def get_my_progression(
+        self,
+        user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        사용자 진행도 조회 (XP/Level/Rank)
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            진행도 정보
+            {
+                "user_id": str,
+                "rank_code": str,
+                "rank_name_ko": str,
+                "rank_name_en": str,
+                "rank_name_ja": str,
+                "icon_emoji": str,
+                "level": int,
+                "experience_points": int,
+                "total_messages": int,
+                "total_sessions": int,
+                "total_play_minutes": int,
+                "scenarios_completed": int,
+                "achievements_count": int,
+                "min_xp": int,
+                "description_ko": str
+            }
+        """
+        logger.info("get_my_progression", "Getting user progression", user_id=user_id)
+
+        # Repository로 진행도 조회
+        progression = await self.repository.get_progression_by_user_id(user_id)
+
+        if not progression:
+            logger.warning("get_my_progression", "Progression not found", user_id=user_id)
+            return None
+
+        logger.info("get_my_progression", "Progression retrieved",
+                   user_id=user_id, level=progression.get("level"), rank=progression.get("rank_code"))
+
+        return progression
+
+    async def get_my_memories(
+        self,
+        user_id: str,
+        scenario_id: Optional[str] = None,
+        memory_type: Optional[str] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        내 기억 조회
+
+        Args:
+            user_id: 사용자 ID
+            scenario_id: 시나리오 ID (선택)
+            memory_type: 기억 유형 (선택: episodic/semantic/procedural)
+            limit: 최대 개수
+
+        Returns:
+            기억 목록
+        """
+        logger.info("get_my_memories", "Getting user memories",
+                   user_id=user_id, scenario_id=scenario_id, memory_type=memory_type)
+
+        # ChatRepository로 기억 조회
+        memories = await self.chat_repository.get_user_memories(
+            user_id=user_id,
+            scenario_id=scenario_id,
+            memory_type=memory_type,
+            limit=limit
+        )
+
+        # ORM 객체를 Dict로 변환
+        memory_list = []
+        for memory in memories:
+            memory_dict = {
+                "memory_id": memory.memory_id,
+                "user_id": str(memory.user_id),
+                "scenario_id": memory.scenario_id,
+                "memory_type": memory.memory_type,
+                "content": memory.content,
+                "importance_score": memory.importance_score,
+                "access_count": memory.access_count,
+                "last_accessed_at": memory.last_accessed_at.isoformat() if memory.last_accessed_at else None,
+                "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                "updated_at": memory.updated_at.isoformat() if memory.updated_at else None
+            }
+            memory_list.append(memory_dict)
+
+        logger.info("get_my_memories", f"Retrieved {len(memory_list)} memories",
+                   user_id=user_id)
+
+        return memory_list
+
+    async def get_my_settings(
+        self,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        사용자 설정 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            사용자 설정 정보 (없으면 기본값 반환)
+        """
+        logger.info("get_my_settings", "Getting user settings", user_id=user_id)
+
+        # Repository로 설정 조회
+        settings = await self.repository.get_settings_by_user_id(user_id)
+
+        # 설정이 없으면 기본값 생성하여 반환
+        if not settings:
+            logger.info("get_my_settings", "No settings found, creating default", user_id=user_id)
+
+            # 기본 설정 생성
+            default_settings = {
+                "sound_enabled": True,
+                "bgm_volume": 80,
+                "sfx_volume": 100,
+                "language": "ko"
+            }
+
+            # DB에 저장
+            await self.repository.upsert_user_settings(user_id, default_settings)
+
+            # 생성된 설정 조회
+            settings = await self.repository.get_settings_by_user_id(user_id)
+
+        logger.info("get_my_settings", "Settings retrieved", user_id=user_id)
+        return settings
+
+    async def update_my_settings(
+        self,
+        user_id: str,
+        settings_update: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        사용자 설정 업데이트
+
+        Args:
+            user_id: 사용자 ID
+            settings_update: 업데이트할 설정 데이터
+
+        Returns:
+            업데이트된 설정 정보
+        """
+        logger.info("update_my_settings", "Updating user settings",
+                   user_id=user_id, fields=list(settings_update.keys()))
+
+        # Repository로 설정 업데이트 (UPSERT)
+        await self.repository.upsert_user_settings(user_id, settings_update)
+
+        # 업데이트된 설정 조회
+        settings = await self.repository.get_settings_by_user_id(user_id)
+
+        logger.info("update_my_settings", "Settings updated", user_id=user_id)
+        return settings

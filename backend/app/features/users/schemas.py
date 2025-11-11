@@ -8,6 +8,22 @@ from datetime import datetime
 
 
 # ============================================================
+# Affinity Schemas
+# ============================================================
+
+class AffinityResponse(BaseModel):
+    """캐릭터 호감도 응답"""
+    character_name: str = Field(..., description="캐릭터 이름")
+    total_affinity_score: int = Field(..., description="총 호감도 점수")
+    affinity_level: int = Field(..., description="호감도 레벨")
+    total_interactions: int = Field(..., description="총 상호작용 수")
+    last_interaction_at: Optional[str] = Field(None, description="마지막 상호작용 시간")
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
 # Profile Schemas
 # ============================================================
 
@@ -24,6 +40,7 @@ class UserProfileResponse(BaseModel):
     last_login_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    affinities: List[AffinityResponse] = Field(default_factory=list, description="캐릭터 호감도 목록")
 
     class Config:
         from_attributes = True
@@ -80,6 +97,59 @@ class ConsumeCreditsResponse(BaseModel):
     success: bool = Field(..., description="성공 여부")
     message: str = Field(..., description="응답 메시지")
     remaining_credits: int = Field(..., description="남은 크레딧")
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# Progression Schemas
+# ============================================================
+
+class UserProgressionResponse(BaseModel):
+    """사용자 진행도 응답"""
+    user_id: str = Field(..., description="사용자 ID")
+    rank_code: str = Field(..., description="계급 코드")
+    rank_name_ko: str = Field(..., description="계급 이름 (한글)")
+    rank_name_en: Optional[str] = Field(None, description="계급 이름 (영어)")
+    rank_name_ja: Optional[str] = Field(None, description="계급 이름 (일본어)")
+    icon_emoji: Optional[str] = Field(None, description="계급 아이콘 이모지")
+    level: int = Field(..., description="현재 레벨 (1-99)")
+    experience_points: int = Field(..., description="총 경험치 (XP)")
+    total_messages: int = Field(default=0, description="전체 메시지 수")
+    total_sessions: int = Field(default=0, description="전체 세션 수")
+    total_play_minutes: int = Field(default=0, description="전체 플레이 시간 (분)")
+    scenarios_completed: int = Field(default=0, description="완료한 시나리오 수")
+    achievements_count: int = Field(default=0, description="달성한 업적 수")
+    min_xp: int = Field(..., description="현재 계급의 최소 XP")
+    description_ko: Optional[str] = Field(None, description="계급 설명 (한글)")
+    created_at: Optional[str] = Field(None, description="생성일시")
+    updated_at: Optional[str] = Field(None, description="수정일시")
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# Settings Schemas
+# ============================================================
+
+class UserSettingsBase(BaseModel):
+    """사용자 설정 업데이트 요청"""
+    sound_enabled: Optional[bool] = Field(None, description="사운드 활성화 여부")
+    bgm_volume: Optional[int] = Field(None, ge=0, le=100, description="BGM 볼륨 (0-100)")
+    sfx_volume: Optional[int] = Field(None, ge=0, le=100, description="SFX 볼륨 (0-100)")
+    language: Optional[str] = Field(None, min_length=2, max_length=10, description="언어 설정 (ko/en/ja)")
+
+
+class UserSettingsResponse(BaseModel):
+    """사용자 설정 조회 응답"""
+    user_id: str = Field(..., description="사용자 ID")
+    sound_enabled: bool = Field(..., description="사운드 활성화 여부")
+    bgm_volume: int = Field(..., description="BGM 볼륨 (0-100)")
+    sfx_volume: int = Field(..., description="SFX 볼륨 (0-100)")
+    language: str = Field(..., description="언어 설정")
+    updated_at: str = Field(..., description="최종 수정 시간")
 
     class Config:
         from_attributes = True

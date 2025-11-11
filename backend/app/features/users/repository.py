@@ -3,11 +3,12 @@ Users Repository
 사용자 데이터 액세스 계층
 Layer 4: Repository
 """
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_parent_logger
+from app.features.auth.models import CreditTransaction
 
 logger = get_parent_logger("UserRepository")
 
@@ -219,6 +220,9 @@ class UserRepository:
             )
             return False
 
+        # 변동 전 잔액 저장
+        balance_before = row.bubble_count
+
         # 크레딧 차감
         update_query = text("""
             UPDATE user_credits
@@ -234,6 +238,19 @@ class UserRepository:
             "amount": amount,
             "updated_at": datetime.utcnow()
         })
+
+        # 변동 후 잔액
+        balance_after = balance_before - amount
+
+        # 크레딧 트랜잭션 로깅
+        await self._log_credit_transaction(
+            user_id=user_id,
+            amount=-amount,  # 소비는 음수
+            transaction_type="consume",
+            balance_after=balance_after,
+            description=description
+        )
+
         await self.db.commit()
 
         logger.info(
@@ -243,4 +260,383 @@ class UserRepository:
             amount=amount,
             description=description
         )
+        return True
+
+    async def add_credits(
+        self,
+        user_id: str,
+        amount: int,
+        transaction_type: str,
+        description: Optional[str] = None
+    ) -> bool:
+        """
+        크레딧 추가 (purchase, bonus, initial, refund)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 추가할 양
+            transaction_type: 거래 유형 (purchase, bonus, initial, refund)
+            description: 설명
+
+        Returns:
+            성공 여부
+        """
+        # 현재 크레딧 확인
+        check_query = text("""
+            SELECT bubble_count
+            FROM user_credits
+            WHERE user_id = :user_id
+        """)
+        result = await self.db.execute(check_query, {"user_id": user_id})
+        row = result.fetchone()
+
+        # 잔액 계산
+        balance_before = row.bubble_count if row else 0
+
+        # 크레딧 추가
+        if row:
+            # 기존 레코드 업데이트
+            update_query = text("""
+                UPDATE user_credits
+                SET
+                    bubble_count = bubble_count + :amount,
+                    total_purchased = total_purchased + :amount,
+                    last_updated = :updated_at
+                WHERE user_id = :user_id
+            """)
+            await self.db.execute(update_query, {
+                "user_id": user_id,
+                "amount": amount,
+                "updated_at": datetime.utcnow()
+            })
+        else:
+            # 새 레코드 생성
+            insert_query = text("""
+                INSERT INTO user_credits (user_id, bubble_count, total_purchased, total_consumed, last_updated)
+                VALUES (:user_id, :amount, :amount, 0, :updated_at)
+            """)
+            await self.db.execute(insert_query, {
+                "user_id": user_id,
+                "amount": amount,
+                "updated_at": datetime.utcnow()
+            })
+
+        # 변동 후 잔액
+        balance_after = balance_before + amount
+
+        # 크레딧 트랜잭션 로깅
+        await self._log_credit_transaction(
+            user_id=user_id,
+            amount=amount,  # 추가는 양수
+            transaction_type=transaction_type,
+            balance_after=balance_after,
+            description=description
+        )
+
+        await self.db.commit()
+
+        logger.info(
+            "add_credits",
+            "Credits added",
+            user_id=user_id,
+            amount=amount,
+            type=transaction_type,
+            description=description
+        )
+        return True
+
+    async def _log_credit_transaction(
+        self,
+        user_id: str,
+        amount: int,
+        transaction_type: str,
+        balance_after: int,
+        description: Optional[str] = None
+    ) -> CreditTransaction:
+        """
+        크레딧 트랜잭션 로깅 (내부 메서드)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 변동량 (양수: 획득, 음수: 소비)
+            transaction_type: 거래 유형
+            balance_after: 변동 후 잔액
+            description: 설명
+
+        Returns:
+            CreditTransaction 객체
+        """
+        transaction = CreditTransaction(
+            user_id=user_id,
+            amount=amount,
+            transaction_type=transaction_type,
+            balance_after=balance_after,
+            description=description
+        )
+
+        self.db.add(transaction)
+        # commit은 호출하는 쪽에서 처리
+        return transaction
+
+    async def get_credit_transactions(
+        self,
+        user_id: str,
+        transaction_type: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """
+        크레딧 트랜잭션 내역 조회
+
+        Args:
+            user_id: 사용자 ID
+            transaction_type: 거래 유형 필터 (선택)
+            limit: 조회 개수
+            offset: 오프셋
+
+        Returns:
+            트랜잭션 목록
+        """
+        base_query = """
+            SELECT
+                transaction_id, user_id, amount, transaction_type,
+                balance_after, description, created_at
+            FROM credit_transactions
+            WHERE user_id = :user_id
+        """
+
+        params = {"user_id": user_id, "limit": limit, "offset": offset}
+
+        if transaction_type:
+            base_query += " AND transaction_type = :transaction_type"
+            params["transaction_type"] = transaction_type
+
+        base_query += """
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+        """
+
+        query = text(base_query)
+        result = await self.db.execute(query, params)
+        rows = result.fetchall()
+
+        transactions = []
+        for row in rows:
+            transactions.append({
+                "transaction_id": str(row.transaction_id),
+                "user_id": str(row.user_id),
+                "amount": row.amount,
+                "transaction_type": row.transaction_type,
+                "balance_after": row.balance_after,
+                "description": row.description,
+                "created_at": row.created_at.isoformat() if row.created_at else None
+            })
+
+        return transactions
+
+    async def get_credit_statistics(self, user_id: str) -> Dict[str, Any]:
+        """
+        크레딧 통계 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            크레딧 통계 정보
+        """
+        query = text("""
+            SELECT
+                transaction_type,
+                COUNT(*) as count,
+                SUM(amount) as total_amount,
+                AVG(amount) as avg_amount,
+                MAX(created_at) as last_transaction_at
+            FROM credit_transactions
+            WHERE user_id = :user_id
+            GROUP BY transaction_type
+            ORDER BY transaction_type
+        """)
+
+        result = await self.db.execute(query, {"user_id": user_id})
+        rows = result.fetchall()
+
+        statistics = {
+            "by_type": [],
+            "total_transactions": 0,
+            "net_change": 0
+        }
+
+        for row in rows:
+            type_stat = {
+                "transaction_type": row.transaction_type,
+                "count": row.count,
+                "total_amount": row.total_amount,
+                "avg_amount": float(row.avg_amount) if row.avg_amount else 0,
+                "last_transaction_at": row.last_transaction_at.isoformat() if row.last_transaction_at else None
+            }
+            statistics["by_type"].append(type_stat)
+            statistics["total_transactions"] += row.count
+            statistics["net_change"] += row.total_amount
+
+        return statistics
+
+    async def get_progression_by_user_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 진행도 조회 (progression.user_progression + content.rank_definitions JOIN)
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            진행도 정보
+            {
+                "user_id": str,
+                "rank_code": str,
+                "rank_name_ko": str,
+                "rank_name_en": str,
+                "rank_name_ja": str,
+                "icon_emoji": str,
+                "level": int,
+                "experience_points": int,
+                "total_messages": int,
+                "total_sessions": int,
+                "total_play_minutes": int,
+                "scenarios_completed": int,
+                "achievements_count": int,
+                "min_xp": int,  # 현재 계급의 최소 XP
+                "description_ko": str
+            }
+        """
+        query = text("""
+            SELECT
+                up.user_id,
+                up.rank_code,
+                rd.rank_name_ko,
+                rd.rank_name_en,
+                rd.rank_name_ja,
+                rd.icon_emoji,
+                up.level,
+                up.experience_points,
+                up.total_messages,
+                up.total_sessions,
+                up.total_play_minutes,
+                up.scenarios_completed,
+                up.achievements_count,
+                rd.min_xp,
+                rd.description_ko,
+                up.created_at,
+                up.updated_at
+            FROM progression.user_progression up
+            LEFT JOIN content.rank_definitions rd ON up.rank_code = rd.rank_code
+            WHERE up.user_id = :user_id
+        """)
+
+        result = await self.db.execute(query, {"user_id": user_id})
+        row = result.fetchone()
+
+        if not row:
+            logger.debug("get_progression_by_user_id", "Progression not found", user_id=user_id)
+            return None
+
+        return {
+            "user_id": str(row.user_id),
+            "rank_code": row.rank_code,
+            "rank_name_ko": row.rank_name_ko,
+            "rank_name_en": row.rank_name_en,
+            "rank_name_ja": row.rank_name_ja,
+            "icon_emoji": row.icon_emoji,
+            "level": row.level,
+            "experience_points": row.experience_points,
+            "total_messages": row.total_messages or 0,
+            "total_sessions": row.total_sessions or 0,
+            "total_play_minutes": row.total_play_minutes or 0,
+            "scenarios_completed": row.scenarios_completed or 0,
+            "achievements_count": row.achievements_count or 0,
+            "min_xp": row.min_xp,
+            "description_ko": row.description_ko,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None
+        }
+
+    async def get_settings_by_user_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 설정 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            사용자 설정 정보 또는 None
+        """
+        query = text("""
+            SELECT
+                user_id, sound_enabled, bgm_volume, sfx_volume,
+                language, updated_at
+            FROM public.user_settings
+            WHERE user_id = :user_id
+        """)
+
+        result = await self.db.execute(query, {"user_id": user_id})
+        row = result.fetchone()
+
+        if not row:
+            logger.debug("get_settings_by_user_id", "Settings not found", user_id=user_id)
+            return None
+
+        return {
+            "user_id": str(row.user_id),
+            "sound_enabled": row.sound_enabled,
+            "bgm_volume": row.bgm_volume,
+            "sfx_volume": row.sfx_volume,
+            "language": row.language,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+
+    async def upsert_user_settings(
+        self,
+        user_id: str,
+        settings_data: Dict[str, Any]
+    ) -> bool:
+        """
+        사용자 설정 생성 또는 업데이트 (UPSERT)
+
+        Args:
+            user_id: 사용자 ID
+            settings_data: 설정 데이터
+
+        Returns:
+            성공 여부
+        """
+        # 업데이트할 필드 구성
+        params = {"user_id": user_id, "updated_at": datetime.utcnow()}
+
+        # settings_data에서 None이 아닌 필드만 추가
+        set_fields = []
+        insert_fields = ["user_id"]
+        insert_values = [":user_id"]
+
+        for key, value in settings_data.items():
+            if value is not None:
+                params[key] = value
+                set_fields.append(f"{key} = :{key}")
+                insert_fields.append(key)
+                insert_values.append(f":{key}")
+
+        # updated_at 추가
+        set_fields.append("updated_at = :updated_at")
+        insert_fields.append("updated_at")
+        insert_values.append(":updated_at")
+
+        # INSERT ... ON CONFLICT DO UPDATE 쿼리
+        query = text(f"""
+            INSERT INTO public.user_settings ({', '.join(insert_fields)})
+            VALUES ({', '.join(insert_values)})
+            ON CONFLICT (user_id)
+            DO UPDATE SET {', '.join(set_fields)}
+        """)
+
+        await self.db.execute(query, params)
+        await self.db.commit()
+
+        logger.info("upsert_user_settings", "Settings upserted", user_id=user_id)
         return True
