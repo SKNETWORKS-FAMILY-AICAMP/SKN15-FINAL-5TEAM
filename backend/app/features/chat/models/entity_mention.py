@@ -1,28 +1,32 @@
 """
-EntityMention 모델 (대화 턴에서 엔티티 언급)
+EntityMention Model (기존 DB 구조)
 """
-from sqlalchemy import Column, Text, ForeignKey, TIMESTAMP
+from sqlalchemy import Column, Text, Integer, Float, ForeignKey, Index, CheckConstraint, DateTime
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 from app.core.db.base import Base
-import uuid
 from datetime import datetime
 
 
 class EntityMention(Base):
-    """엔티티 언급 (대화 턴에서)"""
+    """
+    대화 턴별 엔티티 언급 기록
+    """
     __tablename__ = "entity_mentions"
 
-    mention_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    mention_id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_id = Column(Integer, ForeignKey("entities.entity_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    turn_number = Column(Integer, nullable=False)
+    mention_text = Column(Text)
+    context_window = Column(Text)
+    sentiment_score = Column(Float)
+    mentioned_at = Column(DateTime, default=datetime.utcnow)
 
-    entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.entity_id"), nullable=False)
-    dialogue_turn_id = Column(UUID(as_uuid=True), ForeignKey("dialogue_turns.turn_id"), nullable=False)
+    __table_args__ = (
+        CheckConstraint('sentiment_score >= -1.0 AND sentiment_score <= 1.0', name='valid_sentiment'),
+        Index('idx_mentions_entity', 'entity_id', 'mentioned_at'),
+        Index('idx_mentions_session', 'session_id', 'turn_number'),
+    )
 
-    mention_text = Column(Text, nullable=False)
-    context = Column(Text)
-
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-
-    # Relationships
-    entity = relationship("Entity", back_populates="mentions")
-    dialogue_turn = relationship("DialogueTurn")
+    def __repr__(self):
+        return f"<EntityMention(id={self.mention_id}, entity={self.entity_id}, text={self.mention_text[:20]}...)>"

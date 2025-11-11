@@ -7,6 +7,8 @@ from .user_memory import UserMemory
 from .entity import Entity
 from .relationship import Relationship
 from .entity_mention import EntityMention
+from .user_character_affinity import UserCharacterAffinity
+from .affinity_record import AffinityRecord
 
 __all__ = [
     "DialogueTurn",
@@ -15,4 +17,6 @@ __all__ = [
     "Entity",
     "Relationship",
     "EntityMention",
+    "UserCharacterAffinity",
+    "AffinityRecord",
 ]

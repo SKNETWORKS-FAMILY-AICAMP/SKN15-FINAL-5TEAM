@@ -15,7 +15,7 @@ class UserMemory(Base):
     __tablename__ = "user_memories"
 
     memory_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("game_sessions.session_id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
 
     memory_text = Column(Text, nullable=False)
@@ -28,6 +28,6 @@ class UserMemory(Base):
     last_accessed = Column(TIMESTAMP, default=datetime.utcnow)
     access_count = Column(Integer, default=0)
 
-    # Relationships
-    session = relationship("GameSession")
-    user = relationship("User")
+    # Relationships (commented out - Session model doesn't have back_populates defined)
+    # session = relationship("Session")
+    # user = relationship("User")

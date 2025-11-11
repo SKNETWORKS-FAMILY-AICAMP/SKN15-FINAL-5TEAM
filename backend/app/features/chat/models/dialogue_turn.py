@@ -1,39 +1,46 @@
 """
-DialogueTurn 모델
+DialogueTurn Model (기존 DB 구조)
 """
-from sqlalchemy import Column, String, Text, Integer, Float, Boolean, ForeignKey, TIMESTAMP
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Text, Integer, Float, Index, DateTime
+from sqlalchemy.sql import func
 from app.core.db.base import Base
-import uuid
 from datetime import datetime
 
 
-class DialogueTurn(Base):
-    """대화 턴"""
+class TimestampMixin:
+    """Timestamp mixin for created_at and updated_at"""
+    created_at = Column(DateTime, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now())
+
+
+class DialogueTurn(Base, TimestampMixin):
+    """
+    대화 턴 기록
+
+    각 대사를 개별 row로 저장
+    """
     __tablename__ = "dialogue_turns"
 
-    turn_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"), nullable=False)
-    turn_number = Column(Integer, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(255), nullable=False, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    scenario_id = Column(String(255), nullable=False)
+    turn_count = Column(Integer, nullable=False)
 
-    user_input = Column(Text, nullable=False)
-    ai_response = Column(Text, nullable=False)
-    speaker = Column(String(100))
-    emotion = Column(String(50))
+    # 대사 내용
+    speaker = Column(String(100), nullable=False)
+    text = Column(Text, nullable=False)  # text로 통일 (content 아님!)
+    emotion = Column(String(50), default="neutral")
 
-    stage_id = Column(String(100))
-    stage_type = Column(String(50))
+    # 메타데이터
+    stage_tag = Column(String(100))
+    affinity_delta = Column(Float, default=0.0)
 
-    image_url = Column(Text)
-    thumbnail_url = Column(Text)
+    # 인덱스
+    __table_args__ = (
+        Index('idx_session_user', 'session_id', 'user_id'),
+        Index('idx_user_created', 'user_id', 'created_at'),
+    )
 
-    affinity_change = Column(Float, default=0.0)
-    xp_earned = Column(Integer, default=0)
-
-    extra_metadata = Column(JSONB, default={})
-
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-
-    # Relationships (commented out - Session model doesn't have back_populates defined)
-    # session = relationship("Session", back_populates="dialogue_turns")
+    def __repr__(self):
+        return f"<DialogueTurn(id={self.id}, speaker={self.speaker}, session={self.session_id})>"
