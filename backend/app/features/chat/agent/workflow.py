@@ -119,13 +119,13 @@ class ChatWorkflow:
 
         return result
 
-    def _dialogue_node(self, state: GraphState) -> GraphState:
+    async def _dialogue_node(self, state: GraphState) -> GraphState:
         """Dialogue Agent 노드"""
         logger.debug("_dialogue_node", "Executing dialogue agent")
         state["agent_trace"].append("dialogue")
 
         agent = DialogueAgent()
-        result = agent.generate_dialogue(state)
+        result = await agent.generate_dialogue(state)
 
         return result
 
