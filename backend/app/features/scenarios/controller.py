@@ -239,10 +239,11 @@ async def get_comments(
     sort_by: str = Query("created_at", regex="^(created_at|like_count)$", description="정렬 기준"),
     limit: int = Query(50, ge=1, le=100, description="페이징 크기"),
     offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    user_id: Optional[str] = Depends(get_current_user_id),
     usecase: ScenarioUseCase = Depends(get_scenario_usecase)
 ):
     """
-    시나리오 댓글 목록 조회
+    시나리오 댓글 목록 조회 (Public API - 인증 선택적)
 
     Controller → UseCase → Repository
     """
@@ -253,7 +254,8 @@ async def get_comments(
             scenario_id=scenario_id,
             sort_by=sort_by,
             limit=limit,
-            offset=offset
+            offset=offset,
+            user_id=user_id
         )
 
         return CommentListResponse(
@@ -275,6 +277,7 @@ async def get_comment_replies(
     comment_id: int,
     limit: int = Query(20, ge=1, le=100, description="페이징 크기"),
     offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    user_id: Optional[str] = Depends(get_current_user_id),
     usecase: ScenarioUseCase = Depends(get_scenario_usecase)
 ):
     """
@@ -293,7 +296,8 @@ async def get_comment_replies(
         replies = await usecase.get_comment_replies(
             parent_comment_id=comment_id,
             limit=limit,
-            offset=offset
+            offset=offset,
+            user_id=user_id
         )
 
         return CommentListResponse(
