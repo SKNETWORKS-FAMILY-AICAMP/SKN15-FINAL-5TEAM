@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 
 from app.core.logging import get_usecase_logger
 from .repository import AdminRepository
+from app.features.entities.repository import EntitiesRepository
 
 logger = get_usecase_logger("Admin")
 
@@ -28,6 +29,7 @@ class AdminUseCase:
         """
         self.db = db
         self.repository = AdminRepository(db)
+        self.entity_repository = EntitiesRepository(db)
 
     async def list_dialogue_sessions(
         self,
@@ -163,3 +165,92 @@ class AdminUseCase:
         logger.info("get_user_details", f"User retrieved: {user.username}")
 
         return user
+
+    # ============================================================
+    # Graph RAG Entity Management
+    # ============================================================
+
+    async def list_entities(
+        self,
+        query: str = None,
+        entity_type: str = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        모든 엔티티 목록 조회 (관리자용)
+
+        Args:
+            query: 검색 쿼리 (엔티티 이름/설명 필터)
+            entity_type: 엔티티 타입 필터
+            limit: 페이징 크기
+            offset: 페이징 오프셋
+
+        Returns:
+            {
+                "entities": List[Entity ORM],
+                "total": int
+            }
+        """
+        logger.info("list_entities", f"Listing entities (limit={limit}, offset={offset})",
+                   query=query, entity_type=entity_type)
+
+        # EntityRepository로 엔티티 검색
+        entities, total = await self.entity_repository.search_entities(
+            query=query,
+            entity_type=entity_type,
+            limit=limit,
+            offset=offset
+        )
+
+        logger.info("list_entities", f"Retrieved {len(entities)} entities (total={total})")
+
+        return {
+            "entities": entities,
+            "total": total
+        }
+
+    async def get_entity_relationships(
+        self,
+        entity_id: int,
+        direction: str = "both"
+    ) -> Dict[str, Any]:
+        """
+        특정 엔티티의 관계 조회
+
+        Args:
+            entity_id: 엔티티 ID
+            direction: 관계 방향 (outgoing, incoming, both)
+
+        Returns:
+            {
+                "entity_id": int,
+                "relationships": List[EntityRelationship ORM],
+                "total": int
+            }
+
+        Raises:
+            ValueError: 엔티티를 찾을 수 없는 경우
+        """
+        logger.info("get_entity_relationships", f"Getting relationships for entity: {entity_id}",
+                   direction=direction)
+
+        # 엔티티 존재 여부 확인
+        entity = await self.entity_repository.get_entity_by_id(entity_id)
+        if not entity:
+            logger.warning("get_entity_relationships", f"Entity not found: {entity_id}")
+            raise ValueError(f"Entity not found: {entity_id}")
+
+        # EntityRepository로 관계 조회
+        relationships = await self.entity_repository.get_entity_relationships(
+            entity_id=entity_id,
+            direction=direction
+        )
+
+        logger.info("get_entity_relationships", f"Retrieved {len(relationships)} relationships")
+
+        return {
+            "entity_id": entity_id,
+            "relationships": relationships,
+            "total": len(relationships)
+        }

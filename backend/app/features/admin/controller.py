@@ -19,6 +19,11 @@ from .schemas import (
     AdminUserResponse,
     AdminUserListResponse,
 )
+from app.features.entities.schemas import (
+    EntityResponse,
+    EntityListResponse,
+    RelationshipResponse,
+)
 
 logger = get_controller_logger("Admin")
 
@@ -162,4 +167,78 @@ async def get_user_details(
         raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         logger.exception("get_user_details", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================
+# Graph RAG Entity Management
+# ============================================================
+
+@router.get("/entities", response_model=EntityListResponse)
+async def list_entities(
+    query: str = Query(None, description="검색 쿼리 (엔티티 이름/설명)"),
+    entity_type: str = Query(None, description="엔티티 타입 필터 (character, location, event, item, skill)"),
+    limit: int = Query(100, ge=1, le=500, description="페이징 크기"),
+    offset: int = Query(0, ge=0, description="페이징 오프셋"),
+    usecase: AdminUseCase = Depends(get_admin_usecase)
+):
+    """
+    Graph RAG 엔티티 목록 조회 (관리자 전용)
+
+    Controller → UseCase → EntityRepository
+    """
+    logger.info("list_entities", "Listing all entities",
+               query=query, entity_type=entity_type, limit=limit, offset=offset)
+
+    try:
+        result = await usecase.list_entities(
+            query=query,
+            entity_type=entity_type,
+            limit=limit,
+            offset=offset
+        )
+
+        return EntityListResponse(
+            entities=[EntityResponse.model_validate(entity) for entity in result["entities"]],
+            total_count=result["total"]
+        )
+
+    except BusinessException as e:
+        logger.error("list_entities", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("list_entities", f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/entities/{entity_id}/relationships", response_model=list[RelationshipResponse])
+async def get_entity_relationships(
+    entity_id: int,
+    direction: str = Query("both", description="관계 방향 (outgoing, incoming, both)"),
+    usecase: AdminUseCase = Depends(get_admin_usecase)
+):
+    """
+    특정 엔티티의 관계 조회 (관리자 전용)
+
+    Controller → UseCase → EntityRepository
+    """
+    logger.info("get_entity_relationships", f"Getting relationships for entity: {entity_id}",
+               direction=direction)
+
+    try:
+        result = await usecase.get_entity_relationships(
+            entity_id=entity_id,
+            direction=direction
+        )
+
+        return [RelationshipResponse.model_validate(rel) for rel in result["relationships"]]
+
+    except ValueError as e:
+        logger.warning("get_entity_relationships", f"Entity not found: {entity_id}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessException as e:
+        logger.error("get_entity_relationships", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.exception("get_entity_relationships", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
