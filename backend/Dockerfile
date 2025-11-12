@@ -42,5 +42,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Set PYTHONPATH to include app directory
 ENV PYTHONPATH=/app:$PYTHONPATH
 
-# Run the application (new 4-layer architecture)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# Set entrypoint (handles migrations automatically)
+ENTRYPOINT ["/docker-entrypoint.sh"]

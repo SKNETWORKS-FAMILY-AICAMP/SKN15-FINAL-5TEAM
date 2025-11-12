@@ -53,8 +53,9 @@ from app.features.progression.models import (
     StageProgression
 )
 from app.features.misc.models import (
-    SessionSnapshot, ScenarioStatistics, UserFeedback, UserCredits
+    SessionSnapshot, ScenarioStatistics, UserFeedback
 )
+from app.features.users.models import UserCredits
 from app.features.logging.models import (
     Log,
     ErrorLog,
