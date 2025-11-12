@@ -52,7 +52,7 @@ class AuthRepository:
         Returns:
             UserData 또는 None
         """
-        query = text("SELECT user_id, username, password_hash, role, email, is_active FROM users WHERE user_id = :user_id")
+        query = text("SELECT user_id, username, password_hash, role, email, is_active FROM auth.users WHERE user_id = :user_id")
         result = await self.db.execute(query, {"user_id": user_id})
         row = result.fetchone()
 
@@ -80,7 +80,7 @@ class AuthRepository:
         Returns:
             UserData 또는 None
         """
-        query = text("SELECT user_id, username, password_hash, role, email, is_active FROM users WHERE username = :username")
+        query = text("SELECT user_id, username, password_hash, role, email, is_active FROM auth.users WHERE username = :username")
         result = await self.db.execute(query, {"username": username})
         row = result.fetchone()
 
@@ -108,7 +108,7 @@ class AuthRepository:
         Returns:
             UserData 또는 None
         """
-        query = text("SELECT user_id, username, password_hash, role, email, is_active FROM users WHERE email = :email")
+        query = text("SELECT user_id, username, password_hash, role, email, is_active FROM auth.users WHERE email = :email")
         result = await self.db.execute(query, {"email": email})
         row = result.fetchone()
 
@@ -128,13 +128,13 @@ class AuthRepository:
 
     async def username_exists(self, username: str) -> bool:
         """username 중복 체크"""
-        query = text("SELECT EXISTS(SELECT 1 FROM users WHERE username = :username)")
+        query = text("SELECT EXISTS(SELECT 1 FROM auth.users WHERE username = :username)")
         result = await self.db.execute(query, {"username": username})
         return result.scalar()
 
     async def email_exists(self, email: str) -> bool:
         """email 중복 체크"""
-        query = text("SELECT EXISTS(SELECT 1 FROM users WHERE email = :email)")
+        query = text("SELECT EXISTS(SELECT 1 FROM auth.users WHERE email = :email)")
         result = await self.db.execute(query, {"email": email})
         return result.scalar()
 
@@ -163,7 +163,7 @@ class AuthRepository:
         now = datetime.utcnow()
 
         query = text("""
-            INSERT INTO users (
+            INSERT INTO auth.users (
                 user_id, username, password_hash, display_name, email,
                 is_active, is_verified, role, total_sessions, total_bubbles,
                 created_at, updated_at
@@ -214,7 +214,7 @@ class AuthRepository:
         now = datetime.utcnow()
 
         query = text("""
-            INSERT INTO password_reset_tokens (
+            INSERT INTO auth.password_reset_tokens (
                 token_id, user_id, token, expires_at, is_used, created_at
             ) VALUES (
                 :token_id, :user_id, :token, :expires_at, :is_used, :created_at
@@ -246,7 +246,7 @@ class AuthRepository:
         """
         query = text("""
             SELECT token_id, user_id, token, expires_at, is_used
-            FROM password_reset_tokens
+            FROM auth.password_reset_tokens
             WHERE token = :token
         """)
 
@@ -266,7 +266,7 @@ class AuthRepository:
 
     async def mark_token_as_used(self, token: str):
         """토큰을 사용됨으로 표시"""
-        query = text("UPDATE password_reset_tokens SET is_used = true, used_at = :used_at WHERE token = :token")
+        query = text("UPDATE auth.password_reset_tokens SET is_used = true, used_at = :used_at WHERE token = :token")
         await self.db.execute(query, {"token": token, "used_at": datetime.utcnow()})
         await self.db.commit()
         logger.info("mark_token_as_used", "Token marked as used")
@@ -280,8 +280,7 @@ class AuthRepository:
             new_password_hash: 새 비밀번호 해시
         """
         query = text("""
-            UPDATE users
-            SET password_hash = :password_hash, updated_at = :updated_at
+            UPDATE auth.users
             WHERE user_id = :user_id
         """)
 
@@ -302,7 +301,7 @@ class AuthRepository:
             user_id: 사용자 ID
         """
         query = text("""
-            UPDATE users
+            UPDATE auth.users
             SET last_login_at = :last_login_at
             WHERE user_id = :user_id
         """)
