@@ -78,6 +78,7 @@ class DialogueResult(BaseModel):
     stage_complete: bool = False
     updated_state: Dict = Field(default_factory=dict)
     affinity_delta: Optional[Dict[str, float]] = None
+    affinity_scores: Optional[Dict[str, float]] = None  # 현재 친밀도 (DB 로드 + 델타 적용)
 
 
 class StageResult(BaseModel):

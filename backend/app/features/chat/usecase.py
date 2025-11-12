@@ -193,13 +193,22 @@ class ChatUseCase:
 
         # Updated state 병합
         updated_state = original_state.copy()
+
+        # affinity_delta를 사용해서 affinity_scores 계산
+        affinity_delta = graph_state.get("output", {}).get("affinity_delta", {})
+        current_affinity = updated_state.get("affinity_scores", {})
+
+        # delta 적용
+        for char, delta in affinity_delta.items():
+            current_affinity[char] = current_affinity.get(char, 0) + delta
+
         updated_state.update({
             "current_stage": graph_state.get("current_stage") or graph_state.get("stage_tag"),
             "turn_count": graph_state.get("turn_count", 0),
             "stage_turn": graph_state.get("stage_turn", 0),
             "conversation_summary": graph_state.get("conversation_summary"),
             "summary_turn_count": graph_state.get("summary_turn_count", 0),
-            "affinity_scores": graph_state.get("affinity_scores", {}),
+            "affinity_scores": current_affinity,  # 계산된 친밀도 사용
             "final_ending": graph_state.get("final_ending"),
             "is_active": graph_state.get("is_active", True),
             "game": graph_state.get("game", {}),
@@ -212,7 +221,8 @@ class ChatUseCase:
             next_stage=graph_state.get("output", {}).get("next_stage"),
             stage_complete=graph_state.get("output", {}).get("stage_complete", False),
             updated_state=updated_state,
-            affinity_delta=graph_state.get("output", {}).get("affinity_delta")
+            affinity_delta=graph_state.get("output", {}).get("affinity_delta"),
+            affinity_scores=updated_state.get("affinity_scores", {})  # 현재 친밀도 포함
         )
 
         return result
@@ -265,15 +275,46 @@ class ChatUseCase:
                            current_stage=existing_session["state"].get("current_stage"),
                            turn_count=existing_session["state"].get("turn_count"))
                 session_state = existing_session["state"]
-                # 세션 메타 정보 업데이트
+                # 세션 메타 정보 업데이트 (scenario_id 포함)
                 session_state["session_id"] = session_id
+                session_state["scenario_id"] = scenario_id  # scenario_id 명시적 보존
                 session_state["user_id"] = user_id
                 session_state["user_name"] = user_name or session_state.get("user_name", "여행자")
+
+                # 기존 세션이라도 DB에서 최신 친밀도를 다시 로드 (sessions 테이블에 저장되지 않으므로)
+                if user_id:
+                    try:
+                        user_affinities = await self.affinity_repository.get_all_user_affinities(user_id)
+                        affinity_scores = {}
+                        for affinity in user_affinities:
+                            affinity_scores[affinity.character_name] = affinity.total_affinity_score
+                        session_state["affinity_scores"] = affinity_scores
+                        logger.info("create_dialogue", f"Loaded {len(affinity_scores)} affinity scores from DB for existing session",
+                                   user_id=user_id, scores=affinity_scores)
+                    except Exception as e:
+                        logger.error("create_dialogue", f"Failed to load affinity scores for existing session: {e}",
+                                    user_id=user_id, exc_info=True)
+                        # 에러 시에도 빈 dict로 초기화 (기존 로직 유지)
+                        if "affinity_scores" not in session_state:
+                            session_state["affinity_scores"] = {}
             else:
                 # 신규 세션 생성
                 logger.info("create_dialogue", "Creating new session", session_id=session_id)
                 # Get first stage from scenario
                 first_stage = self.scenario_service.get_first_stage_tag(scenario_id)
+
+                # 사용자의 기존 친밀도를 DB에서 불러오기
+                initial_affinity_scores = {}
+                if user_id:
+                    try:
+                        user_affinities = await self.affinity_repository.get_all_user_affinities(user_id)
+                        for affinity in user_affinities:
+                            initial_affinity_scores[affinity.character_name] = affinity.total_affinity_score
+                        logger.info("create_dialogue", f"Loaded {len(initial_affinity_scores)} affinity scores from DB",
+                                   user_id=user_id, scores=initial_affinity_scores)
+                    except Exception as e:
+                        logger.error("create_dialogue", f"Failed to load affinity scores: {e}",
+                                    user_id=user_id, exc_info=True)
 
                 session_state = {
                     "session_id": session_id,
@@ -282,7 +323,7 @@ class ChatUseCase:
                     "user_name": user_name,
                     "turn_count": 0,
                     "current_stage": first_stage,
-                    "affinity_scores": {},
+                    "affinity_scores": initial_affinity_scores,
                 }
 
             # ============================================================
@@ -428,6 +469,52 @@ class ChatUseCase:
             )
 
             # ============================================================
+            # 5.5 친밀도를 user_character_affinity 테이블에 저장
+            # ============================================================
+            if user_id and dialogue_result.affinity_scores:
+                try:
+                    from uuid import UUID
+                    for character_name, score in dialogue_result.affinity_scores.items():
+                        # 세션별 친밀도 변화 기록
+                        await self.affinity_repository.save_affinity_record(
+                            session_id=session_id,
+                            turn_number=turn_count,
+                            character_name=character_name,
+                            affinity_score=score,
+                            change_amount=None  # 변화량은 나중에 계산 가능
+                        )
+
+                        # 사용자별 글로벌 친밀도 업데이트
+                        # 기존 점수 조회
+                        existing_affinity = await self.affinity_repository.get_user_character_affinity(
+                            user_id=user_id,
+                            character_name=character_name
+                        )
+
+                        if existing_affinity:
+                            # 차이만큼 업데이트 (delta 계산)
+                            delta = score - existing_affinity.total_affinity_score
+                            if delta != 0:
+                                await self.affinity_repository.upsert_user_character_affinity(
+                                    user_id=user_id,
+                                    character_name=character_name,
+                                    score_delta=delta
+                                )
+                        else:
+                            # 새로 생성 (현재 점수를 delta로 설정)
+                            await self.affinity_repository.upsert_user_character_affinity(
+                                user_id=user_id,
+                                character_name=character_name,
+                                score_delta=score
+                            )
+
+                    logger.info("create_dialogue", "Affinity scores saved to DB",
+                               user_id=user_id, characters=list(dialogue_result.affinity_scores.keys()))
+                except Exception as e:
+                    logger.error("create_dialogue", f"Failed to save affinity scores: {e}",
+                                user_id=user_id, exc_info=True)
+
+            # ============================================================
             # 6. 사용자 진행 (Progression) 업데이트
             # ============================================================
             if user_id:
@@ -456,7 +543,7 @@ class ChatUseCase:
                         await self.progression_repository.update_scenario_progress(
                             user_id=UUID(user_id),
                             scenario_id=scenario_id,
-                            updates={
+                            progress_data={
                                 "total_messages": scenario_progress.total_messages + 1,
                                 "last_session_id": session_id,
                                 "has_started": True
@@ -467,7 +554,7 @@ class ChatUseCase:
                         await self.progression_repository.update_scenario_progress(
                             user_id=UUID(user_id),
                             scenario_id=scenario_id,
-                            updates={
+                            progress_data={
                                 "has_started": True,
                                 "total_messages": 1,
                                 "last_session_id": session_id

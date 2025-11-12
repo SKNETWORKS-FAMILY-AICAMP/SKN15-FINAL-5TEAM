@@ -221,7 +221,8 @@ class ParentAgent:
                 next_stage=next_stage or current_stage_tag,
                 stage_complete=stage_complete,
                 updated_state=updated_state,
-                affinity_delta=affinity_delta
+                affinity_delta=affinity_delta,
+                affinity_scores=updated_state.get("affinity_scores", {})  # 현재 친밀도 포함
             )
 
             logger.info("run", "Pipeline completed",
@@ -440,18 +441,18 @@ class ParentAgent:
             )
 
             # 변화량 계산
-            old_affinity = state.get("affinity", {})
+            old_affinity = state.get("affinity_scores", {})  # Use affinity_scores, not affinity
             affinity_delta = {}
 
             for char, new_score in updated_affinity.items():
-                old_score = old_affinity.get(char, 500)  # 기본값 500
+                old_score = old_affinity.get(char, 0)  # 기본값 0 (500은 너무 높음)
                 delta = new_score - old_score
                 if delta != 0:
                     affinity_delta[char] = delta
                     logger.info("_update_affinity", f"{char}: {old_score} → {new_score} ({delta:+d})")
 
-            # state 업데이트
-            state["affinity"] = updated_affinity
+            # state 업데이트 (affinity_scores로 저장)
+            state["affinity_scores"] = updated_affinity
 
             return affinity_delta
 
@@ -547,7 +548,8 @@ class ParentAgent:
             next_stage=state.get("current_stage", "intro"),
             stage_complete=False,
             updated_state=state,
-            affinity_delta={}
+            affinity_delta={},
+            affinity_scores=state.get("affinity_scores", {})  # 현재 친밀도 포함
         )
 
 
