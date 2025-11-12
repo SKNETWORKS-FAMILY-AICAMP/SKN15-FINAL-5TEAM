@@ -10,7 +10,7 @@ import uuid
 
 from .repository import SessionRepository
 from .models import Session
-from app.features.chat.repository import ChatRepository
+from app.features.chat.repositories import DialogueRepository
 from app.core.logging import get_usecase_logger
 
 logger = get_usecase_logger("Session")
@@ -32,7 +32,7 @@ class SessionUseCase:
         """
         self.db = db
         self.repository = SessionRepository(db)
-        self.chat_repository = ChatRepository(db)
+        self.dialogue_repository = DialogueRepository(db)
 
     async def list_user_sessions(
         self,
@@ -149,7 +149,7 @@ class SessionUseCase:
             return None
 
         # 최근 대화 조회
-        dialogues_db = await self.chat_repository.get_recent_dialogues(
+        dialogues_db = await self.dialogue_repository.get_recent_dialogues(
             session_id=session_id,
             limit=10
         )

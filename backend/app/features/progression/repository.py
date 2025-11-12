@@ -14,8 +14,8 @@ from .models import (
     UserProgression,
     UserScenarioProgress,
     StageProgression,
-    XPTransaction
 )
+from app.features.users.models.xp_transaction import XPTransaction
 
 
 class ProgressionRepository:

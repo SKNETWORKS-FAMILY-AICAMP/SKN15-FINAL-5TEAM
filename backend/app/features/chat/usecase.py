@@ -8,7 +8,14 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import os
 
-from .repository import ChatRepository
+from .repositories import (
+    DialogueRepository,
+    SessionRepository,
+    AffinityRepository,
+    ImageRepository,
+    EntityRepository,
+    MemoryRepository,
+)
 from .agent.parent import ParentAgent  # Legacy ParentAgent (not LangGraph)
 from .services import AffinityService, MemoryService, MissionService, ScenarioService
 from .services.extractors.conversation_summarizer import ConversationSummarizer
@@ -16,7 +23,6 @@ from .models import DialogueTurn
 from .schemas import DialogueResult, ChatMessage
 from app.core.logging import get_usecase_logger, print_layer_debug
 from app.shared.exceptions import DailyLimitExceededException
-from .repositories.memory_repository import MemoryRepository
 from app.features.users.repository import UserRepository
 from app.features.progression.repository import ProgressionRepository
 from app.core.llm.client import LLMClient
@@ -53,7 +59,11 @@ class ChatUseCase:
         """
         self.db = db
         # UseCase 내부에서 Repository, Agent, Service 생성
-        self.repository = ChatRepository(db)
+        self.dialogue_repository = DialogueRepository(db)
+        self.session_repository = SessionRepository(db)
+        self.affinity_repository = AffinityRepository(db)
+        self.image_repository = ImageRepository(db)
+        self.entity_repository = EntityRepository(db)
         self.memory_repository = MemoryRepository(db)
         self.user_repository = UserRepository(db)
         self.progression_repository = ProgressionRepository(db)
@@ -246,7 +256,7 @@ class ChatUseCase:
             # ============================================================
             # 1. 세션 상태 로드 (트랜잭션 내부)
             # ============================================================
-            existing_session = await self.repository.get_session(session_id)
+            existing_session = await self.session_repository.get_session(session_id)
 
             if existing_session:
                 # 기존 세션 상태 로드
@@ -278,7 +288,7 @@ class ChatUseCase:
             # ============================================================
             # 2. 정책: 일일 대화 제한 체크
             # ============================================================
-            today_count = await self.repository.count_today(user_id)
+            today_count = await self.dialogue_repository.count_today(user_id)
             logger.debug("create_dialogue", f"Today's dialogue count: {today_count}", user_id=user_id, count=today_count)
 
             if today_count >= MAX_DAILY_CHATS:
@@ -354,7 +364,7 @@ class ChatUseCase:
                 dialogue_models.append(model)
 
             logger.info("create_dialogue", f"Saving {len(dialogue_models)} dialogues to DB")
-            await self.repository.save_dialogues_batch(dialogue_models)
+            await self.dialogue_repository.save_dialogues_batch(dialogue_models)
 
             # ============================================================
             # 4. 대화 요약 생성 및 Memory 저장
@@ -362,7 +372,7 @@ class ChatUseCase:
             if self.summarizer and user_id:
                 try:
                     # 최근 대화 조회
-                    recent_dialogues = await self.repository.get_recent_dialogues(session_id, limit=50)
+                    recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
 
                     # 대화 히스토리 구성
                     message_history = []
@@ -410,7 +420,7 @@ class ChatUseCase:
             # 5. 세션 상태 저장
             # ============================================================
             logger.info("create_dialogue", "Saving session state")
-            await self.repository.save_session(
+            await self.session_repository.save_session(
                 session_id=session_id,
                 user_id=user_id,
                 scenario_id=scenario_id,
@@ -509,7 +519,7 @@ class ChatUseCase:
         logger.info("get_recent_dialogues", "Fetching recent dialogues", session_id=session_id, limit=limit)
 
         # Repository 호출
-        dialogue_models = await self.repository.get_recent_dialogues(session_id, limit)
+        dialogue_models = await self.dialogue_repository.get_recent_dialogues(session_id, limit)
 
         # ORM → DTO 변환
         messages = [
@@ -547,7 +557,7 @@ class ChatUseCase:
         logger.info("get_session_state", "Getting session state", session_id=session_id)
 
         # 기존 세션 조회
-        existing_session = await self.repository.get_session(session_id)
+        existing_session = await self.session_repository.get_session(session_id)
 
         if existing_session:
             # 기존 세션 상태 로드
@@ -588,7 +598,7 @@ class ChatUseCase:
         logger.warning("delete_session", "Deleting session", session_id=session_id)
 
         async with self.db.begin():
-            count = await self.repository.delete_session_dialogues(session_id)
+            count = await self.dialogue_repository.delete_session_dialogues(session_id)
 
         logger.warning("delete_session", f"Session deleted: {count} dialogues", session_id=session_id)
         return count

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from app.core.logging import get_usecase_logger
 from .repository import UserRepository
-from app.features.chat.repository import ChatRepository
+from app.features.chat.repositories import AffinityRepository, MemoryRepository
 from app.features.galleries.repository import GalleryRepository
 
 logger = get_usecase_logger("User")
@@ -31,7 +31,8 @@ class UserUseCase:
         """
         self.db = db
         self.repository = UserRepository(db)
-        self.chat_repository = ChatRepository(db)
+        self.affinity_repository = AffinityRepository(db)
+        self.memory_repository = MemoryRepository(db)
         self.gallery_repository = GalleryRepository(db)
 
     async def get_user_profile(
@@ -65,8 +66,8 @@ class UserUseCase:
             logger.warning("get_user_profile", "User not found", user_id=user_id)
             return None
 
-        # ChatRepository로 모든 캐릭터 호감도 조회
-        affinities = await self.chat_repository.get_all_user_affinities(user_id)
+        # AffinityRepository로 모든 캐릭터 호감도 조회
+        affinities = await self.affinity_repository.get_all_user_affinities(user_id)
 
         # 호감도 정보를 Dict 리스트로 변환
         affinity_list = []
@@ -379,8 +380,8 @@ class UserUseCase:
         logger.info("get_my_memories", "Getting user memories",
                    user_id=user_id, scenario_id=scenario_id, memory_type=memory_type)
 
-        # ChatRepository로 기억 조회
-        memories = await self.chat_repository.get_user_memories(
+        # MemoryRepository로 기억 조회
+        memories = await self.memory_repository.get_user_memories(
             user_id=user_id,
             scenario_id=scenario_id,
             memory_type=memory_type,
