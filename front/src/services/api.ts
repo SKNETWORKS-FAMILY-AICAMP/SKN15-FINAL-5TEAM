@@ -533,6 +533,27 @@ class ApiClient {
   }
 
   /**
+   * Get session dialogue history (with JWT authentication)
+   */
+  async getSessionDialogues(sessionId: string, limit: number = 100): Promise<ChatMessage[]> {
+    try {
+      const response = await authenticatedApiClient.get(`/api/sessions/${sessionId}/dialogues`, {
+        params: { limit }
+      })
+      return response.data.dialogues.map((d: any) => ({
+        speaker: d.speaker,
+        text: d.content,
+        emotion: d.emotion,
+        emotion_intensity: d.emotion_intensity,
+        timestamp: d.created_at
+      }))
+    } catch (error) {
+      console.error('Error getting session dialogues:', error)
+      return []
+    }
+  }
+
+  /**
    * Get current user information (with JWT authentication)
    */
   async getCurrentUser(): Promise<UserInfo> {

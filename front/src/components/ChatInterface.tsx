@@ -117,6 +117,39 @@ export default function ChatInterface({
     preloadImages();
   }, [preloadImages]);
 
+  // 세션 히스토리 로드 (이전 대화 이어하기)
+  useEffect(() => {
+    if (initialSessionId && messages.length === 0) {
+      console.log('[ChatInterface] Loading session history:', initialSessionId);
+
+      const loadHistory = async () => {
+        try {
+          const { apiClient } = await import('@/services/api');
+          const dialogues = await apiClient.getSessionDialogues(initialSessionId, 100);
+
+          if (dialogues && dialogues.length > 0) {
+            console.log(`[ChatInterface] Loaded ${dialogues.length} messages from history`);
+
+            const historyMessages: Message[] = dialogues.map((d, idx) => ({
+              id: messageIdCounter.current++,
+              text: d.text,
+              isUser: false,
+              timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
+              characterId: d.speaker,
+              isSystemMessage: d.speaker === 'narr' || d.speaker === 'system'
+            }));
+
+            setMessages(historyMessages);
+          }
+        } catch (error) {
+          console.error('[ChatInterface] Failed to load session history:', error);
+        }
+      };
+
+      loadHistory();
+    }
+  }, [initialSessionId]);
+
   // 배경 이미지 변경 추적 (디버깅)
   useEffect(() => {
     if (currentBackground) {
@@ -802,10 +835,19 @@ export default function ChatInterface({
       setBackendError(null);
 
       try {
-        // 첫 메시지로 대화 시작 (시나리오 초기화)
+        // 기존 세션을 이어하는 경우 (initialSessionId가 있는 경우)
+        if (initialSessionId) {
+          console.log(`🔄 Resuming session: ${initialSessionId}`);
+          // 세션 히스토리 로드는 별도 useEffect에서 처리되므로 여기서는 세션 ID만 설정
+          setSessionId(initialSessionId);
+          setIsLoading(false);
+          return;
+        }
+
+        // 새 세션 시작: 첫 메시지 전송 (prologue가 있으면 백엔드에서 자동 반환)
         const response: ChatResponse = await sendChatMessage(
           backendScenarioId,
-          '시작',  // Initial trigger message
+          '시작',  // Initial trigger message (prologue가 있으면 백엔드에서 무시됨)
           undefined,
           currentUser || 'Player'  // 로그인한 사용자 이름 사용
         );
@@ -874,7 +916,7 @@ export default function ChatInterface({
     };
 
     initializeChat();
-  }, [characterId]); // Re-initialize when characterId changes
+  }, [characterId, initialSessionId]); // Re-initialize when characterId or initialSessionId changes
 
   // Old hardcoded scenario (removed)
   /*

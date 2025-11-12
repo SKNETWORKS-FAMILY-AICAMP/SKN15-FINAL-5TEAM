@@ -150,6 +150,42 @@ async def get_session_detail(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/{session_id}/dialogues")
+async def get_session_dialogues(
+    session_id: str,
+    limit: int = Query(100, ge=1, le=500, description="최대 대화 개수"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: SessionUseCase = Depends(get_session_usecase)
+):
+    """
+    세션의 대화 히스토리 조회
+
+    Controller → UseCase → Repository
+    """
+    logger.info("get_session_dialogues", "Getting session dialogues",
+               session_id=session_id, user_id=user_id, limit=limit)
+
+    try:
+        dialogues = await usecase.get_session_dialogues(
+            session_id=session_id,
+            user_id=user_id,
+            limit=limit
+        )
+
+        return {
+            "session_id": session_id,
+            "dialogues": dialogues,
+            "total": len(dialogues)
+        }
+
+    except BusinessException as e:
+        logger.error("get_session_dialogues", f"Business error: {e.message}")
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        logger.error("get_session_dialogues", f"Unexpected error: {e}", exc=e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.delete("/{session_id}")
 async def delete_session(
     session_id: str,

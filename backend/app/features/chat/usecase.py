@@ -346,7 +346,69 @@ class ChatUseCase:
                 raise DailyLimitExceededException(MAX_DAILY_CHATS)
 
             # ============================================================
-            # 2. Agent 파이프라인 실행 (LangGraph 또는 Legacy)
+            # 2.5 Prologue 체크: turn_count가 0이면 하드코딩된 프롤로그 반환
+            # ============================================================
+            if session_state["turn_count"] == 0:
+                scenario = self.scenario_service.load_scenario(scenario_id)
+                prologue_messages = scenario.get("prologue_messages") if scenario else None
+
+                if prologue_messages:
+                    logger.info("create_dialogue", "Returning hardcoded prologue messages",
+                               scenario_id=scenario_id, count=len(prologue_messages))
+
+                    # 세션 상태 업데이트 (turn_count 증가, stage 유지)
+                    session_state["turn_count"] += 1
+
+                    # 세션 저장
+                    await self.session_repository.save_session(
+                        session_id=session_id,
+                        user_id=user_id,
+                        scenario_id=scenario_id,
+                        state=session_state
+                    )
+
+                    # prologue_messages를 DialogueTurn 모델로 변환
+                    dialogue_turns = []
+                    for idx, msg in enumerate(prologue_messages):
+                        dialogue_turn = DialogueTurn(
+                            session_id=session_id,
+                            user_id=user_id,
+                            scenario_id=scenario_id,
+                            turn_number=session_state["turn_count"],
+                            speaker=msg.get("speaker", "narr"),
+                            content=msg.get("text", ""),
+                            emotion=msg.get("emotion", "neutral"),
+                            order_index=idx
+                        )
+                        dialogue_turns.append(dialogue_turn)
+
+                    # 배치로 대화 저장 (prologue)
+                    saved_turns = await self.dialogue_repository.save_dialogues_batch(dialogue_turns)
+
+                    # DialogueResult 반환
+                    result = DialogueResult(
+                        session_id=session_id,
+                        scenario_id=scenario_id,
+                        current_stage=session_state["current_stage"],
+                        turn_count=session_state["turn_count"],
+                        dialogues=[
+                            ChatMessage(
+                                speaker=turn.speaker,
+                                text=turn.content,
+                                emotion=turn.emotion
+                            ) for turn in saved_turns
+                        ],
+                        speaker_pool=[],
+                        next_stage=session_state["current_stage"],
+                        images=[]
+                    )
+
+                    logger.info("create_dialogue", "Prologue returned successfully",
+                               session_id=session_id, turn_count=session_state["turn_count"])
+                    return result
+
+            # ============================================================
+            # 3. Agent 파이프라인 실행 (LangGraph 또는 Legacy)
             # ============================================================
             if self.use_langgraph and self.workflow:
                 # LangGraph 워크플로우 사용

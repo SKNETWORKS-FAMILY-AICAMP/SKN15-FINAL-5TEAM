@@ -314,3 +314,66 @@ class SessionUseCase:
             "turn_count": session.turn_count or 0,
             "updated_at": session.updated_at.isoformat() if session.updated_at else ""
         }
+
+    async def get_session_dialogues(
+        self,
+        session_id: str,
+        user_id: str,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        세션의 대화 히스토리 조회
+
+        Args:
+            session_id: 세션 ID
+            user_id: 사용자 ID (권한 체크용)
+            limit: 최대 대화 개수
+
+        Returns:
+            대화 목록
+            [
+                {
+                    "id": int,
+                    "speaker": str,
+                    "content": str,
+                    "emotion": str,
+                    "turn_number": int,
+                    "created_at": str
+                },
+                ...
+            ]
+        """
+        logger.info("get_session_dialogues", "Getting session dialogues",
+                   session_id=session_id, user_id=user_id, limit=limit)
+
+        # 권한 체크
+        session = await self.repository.get_session(session_id)
+        if not session or str(session.user_id) != user_id:
+            logger.warning("get_session_dialogues", "Permission denied or session not found",
+                          session_id=session_id, user_id=user_id)
+            return []
+
+        # 대화 조회
+        dialogues_db = await self.dialogue_repository.get_recent_dialogues(
+            session_id=session_id,
+            limit=limit
+        )
+
+        dialogues = [
+            {
+                "id": d.id,
+                "speaker": d.speaker,
+                "content": d.content,
+                "emotion": d.emotion or "neutral",
+                "emotion_intensity": d.emotion_intensity,
+                "turn_number": d.turn_number,
+                "order_index": d.order_index or 0,
+                "created_at": d.created_at.isoformat() if d.created_at else ""
+            }
+            for d in dialogues_db
+        ]
+
+        logger.info("get_session_dialogues", f"Retrieved {len(dialogues)} dialogues",
+                   session_id=session_id)
+
+        return dialogues
