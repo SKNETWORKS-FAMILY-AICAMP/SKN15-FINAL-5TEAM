@@ -96,4 +96,4 @@ echo "============================================================"
 echo ""
 
 # Uvicorn으로 서버 시작
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000

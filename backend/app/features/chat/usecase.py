@@ -445,6 +445,23 @@ class ChatUseCase:
                 print_layer_debug("USECASE", "Chat", "create_dialogue", "→ Calling Legacy Parent Agent")
 
                 try:
+                    # ✅ ParentAgent 실행 전에 message_history 로드
+                    recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
+
+                    message_history = []
+                    for dlg in recent_dialogues:
+                        message_history.append({
+                            "speaker": dlg.speaker,
+                            "text": dlg.content,
+                            "emotion": dlg.emotion or "neutral",
+                            "turn": dlg.turn_number
+                        })
+
+                    # message_history를 session_state에 추가
+                    session_state["message_history"] = message_history
+                    logger.info("create_dialogue", f"Loaded {len(message_history)} messages for context",
+                               session_id=session_id)
+
                     dialogue_result = await self.parent.run(
                         user_message=user_message,
                         session_state=session_state,

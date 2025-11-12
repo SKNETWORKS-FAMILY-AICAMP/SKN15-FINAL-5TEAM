@@ -1060,40 +1060,77 @@
       "tag": "TRAIN_PRELUDE",
       "type": "scene",
       "loop_mode": "micro_beat",
-      "llm_beats": true,
-      "context": "무한열차 안, 렌고쿠가 도시락을 먹으며 '우마이!'를 연발한다. {user}는 렌고쿠의 제자로서 옆에 앉아 있다. 탄지로 일행이 객차로 들어온다. 유저의 입력에 맞춰 자연스럽게 대화가 진행된다.",
+      "context": "무한열차 안. 렌고쿠가 도시락을 먹으며 '우마이!'를 연발한다. {user}는 스승의 옆에 앉아 조용히 열차 밖 풍경을 바라보고 있다.",
       "beats": [
         {
-          "goal": "무한열차 안, 렌고쿠가 도시락을 먹으며 '우마이! 우마이!'를 연발한다. {user}는 그 옆에서 도시락을 먹고 있다.",
+          "goal": "렌고쿠가 도시락을 먹으며 '우마이!'를 연발한다. {user}는 옆에서 열차 밖 풍경을 바라본다.",
           "speaker_hint": ["rengoku", "narr"]
-        },
+        }
+      ],
+      "speaker_pool": [
+        "rengoku",
+        "narr"
+      ],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "HEROES_ARRIVE"
+    },
+    {
+      "tag": "HEROES_ARRIVE",
+      "type": "scene",
+      "loop_mode": "micro_beat",
+      "context": "객차 문이 열리고 탄지로 일행(탄지로, 젠이츠, 이노스케)이 들어온다. 렌고쿠와 {user}가 고개를 돌려 그들을 바라본다. 탄지로 일행은 렌고쿠를 찾고 있다.",
+      "beats": [
         {
-          "goal": "객차 문이 열리고 탄지로, 젠이츠, 이노스케가 들어온다. 주변 승객들이 놀란 눈으로 바라본다.",
-          "speaker_hint": ["narr", "tanjiro"]
-        },
+          "goal": "객차 문이 열리고 탄지로 일행이 들어온다. 렌고쿠와 {user}가 그들을 바라본다.",
+          "speaker_hint": ["narr", "tanjiro", "rengoku"]
+        }
+      ],
+      "speaker_pool": [
+        "rengoku",
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "narr"
+      ],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 5,
+      "next": "USER_INTRODUCTION"
+    },
+    {
+      "tag": "USER_INTRODUCTION",
+      "type": "scene",
+      "loop_mode": "micro_beat",
+      "context": "렌고쿠가 {user}를 가리키며 '이 아이는 나의 츠구코(계자)다!'라고 자랑스럽게 소개한다. 탄지로 일행이 {user}에게 인사하고 관심을 보인다.",
+      "beats": [
         {
-          "goal": "이노스케가 창문을 치며 신기해한다. 젠이츠가 이노스케를 말린다.",
-          "speaker_hint": ["inosuke", "zenitsu"]
-        },
+          "goal": "렌고쿠가 {user}를 '내 츠구코'라고 자랑스럽게 소개한다. 탄지로 일행이 {user}에게 인사한다.",
+          "speaker_hint": ["rengoku", "tanjiro"]
+        }
+      ],
+      "speaker_pool": [
+        "rengoku",
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "narr"
+      ],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 5,
+      "next": "MISSION_BRIEFING"
+    },
+    {
+      "tag": "MISSION_BRIEFING",
+      "type": "scene",
+      "loop_mode": "micro_beat",
+      "context": "렌고쿠가 무한열차 실종 사건에 대해 설명한다. 40명 이상이 실종되었고, 귀살대원도 사라졌다고. 탄지로가 히노카미 카구라에 대해 묻는다. {user}도 대화에 참여할 수 있다.",
+      "beats": [
         {
-          "goal": "탄지로가 렌고쿠에게 히노카미 카구라(해의 호흡)에 대해 질문한다.",
-          "speaker_hint": ["tanjiro"]
-        },
-        {
-          "goal": "렌고쿠는 '해의 호흡'을 '불의 호흡'으로 잘못 알아듣고, 모른다고 답한다. 하지만 관련이 있을 것 같다고 말한다.",
-          "speaker_hint": ["rengoku"]
-        },
-        {
-          "goal": "렌고쿠가 무한열차에서 40명 이상의 사람들이 실종되었다는 이야기를 한다. 검사도 파견했지만 사라졌다고.",
-          "speaker_hint": ["rengoku"]
-        },
-        {
-          "goal": "젠이츠가 오니(혈귀)가 나타날 수 있다는 말에 무서워하며 떤다.",
-          "speaker_hint": ["zenitsu"]
-        },
-        {
-          "goal": "렌고쿠가 {user}를 가리키며 '이 아이는 나의 츠구코, {user}다!'라고 자랑스럽게 이름을 부르며 소개한다.",
-          "speaker_hint": ["rengoku"]
+          "goal": "렌고쿠가 무한열차 실종 사건을 설명한다. {user}와 탄지로가 듣는다.",
+          "speaker_hint": ["rengoku", "tanjiro"]
         }
       ],
       "speaker_pool": [
@@ -1104,44 +1141,8 @@
         "narr"
       ],
       "atmosphere": 3,
-      "min_turns": 3,
-      "max_turns": 8,
-      "next": "RENGOKU_TRAIN_DIALOGUE"
-    },
-    {
-      "tag": "HEROES_ARRIVE",
-      "type": "scene",
-      "loop_mode": "micro_beat",
-      "context": "객차 문이 열리고 탄지로 일행(탄지로, 젠이츠, 이노스케, 네즈코)이 들어온다. {user}와 탄지로 일행이 처음 만나는 순간이다. 탄지로 일행은 렌고쿠를 찾고 있다.",
-      "llm_beats": true,
-      "speaker_pool": [
-        "rengoku",
-        "tanjiro",
-        "zenitsu",
-        "inosuke",
-        "narr"
-      ],
-      "atmosphere": 3,
-      "min_turns": 3,
-      "max_turns": 8,
-      "next": "RENGOKU_TRAIN_DIALOGUE"
-    },
-    {
-      "tag": "RENGOKU_TRAIN_DIALOGUE",
-      "type": "scene",
-      "loop_mode": "micro_beat",
-      "context": "렌고쿠는 {user}를 이름으로 부르며 '내 제자'라고 소개한다. 탄지로는 무한열차에서 40명 이상이 실종되었다는 사실을 알게 된다. 탄지로가 렌고쿠에게 히노카미 카구라에 대해 묻는다. 렌고쿠는 잘 모르겠지만 불의 호흡과 관련이 있을 것 같다고 한다. 이노스케는 {user}에게 대결을 신청하고 젠이츠는 이노스케를 말린다.",
-      "llm_beats": true,
-      "speaker_pool": [
-        "rengoku",
-        "tanjiro",
-        "zenitsu",
-        "inosuke",
-        "narr"
-      ],
-      "atmosphere": 3,
-      "min_turns": 3,
-      "max_turns": 8,
+      "min_turns": 2,
+      "max_turns": 5,
       "next": "ENMU_APPEAR"
     },
     {

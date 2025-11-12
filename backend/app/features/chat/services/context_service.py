@@ -197,6 +197,9 @@ class ContextService:
         recent_dialogues: List[str] = []
 
         message_history = state.get("message_history") or []
+        logger.info("collect_recent_dialogues", f"🔍 DEBUG: message_history count = {len(message_history)}")
+        if message_history:
+            logger.info("collect_recent_dialogues", f"🔍 DEBUG: First message = {message_history[0]}")
         if isinstance(message_history, list):
             for entry in message_history[-5:]:
                 if not isinstance(entry, dict):

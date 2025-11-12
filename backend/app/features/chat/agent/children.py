@@ -100,33 +100,31 @@ class ChildrenAgent:
     ) -> List[Dict[str, Any]]:
         """
         Beats 기반 대화 생성 (prompts.yaml 사용)
-
-        Layer 3 (Agent): 비즈니스 로직만 처리, 프롬프트는 Layer 4 (PromptService)에서 가져옴
-
-        Args:
-            ctx: children_ctx
-            state: 게임 상태
-
-        Returns:
-            생성된 대화 리스트
+        micro_beat 모드일 때는 사용자 반응형 프롬프트 사용.
         """
         beats = ctx.get("beats", [])
         speaker_pool = ctx.get("speaker_pool", [])
         scenario_id = ctx.get("scenario_id", "unknown")
+        loop_mode = ctx.get("loop_mode", "none")  # ✅ 추가
 
         if not beats:
             logger.warning("_generate_dialogues", "No beats provided")
             return []
 
         # 컨텍스트 정보 준비
-        recent_dialogues = state.get("recent_dialogues", [])
+        # ✅ recent_dialogues는 ctx (children_ctx)에서 가져옴
+        recent_dialogues = ctx.get("recent_dialogues", [])
         user_input = state.get("user_input", "")
         current_turn = state.get("turn_count", 0)
         user_name = state.get("user_name", "츠구코")
 
         logger.info("_generate_dialogues", f"Post-processing will replace '{user_name}' with '{{user}}'")
+        logger.info("_generate_dialogues", f"🔍 DEBUG: recent_dialogues count = {len(recent_dialogues)}")
+        if recent_dialogues:
+            logger.info("_generate_dialogues", f"🔍 DEBUG: First dialogue = {recent_dialogues[0]}")
+            logger.info("_generate_dialogues", f"🔍 DEBUG: Last dialogue = {recent_dialogues[-1]}")
 
-        # Beat 설명 결합
+        # Beat goal 정리
         beat_descriptions = []
         for beat in beats:
             if isinstance(beat, dict):
@@ -137,36 +135,51 @@ class ChildrenAgent:
         beats_description = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
 
         logger.info("_generate_dialogues", f"Generating dialogues for {len(beats)} beats",
-                    speaker_pool=speaker_pool, turn=current_turn)
+                    speaker_pool=speaker_pool, turn=current_turn, loop_mode=loop_mode)
 
         try:
-            # Layer 4 (PromptService)에서 프롬프트 생성
-            prompt = prompt_service.get_dialogue_generation_prompt(
-                beats_description=beats_description,
-                speaker_pool=speaker_pool,
-                user_input=user_input,
-                recent_dialogues=recent_dialogues,
-                current_turn=current_turn,
-                max_turns=len(beats) + 5,
-                # 향후 추가할 컨텍스트
-                tone_profile=None,
-                atmosphere=None,
-                scene_setting=None,
-                previous_scene_summary=None,
-                previous_emotion_tone=None,
-                spatial_continuity=None,
-                character_states=None,
-                transition_hint=None
-            )
+            # ✅ loop_mode에 따라 프롬프트 분기
+            if loop_mode == "micro_beat":
+                # 🎯 사용자 반응형 프롬프트
+                prompt = prompt_service.get_dialogue_generation_prompt(
+                    beats_description=beats_description,
+                    user_input=user_input,
+                    recent_dialogues=recent_dialogues,
+                    speaker_pool=speaker_pool
+                )
 
-            # Layer 4 (LLMService)로 대화 생성
-            dialogues_messages = await self.llm_service.generate_with_prompt(
-                prompt=prompt,
-                temperature=0.8,
-                max_tokens=2000
-            )
+                dialogues_messages = await self.llm_service.generate_with_prompt(
+                    prompt=prompt,
+                    temperature=0.8,
+                    max_tokens=400,  # 반응형은 짧게
+                )
+            else:
+                # 기존 장면 전체 생성 프롬프트
+                prompt = prompt_service.get_dialogue_generation_prompt(
+                    beats_description=beats_description,
+                    speaker_pool=speaker_pool,
+                    user_input=user_input,
+                    recent_dialogues=recent_dialogues,
+                    current_turn=current_turn,
+                    max_turns=len(beats) + 5,
+                    tone_profile=None,
+                    atmosphere=None,
+                    scene_setting=None,
+                    previous_scene_summary=None,
+                    previous_emotion_tone=None,
+                    spatial_continuity=None,
+                    character_states=None,
+                    transition_hint=None
+                )
 
-            logger.info("_generate_dialogues", f"LLM returned {len(dialogues_messages) if dialogues_messages else 0} messages")
+                dialogues_messages = await self.llm_service.generate_with_prompt(
+                    prompt=prompt,
+                    temperature=0.8,
+                    max_tokens=2000
+                )
+
+            logger.info("_generate_dialogues",
+                        f"LLM returned {len(dialogues_messages) if dialogues_messages else 0} messages (mode={loop_mode})")
 
         except Exception as e:
             logger.error("_generate_dialogues", f"LLM call failed: {e}", exc_info=True)
@@ -176,39 +189,36 @@ class ChildrenAgent:
             logger.warning("_generate_dialogues", "LLM returned empty list")
             return []
 
-        # Post-processing: ChatMessage -> dict 변환 및 플레이어 이름 치환
+        # Post-processing 동일
         dialogue_dicts = []
-
         for i, msg in enumerate(dialogues_messages):
             try:
-                # Handle ChatMessage object
                 if hasattr(msg, 'speaker'):
                     dialogue_dict = {
                         "speaker": msg.speaker,
                         "text": msg.text,
-                        "emotion": msg.emotion if hasattr(msg, 'emotion') else "neutral"
+                        "emotion": getattr(msg, 'emotion', 'neutral')
                     }
-                # Handle dict
                 elif isinstance(msg, dict):
                     dialogue_dict = {
                         "speaker": msg.get("speaker", "narr"),
                         "text": msg.get("text", ""),
                         "emotion": msg.get("emotion", "neutral")
                     }
-                # Handle unexpected type
                 else:
-                    logger.warning("_generate_dialogues", f"Unexpected message type at index {i}: {type(msg)}, value: {msg}")
+                    logger.warning("_generate_dialogues",
+                                   f"Unexpected message type at index {i}: {type(msg)}, value: {msg}")
                     continue
 
-                # Post-processing: Replace user name with {user} placeholder
                 if user_name in dialogue_dict["text"]:
                     original_text = dialogue_dict["text"]
                     dialogue_dict["text"] = dialogue_dict["text"].replace(user_name, "{user}")
-                    logger.info("_generate_dialogues", f"✏️ Replaced '{user_name}' → '{{user}}' | {original_text} → {dialogue_dict['text']}")
+                    logger.info("_generate_dialogues",
+                                f"✏️ Replaced '{user_name}' → '{{user}}' | {original_text} → {dialogue_dict['text']}")
 
-                # Skip if LLM generated player dialogue (플레이어 대사 생성 금지 실패 시)
                 if dialogue_dict["speaker"] == user_name:
-                    logger.warning("_generate_dialogues", f"LLM generated player dialogue (speaker={user_name}), skipping")
+                    logger.warning("_generate_dialogues",
+                                   f"LLM generated player dialogue (speaker={user_name}), skipping")
                     continue
 
                 dialogue_dicts.append(dialogue_dict)
@@ -217,9 +227,11 @@ class ChildrenAgent:
                 logger.error("_generate_dialogues", f"Error converting message {i}: {e}", exc_info=True)
                 continue
 
-        logger.info("_generate_dialogues", f"Generated {len(dialogue_dicts)} dialogues from {len(beats)} beats")
+        logger.info("_generate_dialogues",
+                    f"Generated {len(dialogue_dicts)} dialogues from {len(beats)} beats (mode={loop_mode})")
 
         return dialogue_dicts
+
 
 
 # 싱글톤 인스턴스

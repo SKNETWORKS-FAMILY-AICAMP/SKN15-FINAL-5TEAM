@@ -109,6 +109,8 @@ class PromptService:
 
         # 최근 대화 포맷팅
         recent_history = self._format_recent_dialogues(recent_dialogues)
+        logger.debug("get_dialogue_generation_prompt",
+                    f"🔍 DEBUG: Formatted recent_history length = {len(recent_history)} chars")
 
         # 변수 치환을 위한 컨텍스트 준비
         context = {
