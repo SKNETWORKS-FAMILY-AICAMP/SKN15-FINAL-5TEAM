@@ -82,12 +82,17 @@ export default function ChatPage() {
       const session = await apiClient.getUserLastSession(backendScenarioId);
 
       if (session) {
+        // 마지막 세션이 있으면 모달 표시, sessionCheckDone은 사용자 선택 후에 true로 설정
         setLastSession(session);
         setShowResumeModal(true);
+        // sessionCheckDone은 false로 유지 (사용자 선택 대기)
+      } else {
+        // 마지막 세션이 없으면 바로 새 세션 시작 가능
+        setSessionCheckDone(true);
       }
-      setSessionCheckDone(true);
     } catch (error) {
       console.error('Failed to check last session:', error);
+      // 에러 발생 시에도 새 세션 시작 가능
       setSessionCheckDone(true);
     }
   };
@@ -96,13 +101,14 @@ export default function ChatPage() {
     console.log('Resuming session:', sessionId);
     setResumeSessionId(sessionId);
     setShowResumeModal(false);
+    setSessionCheckDone(true);  // 사용자가 "이어하기" 선택 완료
   };
 
   const handleNewSession = () => {
     console.log('Starting new session');
     setResumeSessionId(undefined);
     setShowResumeModal(false);
-    setSessionCheckDone(true);
+    setSessionCheckDone(true);  // 사용자가 "새로 시작" 선택 완료
   };
 
   // Warn user before leaving page (browser close/refresh)
@@ -271,6 +277,7 @@ export default function ChatPage() {
           initialSessionId={resumeSessionId}
           onInvitedCharactersChange={setInvitedCharacters}
           onMessageSent={() => setHasStartedChat(true)}
+          sessionCheckDone={sessionCheckDone}
         />
       </main>
 

@@ -26,6 +26,7 @@ interface ChatInterfaceProps {
   characterId?: string;
   initialSessionId?: string;  // 세션 복원용 session_id
   onInvitedCharactersChange?: (characters: string[]) => void;  // 참여 캐릭터 변경 콜백
+  sessionCheckDone?: boolean;  // 세션 체크 완료 여부 (모달에서 사용자 선택 완료)
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
@@ -41,7 +42,8 @@ export default function ChatInterface({
   onMessageSent,
   characterId = 'ending',
   initialSessionId,
-  onInvitedCharactersChange
+  onInvitedCharactersChange,
+  sessionCheckDone = true  // 기본값: true (기존 동작 유지)
 }: ChatInterfaceProps) {
   // App context (for bubble consumption and user info)
   const { consumeBubbles, currentUser, openMyAccount } = useApp();
@@ -830,6 +832,12 @@ export default function ChatInterface({
 
   // 초기 시나리오 로드 (백엔드 연결)
   useEffect(() => {
+    // 세션 체크가 완료될 때까지 대기 (모달에서 사용자 선택 완료 대기)
+    if (!sessionCheckDone) {
+      console.log('⏸️ Waiting for session check to complete...');
+      return;
+    }
+
     const initializeChat = async () => {
       setIsLoading(true);
       setBackendError(null);
@@ -845,6 +853,7 @@ export default function ChatInterface({
         }
 
         // 새 세션 시작: 첫 메시지 전송 (prologue가 있으면 백엔드에서 자동 반환)
+        console.log('🎬 Starting new session with prologue...');
         const response: ChatResponse = await sendChatMessage(
           backendScenarioId,
           '시작',  // Initial trigger message (prologue가 있으면 백엔드에서 무시됨)
@@ -916,7 +925,7 @@ export default function ChatInterface({
     };
 
     initializeChat();
-  }, [characterId, initialSessionId]); // Re-initialize when characterId or initialSessionId changes
+  }, [characterId, initialSessionId, sessionCheckDone]); // sessionCheckDone 추가
 
   // Old hardcoded scenario (removed)
   /*
