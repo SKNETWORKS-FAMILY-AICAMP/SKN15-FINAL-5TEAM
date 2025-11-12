@@ -14,8 +14,8 @@ class EntityMention(Base):
     __tablename__ = "entity_mentions"
 
     mention_id = Column(Integer, primary_key=True, autoincrement=True)
-    entity_id = Column(Integer, ForeignKey("entities.entity_id", ondelete="CASCADE"), nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    entity_id = Column(Integer, ForeignKey("knowledge.entities.entity_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
     turn_number = Column(Integer, nullable=False)
     mention_text = Column(Text)
     context_window = Column(Text)
@@ -26,6 +26,7 @@ class EntityMention(Base):
         CheckConstraint('sentiment_score >= -1.0 AND sentiment_score <= 1.0', name='valid_sentiment'),
         Index('idx_mentions_entity', 'entity_id', 'mentioned_at'),
         Index('idx_mentions_session', 'session_id', 'turn_number'),
+        {"schema": "knowledge"}
     )
 
     def __repr__(self):

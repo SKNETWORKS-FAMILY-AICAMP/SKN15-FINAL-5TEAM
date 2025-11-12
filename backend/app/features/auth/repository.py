@@ -164,11 +164,15 @@ class AuthRepository:
 
         query = text("""
             INSERT INTO auth.users (
+<<<<<<< HEAD
                 user_id, username, password_hash, display_name, email,
+=======
+                user_id, username, password_hash, provider, display_name, email,
+>>>>>>> fd790e5 (db 스키마 수정중)
                 is_active, is_verified, role, total_sessions, total_bubbles,
                 created_at, updated_at
             ) VALUES (
-                :user_id, :username, :password_hash, :display_name, :email,
+                :user_id, :username, :password_hash, :provider, :display_name, :email,
                 :is_active, :is_verified, :role, :total_sessions, :total_bubbles,
                 :created_at, :updated_at
             )
@@ -178,6 +182,7 @@ class AuthRepository:
             "user_id": user_id,
             "username": username,
             "password_hash": password_hash,
+            "provider": "email",
             "display_name": display_name,
             "email": email,
             "is_active": True,
@@ -281,6 +286,10 @@ class AuthRepository:
         """
         query = text("""
             UPDATE auth.users
+<<<<<<< HEAD
+=======
+            SET password_hash = :password_hash, updated_at = :updated_at
+>>>>>>> fd790e5 (db 스키마 수정중)
             WHERE user_id = :user_id
         """)
 
@@ -302,13 +311,17 @@ class AuthRepository:
         """
         query = text("""
             UPDATE auth.users
+<<<<<<< HEAD
             SET last_login_at = :last_login_at
+=======
+            SET last_login = :last_login
+>>>>>>> fd790e5 (db 스키마 수정중)
             WHERE user_id = :user_id
         """)
 
         await self.db.execute(query, {
             "user_id": user_id,
-            "last_login_at": datetime.utcnow()
+            "last_login": datetime.utcnow()
         })
 
         await self.db.commit()

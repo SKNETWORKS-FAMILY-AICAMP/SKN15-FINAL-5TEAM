@@ -42,9 +42,9 @@ class ScenarioComment(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     scenario_id = Column(String(50), nullable=False, index=True)  # Scenarios are in JSON files, not DB
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)
-    parent_comment_id = Column(BigInteger, ForeignKey("scenario_comments.id", ondelete="CASCADE"))
+    parent_comment_id = Column(BigInteger, ForeignKey("content.scenario_comments.id", ondelete="CASCADE"))
     like_count = Column(Integer, default=0)
     is_deleted = Column(Boolean, default=False)
     is_edited = Column(Boolean, default=False)
@@ -57,6 +57,7 @@ class ScenarioComment(Base):
         Index('idx_scenario_comments_scenario', 'scenario_id', 'created_at'),
         Index('idx_scenario_comments_scenario_likes', 'scenario_id', 'like_count'),
         Index('idx_scenario_comments_parent', 'parent_comment_id'),
+        {"schema": "content"}
     )
 
     def __repr__(self):
@@ -71,13 +72,14 @@ class ScenarioLike(Base):
 
     like_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     scenario_id = Column(String(50), nullable=False, index=True)  # Scenarios are in JSON files, not DB
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint('scenario_id', 'user_id', name='scenario_likes_unique'),
         Index('idx_scenario_likes_scenario', 'scenario_id', 'created_at'),
         Index('idx_scenario_likes_user', 'user_id', 'created_at'),
+        {"schema": "content"}
     )
 
     def __repr__(self):
@@ -90,13 +92,14 @@ class CommentLike(Base):
     """
     __tablename__ = "comment_likes"
 
-    comment_id = Column(BigInteger, ForeignKey("scenario_comments.id", ondelete="CASCADE"), primary_key=True, nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True, nullable=False)
+    comment_id = Column(BigInteger, ForeignKey("content.scenario_comments.id", ondelete="CASCADE"), primary_key=True, nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), primary_key=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         Index('idx_comment_likes_comment', 'comment_id'),
         Index('idx_comment_likes_user', 'user_id'),
+        {"schema": "content"}
     )
 
     def __repr__(self):
@@ -108,6 +111,7 @@ class ScenarioView(Base):
     시나리오 조회 기록
     """
     __tablename__ = "scenario_views"
+    __table_args__ = {"schema": "content"}
 
     view_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     scenario_id = Column(String(50), nullable=True)

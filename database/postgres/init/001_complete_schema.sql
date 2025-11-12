@@ -322,7 +322,11 @@ CREATE TABLE auth.users (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone DEFAULT now(),
     last_login timestamp without time zone,
-    is_active boolean DEFAULT true
+    is_active boolean DEFAULT true,
+    is_verified boolean DEFAULT false,
+    role character varying(50) DEFAULT 'user'::character varying,
+    total_sessions integer DEFAULT 0,
+    total_bubbles integer DEFAULT 0
 );
 
 
@@ -375,6 +379,16 @@ COMMENT ON COLUMN auth.users.provider IS '인증 제공자 (email, google, kakao
 --
 
 COMMENT ON COLUMN auth.users.display_name IS '표시 이름';
+
+COMMENT ON COLUMN auth.users.is_active IS '계정 활성화 여부';
+
+COMMENT ON COLUMN auth.users.is_verified IS '이메일 인증 완료 여부';
+
+COMMENT ON COLUMN auth.users.role IS '사용자 역할 (user, admin, moderator)';
+
+COMMENT ON COLUMN auth.users.total_sessions IS '총 세션 수 (비정규화)';
+
+COMMENT ON COLUMN auth.users.total_bubbles IS '총 획득 버블 수 (비정규화)';
 
 
 --
@@ -1145,6 +1159,7 @@ CREATE TABLE conversation.sessions (
     user_name character varying(255),
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone DEFAULT now(),
+    last_interaction_at timestamp without time zone DEFAULT now(),
     current_stage character varying(255),
     turn_count integer DEFAULT 0,
     stage_turn integer DEFAULT 0,
@@ -1216,6 +1231,13 @@ COMMENT ON COLUMN conversation.sessions.conversation_summary IS '대화 요약 (
 
 
 --
+-- Name: COLUMN sessions.last_interaction_at; Type: COMMENT; Schema: conversation; Owner: kime
+--
+
+COMMENT ON COLUMN conversation.sessions.last_interaction_at IS '마지막 상호작용 시간';
+
+
+--
 -- Name: COLUMN sessions.summary_updated_at; Type: COMMENT; Schema: conversation; Owner: kime
 --
 
@@ -1230,15 +1252,43 @@ COMMENT ON COLUMN conversation.sessions.summary_turn_count IS '요약에 포함�
 
 
 --
+-- Name: FUNCTION touch_session_activity(); Type: FUNCTION; Schema: conversation; Owner: kime
+--
+
+CREATE OR REPLACE FUNCTION conversation.touch_session_activity()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at = now();
+    NEW.last_interaction_at = now();
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: trigger_touch_session_activity; Type: TRIGGER; Schema: conversation; Owner: kime
+--
+
+CREATE TRIGGER trigger_touch_session_activity
+    BEFORE UPDATE ON conversation.sessions
+    FOR EACH ROW
+    EXECUTE FUNCTION conversation.touch_session_activity();
+
+
+--
 -- Name: user_inputs; Type: TABLE; Schema: conversation; Owner: kime
 --
 
 CREATE TABLE conversation.user_inputs (
     id bigint NOT NULL,
     session_id uuid NOT NULL,
+    user_id uuid,
     turn_number integer NOT NULL,
     user_input text NOT NULL,
-    "timestamp" timestamp without time zone DEFAULT now()
+    "timestamp" timestamp without time zone DEFAULT now(),
+    created_at timestamp without time zone DEFAULT now()
 );
 
 
@@ -1257,6 +1307,9 @@ COMMENT ON TABLE conversation.user_inputs IS '사용자 입력 히스토리';
 
 COMMENT ON COLUMN conversation.user_inputs.turn_number IS '해당 세션 내 턴 번호';
 
+COMMENT ON COLUMN conversation.user_inputs.user_id IS '입력한 사용자 ID (세션 사용자 캐시)';
+
+COMMENT ON COLUMN conversation.user_inputs.created_at IS '생성 시각 (timestamp 컬럼과 동일, 이관용)';
 
 --
 -- Name: user_inputs_id_seq; Type: SEQUENCE; Schema: conversation; Owner: kime
@@ -4047,6 +4100,13 @@ ALTER TABLE ONLY conversation.sessions
 ALTER TABLE ONLY conversation.user_inputs
     ADD CONSTRAINT user_inputs_session_id_fkey FOREIGN KEY (session_id) REFERENCES conversation.sessions(session_id) ON DELETE CASCADE;
 
+--
+-- Name: user_inputs user_inputs_user_id_fkey; Type: FK CONSTRAINT; Schema: conversation; Owner: kime
+--
+
+ALTER TABLE ONLY conversation.user_inputs
+    ADD CONSTRAINT user_inputs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(user_id) ON DELETE SET NULL;
+
 
 --
 -- Name: entity_mentions entity_mentions_entity_id_fkey; Type: FK CONSTRAINT; Schema: knowledge; Owner: kime
@@ -4255,4 +4315,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE kime IN SCHEMA progression GRANT ALL ON TABLES
 --
 -- PostgreSQL database dump complete
 --
-

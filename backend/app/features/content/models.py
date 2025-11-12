@@ -16,8 +16,10 @@ class World(Base):
     __table_args__ = {"schema": "content"}
 
     world_id = Column(String(50), primary_key=True)
-    title = Column(String(200), nullable=False)
+    name = Column(String(255), nullable=False)  # DB 컬럼명
     description = Column(Text)
+    era = Column(String(100))  # DB 컬럼
+    lore = Column(JSONB, default={})  # DB 컬럼
 
     # 월드 컨텍스트 (LLM에 전달될 세계관 정보)
     world_context = Column(Text)
@@ -41,7 +43,7 @@ class World(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f"<World(id={self.world_id}, title={self.title})>"
+        return f"<World(id={self.world_id}, name={self.name})>"
 
 
 class Character(Base):

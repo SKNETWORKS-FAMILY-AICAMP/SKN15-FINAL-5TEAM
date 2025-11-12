@@ -15,7 +15,7 @@ class AffinityRecord(Base):
     __tablename__ = "affinity_records"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
     turn_number = Column(Integer, nullable=False)
     character_name = Column(String(255), nullable=False)
     affinity_score = Column(Integer, nullable=False)
@@ -26,6 +26,7 @@ class AffinityRecord(Base):
         Index('idx_affinity_session', 'session_id', 'character_name'),
         Index('idx_affinity_character', 'character_name'),
         Index('idx_affinity_timestamp', 'timestamp'),
+        {"schema": "progression"}
     )
 
     def __repr__(self):

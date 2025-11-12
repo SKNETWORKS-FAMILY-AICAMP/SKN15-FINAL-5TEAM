@@ -15,9 +15,10 @@ class SessionSnapshot(Base):
     각 턴마다 세션 상태 스냅샷 저장
     """
     __tablename__ = "session_snapshots"
+    __table_args__ = {"schema": "conversation"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
     turn_number = Column(Integer, nullable=False)
     state_json = Column(JSONB, nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
@@ -56,6 +57,7 @@ class ScenarioStatistics(Base):
         CheckConstraint("total_completions >= 0", name="scenario_statistics_total_completions_check"),
         CheckConstraint("total_sessions >= 0", name="scenario_statistics_total_sessions_check"),
         CheckConstraint("avg_session_duration >= 0", name="scenario_statistics_avg_session_duration_check"),
+        {"schema": "content"}
     )
 
     def __repr__(self):
@@ -69,6 +71,7 @@ class UserFeedback(Base):
     사용자의 피드백 및 개선 제안
     """
     __tablename__ = "user_feedback"
+    __table_args__ = {"schema": "ml"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     training_log_id = Column(BigInteger)

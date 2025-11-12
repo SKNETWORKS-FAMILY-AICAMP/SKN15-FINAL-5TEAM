@@ -572,7 +572,7 @@ class UserRepository:
             SELECT
                 user_id, sound_enabled, bgm_volume, sfx_volume,
                 language, updated_at
-            FROM public.user_settings
+            FROM auth.user_settings
             WHERE user_id = :user_id
         """)
 
@@ -629,7 +629,7 @@ class UserRepository:
 
         # INSERT ... ON CONFLICT DO UPDATE 쿼리
         query = text(f"""
-            INSERT INTO public.user_settings ({', '.join(insert_fields)})
+            INSERT INTO auth.user_settings ({', '.join(insert_fields)})
             VALUES ({', '.join(insert_values)})
             ON CONFLICT (user_id)
             DO UPDATE SET {', '.join(set_fields)}

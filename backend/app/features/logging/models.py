@@ -14,6 +14,7 @@ class Log(Base):
     기존 logdb.logs 테이블을 public 스키마로 이동
     """
     __tablename__ = "logs"
+    __table_args__ = {"schema": "observability"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     session_id = Column(UUID(as_uuid=True), nullable=True)
@@ -35,6 +36,7 @@ class ErrorLog(Base):
     기존 logdb.error_logs 테이블을 public 스키마로 이동
     """
     __tablename__ = "error_logs"
+    __table_args__ = {"schema": "observability"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     session_id = Column(UUID(as_uuid=True), nullable=True)
@@ -54,6 +56,7 @@ class PerformanceMetric(Base):
     기존 logdb.performance_metrics 테이블을 public 스키마로 이동
     """
     __tablename__ = "performance_metrics"
+    __table_args__ = {"schema": "observability"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     metric_name = Column(String(100), nullable=False)
@@ -116,6 +119,7 @@ class TrainingLog(Base):
     __table_args__ = (
         CheckConstraint("feedback_score >= 0.0 AND feedback_score <= 1.0",
                         name="training_logs_feedback_score_check"),
+        {"schema": "ml"}
     )
 
     def __repr__(self):

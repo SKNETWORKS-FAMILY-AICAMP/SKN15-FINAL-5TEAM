@@ -16,12 +16,15 @@ class UserInput(Base):
     세션별 사용자 입력을 기록
     """
     __tablename__ = "user_inputs"
+    __table_args__ = {"schema": "conversation"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="SET NULL"))
     turn_number = Column(Integer, nullable=False)
     user_input = Column(Text, nullable=False)
     timestamp = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     def __repr__(self):
         return f"<UserInput(id={self.id}, session={self.session_id}, turn={self.turn_number})>"
@@ -35,7 +38,7 @@ class UserProgression(Base):
     """
     __tablename__ = "user_progression"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), primary_key=True)
 
     # 랭크 및 레벨
     rank_code = Column(String(50), default="novice")
@@ -60,6 +63,7 @@ class UserProgression(Base):
         CheckConstraint("total_play_minutes >= 0", name="user_progression_total_play_minutes_check"),
         CheckConstraint("scenarios_completed >= 0", name="user_progression_scenarios_completed_check"),
         CheckConstraint("achievements_count >= 0", name="user_progression_achievements_count_check"),
+        {"schema": "progression"}
     )
 
     def __repr__(self):
@@ -74,7 +78,7 @@ class UserScenarioProgress(Base):
     """
     __tablename__ = "user_scenario_progress"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), primary_key=True)
     scenario_id = Column(String(50), primary_key=True)
 
     # 진행 상태
@@ -102,6 +106,7 @@ class UserScenarioProgress(Base):
                         name="user_scenario_progress_completion_percentage_check"),
         CheckConstraint("total_messages >= 0", name="user_scenario_progress_total_messages_check"),
         CheckConstraint("total_play_time >= 0", name="user_scenario_progress_total_play_time_check"),
+        {"schema": "progression"}
     )
 
     def __repr__(self):
@@ -115,9 +120,10 @@ class StageProgression(Base):
     세션 내에서 각 스테이지의 진입/이탈 시간 및 통계
     """
     __tablename__ = "stage_progression"
+    __table_args__ = {"schema": "progression"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
     stage_id = Column(String(255), nullable=False)
     stage_order = Column(Integer, nullable=False)
 

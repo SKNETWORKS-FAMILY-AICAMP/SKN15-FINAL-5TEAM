@@ -89,7 +89,7 @@ class ConversationSummarizerService:
 
         # 대화 텍스트 구성
         conversation_text = "\n".join([
-            f"{turn.speaker}: {turn.text}"
+            f"{turn.speaker}: {turn.content}"
             for turn in dialogue_turns
         ])
 
@@ -141,7 +141,7 @@ class ConversationSummarizerService:
         speakers = set(turn.speaker for turn in dialogue_turns)
         message_count = len(dialogue_turns)
 
-        return f"{', '.join(speakers)} 간의 대화 ({message_count}개 메시지). 최근 메시지: {dialogue_turns[-1].text[:50]}..."
+        return f"{', '.join(speakers)} 간의 대화 ({message_count}개 메시지). 최근 메시지: {dialogue_turns[-1].content[:50]}..."
 
     async def get_or_create_summary(
         self,
@@ -174,7 +174,7 @@ class ConversationSummarizerService:
         # 대화 턴 조회
         turns_query = select(DialogueTurn).where(
             DialogueTurn.session_id == session_id
-        ).order_by(DialogueTurn.turn_count)
+        ).order_by(DialogueTurn.turn_number)
 
         turns_result = await self.db.execute(turns_query)
         turns = list(turns_result.scalars().all())
@@ -194,7 +194,7 @@ class ConversationSummarizerService:
             summary_text=summary_text,
             embedding=embedding,
             message_count=len(turns),
-            last_turn_number=turns[-1].turn_count
+            last_turn_number=turns[-1].turn_number
         )
 
         self.db.add(summary)
@@ -234,8 +234,8 @@ class ConversationSummarizerService:
         # 새로운 대화 턴 조회
         turns_query = select(DialogueTurn).where(
             DialogueTurn.session_id == session_id,
-            DialogueTurn.turn_count > summary.last_turn_number
-        ).order_by(DialogueTurn.turn_count)
+            DialogueTurn.turn_number > summary.last_turn_number
+        ).order_by(DialogueTurn.turn_number)
 
         turns_result = await self.db.execute(turns_query)
         new_turns = list(turns_result.scalars().all())
@@ -259,7 +259,7 @@ class ConversationSummarizerService:
         summary.summary_text = new_summary_text
         summary.embedding = new_embedding
         summary.message_count += len(new_turns)
-        summary.last_turn_number = new_turns[-1].turn_count
+        summary.last_turn_number = new_turns[-1].turn_number
         summary.updated_at = datetime.utcnow()
 
         await self.db.flush()

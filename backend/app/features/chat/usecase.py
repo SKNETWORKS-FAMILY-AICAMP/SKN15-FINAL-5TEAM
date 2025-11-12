@@ -395,11 +395,13 @@ class ChatUseCase:
                     session_id=session_id,
                     user_id=user_id,
                     scenario_id=scenario_id,
-                    turn_count=turn_count,
+                    turn_number=turn_count,
                     speaker=dialogue.speaker,
-                    text=dialogue.text,  # ✅ text 필드 사용
+                    content=dialogue.text,
                     emotion=dialogue.emotion or "neutral",
+                    emotion_intensity=dialogue.emotion_intensity if hasattr(dialogue, 'emotion_intensity') else None,
                     stage_tag=session_state.get("current_stage"),
+                    order_index=idx,
                     created_at=datetime.utcnow()
                 )
                 dialogue_models.append(model)
@@ -419,11 +421,11 @@ class ChatUseCase:
                     message_history = []
                     for dlg in recent_dialogues:
                         message_history.append({
-                            "turn": dlg.turn_count,
+                            "turn": dlg.turn_number,
                             "user_input": "",  # 사용자 입력은 별도 저장 필요
                             "agent_responses": [{
                                 "speaker": dlg.speaker,
-                                "text": dlg.text
+                                "text": dlg.content
                             }]
                         })
 

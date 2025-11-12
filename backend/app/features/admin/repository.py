@@ -132,7 +132,7 @@ class AdminRepository:
         stmt = (
             select(DialogueTurn)
             .where(DialogueTurn.session_id == session_id)
-            .order_by(DialogueTurn.turn_count.asc())
+            .order_by(DialogueTurn.turn_number.asc())
         )
 
         result = await self.db.execute(stmt)
@@ -142,13 +142,14 @@ class AdminRepository:
         for turn in turns_orm:
             turns.append({
                 "id": turn.id,
-                "session_id": turn.session_id,
-                "user_id": turn.user_id,
+                "session_id": str(turn.session_id),
+                "user_id": str(turn.user_id),
                 "scenario_id": turn.scenario_id,
-                "turn_count": turn.turn_count,
+                "turn_count": turn.turn_number,
                 "speaker": turn.speaker,
-                "text": turn.text,
+                "text": turn.content,
                 "emotion": turn.emotion,
+                "emotion_intensity": turn.emotion_intensity,
                 "stage_tag": turn.stage_tag,
                 "affinity_delta": turn.affinity_delta,
                 "created_at": turn.created_at

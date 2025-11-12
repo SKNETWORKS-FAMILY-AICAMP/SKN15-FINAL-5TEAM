@@ -21,9 +21,9 @@ class GalleryImage(Base):
     image_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Foreign Keys
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), nullable=False)
     scenario_id = Column(String(100), nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="SET NULL"), nullable=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="SET NULL"), nullable=True)
 
     # Image Info
     stage_tag = Column(String(100), nullable=False)  # 스테이지 태그
@@ -49,6 +49,7 @@ class GalleryImage(Base):
         Index("idx_gallery_scenario_id", "scenario_id"),
         Index("idx_gallery_session_id", "session_id"),
         Index("idx_gallery_user_scenario", "user_id", "scenario_id"),
+        {"schema": "gallery"}
     )
 
     def __repr__(self):
@@ -62,14 +63,15 @@ class GalleryImageLike(Base):
     __tablename__ = "gallery_image_likes"
 
     like_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    image_id = Column(UUID(as_uuid=True), ForeignKey("gallery_images.image_id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    image_id = Column(UUID(as_uuid=True), ForeignKey("gallery.gallery_images.image_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         UniqueConstraint('image_id', 'user_id', name='gallery_image_likes_unique'),
         Index('idx_gallery_image_likes_image', 'image_id', 'created_at'),
         Index('idx_gallery_image_likes_user', 'user_id', 'created_at'),
+        {"schema": "gallery"}
     )
 
     def __repr__(self):
@@ -83,14 +85,15 @@ class GalleryImageView(Base):
     __tablename__ = "gallery_image_views"
 
     view_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    image_id = Column(UUID(as_uuid=True), ForeignKey("gallery_images.image_id", ondelete="CASCADE"), nullable=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    image_id = Column(UUID(as_uuid=True), ForeignKey("gallery.gallery_images.image_id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="SET NULL"), nullable=True)
     ip_address = Column(INET, nullable=True)
     viewed_at = Column(DateTime(timezone=True), nullable=True, server_default=text('now()'))
 
     __table_args__ = (
         Index('idx_gallery_image_views_image', 'image_id', 'viewed_at'),
         Index('idx_gallery_image_views_user', 'user_id', 'viewed_at'),
+        {"schema": "gallery"}
     )
 
     def __repr__(self):

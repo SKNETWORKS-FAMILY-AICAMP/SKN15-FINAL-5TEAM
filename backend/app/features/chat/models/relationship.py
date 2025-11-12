@@ -14,8 +14,8 @@ class Relationship(Base):
     __tablename__ = "entity_relationships"
 
     relationship_id = Column(Integer, primary_key=True, autoincrement=True)
-    source_entity_id = Column(Integer, ForeignKey("entities.entity_id", ondelete="CASCADE"), nullable=False)
-    target_entity_id = Column(Integer, ForeignKey("entities.entity_id", ondelete="CASCADE"), nullable=False)
+    source_entity_id = Column(Integer, ForeignKey("knowledge.entities.entity_id", ondelete="CASCADE"), nullable=False)
+    target_entity_id = Column(Integer, ForeignKey("knowledge.entities.entity_id", ondelete="CASCADE"), nullable=False)
     relationship_type = Column(String(50), nullable=False)
     strength = Column(Float, default=0.5)
     context = Column(Text)
@@ -31,6 +31,7 @@ class Relationship(Base):
         Index('idx_relationships_target', 'target_entity_id'),
         Index('idx_relationships_type', 'relationship_type'),
         Index('idx_relationships_strength', 'strength'),
+        {"schema": "knowledge"}
     )
 
     def __repr__(self):

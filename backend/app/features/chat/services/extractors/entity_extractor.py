@@ -12,7 +12,8 @@ Extract entities from text:
 import re
 import json
 import glob
-from typing import List, Dict, Any, Optional, Set
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Set, Union
 from dataclasses import dataclass, asdict
 
 from app.core.config import get_settings
@@ -51,7 +52,8 @@ class EntityExtractor:
     def __init__(
         self,
         llm_client: Optional[LLMClient] = None,
-        enable_llm: bool = True
+        enable_llm: bool = True,
+        data_dir: Optional[Union[str, Path]] = None
     ):
         """
         Args:
@@ -60,6 +62,14 @@ class EntityExtractor:
         """
         self.llm_client = llm_client
         self.enable_llm = enable_llm
+
+        if data_dir is None:
+            data_dir = settings.DATA_DIR
+        if isinstance(data_dir, str):
+            data_dir = Path(data_dir)
+        self.data_dir: Path = data_dir
+        self.character_dir = self.data_dir / "characters"
+        self.scenario_dir = self.data_dir / "scenarios"
 
         # Knowledge bases
         self.known_characters: Dict[str, Dict[str, Any]] = {}
@@ -80,9 +90,8 @@ class EntityExtractor:
         """시나리오/캐릭터 데이터에서 알려진 엔티티 로드"""
         try:
             # Load characters
-            character_dir = settings.DATA_DIR / "characters"
-            if character_dir.exists():
-                character_files = glob.glob(str(character_dir / "*.json"))
+            if self.character_dir.exists():
+                character_files = glob.glob(str(self.character_dir / "*.json"))
                 for filepath in character_files:
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:
@@ -109,9 +118,8 @@ class EntityExtractor:
                         logger.error("_load_reference_data", f"Failed to load {filepath}: {e}")
 
             # Load scenarios for locations
-            scenario_dir = settings.DATA_DIR / "scenarios"
-            if scenario_dir.exists():
-                scenario_files = glob.glob(str(scenario_dir / "*.json"))
+            if self.scenario_dir.exists():
+                scenario_files = glob.glob(str(self.scenario_dir / "*.json"))
                 for filepath in scenario_files:
                     try:
                         with open(filepath, 'r', encoding='utf-8') as f:

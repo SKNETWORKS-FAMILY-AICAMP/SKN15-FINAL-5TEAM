@@ -92,7 +92,7 @@ class SessionRepository:
             select(
                 DialogueTurn.session_id,
                 DialogueTurn.speaker,
-                DialogueTurn.text
+                DialogueTurn.content
             )
             .where(
                 and_(
@@ -100,7 +100,7 @@ class SessionRepository:
                     DialogueTurn.speaker != 'user'
                 )
             )
-            .order_by(desc(DialogueTurn.turn_count), desc(DialogueTurn.id))
+            .order_by(desc(DialogueTurn.turn_number), desc(DialogueTurn.id))
             .limit(1)
             .correlate(Session)
             .lateral("last_dialogue")

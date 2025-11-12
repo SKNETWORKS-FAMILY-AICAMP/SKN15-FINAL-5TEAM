@@ -13,10 +13,11 @@ from datetime import datetime
 class UserMemory(Base):
     """사용자 메모리 (장기 기억)"""
     __tablename__ = "user_memories"
+    __table_args__ = {"schema": "knowledge"}
 
     memory_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id"), nullable=False)
 
     memory_text = Column(Text, nullable=False)
     memory_type = Column(String(50))  # preference, fact, goal, etc.

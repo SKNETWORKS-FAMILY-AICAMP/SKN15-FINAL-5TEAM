@@ -20,7 +20,7 @@ class Session(Base):
     session_id = Column(UUID(as_uuid=True), primary_key=True)
     scenario_id = Column(String(255), nullable=False, index=True)
     user_name = Column(String(255))
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="SET NULL"), index=True)
 
     # 세션 상태
     current_stage = Column(String(255))
@@ -40,6 +40,7 @@ class Session(Base):
 
     __table_args__ = (
         Index('idx_sessions_created', 'created_at'),
+        {"schema": "conversation"}
     )
 
     def __repr__(self):

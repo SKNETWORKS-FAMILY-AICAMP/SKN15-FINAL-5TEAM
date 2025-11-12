@@ -37,6 +37,7 @@ class Entity(Base):
         Index('idx_entities_importance', 'importance_score'),
         Index('idx_entities_mention_count', 'mention_count'),
         Index('idx_entities_community', 'community_id'),
+        {"schema": "knowledge"}
     )
 
     def __repr__(self):

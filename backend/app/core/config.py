@@ -2,6 +2,7 @@
 Core Configuration
 Pydantic Settings를 사용한 환경 설정 관리
 """
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
@@ -72,7 +73,8 @@ class Settings(BaseSettings):
     # OpenAI 설정
     # ============================================================
     OPENAI_PROVIDER: str = "openai"
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: Optional[str] = None
+    LLM_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_MAX_TOKENS: int = 2000
@@ -100,7 +102,7 @@ class Settings(BaseSettings):
     # ============================================================
     # 파일 시스템 설정
     # ============================================================
-    DATA_DIR: str = "/Users/jtm427/Desktop/workspace/data"  # 로컬: workspace/data, Docker: /app/data
+    DATA_DIR: Path = Path("/Users/jtm427/Desktop/workspace/data")  # 로컬: workspace/data, Docker: /app/data
 
     # ============================================================
     # 로깅 설정

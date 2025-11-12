@@ -79,13 +79,13 @@ class LLMClient:
             enable_caching: 응답 캐싱 활성화
             max_requests_per_minute: 분당 최대 요청 수
         """
-        self.api_key = api_key or settings.OPENAI_API_KEY
+        self.api_key = api_key or settings.LLM_API_KEY or settings.OPENAI_API_KEY
         self.model = model or settings.OPENAI_MODEL
         self.temperature = settings.OPENAI_TEMPERATURE
         self.max_tokens = settings.OPENAI_MAX_TOKENS
 
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
+            raise ValueError("OpenAI API 키가 설정되지 않았습니다. (.env의 OPENAI_API_KEY 또는 LLM_API_KEY를 확인하세요)")
 
         self.client = OpenAI(api_key=self.api_key)
         self.enable_caching = enable_caching

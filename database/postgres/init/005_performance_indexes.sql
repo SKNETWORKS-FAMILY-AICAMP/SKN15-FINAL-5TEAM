@@ -64,14 +64,14 @@ ON conversation.dialogues(speaker, "timestamp" DESC);
 
 -- state 내 특정 필드 조회 최적화 (GIN 인덱스)
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_state_gin
-ON chat_sessions USING gin(state);
+ON conversation.chat_sessions USING gin(state);
 
 -- 자주 조회되는 state 필드에 대한 인덱스
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_state_scenario
-ON chat_sessions((state->>'scenario_id'));
+ON conversation.chat_sessions((state->>'scenario_id'));
 
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_state_stage
-ON chat_sessions((state->>'current_stage'));
+ON conversation.chat_sessions((state->>'current_stage'));
 
 -- ============================================================
 -- 벡터 임베딩 인덱스 (향후 semantic search용)
@@ -92,7 +92,7 @@ WITH (lists = 100);
 ANALYZE conversation.dialogues;
 ANALYZE conversation.sessions;
 ANALYZE conversation.user_inputs;
-ANALYZE chat_sessions;
+ANALYZE conversation.chat_sessions;
 
 -- ============================================================
 -- 인덱스 성능 모니터링 쿼리 (참고용)

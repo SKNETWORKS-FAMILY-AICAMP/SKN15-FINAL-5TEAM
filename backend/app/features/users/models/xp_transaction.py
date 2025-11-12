@@ -12,9 +12,10 @@ from datetime import datetime
 class XPTransaction(Base):
     """XP 트랜잭션 로그"""
     __tablename__ = "xp_transactions"
+    __table_args__ = {"schema": "progression"}
 
     transaction_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id"), nullable=False)
     # session_id removed - not in DB schema
 
     xp_amount = Column(Integer, nullable=False)  # 양수: 획득, 음수: 소비

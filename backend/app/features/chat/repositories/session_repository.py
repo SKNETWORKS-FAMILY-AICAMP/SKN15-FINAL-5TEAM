@@ -143,7 +143,7 @@ class SessionRepository:
         logger.warning("delete_session", "Deleting session", session_id=session_id)
 
         stmt = text("""
-            UPDATE chat_sessions
+            UPDATE conversation.chat_sessions
             SET is_active = FALSE, updated_at = NOW()
             WHERE id = :session_id
         """)

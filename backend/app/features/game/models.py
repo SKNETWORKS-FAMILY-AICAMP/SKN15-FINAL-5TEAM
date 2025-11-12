@@ -17,7 +17,7 @@ class UserEquipment(Base):
     """
     __tablename__ = "user_equipment"
 
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), primary_key=True)
 
     # 장비 상태
     sword_status = Column(String(50), default="good")  # excellent, good, fair, poor, broken
@@ -45,6 +45,7 @@ class UserEquipment(Base):
             "crow_status IN ('waiting', 'active', 'resting', 'absent')",
             name="user_equipment_crow_status_check"
         ),
+        {"schema": "progression"}
     )
 
     def __repr__(self):
@@ -60,7 +61,7 @@ class UserUnlockedImage(Base):
     __tablename__ = "user_unlocked_images"
 
     unlock_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), nullable=False)
     image_id = Column(UUID(as_uuid=True), nullable=False)
 
     # 언락 정보
@@ -81,6 +82,7 @@ class RankDefinition(Base):
     사용자 레벨에 따른 랭크 시스템 (계급, 갑, 을, 병, 정 등)
     """
     __tablename__ = "rank_definitions"
+    __table_args__ = {"schema": "content"}
 
     rank_code = Column(String(50), primary_key=True)
 
@@ -111,9 +113,10 @@ class GameEvent(Base):
     게임 내에서 발생하는 주요 이벤트 기록
     """
     __tablename__ = "game_events"
+    __table_args__ = {"schema": "progression"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
     turn_number = Column(Integer, nullable=False)
 
     event_type = Column(String(100), nullable=False)  # mission_start, mission_complete, rank_up, item_acquired
@@ -132,9 +135,10 @@ class MissionRecord(Base):
     사용자가 완료한 미션 기록
     """
     __tablename__ = "mission_records"
+    __table_args__ = {"schema": "progression"}
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id", ondelete="CASCADE"), nullable=False)
 
     mission_type = Column(String(100), nullable=False)  # persuade, investigate, battle, protect
     target_character = Column(String(255))

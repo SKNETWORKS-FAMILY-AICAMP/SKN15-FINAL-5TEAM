@@ -24,10 +24,11 @@ class User(Base, TimestampMixin):
 
     # Authentication
     username = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
+    provider = Column(String(50), default='email', nullable=False)  # email, google, kakao, etc.
 
     # Profile
-    display_name = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=True)
     email = Column(String(255), unique=True, nullable=True, index=True)
 
     # Account Status
@@ -40,7 +41,7 @@ class User(Base, TimestampMixin):
     total_bubbles = Column(Integer, default=0)  # 총 획득 버블 수
 
     # Last Activity
-    last_login_at = Column(DateTime, nullable=True)
+    last_login = Column(DateTime, nullable=True)
 
     # Relationships
     xp_transactions = relationship("XPTransaction", back_populates="user")
@@ -50,6 +51,7 @@ class User(Base, TimestampMixin):
         Index('idx_users_username', 'username'),
         Index('idx_users_email', 'email'),
         Index('idx_users_is_active', 'is_active'),
+        {"schema": "auth"}
     )
 
     def __repr__(self):
@@ -75,8 +77,7 @@ class PasswordResetToken(Base):
 
     # Expiration
     expires_at = Column(DateTime, nullable=False)
-    used_at = Column(DateTime, nullable=True)
-    is_used = Column(Boolean, default=False, nullable=False)
+    used = Column(Boolean, default=False, nullable=False)  # DB 컬럼명
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -86,10 +87,41 @@ class PasswordResetToken(Base):
         Index('idx_password_reset_token', 'token'),
         Index('idx_password_reset_user_id', 'user_id'),
         Index('idx_password_reset_expires_at', 'expires_at'),
+        {"schema": "auth"}
     )
 
     def __repr__(self):
-        return f"<PasswordResetToken(id={self.token_id}, user_id={self.user_id}, used={self.is_used})>"
+        return f"<PasswordResetToken(id={self.token_id}, user_id={self.user_id}, used={self.used})>"
+
+
+class UserCredits(Base):
+    """
+    사용자 크레딧(버블) 정보
+
+    Note: DB 테이블명은 user_credits입니다.
+    """
+    __tablename__ = "user_credits"
+
+    # Primary Key & Foreign Key
+    user_id = Column(UUID(as_uuid=True), primary_key=True)
+
+    # 크레딧 정보
+    bubble_count = Column(Integer, default=100, nullable=False)
+    total_purchased = Column(Integer, default=100, nullable=False)
+    total_consumed = Column(Integer, default=0, nullable=False)
+
+    # Timestamps
+    last_updated = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("bubble_count >= 0", name="positive_bubble_count"),
+        CheckConstraint("total_purchased >= 0 AND total_consumed >= 0", name="positive_totals"),
+        {"schema": "auth"}
+    )
+
+    def __repr__(self):
+        return f"<UserCredits(user_id={self.user_id}, bubbles={self.bubble_count})>"
 
 
 class UserSettings(Base):
@@ -99,6 +131,7 @@ class UserSettings(Base):
     사운드, 볼륨, 언어 등 개인 설정 정보를 관리합니다.
     """
     __tablename__ = "user_settings"
+    __table_args__ = {"schema": "auth"}
 
     # Primary Key & Foreign Key
     user_id = Column(UUID(as_uuid=True), primary_key=True)
@@ -148,6 +181,7 @@ class CreditTransaction(Base):
             "transaction_type IN ('purchase', 'consume', 'refund', 'bonus', 'initial')",
             name='credit_transactions_transaction_type_check'
         ),
+        {"schema": "auth"}
     )
 
     def __repr__(self):
