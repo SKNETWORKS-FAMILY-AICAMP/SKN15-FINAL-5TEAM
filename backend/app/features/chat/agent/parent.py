@@ -508,7 +508,7 @@ class ParentAgent:
                 user_input=user_input,
                 assistant_response="\n".join([d.get("text", "") for d in dialogues]),
                 context={"scenario_id": state.get("scenario_id")}
-            )
+            ) 
 
             logger.info("_extract_memories",
                        entities=len(result["entities"]),

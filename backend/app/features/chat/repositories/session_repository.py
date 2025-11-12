@@ -34,7 +34,7 @@ class SessionRepository:
         stmt = text("""
             SELECT session_id, user_id, scenario_id, user_name, current_stage, turn_count,
                    stage_turn, is_active, conversation_summary, created_at, updated_at
-            FROM sessions
+            FROM conversation.sessions
             WHERE session_id = :session_id AND is_active = TRUE
         """)
 
@@ -94,7 +94,7 @@ class SessionRepository:
         user_name = state.get("user_name")
 
         stmt = text("""
-            INSERT INTO sessions (session_id, user_id, scenario_id, user_name, current_stage, turn_count,
+            INSERT INTO conversation.sessions (session_id, user_id, scenario_id, user_name, current_stage, turn_count,
                                  stage_turn, is_active, conversation_summary, summary_turn_count,
                                  summary_updated_at, created_at, updated_at)
             VALUES (:session_id, :user_id, :scenario_id, :user_name, :current_stage, :turn_count,
@@ -143,9 +143,9 @@ class SessionRepository:
         logger.warning("delete_session", "Deleting session", session_id=session_id)
 
         stmt = text("""
-            UPDATE conversation.chat_sessions
+            UPDATE conversation.sessions
             SET is_active = FALSE, updated_at = NOW()
-            WHERE id = :session_id
+            WHERE session_id = :session_id
         """)
 
         result = await self.db.execute(stmt, {"session_id": session_id})

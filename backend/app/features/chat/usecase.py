@@ -326,6 +326,15 @@ class ChatUseCase:
                     "affinity_scores": initial_affinity_scores,
                 }
 
+                # 신규 세션을 먼저 DB에 저장 (dialogue FK 위반 방지)
+                logger.info("create_dialogue", "Saving new session to DB before dialogue insert")
+                await self.session_repository.save_session(
+                    session_id=session_id,
+                    user_id=user_id,
+                    scenario_id=scenario_id,
+                    state=session_state
+                )
+
             # ============================================================
             # 2. 정책: 일일 대화 제한 체크
             # ============================================================

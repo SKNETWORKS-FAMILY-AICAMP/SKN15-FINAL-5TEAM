@@ -45,7 +45,7 @@ async def grant_initial_credits():
             # 1. 크레딧이 없는 사용자 조회
             query_users = text("""
                 SELECT u.user_id, u.username, u.display_name
-                FROM users u
+                FROM auth.users u
                 LEFT JOIN user_credits uc ON u.user_id = uc.user_id
                 WHERE uc.user_id IS NULL OR uc.bubble_count = 0
                 ORDER BY u.created_at

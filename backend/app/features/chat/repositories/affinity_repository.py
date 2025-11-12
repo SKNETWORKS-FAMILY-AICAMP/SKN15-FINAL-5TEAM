@@ -122,7 +122,7 @@ class AffinityRepository:
         # PostgreSQL의 ON CONFLICT를 사용한 atomic upsert
         # 이렇게 하면 동시 요청 시 race condition 방지
         stmt = text("""
-            INSERT INTO user_character_affinity
+            INSERT INTO progression.user_character_affinity
                 (user_id, character_name, total_affinity_score, affinity_level,
                  total_interactions, last_interaction_at, created_at, updated_at)
             VALUES
@@ -132,8 +132,8 @@ class AffinityRepository:
             ON CONFLICT (user_id, character_name)
             DO UPDATE SET
                 total_affinity_score = GREATEST(0, LEAST(1000,
-                    user_character_affinity.total_affinity_score + :score_delta)),
-                total_interactions = user_character_affinity.total_interactions + 1,
+                    progression.user_character_affinity.total_affinity_score + :score_delta)),
+                total_interactions = progression.user_character_affinity.total_interactions + 1,
                 last_interaction_at = NOW(),
                 updated_at = NOW()
             RETURNING id, user_id, character_name, total_affinity_score,

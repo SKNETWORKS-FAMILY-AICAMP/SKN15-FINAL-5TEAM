@@ -15,7 +15,7 @@ class UserCharacterAffinity(Base):
     __tablename__ = "user_character_affinity"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("auth.users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     character_name = Column(String(255), nullable=False)
     total_affinity_score = Column(Integer, nullable=False, default=0)
     affinity_level = Column(Integer, nullable=False, default=1)
@@ -30,6 +30,7 @@ class UserCharacterAffinity(Base):
         CheckConstraint('affinity_level >= 1 AND affinity_level <= 10'),
         Index('idx_user_character_affinity_character', 'character_name'),
         Index('idx_user_character_affinity_score', 'user_id', 'total_affinity_score'),
+        {"schema": "progression"}
     )
 
     def __repr__(self):

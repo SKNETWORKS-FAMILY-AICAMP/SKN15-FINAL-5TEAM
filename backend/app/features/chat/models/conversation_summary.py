@@ -15,7 +15,7 @@ class ConversationSummary(Base):
     __tablename__ = "conversation_summaries"
 
     summary_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation.sessions.session_id"), nullable=False)
 
     summary_text = Column(Text, nullable=False)
     embedding = Column(Vector(1536))
@@ -25,6 +25,8 @@ class ConversationSummary(Base):
 
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = {"schema": "conversation"}
 
     # Relationships (commented out - Session model doesn't have back_populates defined)
     # session = relationship("Session")

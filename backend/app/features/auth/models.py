@@ -94,34 +94,9 @@ class PasswordResetToken(Base):
         return f"<PasswordResetToken(id={self.token_id}, user_id={self.user_id}, used={self.used})>"
 
 
-class UserCredits(Base):
-    """
-    사용자 크레딧(버블) 정보
-
-    Note: DB 테이블명은 user_credits입니다.
-    """
-    __tablename__ = "user_credits"
-
-    # Primary Key & Foreign Key
-    user_id = Column(UUID(as_uuid=True), primary_key=True)
-
-    # 크레딧 정보
-    bubble_count = Column(Integer, default=100, nullable=False)
-    total_purchased = Column(Integer, default=100, nullable=False)
-    total_consumed = Column(Integer, default=0, nullable=False)
-
-    # Timestamps
-    last_updated = Column(DateTime, default=datetime.utcnow, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    __table_args__ = (
-        CheckConstraint("bubble_count >= 0", name="positive_bubble_count"),
-        CheckConstraint("total_purchased >= 0 AND total_consumed >= 0", name="positive_totals"),
-        {"schema": "auth"}
-    )
-
-    def __repr__(self):
-        return f"<UserCredits(user_id={self.user_id}, bubbles={self.bubble_count})>"
+# UserCredits moved to app.features.users.models.user_credits
+# Import it from there to avoid duplicate table definition
+# from app.features.users.models.user_credits import UserCredits
 
 
 class UserSettings(Base):

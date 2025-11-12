@@ -38,7 +38,7 @@ class UserRepository:
                 is_active, is_verified, role,
                 total_sessions, total_bubbles,
                 last_login_at, created_at, updated_at
-            FROM users
+            FROM auth.users
             WHERE user_id = :user_id
         """)
 
@@ -99,7 +99,7 @@ class UserRepository:
         updates.append("updated_at = :updated_at")
 
         query = text(f"""
-            UPDATE users
+            UPDATE auth.users
             SET {', '.join(updates)}
             WHERE user_id = :user_id
         """)
@@ -127,7 +127,7 @@ class UserRepository:
                 uc.current_credits,
                 COUNT(DISTINCT s.session_id) as active_sessions,
                 MAX(s.created_at) as last_session_at
-            FROM users u
+            FROM auth.users u
             LEFT JOIN user_credits uc ON u.user_id = uc.user_id
             LEFT JOIN sessions s ON u.user_id = s.user_id
             WHERE u.user_id = :user_id
@@ -163,7 +163,7 @@ class UserRepository:
                 COALESCE(bubble_count, 0) as bubble_count,
                 COALESCE(total_purchased, 0) as total_purchased,
                 COALESCE(total_consumed, 0) as total_consumed
-            FROM user_credits
+            FROM auth.user_credits
             WHERE user_id = :user_id
         """)
 
@@ -204,7 +204,7 @@ class UserRepository:
         # 현재 크레딧 확인
         check_query = text("""
             SELECT bubble_count
-            FROM user_credits
+            FROM auth.user_credits
             WHERE user_id = :user_id
         """)
         result = await self.db.execute(check_query, {"user_id": user_id})
@@ -284,7 +284,7 @@ class UserRepository:
         # 현재 크레딧 확인
         check_query = text("""
             SELECT bubble_count
-            FROM user_credits
+            FROM auth.user_credits
             WHERE user_id = :user_id
         """)
         result = await self.db.execute(check_query, {"user_id": user_id})
@@ -685,7 +685,7 @@ class UserRepository:
 
         # 사용자 테이블 XP 업데이트
         update_query = text("""
-            UPDATE users
+            UPDATE auth.users
             SET total_xp = :new_xp, updated_at = :updated_at
             WHERE user_id = :user_id
         """)
@@ -755,7 +755,7 @@ class UserRepository:
                 xp_amount, xp_type, xp_balance_after,
                 level_before, level_after, did_level_up,
                 extra_metadata, created_at
-            FROM xp_transactions
+            FROM progression.xp_transactions
             WHERE user_id = :user_id
             ORDER BY created_at DESC
             LIMIT :limit

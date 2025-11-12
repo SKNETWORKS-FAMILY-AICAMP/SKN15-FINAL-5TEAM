@@ -28,7 +28,7 @@ def upgrade() -> None:
     # 1. 크레딧이 없거나 0인 사용자 조회
     result = conn.execute(text("""
         SELECT u.user_id, u.username
-        FROM users u
+        FROM auth.users u
         LEFT JOIN user_credits uc ON u.user_id = uc.user_id
         WHERE uc.user_id IS NULL OR uc.bubble_count = 0
     """))
