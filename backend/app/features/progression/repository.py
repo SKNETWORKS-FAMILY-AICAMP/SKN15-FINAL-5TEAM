@@ -143,8 +143,8 @@ class ProgressionRepository:
             level_before=level_before,
             level_after=new_level,
             did_level_up=did_level_up,
-            description=description,
-            extra_metadata=metadata or {}
+            description=description,  # Use description field directly
+            extra_metadata=metadata or {}  # Python attr name is extra_metadata, DB column is metadata
         )
         self.db.add(transaction)
         await self.db.flush()
