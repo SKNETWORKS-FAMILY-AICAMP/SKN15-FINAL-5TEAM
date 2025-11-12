@@ -4,6 +4,7 @@ import LeftSidebar from '@/components/LeftSidebar';
 import SettingsModal from '@/components/SettingsModal';
 import AdvancedSettingsModal from '@/components/AdvancedSettingsModal';
 import PaymentModal from '@/components/PaymentModal';
+import MyAccountModal from '@/components/MyAccountModal';
 
 export default function GlobalComponents() {
   const {
@@ -42,6 +43,9 @@ export default function GlobalComponents() {
         isOpen={isPaymentModalOpen}
         onClose={closePaymentModal}
       />
+
+      {/* 마이 어카운트 모달 */}
+      <MyAccountModal />
     </>
   );
 }

@@ -141,7 +141,7 @@ async def create_chat(
                 dialogues=rendered_chat_messages,
                 turn_count=dialogue_result.updated_state.get("turn_count", 1),
                 current_stage=dialogue_result.next_stage or dialogue_result.updated_state.get("current_stage", "intro"),
-                affinity_scores=dialogue_result.updated_state.get("affinity_scores", {}),
+                affinity_scores=dialogue_result.affinity_scores or {},
                 is_ended=False,
                 has_more=False,
                 current_image=None,

@@ -4,6 +4,7 @@ Auth Feature - Models
 """
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, Index, Text, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 from app.core.db.base import Base, TimestampMixin
@@ -40,6 +41,9 @@ class User(Base, TimestampMixin):
 
     # Last Activity
     last_login_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    xp_transactions = relationship("XPTransaction", back_populates="user")
 
     # Indexes
     __table_args__ = (

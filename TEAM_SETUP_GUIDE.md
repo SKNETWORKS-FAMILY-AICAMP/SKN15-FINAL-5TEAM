@@ -66,6 +66,13 @@ docker-compose logs -f backend
 docker-compose logs -f frontend
 ```
 
+**🎉 중요: 마이그레이션 자동 실행**
+- `docker-compose up -d` 실행 시 **자동으로 데이터베이스 마이그레이션**이 실행됩니다
+- **기존 데이터는 절대 삭제되지 않습니다** (안전한 업그레이드만 수행)
+- 이미 적용된 마이그레이션은 자동으로 건너뜁니다
+- 크레딧이 없는 사용자에게 자동으로 200 버블이 지급됩니다
+- **별도로 `alembic upgrade head` 명령을 실행할 필요가 없습니다!**
+
 ### 4. 접속 확인
 
 - **프론트엔드**: http://localhost
@@ -142,17 +149,44 @@ docker-compose down -v
 docker-compose up -d
 ```
 
-## 🆕 신규 기능: 회원가입 시 초기 크레딧 지급
+## 🆕 신규 기능: 초기 크레딧 자동 지급
 
-### 자동 지급
-- 신규 회원가입 시 자동으로 **200 버블** 지급
-- 트랜잭션 로그 자동 기록
+### 자동 지급 시점
+팀원이 처음 프로젝트를 설정할 때 다음 시점에 자동으로 **200 버블**이 지급됩니다:
 
-### 수동 지급 (기존 사용자)
-기존 사용자들에게 소급 지급하려면:
+1. **신규 회원가입 시**: 자동으로 200 버블 지급
+2. **마이그레이션 실행 시**: 기존 사용자 중 크레딧이 없는 사용자에게 자동 지급
+
+### 처음 프로젝트 설정 시 (팀원용)
 
 ```bash
-docker-compose exec backend python scripts/grant_initial_credits_to_existing_users.py
+# 도커 실행 (마이그레이션 자동 실행됨)
+docker-compose up -d
+```
+
+**완료!** 이게 전부입니다. 백엔드 시작 시 자동으로:
+1. PostgreSQL 연결 대기
+2. 데이터베이스 마이그레이션 실행
+3. 크레딧이 없는 사용자에게 200 버블 지급
+4. FastAPI 서버 시작
+
+백엔드 로그에서 다음과 같은 메시지를 볼 수 있습니다:
+```
+📊 Granting initial credits to X users
+  ✓ username1: +200 버블
+  ✓ username2: +200 버블
+✓ Successfully granted 200 credits to X users
+```
+
+### 크레딧 확인
+
+```bash
+# 모든 사용자의 크레딧 확인
+docker-compose exec -T postgres psql -U kime -d kimedb -c \
+  "SELECT u.username, u.display_name, uc.bubble_count
+   FROM users u
+   LEFT JOIN user_credits uc ON u.user_id = uc.user_id
+   ORDER BY u.created_at;"
 ```
 
 ### 테스트 계정 생성
@@ -176,6 +210,13 @@ docker-compose exec -T postgres psql -U kime -d kimedb -c \
    LEFT JOIN user_credits uc ON u.user_id = uc.user_id
    WHERE u.username = 'testuser';"
 ```
+
+### 💡 중요 사항
+
+- **일일 채팅 제한**: 1000회 (충분한 테스트를 위한 제한)
+- **초기 크레딧**: 200 버블 (자동 지급)
+- **크레딧 소비**: 채팅 1회당 버블 소비 (정확한 양은 시나리오 설정에 따름)
+- **추가 크레딧이 필요한 경우**: 팀원에게 문의하여 수동으로 지급 가능
 
 ## 🐛 문제 해결
 
