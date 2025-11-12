@@ -37,7 +37,7 @@ class UserRepository:
                 user_id, username, display_name, email,
                 is_active, is_verified, role,
                 total_sessions, total_bubbles,
-                last_login_at, created_at, updated_at
+                last_login, created_at, updated_at
             FROM auth.users
             WHERE user_id = :user_id
         """)
@@ -59,7 +59,7 @@ class UserRepository:
             "role": row.role,
             "total_sessions": row.total_sessions or 0,
             "total_bubbles": row.total_bubbles or 0,
-            "last_login_at": row.last_login_at.isoformat() if row.last_login_at else None,
+            "last_login": row.last_login.isoformat() if row.last_login else None,
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         }

@@ -37,7 +37,7 @@ class UserProfileResponse(BaseModel):
     is_active: bool = True
     total_sessions: int = 0
     total_bubbles: int = 0
-    last_login_at: Optional[str] = None
+    last_login: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     affinities: List[AffinityResponse] = Field(default_factory=list, description="캐릭터 호감도 목록")
