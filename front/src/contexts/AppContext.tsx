@@ -121,10 +121,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
           // Load user credits (bubble count)
           try {
+            console.log('[AppContext] Fetching user credits...');
+            console.log('[AppContext] Access token exists:', !!localStorage.getItem('access_token'));
             const credits = await apiClient.getUserCredits();
+            console.log('[AppContext] Credits loaded successfully:', credits);
+            console.log('[AppContext] Setting bubbles to:', credits.bubble_count);
             setCurrentBubbles(credits.bubble_count);
-          } catch (error) {
-            console.error('Failed to load credits:', error);
+          } catch (error: any) {
+            console.error('[AppContext] ❌ Failed to load credits:', error);
+            console.error('[AppContext] Error details:', {
+              message: error?.message,
+              response: error?.response?.data,
+              status: error?.response?.status,
+              config: error?.config?.url
+            });
+            // 기본값 0 설정 (실제 DB에 크레딧이 있어도 API 호출 실패 시)
+            console.warn('[AppContext] Setting bubbles to 0 due to API error');
             setCurrentBubbles(0);
           }
         } catch (error: any) {
