@@ -79,7 +79,7 @@ class AdminUserResponse(BaseModel):
     is_verified: bool = Field(..., description="이메일 인증 여부")
     total_sessions: int = Field(default=0, description="총 세션 수")
     total_bubbles: int = Field(default=0, description="총 버블 수")
-    last_login_at: Optional[datetime] = Field(None, description="마지막 로그인 시간")
+    last_login: Optional[datetime] = Field(None, description="마지막 로그인 시간")
     created_at: datetime = Field(..., description="가입 시간")
     updated_at: datetime = Field(..., description="수정 시간")
 
