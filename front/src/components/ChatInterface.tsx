@@ -44,7 +44,7 @@ export default function ChatInterface({
   onInvitedCharactersChange
 }: ChatInterfaceProps) {
   // App context (for bubble consumption and user info)
-  const { consumeBubbles, currentUser } = useApp();
+  const { consumeBubbles, currentUser, openMyAccount } = useApp();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -1137,6 +1137,14 @@ export default function ChatInterface({
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+
+    // 🎯 명령어 처리 (백엔드로 전송하지 않음)
+    const command = text.trim().toLowerCase();
+    if (command === 'my account' || command === '/my account' || command === '마이 어카운트' || command === '내 계정') {
+      openMyAccount();
+      setInputMessage(''); // 입력창 초기화
+      return;
+    }
 
     // 🚫 중복 전송 방지
     if (isSendingRef.current) {

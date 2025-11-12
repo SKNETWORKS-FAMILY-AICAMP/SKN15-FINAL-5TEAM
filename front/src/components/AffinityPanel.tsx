@@ -60,10 +60,7 @@ function getLevelProgress(score: number): number {
 
 export default function AffinityPanel({ affinityScores }: AffinityPanelProps) {
   // 모든 캐릭터 표시 (친밀도가 없으면 0으로 표시)
-  if (Object.keys(affinityScores).length === 0) {
-    return null; // 친밀도 데이터가 전혀 없으면 패널을 표시하지 않음
-  }
-
+  // 항상 패널을 표시하고, 친밀도가 없는 캐릭터는 0으로 시작
   return (
     <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg p-2.5 border border-purple-200/50">
       {/* 헤더 */}
