@@ -104,7 +104,7 @@ class AffinityRepository:
         score_delta: int
     ) -> UserCharacterAffinity:
         """
-        사용자별 글로벌 친밀도 UPSERT
+        사용자별 글로벌 친밀도 UPSERT (race-condition safe)
 
         Args:
             user_id: 사용자 ID
@@ -114,35 +114,53 @@ class AffinityRepository:
         Returns:
             업데이트된 UserCharacterAffinity
         """
+        from sqlalchemy import text
+
         logger.info("upsert_user_character_affinity", f"Updating global affinity for {character_name}",
                    user_id=user_id, delta=score_delta)
 
-        # 기존 레코드 조회
-        stmt = select(UserCharacterAffinity).where(
-            and_(
-                UserCharacterAffinity.user_id == user_id,
-                UserCharacterAffinity.character_name == character_name
-            )
-        )
-        result = await self.db.execute(stmt)
-        affinity = result.scalar_one_or_none()
+        # PostgreSQL의 ON CONFLICT를 사용한 atomic upsert
+        # 이렇게 하면 동시 요청 시 race condition 방지
+        stmt = text("""
+            INSERT INTO user_character_affinity
+                (user_id, character_name, total_affinity_score, affinity_level,
+                 total_interactions, last_interaction_at, created_at, updated_at)
+            VALUES
+                (:user_id, :character_name,
+                 GREATEST(0, LEAST(1000, :score_delta)),
+                 1, 1, NOW(), NOW(), NOW())
+            ON CONFLICT (user_id, character_name)
+            DO UPDATE SET
+                total_affinity_score = GREATEST(0, LEAST(1000,
+                    user_character_affinity.total_affinity_score + :score_delta)),
+                total_interactions = user_character_affinity.total_interactions + 1,
+                last_interaction_at = NOW(),
+                updated_at = NOW()
+            RETURNING id, user_id, character_name, total_affinity_score,
+                      affinity_level, total_interactions, last_interaction_at,
+                      created_at, updated_at
+        """)
 
-        if affinity:
-            # 업데이트
-            affinity.total_affinity_score = max(0, min(1000, affinity.total_affinity_score + score_delta))
-            affinity.total_interactions += 1
-            affinity.last_interaction_at = datetime.utcnow()
-            affinity.updated_at = datetime.utcnow()
-        else:
-            # 생성
-            affinity = UserCharacterAffinity(
-                user_id=user_id,
-                character_name=character_name,
-                total_affinity_score=max(0, min(1000, score_delta)),
-                affinity_level=1,
-                total_interactions=1
-            )
-            self.db.add(affinity)
+        result = await self.db.execute(stmt, {
+            "user_id": user_id,
+            "character_name": character_name,
+            "score_delta": score_delta
+        })
+
+        row = result.fetchone()
+
+        # 결과를 UserCharacterAffinity 객체로 변환
+        affinity = UserCharacterAffinity(
+            id=row.id,
+            user_id=row.user_id,
+            character_name=row.character_name,
+            total_affinity_score=row.total_affinity_score,
+            affinity_level=row.affinity_level,
+            total_interactions=row.total_interactions,
+            last_interaction_at=row.last_interaction_at,
+            created_at=row.created_at,
+            updated_at=row.updated_at
+        )
 
         await self.db.flush()
         logger.info("upsert_user_character_affinity", f"Global affinity updated",
