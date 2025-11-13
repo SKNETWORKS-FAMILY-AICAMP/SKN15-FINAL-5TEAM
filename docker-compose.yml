@@ -1,0 +1,151 @@
+# KIME Chat - Local Development
+# 로컬 개발 환경: 모든 서비스를 한번에 실행
+# 사용법: docker-compose up
+
+services:
+  # Database: PostgreSQL with pgvector
+  postgres:
+    image: postgresql
+    build:
+      context: ./database/postgres
+      dockerfile: Dockerfile
+    container_name: postgresql
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-kimedb}
+      POSTGRES_USER: ${DB_USER:-kime}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./database/postgres/init:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-kime} -d ${DB_NAME:-kimedb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - kime-network
+
+  # Cache: Redis
+  redis:
+    image: redis
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kime-network
+
+  # Backend: FastAPI
+  backend:
+    image: backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: unless-stopped
+    environment:
+      # Database (Local PostgreSQL container)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-kimedb}
+      DB_USER: ${DB_USER:-kime}
+      DB_PASSWORD: ${DB_PASSWORD:-dev123}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      # JWT
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
+
+      # App
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data  # 프로젝트 루트 data → 컨테이너 /app/data
+      - backend_cache:/app/__pycache__
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - kime-network
+
+  # Frontend: React + Vite (jw_work branch - merged front/)
+  frontend:
+    image: frontend
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+      target: development
+    container_name: frontend
+    restart: unless-stopped
+    expose:
+      - "5173"
+    volumes:
+      - ./front:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost}
+    stdin_open: true
+    tty: true
+    networks:
+      - kime-network
+
+  # Nginx: Reverse Proxy (http://localhost)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - kime-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_cache:
+    driver: local
+
+networks:
+  kime-network:
+    driver: bridge
