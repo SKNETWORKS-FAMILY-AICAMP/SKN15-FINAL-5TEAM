@@ -19,6 +19,7 @@ from .repositories import (
 from .agent.parent import ParentAgent  # Legacy ParentAgent (not LangGraph)
 from .services import AffinityService, MemoryService, MissionService, ScenarioService
 from .services.extractors.conversation_summarizer import ConversationSummarizer
+from .services.extractors.memory_extractor import MemoryExtractor
 from .models import DialogueTurn
 from .schemas import DialogueResult, ChatMessage
 from app.core.logging import get_usecase_logger, print_layer_debug
@@ -26,6 +27,7 @@ from app.shared.exceptions import DailyLimitExceededException
 from app.features.users.repository import UserRepository
 from app.features.progression.repository import ProgressionRepository
 from app.core.llm.client import LLMClient
+from app.core.embeddings import EmbeddingsService
 from app.features.images.local_mapping_loader import get_stage_image_identifier
 
 # LangGraph imports (optional - only used if USE_LANGGRAPH=true)
@@ -82,6 +84,22 @@ class ChatUseCase:
         except Exception as e:
             logger.warning("__init__", f"Failed to initialize ConversationSummarizer: {e}")
             self.summarizer = None
+
+        # Memory Extractor (장기기억 추출)
+        try:
+            self.memory_extractor = MemoryExtractor(llm_client=llm_client if self.summarizer else None)
+            logger.info("__init__", "MemoryExtractor initialized")
+        except Exception as e:
+            logger.warning("__init__", f"Failed to initialize MemoryExtractor: {e}")
+            self.memory_extractor = None
+
+        # Embeddings Service (벡터 임베딩 생성)
+        try:
+            self.embeddings_service = EmbeddingsService()
+            logger.info("__init__", "EmbeddingsService initialized")
+        except Exception as e:
+            logger.warning("__init__", f"Failed to initialize EmbeddingsService: {e}")
+            self.embeddings_service = None
 
         # LangGraph 워크플로우 (feature flag)
         self.use_langgraph = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
@@ -407,6 +425,62 @@ class ChatUseCase:
                 )
 
             # ============================================================
+            # 1.5 장기기억 로딩 (세션 초기화 또는 로드 후)
+            # ============================================================
+            if user_id:
+                try:
+                    logger.info("create_dialogue", "Loading long-term memories",
+                               user_id=user_id, scenario_id=scenario_id)
+
+                    # 사용자의 메모리 조회 (scenario별 + 높은 중요도 우선)
+                    memories = await self.memory_repository.get_user_memories(
+                        user_id=user_id,
+                        scenario_id=scenario_id,
+                        limit=20  # 최대 20개까지 로드
+                    )
+
+                    if memories:
+                        # 중요도 순으로 정렬
+                        memories_sorted = sorted(
+                            memories,
+                            key=lambda m: (m.importance or 0, m.created_at or datetime.min),  # importance_score -> importance
+                            reverse=True
+                        )
+
+                        # 상위 5개를 세션 상태에 추가
+                        session_state["long_term_memories"] = [
+                            {
+                                "memory_id": m.id,  # memory_id -> id
+                                "memory_key": m.memory_key,
+                                "content": m.memory_value,  # content -> memory_value
+                                "type": m.memory_type,
+                                "importance": m.importance,  # importance_score -> importance
+                                "created_at": m.created_at.isoformat() if m.created_at else None
+                            }
+                            for m in memories_sorted[:5]
+                        ]
+
+                        logger.info("create_dialogue", f"Loaded {len(memories_sorted[:5])} long-term memories",
+                                   user_id=user_id, scenario_id=scenario_id)
+
+                        # 접근 통계 업데이트 (상위 5개만)
+                        for memory in memories_sorted[:5]:
+                            try:
+                                await self.memory_repository.update_access_stats(memory.id)  # memory_id -> id
+                            except Exception as stats_err:
+                                logger.warning("create_dialogue", f"Failed to update memory access stats: {stats_err}",
+                                             memory_id=memory.id)
+
+                    else:
+                        logger.info("create_dialogue", "No long-term memories found",
+                                   user_id=user_id, scenario_id=scenario_id)
+
+                except Exception as mem_load_err:
+                    logger.error("create_dialogue", f"Failed to load long-term memories: {mem_load_err}",
+                                user_id=user_id, scenario_id=scenario_id, exc=mem_load_err)
+                    # 메모리 로딩 실패해도 대화는 계속 진행
+
+            # ============================================================
             # 2. 정책: 일일 대화 제한 체크
             # ============================================================
             today_count = await self.dialogue_repository.count_today(user_id)
@@ -663,6 +737,56 @@ class ChatUseCase:
                             )
                             logger.info("create_dialogue", "Summary saved to memories",
                                        session_id=session_id, summary_length=len(summary_result["summary"]))
+
+                        # ============================================================
+                        # 4.5 장기기억 추출 (요약에서 중요한 정보 추출)
+                        # ============================================================
+                        if self.memory_extractor and self.embeddings_service:
+                            try:
+                                logger.info("create_dialogue", "Extracting long-term memories from summary",
+                                           session_id=session_id)
+
+                                # 요약에서 장기기억 추출 (relationship, preference, event, fact)
+                                extracted_memories = await self.memory_extractor.extract_memories(
+                                    conversation_summary=summary_result["summary"]
+                                )
+
+                                logger.info("create_dialogue", f"Extracted {len(extracted_memories)} long-term memories",
+                                           session_id=session_id)
+
+                                # 추출된 메모리 각각 저장
+                                for memory in extracted_memories:
+                                    try:
+                                        # 임베딩 생성
+                                        memory_embedding = self.embeddings_service.embed(memory.memory_value)
+
+                                        # memory_type은 MemoryExtractor에서 반환한 값을 그대로 사용
+                                        # (relationship, preference, event, fact)
+                                        # DB 스키마는 이 값들을 모두 지원함
+
+                                        # 메모리 저장
+                                        await self.memory_repository.create_memory(
+                                            user_id=user_id,
+                                            content=memory.memory_value,
+                                            memory_type=memory.memory_type,  # 변환 없이 그대로 사용
+                                            embedding=memory_embedding,
+                                            scenario_id=scenario_id,
+                                            importance_score=memory.importance
+                                        )
+
+                                        logger.debug("create_dialogue", f"Saved memory: {memory.memory_key}",
+                                                    type=memory.memory_type, importance=memory.importance)
+
+                                    except Exception as mem_err:
+                                        logger.error("create_dialogue", f"Failed to save individual memory: {mem_err}",
+                                                    memory_key=memory.memory_key, exc=mem_err)
+
+                                logger.info("create_dialogue", f"Successfully saved {len(extracted_memories)} long-term memories",
+                                           session_id=session_id, user_id=user_id)
+
+                            except Exception as extract_err:
+                                logger.error("create_dialogue", f"Memory extraction failed: {extract_err}",
+                                           session_id=session_id, exc=extract_err)
 
                 except Exception as e:
                     logger.error("create_dialogue", f"Summary generation failed: {e}", exc=e)
