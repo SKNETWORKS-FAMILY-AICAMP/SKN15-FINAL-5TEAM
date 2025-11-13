@@ -11,7 +11,7 @@ import { normalizeScenarioId } from '@/utils/scenario';
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId, updateBubbles } = useApp();
   const navigate = useNavigate();
 
   // Scenario loading state
@@ -57,6 +57,25 @@ export default function ChatPage() {
 
     loadScenario();
   }, [characterId]);
+
+  // Refresh user credits when page loads (after login)
+  useEffect(() => {
+    const refreshCredits = async () => {
+      if (!isAuthLoading && isLoggedIn) {
+        try {
+          console.log('[ChatPage] Refreshing user credits...');
+          const credits = await apiClient.getUserCredits();
+          console.log('[ChatPage] Credits refreshed:', credits);
+          updateBubbles(credits.bubble_count);
+        } catch (error) {
+          console.error('[ChatPage] Failed to refresh credits:', error);
+          // 에러가 발생해도 기존 값 유지 (0으로 설정하지 않음)
+        }
+      }
+    };
+
+    refreshCredits();
+  }, [isAuthLoading, isLoggedIn, updateBubbles]);
 
   // Authentication guard: show login modal if not authenticated (after auth loading completes)
   useEffect(() => {

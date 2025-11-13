@@ -3,7 +3,7 @@ import { useApp } from '@/contexts/AppContext'
 import { apiClient, UserInfo, UserProgression, UserCredits, CreditTransaction } from '@/services/api'
 
 export default function MyAccountModal() {
-  const { isMyAccountModalOpen, closeMyAccount, logout } = useApp()
+  const { isMyAccountModalOpen, closeMyAccount, logout, updateBubbles } = useApp()
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [progression, setProgression] = useState<UserProgression | null>(null)
   const [credits, setCredits] = useState<UserCredits | null>(null)
@@ -92,6 +92,9 @@ export default function MyAccountModal() {
       // Reload credits
       const cred = await apiClient.getUserCredits()
       setCredits(cred)
+
+      // Update AppContext bubbles immediately
+      updateBubbles(cred.bubble_count)
 
       // Reload transactions if section is open
       if (showCreditSection) {

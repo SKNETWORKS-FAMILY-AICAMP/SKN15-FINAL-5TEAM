@@ -1209,6 +1209,7 @@ export default function ChatInterface({
 
     if (!consumed) {
       setBackendError(`버블이 부족합니다. 최소 ${bubbleCost}개의 버블이 필요합니다.`);
+      isSendingRef.current = false;  // 실패 시 플래그 리셋
       return;
     }
 
@@ -1226,6 +1227,7 @@ export default function ChatInterface({
     // 🔥 자동 요청 중일 때는 사용자 입력 차단
     if (isAutoRequesting) {
       console.log('⚠️ Auto-requesting in progress, user input blocked');
+      isSendingRef.current = false;  // 차단 시 플래그 리셋
       return;
     }
 

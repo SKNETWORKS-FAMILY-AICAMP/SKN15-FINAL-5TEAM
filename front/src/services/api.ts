@@ -95,9 +95,17 @@ export interface UserCredits {
 }
 
 export interface ConsumeCreditsResult {
-  success: boolean
-  message: string
-  remaining_credits: number
+  success?: boolean  // Optional for backward compatibility
+  message?: string
+  remaining_credits?: number
+  // Backend returns CreditTransactionResponse
+  transaction_id?: string
+  user_id?: string
+  amount?: number
+  transaction_type?: string
+  balance_after?: number
+  description?: string
+  created_at?: string
 }
 
 export interface CreditTransaction {
@@ -668,10 +676,13 @@ class ApiClient {
    */
   async consumeCredits(amount: number, description: string): Promise<ConsumeCreditsResult> {
     try {
-      const response = await authenticatedApiClient.post('/api/users/me/credits/consume', {
-        amount,
-        description
-      })
+      const params = new URLSearchParams()
+      params.append('amount', amount.toString())
+      if (description) {
+        params.append('description', description)
+      }
+
+      const response = await authenticatedApiClient.post(`/api/users/me/credits/consume?${params.toString()}`)
       return response.data
     } catch (error) {
       console.error('Error consuming credits:', error)
