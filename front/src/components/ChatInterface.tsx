@@ -123,14 +123,22 @@ export default function ChatInterface({
           if (dialogues && dialogues.length > 0) {
             console.log(`[ChatInterface] Loaded ${dialogues.length} messages from history`);
 
+            // NPC 리스트 (백엔드 character_refs에서 가져온 것)
+            const npcSpeakers = new Set(['narr', 'system', 'rengoku', 'tanjiro', 'zenitsu', 'inosuke', 'nezuko', 'akaza', 'enmu', 'kasugai_crow']);
+
             const historyMessages: Message[] = dialogues.map((d, idx) => ({
               id: messageIdCounter.current++,
               text: d.text,
-              isUser: false,
+              isUser: !npcSpeakers.has(d.speaker),  // NPC가 아니면 유저 메시지
               timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
               characterId: d.speaker,
               isSystemMessage: d.speaker === 'narr' || d.speaker === 'system'
             }));
+
+            console.log('[ChatInterface] 🔍 History messages:');
+            historyMessages.forEach((m, idx) => {
+              console.log(`  [${idx}] ${m.isUser ? 'USER' : 'NPC '} ${m.characterId}: ${m.text.substring(0, 50)}`);
+            });
 
             setMessages(historyMessages);
           }

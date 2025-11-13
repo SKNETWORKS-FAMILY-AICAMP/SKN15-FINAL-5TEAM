@@ -139,7 +139,7 @@ class ContextService:
         # Context summary 및 최근 대화
         children_ctx["context_summary"] = self.build_context_summary(state)
         children_ctx["latest_user_input"] = state.get("user_input", "")
-        children_ctx["recent_dialogues"] = self.collect_recent_dialogues(state)
+        children_ctx["recent_dialogues"] = self.collect_recent_dialogues(state, current_stage_tag=stage_tag)
 
         # Character refs 및 scenario_id
         children_ctx.setdefault("character_refs", scenario.get("character_refs", {}))
@@ -184,12 +184,13 @@ class ContextService:
 
         return summary
 
-    def collect_recent_dialogues(self, state: Dict[str, Any]) -> List[str]:
+    def collect_recent_dialogues(self, state: Dict[str, Any], current_stage_tag: Optional[str] = None) -> List[str]:
         """
-        최근 대화 수집
+        최근 대화 수집 (현재 스테이지의 대화만)
 
         Args:
             state: 전체 state 객체
+            current_stage_tag: 현재 스테이지 태그 (필터링용)
 
         Returns:
             최근 대화 리스트
@@ -197,13 +198,28 @@ class ContextService:
         recent_dialogues: List[str] = []
 
         message_history = state.get("message_history") or []
-        logger.info("collect_recent_dialogues", f"🔍 DEBUG: message_history count = {len(message_history)}")
+        logger.info("collect_recent_dialogues", f"🔍 DEBUG: message_history count = {len(message_history)}, filtering by stage_tag={current_stage_tag}")
         if message_history:
             logger.info("collect_recent_dialogues", f"🔍 DEBUG: First message = {message_history[0]}")
+
         if isinstance(message_history, list):
-            for entry in message_history[-5:]:
+            # 현재 스테이지의 대화만 필터링
+            stage_filtered = []
+            for entry in message_history:
                 if not isinstance(entry, dict):
                     continue
+                # stage_tag가 제공되고, 메시지에 stage_tag가 있으면 필터링
+                if current_stage_tag and entry.get("stage_tag"):
+                    if entry.get("stage_tag") == current_stage_tag:
+                        stage_filtered.append(entry)
+                else:
+                    # stage_tag 정보가 없으면 모든 대화 포함 (하위 호환성)
+                    stage_filtered.append(entry)
+
+            logger.info("collect_recent_dialogues", f"🔍 DEBUG: After stage filtering = {len(stage_filtered)} messages")
+
+            # 최근 5개만 선택
+            for entry in stage_filtered[-5:]:
                 speaker = entry.get("speaker") or "unknown"
                 text = (entry.get("text") or "").strip()
                 if text:

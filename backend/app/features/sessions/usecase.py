@@ -33,6 +33,8 @@ class SessionUseCase:
         self.db = db
         self.repository = SessionRepository(db)
         self.dialogue_repository = DialogueRepository(db)
+        from app.features.progression.repository import ProgressionRepository
+        self.progression_repository = ProgressionRepository(db)
 
     async def list_user_sessions(
         self,
@@ -353,14 +355,27 @@ class SessionUseCase:
                           session_id=session_id, user_id=user_id)
             return []
 
-        # 대화 조회
+        # 1. NPC 대화 조회
         dialogues_db = await self.dialogue_repository.get_recent_dialogues(
             session_id=session_id,
-            limit=limit
+            limit=limit * 2  # 유저 입력과 합쳐질 것을 고려하여 더 많이 조회
         )
 
-        dialogues = [
-            {
+        # 2. 유저 입력 조회
+        user_inputs = await self.progression_repository.get_user_inputs(
+            session_id=session_id,
+            limit=limit * 2
+        )
+
+        # 3. 유저 이름 가져오기
+        user_name = session.user_name if session else "User"
+
+        # 4. 통합 메시지 리스트 생성
+        all_messages = []
+
+        # NPC 대화 추가
+        for d in dialogues_db:
+            all_messages.append({
                 "id": d.id,
                 "speaker": d.speaker,
                 "content": d.content,
@@ -368,12 +383,39 @@ class SessionUseCase:
                 "emotion_intensity": d.emotion_intensity,
                 "turn_number": d.turn_number,
                 "order_index": d.order_index or 0,
-                "created_at": d.created_at.isoformat() if d.created_at else ""
-            }
-            for d in dialogues_db
-        ]
+                "created_at": d.created_at.isoformat() if d.created_at else "",
+                "timestamp": d.created_at,
+                "order": d.turn_number * 1000 + (d.order_index or 0) + 1
+            })
 
-        logger.info("get_session_dialogues", f"Retrieved {len(dialogues)} dialogues",
+        # 유저 입력 추가
+        for user_input in user_inputs:
+            all_messages.append({
+                "id": f"user_{user_input.id}",  # 유저 입력 ID는 문자열로 구분
+                "speaker": user_name,
+                "content": user_input.user_input,
+                "emotion": "neutral",
+                "emotion_intensity": 1.0,
+                "turn_number": user_input.turn_number,
+                "order_index": 0,
+                "created_at": user_input.timestamp.isoformat() if user_input.timestamp else "",
+                "timestamp": user_input.timestamp,
+                "order": user_input.turn_number * 1000  # 유저 입력은 턴의 시작
+            })
+
+        # 5. 시간순 정렬 (오래된 것부터 → 최신이 맨 뒤)
+        all_messages.sort(key=lambda x: x["order"])
+
+        # 6. limit 적용
+        all_messages = all_messages[-limit:] if len(all_messages) > limit else all_messages
+
+        # 7. order 필드 제거 (프론트엔드에 불필요)
+        for msg in all_messages:
+            msg.pop("order", None)
+            msg.pop("timestamp", None)
+
+        logger.info("get_session_dialogues",
+                   f"Retrieved {len(all_messages)} messages (NPC: {len(dialogues_db)}, User: {len(user_inputs)})",
                    session_id=session_id)
 
-        return dialogues
+        return all_messages

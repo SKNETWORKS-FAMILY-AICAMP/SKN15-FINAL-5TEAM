@@ -417,68 +417,72 @@ class ChatUseCase:
                 raise DailyLimitExceededException(MAX_DAILY_CHATS)
 
             # ============================================================
-            # 2.5 Prologue 체크: turn_count가 0이면 하드코딩된 프롤로그 반환
+            # 2.5 Prologue 체크: turn_count가 0이고 DB에 대화가 없으면 프롤로그 반환
             # ============================================================
             if session_state["turn_count"] == 0:
-                scenario = self.scenario_service.load_scenario(scenario_id)
-                prologue_messages = scenario.get("prologue_messages") if scenario else None
+                # DB에 이미 대화가 있는지 확인 (프롤로그가 이미 저장되었는지)
+                existing_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=1)
 
-                if prologue_messages:
-                    logger.info("create_dialogue", "Returning hardcoded prologue messages",
-                               scenario_id=scenario_id, count=len(prologue_messages))
+                # DB에 대화가 없을 때만 프롤로그 반환
+                if not existing_dialogues:
+                    scenario = self.scenario_service.load_scenario(scenario_id)
+                    prologue_messages = scenario.get("prologue_messages") if scenario else None
 
-                    # 세션 상태 업데이트 (turn_count 증가, stage 유지)
-                    session_state["turn_count"] += 1
+                    if prologue_messages:
+                        logger.info("create_dialogue", "Returning hardcoded prologue messages",
+                                   scenario_id=scenario_id, count=len(prologue_messages))
 
-                    # 세션 저장
-                    await self.session_repository.save_session(
-                        session_id=session_id,
-                        user_id=user_id,
-                        scenario_id=scenario_id,
-                        state=session_state
-                    )
+                        # 세션 상태 업데이트 (turn_count 증가, stage 유지)
+                        session_state["turn_count"] += 1
 
-                    # prologue_messages를 DialogueTurn 모델로 변환
-                    dialogue_turns = []
-                    for idx, msg in enumerate(prologue_messages):
-                        dialogue_turn = DialogueTurn(
+                        # 세션 저장
+                        await self.session_repository.save_session(
                             session_id=session_id,
                             user_id=user_id,
                             scenario_id=scenario_id,
-                            turn_number=session_state["turn_count"],
-                            speaker=msg.get("speaker", "narr"),
-                            content=msg.get("text", ""),
-                            emotion=msg.get("emotion", "neutral"),
-                            order_index=idx
+                            state=session_state
                         )
-                        dialogue_turns.append(dialogue_turn)
 
-                    # 배치로 대화 저장 (prologue)
-                    saved_turns = await self.dialogue_repository.save_dialogues_batch(dialogue_turns)
+                        # prologue_messages를 DialogueTurn 모델로 변환
+                        dialogue_turns = []
+                        for idx, msg in enumerate(prologue_messages):
+                            dialogue_turn = DialogueTurn(
+                                session_id=session_id,
+                                user_id=user_id,
+                                scenario_id=scenario_id,
+                                turn_number=session_state["turn_count"],
+                                speaker=msg.get("speaker", "narr"),
+                                content=msg.get("text", ""),
+                                emotion=msg.get("emotion", "neutral"),
+                                order_index=idx
+                            )
+                            dialogue_turns.append(dialogue_turn)
 
-                    # DialogueResult 반환
-                    result = DialogueResult(
-                        session_id=session_id,
-                        scenario_id=scenario_id,
-                        current_stage=session_state["current_stage"],
-                        turn_count=session_state["turn_count"],
-                        dialogues=[
-                            ChatMessage(
-                                speaker=turn.speaker,
-                                text=turn.content,
-                                emotion=turn.emotion
-                            ) for turn in saved_turns
-                        ],
-                        speaker_pool=[],
-                        next_stage=session_state["current_stage"],
-                        images=[]
-                    )
+                        # 배치로 대화 저장 (prologue)
+                        saved_turns = await self.dialogue_repository.save_dialogues_batch(dialogue_turns)
 
-                    result.current_image = await self._resolve_current_image(session_state, scenario_id)
+                        # DialogueResult 반환
+                        result = DialogueResult(
+                            session_id=session_id,
+                            scenario_id=scenario_id,
+                            current_stage=session_state["current_stage"],
+                            turn_count=session_state["turn_count"],
+                            dialogues=[
+                                ChatMessage(
+                                    speaker=turn.speaker,
+                                    text=turn.content,
+                                    emotion=turn.emotion
+                                ) for turn in saved_turns
+                            ],
+                            speaker_pool=[],
+                            next_stage=session_state["current_stage"],
+                            images=[]
+                        )
 
-                    logger.info("create_dialogue", "Prologue returned successfully",
-                               session_id=session_id, turn_count=session_state["turn_count"])
-                    return result
+                        result.current_image = await self._resolve_current_image(session_state, scenario_id)
+                        logger.info("create_dialogue", "Prologue returned successfully",
+                                   session_id=session_id, turn_count=session_state["turn_count"])
+                        return result
 
             # ============================================================
             # 3. Agent 파이프라인 실행 (LangGraph 또는 Legacy)
@@ -518,21 +522,55 @@ class ChatUseCase:
                 print_layer_debug("USECASE", "Chat", "create_dialogue", "→ Calling Legacy Parent Agent")
 
                 try:
-                    # ✅ ParentAgent 실행 전에 message_history 로드
+                    # ✅ ParentAgent 실행 전에 message_history 로드 (dialogues + user_inputs 통합)
                     recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
+                    recent_user_inputs = await self.progression_repository.get_user_inputs(session_id, limit=50)
 
+                    # 대화와 유저 입력을 턴 번호 기준으로 통합
                     message_history = []
+
+                    # 유저 입력을 턴 번호별로 매핑
+                    user_inputs_by_turn = {}
+                    for user_input in recent_user_inputs:
+                        user_inputs_by_turn[user_input.turn_number] = user_input.user_input
+
+                    # 턴 번호별로 정렬하기 위해 모든 메시지를 수집
+                    all_messages = []
+
+                    # NPC 대화 추가
                     for dlg in recent_dialogues:
-                        message_history.append({
+                        all_messages.append({
                             "speaker": dlg.speaker,
                             "text": dlg.content,
                             "emotion": dlg.emotion or "neutral",
-                            "turn": dlg.turn_number
+                            "turn": dlg.turn_number,
+                            "stage_tag": dlg.stage_tag,
+                            "order": dlg.turn_number * 100 + (dlg.order_index or 0) + 1  # 유저 입력 뒤에 배치
                         })
+
+                    # 유저 입력 추가
+                    for turn_num, user_text in user_inputs_by_turn.items():
+                        all_messages.append({
+                            "speaker": user_name,  # ✅ 유저 이름 사용
+                            "text": user_text,
+                            "emotion": "neutral",
+                            "turn": turn_num,
+                            "stage_tag": None,  # 유저 입력은 stage_tag 없음
+                            "order": turn_num * 100  # 해당 턴의 NPC 대화보다 먼저 배치
+                        })
+
+                    # 턴 번호와 order로 정렬
+                    all_messages.sort(key=lambda x: x["order"])
+
+                    # order 필드 제거하고 message_history에 추가
+                    for msg in all_messages:
+                        del msg["order"]
+                        message_history.append(msg)
 
                     # message_history를 session_state에 추가
                     session_state["message_history"] = message_history
-                    logger.info("create_dialogue", f"Loaded {len(message_history)} messages for context",
+                    logger.info("create_dialogue",
+                               f"Loaded {len(message_history)} messages for context (dialogues={len(recent_dialogues)}, user_inputs={len(recent_user_inputs)})",
                                session_id=session_id)
 
                     dialogue_result = await self.parent.run(
@@ -766,32 +804,82 @@ class ChatUseCase:
         limit: int = 10
     ) -> list[ChatMessage]:
         """
-        최근 대화 조회
+        최근 대화 조회 (유저 입력 + NPC 대화 통합)
 
         Args:
             session_id: 세션 ID
             limit: 조회 개수
 
         Returns:
-            ChatMessage 리스트
+            ChatMessage 리스트 (시간순 정렬, 유저 입력 포함)
         """
-        logger.info("get_recent_dialogues", "Fetching recent dialogues", session_id=session_id, limit=limit)
+        logger.info("get_recent_dialogues", "Fetching recent dialogues with user inputs", session_id=session_id, limit=limit)
 
-        # Repository 호출
-        dialogue_models = await self.dialogue_repository.get_recent_dialogues(session_id, limit)
+        # 1. NPC 대화 조회
+        dialogue_models = await self.dialogue_repository.get_recent_dialogues(session_id, limit=limit * 2)  # 넉넉하게 가져오기
 
-        # ORM → DTO 변환
+        # 2. 유저 입력 조회
+        user_inputs = await self.progression_repository.get_user_inputs(session_id, limit=limit * 2)
+
+        # 3. 유저 이름 가져오기 (session에서)
+        session = await self.session_repository.get_session(session_id)
+        user_name = session.user_name if session else "User"
+
+        # 4. 통합 메시지 리스트 생성
+        all_messages = []
+
+        # NPC 대화 추가
+        for d in dialogue_models:
+            all_messages.append({
+                "speaker": d.speaker,
+                "text": d.content,  # ✅ DialogueTurn.content 사용
+                "emotion": d.emotion or "neutral",
+                "timestamp": d.created_at,
+                "turn": d.turn_number,
+                "order": d.turn_number * 1000 + (d.order_index or 0) + 1  # 유저 입력 뒤에 배치
+            })
+
+        # 유저 입력 추가
+        for user_input in user_inputs:
+            all_messages.append({
+                "speaker": user_name,
+                "text": user_input.user_input,
+                "emotion": "neutral",
+                "timestamp": user_input.timestamp,
+                "turn": user_input.turn_number,
+                "order": user_input.turn_number * 1000  # 해당 턴의 NPC 대화보다 먼저 배치
+            })
+
+        # 5. 시간순 정렬 (order 기준, 오름차순)
+        all_messages.sort(key=lambda x: x["order"])
+
+        # 6. limit 적용 (최근 N개만)
+        all_messages = all_messages[-limit:] if len(all_messages) > limit else all_messages
+
+        # 7. 역순으로 뒤집기 (최신 메시지가 먼저 오도록)
+        all_messages.reverse()
+
+        # 8. ChatMessage DTO로 변환
         messages = [
             ChatMessage(
-                speaker=d.speaker,
-                text=d.text,  # ✅ text 필드
-                emotion=d.emotion,
-                timestamp=d.created_at.isoformat() if d.created_at else None
+                speaker=msg["speaker"],
+                text=msg["text"],
+                emotion=msg["emotion"],
+                timestamp=msg["timestamp"].isoformat() if msg["timestamp"] else None
             )
-            for d in dialogue_models
+            for msg in all_messages
         ]
 
-        logger.info("get_recent_dialogues", f"Fetched {len(messages)} messages", session_id=session_id)
+        logger.info("get_recent_dialogues",
+                   f"Fetched {len(messages)} messages (dialogues={len(dialogue_models)}, user_inputs={len(user_inputs)})",
+                   session_id=session_id)
+
+        # 🔍 DEBUG: 첫 3개 메시지 출력
+        if messages:
+            logger.info("get_recent_dialogues", f"🔍 First 3 messages:")
+            for i, msg in enumerate(messages[:3]):
+                logger.info("get_recent_dialogues", f"  [{i}] {msg.speaker}: {msg.text[:50]}")
+
         return messages
 
     async def get_session_state(

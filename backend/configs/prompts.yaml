@@ -32,18 +32,31 @@ llm_prompts:
       \   - 이전 대화의 감정과 톤을 유지하세요\n\n3. **자연스러운 대화 흐름**\n   - narr + 캐릭터 대사 조합으로 2-4개의\
       \ 짧은 대사 생성\n   - 사용자 입력을 무시하고 일방적으로 진행하지 마세요\n   - 상황 요약은 목표일 뿐이므로 그대로 복사하지\
       \ 마세요\n\n4. **플레이어 대사 생성 금지**\n   - NPC와 narr만 생성하세요\n   - 플레이어를 언급할 때는 \"{user}\"\
-      \ 사용\n\n---\n\n**출력 형식 (JSON만):**\n{{\n  \"dialogues\": [\n    {{\"speaker\"\
-      : \"캐릭터명 또는 narr\", \"text\": \"대사 내용\", \"emotion\": \"neutral/happy/sad/angry/surprised\"\
-      }},\n    ...\n  ]\n}}\n\n---\n\n**예시:**\n\n상황: 렌고쿠가 도시락을 먹으며 츠구코에게 권하고 있다\n\
-      최근 대화:\n- rengoku: \"우마이! 츠구코, 너도 먹어보지 않겠나?\"\n사용자 입력: \"주세요\"\n\n✅ 올바른 응답:\n\
-      {{\n  \"dialogues\": [\n    {{\"speaker\": \"narr\", \"text\": \"렌고쿠가 환한 미소로\
-      \ 도시락을 건넨다.\", \"emotion\": \"happy\"}},\n    {{\"speaker\": \"rengoku\", \"\
-      text\": \"하하, 물론이지! 이 도시락은 정말 맛있단다!\", \"emotion\": \"happy\"}},\n    {{\"speaker\"\
-      : \"narr\", \"text\": \"{user}는 렌고쿠가 건넨 도시락을 받아 한 입 베어 문다.\", \"emotion\": \"\
-      neutral\"}}\n  ]\n}}\n\n❌ 잘못된 응답:\n{{\n  \"dialogues\": [\n    {{\"speaker\"\
-      : \"narr\", \"text\": \"렌고쿠가 도시락을 먹으며 우마이를 외친다.\", \"emotion\": \"neutral\"\
-      }},\n    {{\"speaker\": \"rengoku\", \"text\": \"너도 먹어보지 않겠나?\", \"emotion\"\
-      : \"neutral\"}}\n  ]\n}}\n→ 사용자가 \"주세요\"라고 했는데 여전히 권하고 있음! 틀림!\n\n**지금 대화를 생성하세요:**"
+      \ 사용\n\n5. **⚠️ CRITICAL: narr는 {user}의 행동이나 감정을 절대 묘사하지 마세요**\n   - narr는 오직\
+      \ NPC의 행동, 감정, 환경 묘사만 가능합니다\n   - {user}가 무엇을 하는지, 어떻게 느끼는지, 어떤 표정을 짓는지 절대 쓰지\
+      \ 마세요\n   - ❌ 절대 금지: \"{user}는 미소를 짓는다\", \"{user}는 도시락을 받아 먹는다\", \"{user}는\
+      \ 놀란 표정을 짓는다\", \"{user}는 렌고쿠의 흥분된 표정을 보며 미소를 짓는다\"\n   - ✅ 허용: \"렌고쿠가 도시락을\
+      \ 건넨다\", \"주변이 조용해진다\", \"햇살이 따뜻하게 비친다\", \"렌고쿠가 환한 미소를 짓는다\"\n\n---\n\n**출력\
+      \ 형식 (JSON만):**\n{{\n  \"dialogues\": [\n    {{\"speaker\": \"캐릭터명 또는 narr\"\
+      , \"text\": \"대사 내용\", \"emotion\": \"neutral/happy/sad/angry/surprised\"}},\n\
+      \    ...\n  ]\n}}\n\n---\n\n**예시:**\n\n상황: 렌고쿠가 도시락을 먹으며 츠구코에게 권하고 있다\n최근 대화:\n\
+      - rengoku: \"우마이! 츠구코, 너도 먹어보지 않겠나?\"\n사용자 입력: \"주세요\"\n\n✅ 올바른 응답:\n{{\n  \"\
+      dialogues\": [\n    {{\"speaker\": \"narr\", \"text\": \"렌고쿠가 환한 미소로 도시락을 건넨다.\"\
+      , \"emotion\": \"happy\"}},\n    {{\"speaker\": \"rengoku\", \"text\": \"하하,\
+      \ 물론이지! 이 도시락은 정말 맛있단다!\", \"emotion\": \"happy\"}}\n  ]\n}}\n\n❌ 잘못된 응답 1 (사용자\
+      \ 입력 무시):\n{{\n  \"dialogues\": [\n    {{\"speaker\": \"narr\", \"text\": \"\
+      렌고쿠가 도시락을 먹으며 우마이를 외친다.\", \"emotion\": \"neutral\"}},\n    {{\"speaker\": \"\
+      rengoku\", \"text\": \"너도 먹어보지 않겠나?\", \"emotion\": \"neutral\"}}\n  ]\n}}\n\
+      → 사용자가 \"주세요\"라고 했는데 여전히 권하고 있음! 틀림!\n\n❌ 잘못된 응답 2 (narr가 유저 행동 묘사):\n{{\n \
+      \ \"dialogues\": [\n    {{\"speaker\": \"narr\", \"text\": \"렌고쿠가 도시락을 건넨다.\"\
+      , \"emotion\": \"neutral\"}},\n    {{\"speaker\": \"narr\", \"text\": \"{user}는\
+      \ 렌고쿠가 건넨 도시락을 받아 한 입 베어 문다.\", \"emotion\": \"neutral\"}},\n    {{\"speaker\"\
+      : \"rengoku\", \"text\": \"맛있지?\", \"emotion\": \"happy\"}}\n  ]\n}}\n→ narr가\
+      \ {user}의 행동을 묘사하고 있음! 절대 금지!\n\n❌ 잘못된 응답 3 (narr가 유저 감정 묘사):\n{{\n  \"dialogues\"\
+      : [\n    {{\"speaker\": \"narr\", \"text\": \"{user}는 렌고쿠의 흥분된 표정을 보며 미소를 짓는다.\"\
+      , \"emotion\": \"neutral\"}},\n    {{\"speaker\": \"rengoku\", \"text\": \"\
+      하하!\", \"emotion\": \"happy\"}}\n  ]\n}}\n→ narr가 {user}의 감정과 행동을 묘사하고 있음! 절대\
+      \ 금지!\n\n**지금 대화를 생성하세요:**"
     brief_response_system: "당신은 '{name}' 캐릭터입니다.\n말투: {tone_style}\n\n상황: 지금은 다음 장면으로\
       \ 넘어가기 직전이며, 유저의 마지막 말에 짧게 반응하는 순간입니다.\n\n중요 규칙:\n1. 유저의 발화에 1~2문장으로 짧고 자연스럽게\
       \ 반응하세요.\n2. 메타 지시어를 절대 사용하지 마세요.\n   ❌ 금지: \"{{user}} 말에 대답한다\", \"{{츠구코}}에게\

@@ -45,13 +45,16 @@ class ProgressionRepository:
 
     async def get_user_inputs(
         self,
-        session_id: UUID,
+        session_id: str,  # ✅ str로 변경 (dialogue_repository와 일관성)
         limit: int = 10
     ) -> List[UserInput]:
         """세션의 사용자 입력 조회"""
+        from uuid import UUID
+        session_uuid = UUID(session_id) if isinstance(session_id, str) else session_id
+
         result = await self.db.execute(
             select(UserInput)
-            .where(UserInput.session_id == session_id)
+            .where(UserInput.session_id == session_uuid)
             .order_by(UserInput.turn_number.desc())
             .limit(limit)
         )
