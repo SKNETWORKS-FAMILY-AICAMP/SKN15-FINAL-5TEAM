@@ -47,6 +47,18 @@ class ChatMessage(BaseModel):
     emotion_intensity: Optional[str] = Field(None, description="Emotion intensity")
 
 
+class MemoryEvent(BaseModel):
+    """
+    메모리 이벤트 (UI 표시용)
+    """
+    event_type: str = Field(..., description="Event type: 'saved' or 'recalled'")
+    character_name: str = Field(..., description="Character who saved/recalled the memory")
+    memory_type: str = Field(..., description="Memory type: fact, event, relationship, preference")
+    memory_content: str = Field(..., description="Memory content (max 100 chars)")
+    importance: float = Field(..., description="Importance score (0.0-1.0)")
+    count: Optional[int] = Field(None, description="Number of memories (for batch events)")
+
+
 class ChatResponse(BaseModel):
     """
     채팅 응답
@@ -63,6 +75,7 @@ class ChatResponse(BaseModel):
     system_message: Optional[str] = None
     current_image: Optional[str] = None
     output: Optional[Dict] = None
+    memory_events: Optional[List[MemoryEvent]] = Field(None, description="Memory save/recall events for UI display")
 
 
 # ============================================================
@@ -80,6 +93,7 @@ class DialogueResult(BaseModel):
     affinity_delta: Optional[Dict[str, float]] = None
     affinity_scores: Optional[Dict[str, float]] = None  # 현재 친밀도 (DB 로드 + 델타 적용)
     current_image: Optional[str] = Field(None, description="선택된 배경 이미지 식별자")
+    memory_events: List[MemoryEvent] = Field(default_factory=list, description="Memory events during this turn")
 
 
 class StageResult(BaseModel):

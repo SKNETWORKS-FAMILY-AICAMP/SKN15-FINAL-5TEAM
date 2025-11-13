@@ -32,6 +32,15 @@ export interface ChatRequest {
   user_name?: string
 }
 
+export interface MemoryEvent {
+  event_type: 'saved' | 'recalled'
+  character_name: string
+  memory_type: string
+  memory_content: string
+  importance: number
+  count?: number
+}
+
 export interface ChatResponse {
   session_id: string
   turn_count: number
@@ -43,6 +52,7 @@ export interface ChatResponse {
   system_message?: string
   current_image?: string  // 현재 표시할 이미지 경로 (ImageManager 제공)
   output?: Record<string, unknown>
+  memory_events?: MemoryEvent[]
 }
 
 export interface SessionInfo {
@@ -415,6 +425,7 @@ class ApiClient {
                       has_more: metadata.has_more || false,
                       current_image: metadata.current_image,
                       output: metadata.output || {},
+                      memory_events: metadata.memory_events || [],
                     })
                   } else {
                     reject(new Error('No metadata received'))
@@ -453,6 +464,7 @@ class ApiClient {
                           affinity_scores: parsed.affinity_scores || {},
                           is_ended: parsed.is_ended || false,
                           output: parsed.output || {},
+                          memory_events: parsed.memory_events || [],
                         }
                       } else if (parsed.type === 'error') {
                         reject(new Error(parsed.message))

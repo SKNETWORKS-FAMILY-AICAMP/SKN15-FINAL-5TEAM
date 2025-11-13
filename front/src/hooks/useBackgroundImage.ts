@@ -65,9 +65,10 @@ export function useBackgroundImage(scenarioId: string) {
 
   const [currentBackground, setCurrentBackground] = useState<BackgroundState>(defaultBackgroundState);
 
+  // 시나리오 변경 시에만 배경을 리셋 (무한 루프 방지)
   useEffect(() => {
     setCurrentBackground(defaultBackgroundState);
-  }, [defaultBackgroundState]);
+  }, [configScenarioId]); // defaultBackgroundState 대신 configScenarioId만 의존
 
   const setBackgroundById = useCallback(
     (id: string): boolean => {

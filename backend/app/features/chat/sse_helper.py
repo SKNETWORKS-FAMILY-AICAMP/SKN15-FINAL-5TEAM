@@ -15,7 +15,8 @@ async def sse_generator(
     is_ended: bool,
     has_more: bool,
     current_image: str = None,
-    output: dict = None
+    output: dict = None,
+    memory_events: list = None
 ) -> AsyncGenerator[str, None]:
     """
     SSE 형식으로 채팅 응답 스트리밍
@@ -59,6 +60,16 @@ async def sse_generator(
         "current_stage": current_stage,
         "affinity_scores": affinity_scores or {},
         "is_ended": is_ended,
-        "output": output or {}
+        "output": output or {},
+        "memory_events": [
+            {
+                "event_type": event.event_type,
+                "character_name": event.character_name,
+                "memory_type": event.memory_type,
+                "memory_content": event.memory_content,
+                "importance": event.importance,
+                "count": event.count
+            } for event in (memory_events or [])
+        ] if memory_events else []
     }
     yield f"data: {json.dumps(done_data)}\n\n"

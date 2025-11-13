@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import CharacterSelectionModal from './CharacterSelectionModal';
 import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
-import { sendChatMessage, ChatResponse } from '@/services/api';
+import MemoryToastContainer from './MemoryToastContainer';
+import { sendChatMessage, ChatResponse, MemoryEvent } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
@@ -70,6 +71,7 @@ export default function ChatInterface({
   const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
   const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
   const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
+  const [memoryToasts, setMemoryToasts] = useState<Array<MemoryEvent & { id: string }>>([]); // 메모리 이벤트 토스트
 
   // Skip 기능을 위한 ref
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
@@ -623,6 +625,23 @@ export default function ChatInterface({
     }
   };
 
+  // 메모리 이벤트 토스트 추가
+  const handleMemoryEvents = (events: MemoryEvent[] | undefined) => {
+    if (!events || events.length === 0) return;
+
+    const newToasts = events.map((event) => ({
+      ...event,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }));
+
+    setMemoryToasts((prev) => [...prev, ...newToasts]);
+  };
+
+  // 메모리 토스트 제거 핸들러
+  const handleRemoveMemoryToast = (id: string) => {
+    setMemoryToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
   // 메시지 스크롤 자동화
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -797,6 +816,9 @@ export default function ChatInterface({
       setAffinityScores(response.affinity_scores || {});
       setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
+      // 메모리 이벤트 처리 (토스트 알림 표시)
+      handleMemoryEvents(response.memory_events);
+
       // 배경 이미지 변경 (current_image 사용)
       if (response.current_image) {
         console.log(`🖼️ [Auto-request] Changing background to: ${response.current_image}`);
@@ -896,6 +918,9 @@ export default function ChatInterface({
         // Update affinity_scores and current_stage from response
         setAffinityScores(response.affinity_scores || {});
         setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
+
+        // 메모리 이벤트 처리 (토스트 알림 표시)
+        handleMemoryEvents(response.memory_events);
 
         // 배경 이미지 변경 (current_image 사용)
         if (response.current_image) {
@@ -1304,6 +1329,9 @@ export default function ChatInterface({
       // Update affinity_scores and current_stage from response
       setAffinityScores(response.affinity_scores || {});
       setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
+
+      // 메모리 이벤트 처리 (토스트 알림 표시)
+      handleMemoryEvents(response.memory_events);
 
       // 배경 이미지 변경 (current_image 사용)
       if (response.current_image) {
@@ -2222,6 +2250,12 @@ export default function ChatInterface({
           </div>
         </div>
       )}
+
+      {/* Memory Toast Notifications */}
+      <MemoryToastContainer
+        events={memoryToasts}
+        onRemove={handleRemoveMemoryToast}
+      />
     </div>
   );
 }

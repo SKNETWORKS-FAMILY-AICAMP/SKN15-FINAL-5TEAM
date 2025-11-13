@@ -147,7 +147,8 @@ async def create_chat(
                 is_ended=False,
                 has_more=False,
                 current_image=current_image,
-                output={}
+                output={},
+                memory_events=dialogue_result.memory_events
             ),
             media_type="text/event-stream",
             headers={

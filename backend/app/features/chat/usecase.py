@@ -813,7 +813,8 @@ class ChatUseCase:
                                 logger.info("create_dialogue", f"Extracted {len(extracted_memories)} long-term memories",
                                            session_id=session_id)
 
-                                # 추출된 메모리 각각 저장
+                                # 추출된 메모리 각각 저장 및 이벤트 생성
+                                saved_memories = []
                                 for memory in extracted_memories:
                                     try:
                                         # 임베딩 생성
@@ -836,12 +837,31 @@ class ChatUseCase:
                                         logger.debug("create_dialogue", f"Saved memory: {memory.memory_key}",
                                                     type=memory.memory_type, importance=memory.importance)
 
+                                        saved_memories.append(memory)
+
                                     except Exception as mem_err:
                                         logger.error("create_dialogue", f"Failed to save individual memory: {mem_err}",
                                                     memory_key=memory.memory_key, exc=mem_err)
 
                                 logger.info("create_dialogue", f"Successfully saved {len(extracted_memories)} long-term memories",
                                            session_id=session_id, user_id=user_id)
+
+                                # 메모리 저장 이벤트 생성 (UI 표시용)
+                                if saved_memories:
+                                    from .schemas import MemoryEvent
+                                    # 대표 캐릭터 이름 가져오기 (마지막 dialogue의 speaker)
+                                    character_name = dialogue_result.dialogues[-1].speaker if dialogue_result.dialogues else "AI"
+
+                                    for memory in saved_memories:
+                                        event = MemoryEvent(
+                                            event_type="saved",
+                                            character_name=character_name,
+                                            memory_type=memory.memory_type,
+                                            memory_content=memory.memory_value[:100],  # 최대 100자
+                                            importance=memory.importance,
+                                            count=None
+                                        )
+                                        dialogue_result.memory_events.append(event)
 
                             except Exception as extract_err:
                                 logger.error("create_dialogue", f"Memory extraction failed: {extract_err}",
