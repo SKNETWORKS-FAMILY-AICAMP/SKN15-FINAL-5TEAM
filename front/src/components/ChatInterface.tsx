@@ -277,7 +277,7 @@ export default function ChatInterface({
       return `${CDN_URL}/프로필_아카자.png`;
     }
     if (lowerCharId.includes('enmu') || lowerCharId.includes('엔무')) {
-      return `${CDN_URL}/엔무.jpg`;
+      return `${CDN_URL}/프로필_엔무.png`;
     }
 
     // 2. 시스템/특수 캐릭터
@@ -286,6 +286,9 @@ export default function ChatInterface({
     }
     if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
       return `${CDN_URL}/기본이미지.png`;
+    }
+    if (lowerCharId.includes('kasugai') || lowerCharId.includes('crow') || lowerCharId.includes('까마귀')) {
+      return `${CDN_URL}/꺾쇠_까마귀.png`;
     }
 
     // 3. 역무원/차장 관련
@@ -359,6 +362,9 @@ export default function ChatInterface({
     }
     if (lowerCharId.includes('system') || lowerCharId.includes('narr') || lowerCharId.includes('내레이터')) {
       return '내레이터';
+    }
+    if (lowerCharId.includes('kasugai') || lowerCharId.includes('crow') || lowerCharId.includes('까마귀')) {
+      return '꺾쇠까마귀';
     }
 
     // 3. 역무원/차장 관련
@@ -1658,7 +1664,7 @@ export default function ChatInterface({
           style={{
             backgroundImage: backgroundImageUrl
               ? `url(${backgroundImageUrl})`
-              : 'url(/images/무한열차.jpeg)'  // 초기 로딩: 무한열차 카드 이미지
+              : 'url(/images/무한열차.png)'  // 초기 로딩: 무한열차 카드 이미지
           }}
         />
 
