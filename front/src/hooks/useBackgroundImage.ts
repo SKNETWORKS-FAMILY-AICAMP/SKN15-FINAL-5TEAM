@@ -1,54 +1,127 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { normalizeScenarioId } from '@/utils/scenario';
+import {
+  BackgroundImage,
+  getBackgroundById,
+  getBackgroundImagePath,
+  getScenarioBackgrounds,
+  getDefaultBackground
+} from '@/config/backgroundImages';
 
-interface BackgroundImage {
-  index: string;
-  fileName: string;
+interface BackgroundState {
+  id: string;
+  index: number;
+  name: string;
+  description: string;
   url: string;
 }
 
-const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
+const buildBackgroundState = (scenarioId: string, image?: BackgroundImage | null): BackgroundState | null => {
+  if (!image) return null;
 
-const SCENARIO_BACKGROUNDS: Record<string, BackgroundImage[]> = {
-  'mugen-train': [
-    { index: '0', fileName: 'mugen_train_bg1.jpg', url: `${CDN_URL}/scenarios/mugen_train/mugen_train_bg1.jpg` },
-    { index: '1', fileName: 'mugen_train_bg2.jpg', url: `${CDN_URL}/scenarios/mugen_train/mugen_train_bg2.jpg` },
-    { index: '2', fileName: 'mugen_train_bg3.jpg', url: `${CDN_URL}/scenarios/mugen_train/mugen_train_bg3.jpg` },
-  ],
+  return {
+    id: image.id,
+    index: Number(image.index),
+    name: image.name,
+    description: image.description,
+    url: getBackgroundImagePath(scenarioId, image.fileName)
+  };
 };
 
 export function useBackgroundImage(scenarioId: string) {
   const normalizedScenarioId = normalizeScenarioId(scenarioId);
-  const backgrounds = SCENARIO_BACKGROUNDS[normalizedScenarioId] || [];
-  const [currentBackground, setCurrentBackground] = useState<BackgroundImage>(
-    backgrounds[0] || { index: '0', fileName: '', url: '' }
+  // backgroundImages.ts 에서는 snake_case ID를 사용하므로 변환
+  const configScenarioId = useMemo(() => normalizedScenarioId.replace(/-/g, '_'), [normalizedScenarioId]);
+
+  const scenarioConfig = useMemo(
+    () => getScenarioBackgrounds(configScenarioId),
+    [configScenarioId]
+  );
+  const scenarioBackgrounds = scenarioConfig?.backgrounds ?? [];
+
+  const defaultBackgroundState = useMemo(() => {
+    const defaultImage = getDefaultBackground(configScenarioId) ?? scenarioBackgrounds[0];
+    return buildBackgroundState(configScenarioId, defaultImage) ?? {
+      id: 'default',
+      index: 0,
+      name: 'Default Background',
+      description: '',
+      url: ''
+    };
+  }, [configScenarioId, scenarioBackgrounds]);
+
+  const [currentBackground, setCurrentBackground] = useState<BackgroundState>(defaultBackgroundState);
+
+  useEffect(() => {
+    setCurrentBackground(defaultBackgroundState);
+  }, [defaultBackgroundState]);
+
+  const setBackgroundById = useCallback(
+    (id: string): boolean => {
+      const image = getBackgroundById(configScenarioId, id);
+      if (!image) {
+        console.warn(`[useBackgroundImage] Unknown background id: ${id}`);
+        return false;
+      }
+      const state = buildBackgroundState(configScenarioId, image);
+      if (state) {
+        setCurrentBackground(state);
+        return true;
+      }
+      return false;
+    },
+    [configScenarioId]
   );
 
-  const setBackgroundById = useCallback((id: string) => {
-    const bg = backgrounds.find(b => b.index === id);
-    if (bg) {
-      setCurrentBackground(bg);
-    }
-  }, [backgrounds]);
+  const setBackgroundByIndex = useCallback(
+    (index: number | string): boolean => {
+      const idx = String(index);
+      const image = scenarioBackgrounds.find(bg => String(bg.index) === idx);
+      if (!image) {
+        console.warn(`[useBackgroundImage] Unknown background index: ${index}`);
+        return false;
+      }
+      const state = buildBackgroundState(configScenarioId, image);
+      if (state) {
+        setCurrentBackground(state);
+        return true;
+      }
+      return false;
+    },
+    [configScenarioId, scenarioBackgrounds]
+  );
 
-  const setBackgroundByIndex = useCallback((index: number) => {
-    if (backgrounds[index]) {
-      setCurrentBackground(backgrounds[index]);
-    }
-  }, [backgrounds]);
+  const setBackgroundByFileName = useCallback(
+    (fileName: string): boolean => {
+      const image = scenarioBackgrounds.find(bg => bg.fileName === fileName);
+      if (!image) {
+        console.warn(`[useBackgroundImage] Unknown background file name: ${fileName}`);
+        return false;
+      }
+      const state = buildBackgroundState(configScenarioId, image);
+      if (state) {
+        setCurrentBackground(state);
+        return true;
+      }
+      return false;
+    },
+    [configScenarioId, scenarioBackgrounds]
+  );
 
   const preloadImages = useCallback(() => {
-    backgrounds.forEach(bg => {
+    scenarioBackgrounds.forEach(bg => {
       const img = new Image();
-      img.src = bg.url;
+      img.src = getBackgroundImagePath(configScenarioId, bg.fileName);
     });
-  }, [backgrounds]);
+  }, [configScenarioId, scenarioBackgrounds]);
 
   return {
     currentBackground,
-    backgroundImageUrl: currentBackground.url,
+    backgroundImageUrl: currentBackground?.url || '',
     setBackgroundById,
     setBackgroundByIndex,
+    setBackgroundByFileName,
     preloadImages,
+    availableBackgrounds: scenarioBackgrounds
   };
 }

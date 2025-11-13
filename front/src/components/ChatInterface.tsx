@@ -93,6 +93,7 @@ export default function ChatInterface({
     backgroundImageUrl,
     setBackgroundById,
     setBackgroundByIndex,
+    setBackgroundByFileName,
     preloadImages
   } = useBackgroundImage(backendScenarioId);
 
@@ -208,16 +209,6 @@ export default function ChatInterface({
     setInvitedCharacters(sortedParticipants);
   };
 
-  // 백엔드 이미지 파일명 → 프론트엔드 인덱스 매핑
-  const backendImageToIndex: Record<string, number> = {
-    'default.png': 1,
-    'cutscene_01_derail.png': 1,           // 무한열차 탈선
-    'cutscene_02_battle_begins.png': 3,    // 전투 시작 (아카자 등장)
-    'cutscene_03_fight_akaza.png': 6,      // 아카자와의 전투
-    'cutscene_04_rengoku_sacrifice.png': 13, // 렌고쿠의 희생
-    'cutscene_05_aftermath.png': 18,       // 전투 이후
-  };
-
   // 백엔드 응답에서 받은 current_image를 처리하여 배경 변경 (페이드 효과 포함)
   const handleBackgroundChange = (currentImage: string | null) => {
     if (!currentImage) return;
@@ -229,22 +220,26 @@ export default function ChatInterface({
 
     // 500ms 후에 배경 변경
     setTimeout(() => {
-      // 1. 숫자인 경우 인덱스로 처리
-      const indexNum = parseInt(currentImage, 10);
-      if (!isNaN(indexNum) && indexNum >= 1 && indexNum <= 21) {
-        console.log(`  → Setting background by index: ${indexNum}`);
-        setBackgroundByIndex(indexNum);
+      const trimmed = currentImage.trim();
+      let handled = false;
+
+      const indexNum = Number(trimmed);
+      if (!Number.isNaN(indexNum) && indexNum >= 0) {
+        handled = setBackgroundByIndex(indexNum);
       }
-      // 2. 백엔드 이미지 파일명인 경우 매핑된 인덱스로 처리
-      else if (backendImageToIndex[currentImage]) {
-        const mappedIndex = backendImageToIndex[currentImage];
-        console.log(`  → Mapped backend image "${currentImage}" to index: ${mappedIndex}`);
-        setBackgroundByIndex(mappedIndex);
+
+      if (!handled) {
+        handled = setBackgroundById(trimmed);
       }
-      // 3. ID로 처리 (예: "derailed_train", "battle_scene_01" 등)
-      else {
-        console.log(`  → Setting background by ID: ${currentImage}`);
-        setBackgroundById(currentImage);
+
+      if (!handled && trimmed.includes('.')) {
+        handled = setBackgroundByFileName(trimmed);
+      }
+
+      if (!handled) {
+        console.warn(`[ChatInterface] Unknown background identifier: ${trimmed}`);
+      } else {
+        console.log(`  → Background updated using identifier: ${trimmed}`);
       }
 
       // 전환 효과 종료
