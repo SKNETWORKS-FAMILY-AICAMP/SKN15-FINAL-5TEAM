@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
@@ -102,7 +103,7 @@ class Settings(BaseSettings):
     # ============================================================
     # 파일 시스템 설정
     # ============================================================
-    DATA_DIR: Path = Path("/Users/jtm427/Desktop/workspace/data")  # 로컬: workspace/data, Docker: /app/data
+    DATA_DIR: Path = Path(os.getenv("DATA_DIR", "/app/data"))
 
     # ============================================================
     # 로깅 설정

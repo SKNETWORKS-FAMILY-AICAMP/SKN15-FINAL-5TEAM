@@ -4,6 +4,7 @@ import ChatInterface from '@/components/ChatInterface';
 import ChatHeader from '@/components/ChatHeader';
 import LoginModal from '@/components/LoginModal';
 import SessionResumeModal from '@/components/SessionResumeModal';
+import TutorialOverlay from '@/components/TutorialOverlay';
 import { useApp } from '@/contexts/AppContext';
 import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
 
@@ -15,7 +16,7 @@ const SCENARIO_ID_MAP: Record<string, string> = {
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId } = useApp();
   const navigate = useNavigate();
 
   // Scenario loading state
@@ -34,6 +35,7 @@ export default function ChatPage() {
 
   // Track if user has interacted with chat (to show exit warning)
   const [hasStartedChat, setHasStartedChat] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // Load scenario data from API
   useEffect(() => {
@@ -63,11 +65,19 @@ export default function ChatPage() {
 
   // Authentication guard: show login modal if not authenticated (after auth loading completes)
   useEffect(() => {
-    if (!isAuthLoading && !isLoggedIn) {
-      openLoginModal();
-      setSessionCheckDone(false);
+    if (!isAuthLoading) {
+      if (!isLoggedIn) {
+        openLoginModal();
+        setSessionCheckDone(false);
+        setShowTutorial(false);
+      } else {
+        const tutorialKey = currentUserId ? `tutorialCompleted:${currentUserId}` : 'tutorialCompleted:guest';
+        if (!localStorage.getItem(tutorialKey)) {
+          setShowTutorial(true);
+        }
+      }
     }
-  }, [isAuthLoading, isLoggedIn, openLoginModal]);
+  }, [isAuthLoading, isLoggedIn, openLoginModal, currentUserId]);
 
   // Check for last session after login (only after auth loading completes)
   useEffect(() => {
@@ -109,6 +119,12 @@ export default function ChatPage() {
     setResumeSessionId(undefined);
     setShowResumeModal(false);
     setSessionCheckDone(true);  // 사용자가 "새로 시작" 선택 완료
+  };
+
+  const handleCompleteTutorial = () => {
+    const tutorialKey = currentUserId ? `tutorialCompleted:${currentUserId}` : 'tutorialCompleted:guest';
+    localStorage.setItem(tutorialKey, 'true');
+    setShowTutorial(false);
   };
 
   // Warn user before leaving page (browser close/refresh)
@@ -261,6 +277,7 @@ export default function ChatPage() {
   // Implemented scenario - ChatInterface handles full layout
   return (
     <div className="min-h-screen bg-gray-50">
+      {showTutorial && <TutorialOverlay onComplete={handleCompleteTutorial} />}
       <ChatHeader
         onToggleSidebar={toggleSidebar}
         onOpenSettings={openSettings}
