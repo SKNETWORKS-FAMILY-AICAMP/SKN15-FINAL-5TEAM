@@ -135,6 +135,8 @@ async def create_chat(
             dialogues_count=len(rendered_chat_messages)
         )
 
+        current_image = dialogue_result.current_image
+
         return StreamingResponse(
             sse_generator(
                 session_id=session_id,
@@ -144,7 +146,7 @@ async def create_chat(
                 affinity_scores=dialogue_result.affinity_scores or {},
                 is_ended=False,
                 has_more=False,
-                current_image=None,
+                current_image=current_image,
                 output={}
             ),
             media_type="text/event-stream",

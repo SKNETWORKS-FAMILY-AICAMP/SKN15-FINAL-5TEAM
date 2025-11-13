@@ -7,12 +7,7 @@ import SessionResumeModal from '@/components/SessionResumeModal';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import { useApp } from '@/contexts/AppContext';
 import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
-
-const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'mugen_train_full',
-  ending: 'cutscene5_llm_driven',
-  mugen_train_full: 'mugen_train_full',
-};
+import { normalizeScenarioId } from '@/utils/scenario';
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
@@ -88,7 +83,7 @@ export default function ChatPage() {
 
   const checkLastSession = async () => {
     try {
-      const backendScenarioId = SCENARIO_ID_MAP[characterId || ''] || characterId;
+      const backendScenarioId = normalizeScenarioId(characterId);
       const session = await apiClient.getUserLastSession(backendScenarioId);
 
       if (session) {

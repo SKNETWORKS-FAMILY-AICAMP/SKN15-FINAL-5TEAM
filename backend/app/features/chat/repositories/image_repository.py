@@ -70,11 +70,11 @@ class ImageRepository:
                 and_(
                     ImageMapping.scenario_id == scenario_id,
                     # JSONB contains check for stage_id in metadata
-                    ImageMapping.metadata.op('@>')(func.jsonb_build_object('stage_id', stage_id))
+                    ImageMapping.extra_data.op('@>')(func.jsonb_build_object('stage_id', stage_id))
                 )
             ).order_by(
                 # Extract priority from metadata JSONB, default to 0
-                ImageMapping.metadata['priority'].astext.cast(Integer).desc()
+                ImageMapping.extra_data['priority'].astext.cast(Integer).desc()
             ).limit(1)
 
             result = await self.db.execute(stmt)
@@ -88,8 +88,8 @@ class ImageRepository:
                     "mapping_category": image.mapping_category,
                     "image_key": image.image_key,
                     "image_url": image.image_url,
-                    "metadata": image.metadata or {},
-                    "priority": (image.metadata or {}).get("priority", 0)
+                    "metadata": image.extra_data or {},
+                    "priority": (image.extra_data or {}).get("priority", 0)
                 }
 
                 logger.info("get_best_image_for_stage",

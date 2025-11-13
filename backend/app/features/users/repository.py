@@ -297,7 +297,7 @@ class UserRepository:
         if row:
             # 기존 레코드 업데이트
             update_query = text("""
-                UPDATE user_credits
+                UPDATE auth.user_credits
                 SET
                     bubble_count = bubble_count + :amount,
                     total_purchased = total_purchased + :amount,
@@ -312,7 +312,7 @@ class UserRepository:
         else:
             # 새 레코드 생성
             insert_query = text("""
-                INSERT INTO user_credits (user_id, bubble_count, total_purchased, total_consumed, last_updated)
+                INSERT INTO auth.user_credits (user_id, bubble_count, total_purchased, total_consumed, last_updated)
                 VALUES (:user_id, :amount, :amount, 0, :updated_at)
             """)
             await self.db.execute(insert_query, {

@@ -7,6 +7,7 @@ import { sendChatMessage, ChatResponse } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
+import { normalizeScenarioId } from '@/utils/scenario';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -30,12 +31,6 @@ interface ChatInterfaceProps {
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
-
-const SCENARIO_ID_MAP: Record<string, string> = {
-  train: 'mugen_train_full',
-  ending: 'cutscene5_llm_driven',
-  mugen_train_full: 'mugen_train_full',
-};
 
 export default function ChatInterface({
   onUserLogin,
@@ -90,12 +85,7 @@ export default function ChatInterface({
   }, [messages]);
 
   // 백엔드 시나리오 ID 결정 (매핑 적용)
-  const backendScenarioId = useMemo(() => {
-    if (!characterId) {
-      return 'cutscene5_llm_driven';
-    }
-    return SCENARIO_ID_MAP[characterId] || characterId;
-  }, [characterId]);
+  const backendScenarioId = useMemo(() => normalizeScenarioId(characterId), [characterId]);
 
   // 배경 이미지 관리 (시나리오별 배경 이미지)
   const {

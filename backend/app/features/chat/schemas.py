@@ -79,6 +79,7 @@ class DialogueResult(BaseModel):
     updated_state: Dict = Field(default_factory=dict)
     affinity_delta: Optional[Dict[str, float]] = None
     affinity_scores: Optional[Dict[str, float]] = None  # 현재 친밀도 (DB 로드 + 델타 적용)
+    current_image: Optional[str] = Field(None, description="선택된 배경 이미지 식별자")
 
 
 class StageResult(BaseModel):

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { normalizeScenarioId } from '@/utils/scenario';
 
 interface BackgroundImage {
   index: string;
@@ -9,19 +10,16 @@ interface BackgroundImage {
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
 const SCENARIO_BACKGROUNDS: Record<string, BackgroundImage[]> = {
-  mugen_train_full: [
+  'mugen-train': [
     { index: '0', fileName: 'mugen_train_bg1.jpg', url: `${CDN_URL}/scenarios/mugen_train/mugen_train_bg1.jpg` },
     { index: '1', fileName: 'mugen_train_bg2.jpg', url: `${CDN_URL}/scenarios/mugen_train/mugen_train_bg2.jpg` },
     { index: '2', fileName: 'mugen_train_bg3.jpg', url: `${CDN_URL}/scenarios/mugen_train/mugen_train_bg3.jpg` },
   ],
-  cutscene5_llm_driven: [
-    { index: '0', fileName: 'ending_bg1.jpg', url: `${CDN_URL}/scenarios/ending/ending_bg1.jpg` },
-    { index: '1', fileName: 'ending_bg2.jpg', url: `${CDN_URL}/scenarios/ending/ending_bg2.jpg` },
-  ],
 };
 
 export function useBackgroundImage(scenarioId: string) {
-  const backgrounds = SCENARIO_BACKGROUNDS[scenarioId] || [];
+  const normalizedScenarioId = normalizeScenarioId(scenarioId);
+  const backgrounds = SCENARIO_BACKGROUNDS[normalizedScenarioId] || [];
   const [currentBackground, setCurrentBackground] = useState<BackgroundImage>(
     backgrounds[0] || { index: '0', fileName: '', url: '' }
   );

@@ -26,6 +26,7 @@ from app.shared.exceptions import DailyLimitExceededException
 from app.features.users.repository import UserRepository
 from app.features.progression.repository import ProgressionRepository
 from app.core.llm.client import LLMClient
+from app.features.images.local_mapping_loader import get_stage_image_identifier
 
 # LangGraph imports (optional - only used if USE_LANGGRAPH=true)
 try:
@@ -227,6 +228,76 @@ class ChatUseCase:
 
         return result
 
+    async def _resolve_current_image(
+        self,
+        state: Dict[str, Any],
+        scenario_id: str
+    ) -> Optional[str]:
+        """
+        현재 스테이지에 맞는 이미지 식별자를 조회
+
+        Args:
+            state: 최신 세션 상태
+            scenario_id: 기본 시나리오 ID (state에 없으면 사용)
+        """
+        scenario = state.get("scenario_id") or scenario_id
+        stage_id = state.get("current_stage") or state.get("stage_tag")
+        turn_count = state.get("turn_count", 0)
+
+        if not scenario or not stage_id:
+            return None
+
+        try:
+            image_data = await self.image_repository.get_best_image_for_stage(
+                scenario_id=scenario,
+                stage_id=stage_id,
+                turn_count=turn_count
+            )
+        except Exception as e:
+            logger.error(
+                "_resolve_current_image",
+                f"Failed to fetch image mapping: {e}",
+                scenario=scenario,
+                stage=stage_id
+            )
+            return None
+
+        if not image_data:
+            fallback = get_stage_image_identifier(scenario, stage_id)
+            if fallback:
+                return fallback
+            return None
+
+        metadata = image_data.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        # 프론트엔드가 이해할 수 있는 고유 ID 우선 반환
+        identifier_keys = [
+            "frontend_index",
+            "frontend_id",
+            "background_id",
+            "index",
+            "image_index",
+            "current_image",
+        ]
+        for key in identifier_keys:
+            value = metadata.get(key)
+            if value not in (None, ""):
+                return str(value)
+
+        if image_data.get("image_key"):
+            return image_data["image_key"]
+
+        if metadata.get("file_name"):
+            return metadata["file_name"]
+
+        fallback = get_stage_image_identifier(scenario, stage_id)
+        if fallback:
+            return fallback
+
+        return image_data.get("image_url")
+
     async def create_dialogue(
         self,
         user_id: str,
@@ -403,6 +474,8 @@ class ChatUseCase:
                         images=[]
                     )
 
+                    result.current_image = await self._resolve_current_image(session_state, scenario_id)
+
                     logger.info("create_dialogue", "Prologue returned successfully",
                                session_id=session_id, turn_count=session_state["turn_count"])
                     return result
@@ -471,6 +544,15 @@ class ChatUseCase:
                 except Exception as e:
                     logger.exception("create_dialogue", "Parent agent failed", exc=e)
                     raise
+
+            # ============================================================
+            # 3-1. 현재 스테이지용 이미지 선택
+            # ============================================================
+            resolved_image = await self._resolve_current_image(
+                dialogue_result.updated_state or session_state,
+                scenario_id=scenario_id
+            )
+            dialogue_result.current_image = resolved_image
 
             # ============================================================
             # 3. 대화 저장
