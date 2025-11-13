@@ -529,6 +529,12 @@ class ChatUseCase:
                     # 대화와 유저 입력을 턴 번호 기준으로 통합
                     message_history = []
 
+                    # 턴 번호별 stage_tag 매핑 (NPC 대화에서 추출)
+                    stage_tag_by_turn = {}
+                    for dlg in recent_dialogues:
+                        if dlg.stage_tag and dlg.turn_number not in stage_tag_by_turn:
+                            stage_tag_by_turn[dlg.turn_number] = dlg.stage_tag
+
                     # 유저 입력을 턴 번호별로 매핑
                     user_inputs_by_turn = {}
                     for user_input in recent_user_inputs:
@@ -548,14 +554,14 @@ class ChatUseCase:
                             "order": dlg.turn_number * 100 + (dlg.order_index or 0) + 1  # 유저 입력 뒤에 배치
                         })
 
-                    # 유저 입력 추가
+                    # 유저 입력 추가 (같은 턴의 NPC 대화에서 stage_tag 추론)
                     for turn_num, user_text in user_inputs_by_turn.items():
                         all_messages.append({
                             "speaker": user_name,  # ✅ 유저 이름 사용
                             "text": user_text,
                             "emotion": "neutral",
                             "turn": turn_num,
-                            "stage_tag": None,  # 유저 입력은 stage_tag 없음
+                            "stage_tag": stage_tag_by_turn.get(turn_num),  # ✅ 같은 턴의 stage_tag 사용
                             "order": turn_num * 100  # 해당 턴의 NPC 대화보다 먼저 배치
                         })
 
@@ -572,6 +578,16 @@ class ChatUseCase:
                     logger.info("create_dialogue",
                                f"Loaded {len(message_history)} messages for context (dialogues={len(recent_dialogues)}, user_inputs={len(recent_user_inputs)})",
                                session_id=session_id)
+
+                    # ✅ CRITICAL FIX: scenario 데이터를 session_state에 추가
+                    # ContextService.collect_recent_dialogues()가 scenario를 state에서 찾음
+                    scenario_data = self.scenario_service.load_scenario(scenario_id)
+                    if scenario_data:
+                        session_state["scenario_data"] = scenario_data
+                        logger.info("create_dialogue",
+                                   "Loaded scenario data for context",
+                                   scenario_id=scenario_id,
+                                   stages_count=len(scenario_data.get("stages", [])))
 
                     dialogue_result = await self.parent.run(
                         user_message=user_message,
@@ -850,16 +866,13 @@ class ChatUseCase:
                 "order": user_input.turn_number * 1000  # 해당 턴의 NPC 대화보다 먼저 배치
             })
 
-        # 5. 시간순 정렬 (order 기준, 오름차순)
+        # 5. 시간순 정렬 (order 기준, 오름차순 = 오래된 것부터)
         all_messages.sort(key=lambda x: x["order"])
 
         # 6. limit 적용 (최근 N개만)
         all_messages = all_messages[-limit:] if len(all_messages) > limit else all_messages
 
-        # 7. 역순으로 뒤집기 (최신 메시지가 먼저 오도록)
-        all_messages.reverse()
-
-        # 8. ChatMessage DTO로 변환
+        # 7. ChatMessage DTO로 변환
         messages = [
             ChatMessage(
                 speaker=msg["speaker"],

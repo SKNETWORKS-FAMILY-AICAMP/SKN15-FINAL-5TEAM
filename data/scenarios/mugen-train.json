@@ -34,48 +34,6 @@
   }, 
   "i18n": {
     "ko": {
-      "beats_train_prelude": [
-        {
-          "goal": "무한열차 안, 렌고쿠가 도시락을 먹으며 '우마이! 우마이!'를 연발한다. {user}는 그 옆에서 도시락을 먹고 있다.",
-          "speaker_hint": ["rengoku", "narr"],
-          "fx": "train_rumble"
-        },
-        {
-          "goal": "객차 문이 열리고 탄지로, 젠이츠, 이노스케가 들어온다. 주변 승객들이 놀란 눈으로 바라본다.",
-          "speaker_hint": ["narr", "tanjiro"],
-          "fx": "door_open"
-        },
-        {
-          "goal": "이노스케가 창문을 치며 신기해한다. 젠이츠가 이노스케를 말린다.",
-          "speaker_hint": ["inosuke", "zenitsu"],
-          "fx": "window_bang"
-        },
-        {
-          "goal": "탄지로가 렌고쿠에게 히노카미 카구라(해의 호흡)에 대해 질문한다.",
-          "speaker_hint": ["tanjiro"],
-          "fx": "curious_gaze"
-        },
-        {
-          "goal": "렌고쿠는 '해의 호흡'을 '불의 호흡'으로 잘못 알아듣고, 모른다고 답한다. 하지만 관련이 있을 것 같다고 말한다.",
-          "speaker_hint": ["rengoku"],
-          "fx": "thoughtful"
-        },
-        {
-          "goal": "렌고쿠가 무한열차에서 40명 이상의 사람들이 실종되었다는 이야기를 한다. 검사도 파견했지만 사라졌다고.",
-          "speaker_hint": ["rengoku"],
-          "fx": "serious_tone"
-        },
-        {
-          "goal": "젠이츠가 오니(혈귀)가 나타날 수 있다는 말에 무서워하며 떤다.",
-          "speaker_hint": ["zenitsu"],
-          "fx": "trembling"
-        },
-        {
-          "goal": "렌고쿠가 {user}를 가리키며 '이 아이는 나의 츠구코, {user}다!'라고 자랑스럽게 이름을 부르며 소개한다.",
-          "speaker_hint": ["rengoku"],
-          "fx": "proud_gesture"
-        }
-      ],
       "beats_user_dream_start": [
         {
           "goal": "차장이 검표를 하러 온다. 승객들의 표를 확인하며 지나간다.",
@@ -1082,31 +1040,26 @@
       "context": "객차 문이 갑자기 열리고 낯선 검사 세 명이 들어온다. 렌고쿠와 {user}가 고개를 돌려 그들을 바라본다. 아직 {user}는 그들이 누구인지 모른다.",
       "beats": [
         {
-          "goal": "객차 문이 갑자기 열리고 낯선 검사 세 명(검은 머리 소년, 금발 소년, 멧돼지 가면을 쓴 자)이 들어온다. 렌고쿠와 {user}가 고개를 돌려 그들을 바라본다.",
-          "speaker_hint": ["narr", "rengoku"]
+          "goal": "객차 문이 열리며 낯선 검사 세 명이 들어온다. 렌고쿠가 그들을 보고 반응한다."
         }
       ],
       "speaker_pool": [
         "rengoku",
-        "tanjiro",
-        "zenitsu",
-        "inosuke",
         "narr"
       ],
       "atmosphere": 2,
-      "min_turns": 2,
-      "max_turns": 5,
+      "min_turns": 1,
+      "max_turns": 1,
       "next": "USER_INTRODUCTION"
     },
     {
       "tag": "USER_INTRODUCTION",
       "type": "scene",
       "loop_mode": "micro_beat",
-      "context": "서로 자기 소개를 한다. 렌고쿠가 {user}를 가리키며 '이 아이는 나의 츠구코(계자)다!'라고 자랑스럽게 소개한다. 탄지로 일행이 {user}에게 인사하고 관심을 보인다.",
+      "context": "탄지로 일행이 자기소개를 하며 렌고쿠와 {user}에게 다가온다. 렌고쿠가 {user}를 가리키며 '이 아이는 나의 츠구코(계자)다!'라고 자랑스럽게 소개한다. 탄지로 일행이 {user}에게 인사하고 관심을 보인다.",
       "beats": [
         {
-          "goal": "탄지로 일행이 자기소개를 하고 {user}에게 인사한다.렌고쿠가 {user}를 '내 츠구코'라고 자랑스럽게 소개한다. ",
-          "speaker_hint": ["rengoku", "tanjiro"]
+          "goal": "탄지로가 자기소개를 하고, 렌고쿠가 {user}를 '내 츠구코'라고 소개한다. 탄지로 일행이 {user}에게 인사한다."
         }
       ],
       "speaker_pool": [
@@ -1117,8 +1070,8 @@
         "narr"
       ],
       "atmosphere": 2,
-      "min_turns": 2,
-      "max_turns": 5,
+      "min_turns": 3,
+      "max_turns": 6,
       "next": "MISSION_BRIEFING"
     },
     {

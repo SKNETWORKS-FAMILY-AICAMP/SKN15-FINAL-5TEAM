@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 
 from app.core.logging import get_parent_logger
 from app.core.llm.prompt_service import get_prompt_service
-from app.features.chat.services import LLMService, DialogueService
+from app.features.chat.services import LLMService, DialogueService, ScenarioService
 
 logger = get_parent_logger("ChildrenAgent")
 prompt_service = get_prompt_service()
@@ -37,15 +37,18 @@ class ChildrenAgent:
     def __init__(
         self,
         llm_service: Optional[LLMService] = None,
-        dialogue_service: Optional[DialogueService] = None
+        dialogue_service: Optional[DialogueService] = None,
+        scenario_service: Optional[ScenarioService] = None
     ):
         """
         Args:
             llm_service: LLMService 인스턴스
             dialogue_service: DialogueService 인스턴스
+            scenario_service: ScenarioService 인스턴스
         """
         self.llm_service = llm_service or LLMService()
         self.dialogue_service = dialogue_service or DialogueService()
+        self.scenario_service = scenario_service or ScenarioService()
 
         logger.info("__init__", "ChildrenAgent initialized")
 
@@ -93,6 +96,28 @@ class ChildrenAgent:
 
         return ctx
 
+    def _get_world_context(self, state: Dict[str, Any]) -> str:
+        """
+        State에서 world_id를 추출하고 world_context 로드
+
+        Args:
+            state: 게임 상태
+
+        Returns:
+            World context 문자열
+        """
+        scenario_data = state.get("scenario_data") or state.get("scenario") or {}
+        world_id = scenario_data.get("world_id")
+
+        if not world_id:
+            logger.warning("_get_world_context", "No world_id found in scenario_data")
+            return ""
+
+        world_context = self.scenario_service.get_world_context(world_id)
+        logger.info("_get_world_context", f"Loaded world_context for {world_id}: {len(world_context)} chars")
+
+        return world_context
+
     async def _generate_dialogues(
         self,
         ctx: Dict[str, Any],
@@ -134,8 +159,12 @@ class ChildrenAgent:
                 beat_descriptions.append(beat)
         beats_description = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
 
+        # ✅ World context 로드
+        world_context = self._get_world_context(state)
+
         logger.info("_generate_dialogues", f"Generating dialogues for {len(beats)} beats",
-                    speaker_pool=speaker_pool, turn=current_turn, loop_mode=loop_mode)
+                    speaker_pool=speaker_pool, turn=current_turn, loop_mode=loop_mode,
+                    world_context_length=len(world_context))
 
         try:
             # ✅ loop_mode에 따라 프롬프트 분기
@@ -145,7 +174,8 @@ class ChildrenAgent:
                     beats_description=beats_description,
                     user_input=user_input,
                     recent_dialogues=recent_dialogues,
-                    speaker_pool=speaker_pool
+                    speaker_pool=speaker_pool,
+                    world_context=world_context
                 )
 
                 dialogues_messages = await self.llm_service.generate_with_prompt(
@@ -169,7 +199,8 @@ class ChildrenAgent:
                     previous_emotion_tone=None,
                     spatial_continuity=None,
                     character_states=None,
-                    transition_hint=None
+                    transition_hint=None,
+                    world_context=world_context
                 )
 
                 dialogues_messages = await self.llm_service.generate_with_prompt(
@@ -210,11 +241,12 @@ class ChildrenAgent:
                                    f"Unexpected message type at index {i}: {type(msg)}, value: {msg}")
                     continue
 
-                if user_name in dialogue_dict["text"]:
-                    original_text = dialogue_dict["text"]
-                    dialogue_dict["text"] = dialogue_dict["text"].replace(user_name, "{user}")
-                    logger.info("_generate_dialogues",
-                                f"✏️ Replaced '{user_name}' → '{{user}}' | {original_text} → {dialogue_dict['text']}")
+                # ❌ 역치환 제거: LLM이 생성한 실제 이름을 그대로 사용
+                # if user_name in dialogue_dict["text"]:
+                #     original_text = dialogue_dict["text"]
+                #     dialogue_dict["text"] = dialogue_dict["text"].replace(user_name, "{user}")
+                #     logger.info("_generate_dialogues",
+                #                 f"✏️ Replaced '{user_name}' → '{{user}}' | {original_text} → {dialogue_dict['text']}")
 
                 if dialogue_dict["speaker"] == user_name:
                     logger.warning("_generate_dialogues",

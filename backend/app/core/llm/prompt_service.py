@@ -77,7 +77,8 @@ class PromptService:
         previous_emotion_tone: Optional[str] = None,
         spatial_continuity: Optional[str] = None,
         character_states: Optional[str] = None,
-        transition_hint: Optional[str] = None
+        transition_hint: Optional[str] = None,
+        world_context: Optional[str] = None
     ) -> str:
         """
         children.dialogue_generation 프롬프트 생성
@@ -97,6 +98,7 @@ class PromptService:
             spatial_continuity: 공간 연속성
             character_states: 캐릭터 상태
             transition_hint: 전환 힌트
+            world_context: 세계관 설정 (YAML에서 로드)
 
         Returns:
             완성된 프롬프트
@@ -128,6 +130,7 @@ class PromptService:
             "공간 연속성": spatial_continuity or "(제공되지 않음)",
             "캐릭터 상태": character_states or "(제공되지 않음)",
             "전환 힌트": transition_hint or "(제공되지 않음)",
+            "세계관": world_context or "(제공되지 않음)",
         }
 
         # 템플릿 변수 치환

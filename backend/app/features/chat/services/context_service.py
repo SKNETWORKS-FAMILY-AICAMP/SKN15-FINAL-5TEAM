@@ -151,6 +151,60 @@ class ContextService:
 
         return children_ctx
 
+    def get_all_previous_stage_tags(
+        self,
+        current_stage_tag: str,
+        scenario: Dict[str, Any]
+    ) -> List[str]:
+        """
+        현재 스테이지 이전의 모든 스테이지 태그 찾기
+
+        Args:
+            current_stage_tag: 현재 스테이지 태그
+            scenario: 시나리오 데이터
+
+        Returns:
+            이전 스테이지 태그 리스트 (순서 유지)
+
+        Example:
+            TRAIN_PRELUDE -> HEROES_ARRIVE -> USER_INTRODUCTION
+            current = USER_INTRODUCTION이면 [TRAIN_PRELUDE, HEROES_ARRIVE] 반환
+        """
+        logger.debug("get_all_previous_stage_tags",
+                    f"🔍 INPUT: current_stage_tag={current_stage_tag}, scenario keys={list(scenario.keys()) if scenario else None}")
+
+        if not current_stage_tag or not scenario:
+            logger.warning("get_all_previous_stage_tags", "❌ Missing current_stage_tag or scenario")
+            return []
+
+        stages = scenario.get("stages", [])
+        logger.debug("get_all_previous_stage_tags",
+                    f"🔍 stages type={type(stages)}, is_list={isinstance(stages, list)}, len={len(stages) if isinstance(stages, list) else 'N/A'}")
+
+        if not isinstance(stages, list):
+            logger.warning("get_all_previous_stage_tags", f"❌ stages is not a list: {type(stages)}")
+            return []
+
+        # 스테이지 순서대로 태그 수집
+        stage_order = []
+        for stage in stages:
+            if not isinstance(stage, dict):
+                continue
+            tag = stage.get("tag")
+            if tag:
+                stage_order.append(tag)
+            # 현재 스테이지를 만나면 중단
+            if tag == current_stage_tag:
+                break
+
+        # 현재 스테이지 제외하고 반환
+        previous_tags = stage_order[:-1] if len(stage_order) > 1 else []
+
+        logger.debug("get_all_previous_stage_tags",
+                    f"Current: {current_stage_tag}, Previous: {previous_tags}")
+
+        return previous_tags
+
     def build_context_summary(self, state: Dict[str, Any]) -> Optional[str]:
         """
         최근 사용자 입력과 대화 요약
@@ -186,47 +240,96 @@ class ContextService:
 
     def collect_recent_dialogues(self, state: Dict[str, Any], current_stage_tag: Optional[str] = None) -> List[str]:
         """
-        최근 대화 수집 (현재 스테이지의 대화만)
+        최근 대화 수집 (이전 스테이지 요약 + 현재 스테이지 전체)
+
+        전략:
+        - 이전 스테이지들: 각 대화를 50자로 자른 요약 형태
+        - 현재 스테이지: 전체 대화 포함
+        - LLM 호출 없이 즉시 처리 (< 1ms)
 
         Args:
             state: 전체 state 객체
-            current_stage_tag: 현재 스테이지 태그 (필터링용)
+            current_stage_tag: 현재 스테이지 태그
 
         Returns:
-            최근 대화 리스트
+            포맷된 대화 리스트
         """
         recent_dialogues: List[str] = []
 
         message_history = state.get("message_history") or []
-        logger.info("collect_recent_dialogues", f"🔍 DEBUG: message_history count = {len(message_history)}, filtering by stage_tag={current_stage_tag}")
-        if message_history:
-            logger.info("collect_recent_dialogues", f"🔍 DEBUG: First message = {message_history[0]}")
+        logger.info("collect_recent_dialogues",
+                   f"🔍 message_history count = {len(message_history)}, current_stage_tag = {current_stage_tag}")
 
-        if isinstance(message_history, list):
-            # 현재 스테이지의 대화만 필터링
-            stage_filtered = []
-            for entry in message_history:
-                if not isinstance(entry, dict):
-                    continue
-                # stage_tag가 제공되고, 메시지에 stage_tag가 있으면 필터링
-                if current_stage_tag and entry.get("stage_tag"):
-                    if entry.get("stage_tag") == current_stage_tag:
-                        stage_filtered.append(entry)
-                else:
-                    # stage_tag 정보가 없으면 모든 대화 포함 (하위 호환성)
-                    stage_filtered.append(entry)
+        if not isinstance(message_history, list) or not message_history:
+            return recent_dialogues
 
-            logger.info("collect_recent_dialogues", f"🔍 DEBUG: After stage filtering = {len(stage_filtered)} messages")
+        # 시나리오 정보 가져오기
+        scenario = state.get("scenario_data") or state.get("scenario") or {}
 
-            # 최근 5개만 선택
-            for entry in stage_filtered[-5:]:
-                speaker = entry.get("speaker") or "unknown"
+        # 이전 스테이지 태그들 찾기
+        previous_stage_tags = []
+        if current_stage_tag:
+            previous_stage_tags = self.get_all_previous_stage_tags(current_stage_tag, scenario)
+            logger.info("collect_recent_dialogues",
+                       f"🔍 Previous stages: {previous_stage_tags}")
+
+        # 메시지 분류
+        previous_stage_messages = []
+        current_stage_messages = []
+        prologue_messages = []
+
+        for entry in message_history:
+            if not isinstance(entry, dict):
+                continue
+
+            entry_stage_tag = entry.get("stage_tag")
+
+            # stage_tag가 없는 메시지 (prologue)
+            if not entry_stage_tag:
+                prologue_messages.append(entry)
+            # 이전 스테이지 메시지
+            elif entry_stage_tag in previous_stage_tags:
+                previous_stage_messages.append(entry)
+            # 현재 스테이지 메시지
+            elif entry_stage_tag == current_stage_tag:
+                current_stage_messages.append(entry)
+
+        logger.info("collect_recent_dialogues",
+                   f"🔍 Prologue: {len(prologue_messages)}, "
+                   f"Previous: {len(previous_stage_messages)}, "
+                   f"Current: {len(current_stage_messages)}")
+
+        # 포맷팅: 이전 장면 (50자 자름)
+        if previous_stage_messages or prologue_messages:
+            recent_dialogues.append("=== 이전 장면 ===")
+
+            # Prologue 포함 (첫 스테이지인 경우)
+            for entry in prologue_messages:
+                speaker = entry.get("speaker", "unknown")
                 text = (entry.get("text") or "").strip()
                 if text:
-                    recent_dialogues.append(f"{speaker}: {text}")
+                    truncated = text[:50] + "..." if len(text) > 50 else text
+                    recent_dialogues.append(f"{speaker}: {truncated}")
 
-        logger.debug("collect_recent_dialogues", "Recent dialogues collected",
-                    count=len(recent_dialogues))
+            # 이전 스테이지 대화들
+            for entry in previous_stage_messages:
+                speaker = entry.get("speaker", "unknown")
+                text = (entry.get("text") or "").strip()
+                if text:
+                    truncated = text[:50] + "..." if len(text) > 50 else text
+                    recent_dialogues.append(f"{speaker}: {truncated}")
+
+            recent_dialogues.append("")  # 빈 줄로 구분
+
+        # 포맷팅: 현재 장면 (전체)
+        for entry in current_stage_messages:
+            speaker = entry.get("speaker", "unknown")
+            text = (entry.get("text") or "").strip()
+            if text:
+                recent_dialogues.append(f"{speaker}: {text}")
+
+        logger.info("collect_recent_dialogues",
+                   f"✅ Total dialogue lines: {len(recent_dialogues)}")
 
         return recent_dialogues
 

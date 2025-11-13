@@ -207,12 +207,14 @@ class ParentAgent:
             stage_complete = stage_result.stage_complete
             next_stage = stage_result.next_stage
 
-            # 11. State 업데이트
+            # 11. State 업데이트 (loop_mode 전달)
+            loop_mode = stage_def.get("loop_mode", "none")
             updated_state = self.state_service.update_state(
                 state,
                 dialogues=[msg.dict() if hasattr(msg, "dict") else msg for msg in dialogues],
                 next_stage=next_stage,
-                stage_complete=stage_complete
+                stage_complete=stage_complete,
+                loop_mode=loop_mode
             )
 
             # 12. DialogueResult 반환
