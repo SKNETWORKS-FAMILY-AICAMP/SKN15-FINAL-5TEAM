@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '@/contexts/AppContext'
-import { apiClient, UserInfo, UserProgression } from '@/services/api'
+import { apiClient, UserInfo, UserProgression, UserCredits, CreditTransaction } from '@/services/api'
 
 export default function MyAccountModal() {
   const { isMyAccountModalOpen, closeMyAccount, logout } = useApp()
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [progression, setProgression] = useState<UserProgression | null>(null)
+  const [credits, setCredits] = useState<UserCredits | null>(null)
+  const [transactions, setTransactions] = useState<CreditTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -17,6 +19,14 @@ export default function MyAccountModal() {
   const [passwordChangeLoading, setPasswordChangeLoading] = useState(false)
   const [passwordChangeError, setPasswordChangeError] = useState('')
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState('')
+
+  // Credit management state
+  const [showCreditSection, setShowCreditSection] = useState(false)
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
+  const [purchaseAmount, setPurchaseAmount] = useState('100')
+  const [purchaseLoading, setPurchaseLoading] = useState(false)
+  const [purchaseError, setPurchaseError] = useState('')
+  const [purchaseSuccess, setPurchaseSuccess] = useState('')
 
   useEffect(() => {
     if (isMyAccountModalOpen) {
@@ -39,11 +49,65 @@ export default function MyAccountModal() {
         console.error('Failed to load progression:', progError)
         // Don't fail the whole modal if progression fails
       }
+
+      // Load user credits
+      try {
+        const cred = await apiClient.getUserCredits()
+        setCredits(cred)
+      } catch (credError) {
+        console.error('Failed to load credits:', credError)
+      }
     } catch (err) {
       console.error('Failed to load user info:', err)
       setError('사용자 정보를 불러올 수 없습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadCreditTransactions = async () => {
+    try {
+      const txs = await apiClient.getCreditTransactions(undefined, 10)
+      setTransactions(txs)
+    } catch (err) {
+      console.error('Failed to load transactions:', err)
+    }
+  }
+
+  const handlePurchaseCredits = async () => {
+    setPurchaseError('')
+    setPurchaseSuccess('')
+
+    const amount = parseInt(purchaseAmount)
+    if (isNaN(amount) || amount <= 0) {
+      setPurchaseError('올바른 금액을 입력해주세요.')
+      return
+    }
+
+    try {
+      setPurchaseLoading(true)
+      await apiClient.purchaseCredits(amount, `크레딧 구매 ${amount}개`)
+      setPurchaseSuccess(`${amount}개의 크레딧이 성공적으로 충전되었습니다!`)
+
+      // Reload credits
+      const cred = await apiClient.getUserCredits()
+      setCredits(cred)
+
+      // Reload transactions if section is open
+      if (showCreditSection) {
+        await loadCreditTransactions()
+      }
+
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setShowPurchaseModal(false)
+        setPurchaseSuccess('')
+        setPurchaseAmount('100')
+      }, 2000)
+    } catch (err: any) {
+      setPurchaseError(err.message || '크레딧 구매에 실패했습니다.')
+    } finally {
+      setPurchaseLoading(false)
     }
   }
 
@@ -215,6 +279,161 @@ export default function MyAccountModal() {
                         <p className="text-sm font-semibold text-gray-800">{progression.total_sessions}</p>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 크레딧 정보 */}
+              {credits && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">크레딧 (버블)</h3>
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-sm text-gray-600">보유 크레딧</p>
+                        <p className="text-3xl font-bold text-purple-600">{credits.bubble_count.toLocaleString()}</p>
+                      </div>
+                      <button
+                        onClick={() => setShowPurchaseModal(true)}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                      >
+                        💰 충전하기
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-purple-200">
+                      <div>
+                        <p className="text-xs text-gray-600">총 구매</p>
+                        <p className="text-sm font-semibold text-gray-800">{credits.total_purchased.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">총 사용</p>
+                        <p className="text-sm font-semibold text-gray-800">{credits.total_consumed.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {!showCreditSection ? (
+                      <button
+                        onClick={async () => {
+                          setShowCreditSection(true)
+                          await loadCreditTransactions()
+                        }}
+                        className="w-full mt-3 p-2 text-sm text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+                      >
+                        📊 거래 내역 보기
+                      </button>
+                    ) : (
+                      <div className="mt-4 pt-3 border-t border-purple-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold text-gray-800">최근 거래</h4>
+                          <button
+                            onClick={() => setShowCreditSection(false)}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            접기
+                          </button>
+                        </div>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {transactions.length === 0 ? (
+                            <p className="text-sm text-gray-500 text-center py-4">거래 내역이 없습니다</p>
+                          ) : (
+                            transactions.map((tx) => (
+                              <div key={tx.transaction_id} className="bg-white p-3 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-xs text-gray-500">
+                                      {new Date(tx.created_at).toLocaleDateString('ko-KR', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                    <p className="text-sm font-medium text-gray-800">{tx.description || tx.transaction_type}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`text-sm font-bold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()}
+                                    </p>
+                                    <p className="text-xs text-gray-500">잔액: {tx.balance_after.toLocaleString()}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 크레딧 구매 모달 */}
+              {showPurchaseModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                  <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-gray-800">크레딧 충전</h3>
+                      <button
+                        onClick={() => {
+                          setShowPurchaseModal(false)
+                          setPurchaseError('')
+                          setPurchaseSuccess('')
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        충전할 크레딧 수량
+                      </label>
+                      <input
+                        type="number"
+                        value={purchaseAmount}
+                        onChange={(e) => setPurchaseAmount(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="100"
+                        min="1"
+                      />
+                      <div className="flex gap-2 mt-2">
+                        {[100, 500, 1000, 5000].map((amount) => (
+                          <button
+                            key={amount}
+                            onClick={() => setPurchaseAmount(amount.toString())}
+                            className="flex-1 px-3 py-1 text-sm bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+                          >
+                            {amount}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {purchaseError && (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-600">{purchaseError}</p>
+                      </div>
+                    )}
+
+                    {purchaseSuccess && (
+                      <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-600">{purchaseSuccess}</p>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handlePurchaseCredits}
+                      disabled={purchaseLoading}
+                      className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                    >
+                      {purchaseLoading ? '처리 중...' : `${purchaseAmount}개 충전하기`}
+                    </button>
+
+                    <p className="text-xs text-gray-500 text-center mt-3">
+                      * 테스트 환경입니다. 실제 결제는 진행되지 않습니다.
+                    </p>
                   </div>
                 </div>
               )}

@@ -475,3 +475,223 @@ class UserUseCase:
 
         logger.info("update_my_settings", "Settings updated", user_id=user_id)
         return settings
+
+    # ========================================
+    # 크레딧 트랜잭션 관련 비즈니스 로직
+    # ========================================
+
+    async def create_credit_transaction(
+        self,
+        user_id: str,
+        amount: int,
+        transaction_type: str,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        크레딧 트랜잭션 생성
+
+        Args:
+            user_id: 사용자 ID
+            amount: 변동량 (양수: 획득, 음수: 소비)
+            transaction_type: 트랜잭션 타입 (purchase, consume, refund, bonus, initial)
+            description: 설명
+
+        Returns:
+            생성된 트랜잭션 정보
+        """
+        logger.info("create_credit_transaction", "Creating transaction",
+                   user_id=user_id, amount=amount, type=transaction_type)
+
+        # 트랜잭션 타입 검증
+        valid_types = ['purchase', 'consume', 'refund', 'bonus', 'initial']
+        if transaction_type not in valid_types:
+            logger.error("create_credit_transaction", "Invalid transaction type",
+                        type=transaction_type, valid=valid_types)
+            raise ValueError(f"Invalid transaction type. Must be one of: {valid_types}")
+
+        # Repository로 트랜잭션 생성 (잔액 자동 계산 및 업데이트)
+        try:
+            transaction = await self.repository.create_credit_transaction(
+                user_id=user_id,
+                amount=amount,
+                transaction_type=transaction_type,
+                description=description
+            )
+
+            logger.info("create_credit_transaction", "Transaction created successfully",
+                       transaction_id=transaction["transaction_id"],
+                       balance_after=transaction["balance_after"])
+
+            return transaction
+
+        except ValueError as e:
+            # 잔액 부족 등의 에러
+            logger.error("create_credit_transaction", "Transaction failed", error=str(e))
+            raise
+
+        except Exception as e:
+            logger.error("create_credit_transaction", "Unexpected error", error=str(e))
+            raise
+
+    async def get_my_credit_transactions(
+        self,
+        user_id: str,
+        transaction_type: Optional[str] = None,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        사용자의 크레딧 트랜잭션 조회
+
+        Args:
+            user_id: 사용자 ID
+            transaction_type: 트랜잭션 타입 필터 (선택)
+            limit: 조회 개수
+
+        Returns:
+            트랜잭션 리스트
+        """
+        logger.info("get_my_credit_transactions", "Getting transactions",
+                   user_id=user_id, type=transaction_type, limit=limit)
+
+        transactions = await self.repository.get_credit_transactions(
+            user_id=user_id,
+            transaction_type=transaction_type,
+            limit=limit
+        )
+
+        # Note: datetime is already converted to string in repository layer
+
+        logger.info("get_my_credit_transactions", f"Retrieved {len(transactions)} transactions",
+                   user_id=user_id)
+
+        return transactions
+
+    async def get_my_credit_stats(
+        self,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        사용자의 크레딧 트랜잭션 통계 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            통계 정보
+        """
+        logger.info("get_my_credit_stats", "Getting credit stats", user_id=user_id)
+
+        stats = await self.repository.get_credit_transaction_stats(user_id)
+
+        logger.info("get_my_credit_stats", "Stats retrieved",
+                   user_id=user_id, total=stats["total_transactions"])
+
+        return stats
+
+    async def purchase_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        크레딧 구매 (편의 메서드)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 구매할 크레딧 수
+            description: 설명
+
+        Returns:
+            트랜잭션 정보
+        """
+        if amount <= 0:
+            raise ValueError("Purchase amount must be positive")
+
+        return await self.create_credit_transaction(
+            user_id=user_id,
+            amount=amount,
+            transaction_type="purchase",
+            description=description or f"크레딧 구매: {amount}개"
+        )
+
+    async def consume_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        크레딧 소비 (편의 메서드)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 소비할 크레딧 수
+            description: 설명
+
+        Returns:
+            트랜잭션 정보
+        """
+        if amount <= 0:
+            raise ValueError("Consume amount must be positive")
+
+        return await self.create_credit_transaction(
+            user_id=user_id,
+            amount=-amount,  # 음수로 변환
+            transaction_type="consume",
+            description=description or f"크레딧 사용: {amount}개"
+        )
+
+    async def refund_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        크레딧 환불 (편의 메서드)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 환불할 크레딧 수
+            description: 설명
+
+        Returns:
+            트랜잭션 정보
+        """
+        if amount <= 0:
+            raise ValueError("Refund amount must be positive")
+
+        return await self.create_credit_transaction(
+            user_id=user_id,
+            amount=amount,
+            transaction_type="refund",
+            description=description or f"크레딧 환불: {amount}개"
+        )
+
+    async def grant_bonus_credits(
+        self,
+        user_id: str,
+        amount: int,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        보너스 크레딧 지급 (편의 메서드)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 지급할 크레딧 수
+            description: 설명
+
+        Returns:
+            트랜잭션 정보
+        """
+        if amount <= 0:
+            raise ValueError("Bonus amount must be positive")
+
+        return await self.create_credit_transaction(
+            user_id=user_id,
+            amount=amount,
+            transaction_type="bonus",
+            description=description or f"보너스 크레딧: {amount}개"
+        )

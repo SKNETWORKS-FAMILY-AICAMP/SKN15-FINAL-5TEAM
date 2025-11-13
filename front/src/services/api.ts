@@ -100,6 +100,26 @@ export interface ConsumeCreditsResult {
   remaining_credits: number
 }
 
+export interface CreditTransaction {
+  transaction_id: string
+  user_id: string
+  amount: number
+  transaction_type: 'purchase' | 'consume' | 'refund' | 'bonus' | 'initial'
+  balance_after: number
+  description?: string
+  created_at: string
+}
+
+export interface CreditStats {
+  total_transactions: number
+  by_type: {
+    [key: string]: {
+      count: number
+      total_amount: number
+    }
+  }
+}
+
 export interface UserProgression {
   user_id: string
   rank_code: string
@@ -655,6 +675,54 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error('Error consuming credits:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Purchase credits
+   */
+  async purchaseCredits(amount: number, description?: string): Promise<CreditTransaction> {
+    try {
+      const params = new URLSearchParams()
+      params.append('amount', amount.toString())
+      if (description) {
+        params.append('description', description)
+      }
+      const response = await authenticatedApiClient.post(`/api/users/me/credits/purchase?${params.toString()}`)
+      return response.data
+    } catch (error) {
+      console.error('Error purchasing credits:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get credit transactions
+   */
+  async getCreditTransactions(transactionType?: string, limit: number = 20): Promise<CreditTransaction[]> {
+    try {
+      const params: any = { limit }
+      if (transactionType) {
+        params.transaction_type = transactionType
+      }
+      const response = await authenticatedApiClient.get('/api/users/me/credits/transactions', { params })
+      return response.data
+    } catch (error) {
+      console.error('Error getting credit transactions:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get credit transaction statistics
+   */
+  async getCreditStats(): Promise<CreditStats> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/credits/stats')
+      return response.data
+    } catch (error) {
+      console.error('Error getting credit stats:', error)
       throw error
     }
   }

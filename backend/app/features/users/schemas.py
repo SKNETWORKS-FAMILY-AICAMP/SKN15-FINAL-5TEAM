@@ -102,6 +102,39 @@ class ConsumeCreditsResponse(BaseModel):
         from_attributes = True
 
 
+class CreditTransactionResponse(BaseModel):
+    """크레딧 트랜잭션 응답"""
+    transaction_id: str = Field(..., description="트랜잭션 ID")
+    user_id: str = Field(..., description="사용자 ID")
+    amount: int = Field(..., description="변동량 (양수: 획득, 음수: 소비)")
+    transaction_type: str = Field(..., description="트랜잭션 타입")
+    balance_after: int = Field(..., description="변동 후 잔액")
+    description: Optional[str] = Field(None, description="설명")
+    created_at: str = Field(..., description="생성일시")
+
+    class Config:
+        from_attributes = True
+
+
+class CreateCreditTransactionRequest(BaseModel):
+    """크레딧 트랜잭션 생성 요청"""
+    amount: int = Field(..., description="변동량 (양수: 획득, 음수: 소비)")
+    transaction_type: str = Field(..., description="트랜잭션 타입 (purchase, consume, refund, bonus, initial)")
+    description: Optional[str] = Field(None, max_length=500, description="설명")
+
+    class Config:
+        from_attributes = True
+
+
+class CreditTransactionStatsResponse(BaseModel):
+    """크레딧 트랜잭션 통계 응답"""
+    total_transactions: int = Field(..., description="총 트랜잭션 수")
+    by_type: dict = Field(..., description="타입별 통계")
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================================
 # Progression Schemas
 # ============================================================
