@@ -32,7 +32,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'derailed_train',
       index: 1,
-      fileName: '1.png',
+      fileName: '탄지로_기본.png',
       name: '무너진 열차, 필사의 질주',
       description: '탄지로가 열차 탈선 현장에서 필사적으로 달리는 장면',
       tags: ['train', 'disaster', 'desperate', 'tanjiro']
@@ -40,7 +40,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'rengoku_standing',
       index: 2,
-      fileName: '2.png',
+      fileName: '렌고쿠_기본.png',
       name: '염주, 렌고쿠 쿄쥬로',
       description: '열차가 탈선 됐지만 당황하지 않고 굳건히 서 있는 렌고쿠의 모습',
       tags: ['rengoku', 'hashira', 'strong', 'flame']
@@ -48,7 +48,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'akaza_arrival',
       index: 3,
-      fileName: '3.png',
+      fileName: '아카자_기본.png',
       name: '상현의 등장',
       description: '상현 3 아카자가 압도적인 기운과 함께 처음 등장하는 장면',
       tags: ['akaza', 'upper_rank', 'demon', 'arrival', 'threatening']
@@ -56,7 +56,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'compass_battle',
       index: 4,
-      fileName: '4.png',
+      fileName: '렌고쿠_전투1.png',
       name: '나침반 위의 사투',
       description: '아카자의 술식 "파괴살: 나침" 위에서 렌고쿠와 격돌하는 장면',
       tags: ['battle', 'rengoku', 'akaza', 'technique', 'intense']
@@ -64,15 +64,15 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'compass_technique',
       index: 5,
-      fileName: '5.png',
-      name: '술식 전개: 파괴살 나침',
-      description: '아카자가 본격적인 전투를 위해 자세를 잡고 기술을 전개하는 장면',
+      fileName: '아카자_술식.mp4',
+      name: '술식 전개: 파괴살 나침 (동영상)',
+      description: '아카자가 본격적인 전투를 위해 자세를 잡고 기술을 전개하는 장면을 영상으로 표현',
       tags: ['akaza', 'technique', 'blood_demon_art', 'battle_start']
     },
     {
       id: 'flame_vs_fighting_spirit',
       index: 6,
-      fileName: '6.png',
+      fileName: '렌고쿠_전투2.png',
       name: '붉은 화염, 푸른 투기',
       description: '렌고쿠의 화염과 아카자의 푸른 투기가 정면으로 충돌하는 모습',
       tags: ['battle', 'rengoku', 'akaza', 'clash', 'intense', 'fire']
@@ -80,7 +80,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'hashira_vs_upper_rank',
       index: 7,
-      fileName: '7.png',
+      fileName: '렌고쿠_발악.jpg',
       name: '염주와 상현의 격돌',
       description: '렌고쿠가 아카자의 공격을 정면으로 받아치며 싸우는 격전',
       tags: ['battle', 'rengoku', 'akaza', 'intense', 'clash']
@@ -88,7 +88,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'inosuke_sharpening',
       index: 8,
-      fileName: '8.png',
+      fileName: '이노스케_기본.png',
       name: '어둠 속의 칼날갈이',
       description: '이노스케를 만났을 때, 이노스케가 다음 전투를 준비하며 칼을 가는 장면',
       tags: ['inosuke', 'preparation', 'dark', 'beast']
@@ -96,7 +96,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'inosuke_charge',
       index: 9,
-      fileName: '9.png',
+      fileName: '이노스케_흥분.png',
       name: '짐승의 호흡, 돌격!',
       description: '이노스케를 설득했을 때 이노스케가 투지가 생긴 모습',
       tags: ['inosuke', 'beast_breathing', 'charge', 'motivated']
@@ -104,7 +104,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'duel_flame_and_fist',
       index: 10,
-      fileName: '10.jpg',
+      fileName: '엔무_등장.png',
       name: '일기토: 불꽃과 권무',
       description: '렌고쿠와 아카자가 서로의 모든 것을 걸고 싸우는 치열한 근접전',
       tags: ['battle', 'rengoku', 'akaza', 'intense', 'duel', 'climax']
@@ -112,7 +112,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'zenitsu_sleeping',
       index: 11,
-      fileName: '11.png',
+      fileName: '젠이츠_숙면.png',
       name: '고요한 열차, 잠든 번개',
       description: '젠이츠가 파괴된 열차 안에서 잠들어 있는 모습',
       tags: ['zenitsu', 'sleeping', 'train', 'calm']
@@ -120,7 +120,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'thunderclap_and_flash',
       index: 12,
-      fileName: '12.png',
+      fileName: '젠이츠_각성.png',
       name: '벽력일섬',
       description: '젠이츠를 설득하는데 성공했을 때 투지가 생긴 젠이츠',
       tags: ['zenitsu', 'thunder_breathing', 'motivated', 'lightning']
@@ -128,7 +128,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'pierced_abdomen',
       index: 13,
-      fileName: '13.png',
+      fileName: '렌고쿠_패배.png',
       name: '최후의 일격, 꿰뚫린 복부',
       description: '아카자의 팔이 렌고쿠의 복부를 꿰뚫은 결정적인 장면',
       tags: ['rengoku', 'akaza', 'critical', 'injury', 'dramatic', 'tragic']
@@ -136,7 +136,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'remaining_flame',
       index: 14,
-      fileName: '14.png',
+      fileName: '배드_엔딩.png',
       name: '남겨진 불꽃',
       description: '싸움이 끝난 후, 렌고쿠의 일륜도와 하오리만 남아있는 장면',
       tags: ['rengoku', 'aftermath', 'tragic', 'emotional', 'sword', 'haori']
@@ -144,7 +144,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'cooperation_towards_dawn',
       index: 15,
-      fileName: '15.png',
+      fileName: '동료_합류.png',
       name: '새벽을 향한 공조',
       description: '이노스케와 젠이츠가 함께 전장을 달리는 모습',
       tags: ['inosuke', 'zenitsu', 'cooperation', 'running', 'dawn']
@@ -152,7 +152,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'three_united',
       index: 16,
-      fileName: '16.png',
+      fileName: '동료_지원.png',
       name: '삼인삼색, 합동 전선',
       description: '탄지로, 젠이츠, 이노스케가 각자의 기술을 상징하는 형상과 함께 싸우는 모습',
       tags: ['tanjiro', 'zenitsu', 'inosuke', 'trio', 'united', 'breathing', 'hidden_ending_route']
@@ -160,7 +160,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'rengoku_ninth_form',
       index: 17,
-      fileName: '17.png',
+      fileName: '렌고쿠_각성.mp4',
       name: '불꽃의 호흡, 오의: 연옥',
       description: '렌고쿠가 화룡의 형상과 함께 최후의 오의를 사용하는 장면',
       tags: ['rengoku', 'flame_breathing', 'ninth_form', 'ultimate', 'dragon', 'climax']
@@ -168,7 +168,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'dawn_and_tears',
       index: 18,
-      fileName: '18.png',
+      fileName: '배드_엔딩_2.png',
       name: '여명, 그리고 패배의 눈물',
       description: '해가 뜨고, 렌고쿠의 곁에서 오열하는 탄지로와 젠이츠, 그리고 분노하는 이노스케',
       tags: ['dawn', 'tanjiro', 'zenitsu', 'inosuke', 'rengoku', 'tears', 'grief', 'anger', 'tragic']
@@ -176,7 +176,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'fulfill_duty',
       index: 19,
-      fileName: '19.jpg',
+      fileName: '렌고쿠_유언.jpg',
       name: '책무를 다하다',
       description: '모든 싸움을 마치고 어머니를 떠올리며 미소 짓는 렌고쿠의 마지막 모습',
       tags: ['rengoku', 'final_moment', 'smile', 'duty', 'mother', 'tragic', 'emotional']
@@ -184,7 +184,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'set_heart_ablaze',
       index: 20,
-      fileName: '20.png',
+      fileName: '히든엔딩1.png',
       name: '마음을 불태워라',
       description: '렌고쿠가 죽기 직전, 탄지로에게 마지막 유언을 남기며 격려하는 장면',
       tags: ['rengoku', 'tanjiro', 'last_words', 'encouragement', 'emotional', 'legacy']
@@ -192,10 +192,42 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'hidden_ending',
       index: 21,
-      fileName: '21.png',
+      fileName: '히든엔딩2.png',
       name: '[히든 엔딩] 불꽃과 함께 맞이한 여명',
       description: '염주 렌고쿠 쿄쥬로가 살아남아, 탄지로 일행과 함께 폐허 속에서 떠오르는 태양을 바라보는, 또 다른 이야기의 결말',
       tags: ['hidden_ending', 'rengoku', 'tanjiro', 'zenitsu', 'inosuke', 'sunrise', 'victory', 'happy', 'alternative']
+    },
+    {
+      id: 'tanjiro_arrival',
+      index: 22,
+      fileName: '탄지로_등장.jpg',
+      name: '귀살대의 합류',
+      description: '탄지로, 젠이츠, 이노스케가 객차 문을 열고 등장해 렌고쿠와 처음 마주하는 순간',
+      tags: ['tanjiro', 'zenitsu', 'inosuke', 'arrival', 'train', 'team']
+    },
+    {
+      id: 'rengoku_bento',
+      index: 23,
+      fileName: '렌고쿠_식사.png',
+      name: '우마이! 도시락 시간',
+      description: '렌고쿠가 연신 “우마이!”를 외치며 도시락을 먹는 즐거운 식사 장면',
+      tags: ['rengoku', 'bento', 'calm', 'humor', 'train']
+    },
+    {
+      id: 'everyone_asleep',
+      index: 24,
+      fileName: '잠든_모두.jpg',
+      name: '엔무의 최면',
+      description: '엔무의 혈귀술에 걸려 승객들과 동료들이 모두 깊은 잠에 빠진 장면',
+      tags: ['enmu', 'sleep', 'spell', 'train', 'suspense']
+    },
+    {
+      id: 'rengoku_annihilation',
+      index: 25,
+      fileName: '렌고쿠_섬멸.mp4',
+      name: '염주의 일도, 섬멸',
+      description: '렌고쿠가 불꽃의 호흡으로 혈귀를 섬멸하는 클라이맥스 영상을 배경으로 사용',
+      tags: ['rengoku', 'ultimate', 'flame', 'finisher', 'cinematic']
     }
   ]
 };

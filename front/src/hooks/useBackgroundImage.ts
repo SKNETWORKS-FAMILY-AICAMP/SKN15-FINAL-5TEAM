@@ -13,8 +13,17 @@ interface BackgroundState {
   index: number;
   name: string;
   description: string;
+  fileName: string;
+  isVideo: boolean;
   url: string;
 }
+
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogg'];
+
+const isVideoFile = (fileName: string): boolean => {
+  const lower = fileName.toLowerCase();
+  return VIDEO_EXTENSIONS.some(ext => lower.endsWith(ext));
+};
 
 const buildBackgroundState = (scenarioId: string, image?: BackgroundImage | null): BackgroundState | null => {
   if (!image) return null;
@@ -24,6 +33,8 @@ const buildBackgroundState = (scenarioId: string, image?: BackgroundImage | null
     index: Number(image.index),
     name: image.name,
     description: image.description,
+    fileName: image.fileName,
+    isVideo: isVideoFile(image.fileName),
     url: getBackgroundImagePath(scenarioId, image.fileName)
   };
 };
@@ -46,6 +57,8 @@ export function useBackgroundImage(scenarioId: string) {
       index: 0,
       name: 'Default Background',
       description: '',
+      fileName: '',
+      isVideo: false,
       url: ''
     };
   }, [configScenarioId, scenarioBackgrounds]);
@@ -110,6 +123,7 @@ export function useBackgroundImage(scenarioId: string) {
 
   const preloadImages = useCallback(() => {
     scenarioBackgrounds.forEach(bg => {
+      if (isVideoFile(bg.fileName)) return;
       const img = new Image();
       img.src = getBackgroundImagePath(configScenarioId, bg.fileName);
     });

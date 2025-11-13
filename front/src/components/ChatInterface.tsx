@@ -1660,21 +1660,41 @@ export default function ChatInterface({
     setIsListening(false);
   };
 
+  const renderBackgroundVisual = () => {
+    const transitionClass = `w-full h-full transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`;
+
+    if (currentBackground?.isVideo && backgroundImageUrl) {
+      return (
+        <video
+          key={backgroundImageUrl}
+          className={`${transitionClass} object-cover`}
+          src={backgroundImageUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+        />
+      );
+    }
+
+    return (
+      <div
+        className={`${transitionClass} bg-cover bg-center bg-no-repeat`}
+        style={{
+          backgroundImage: backgroundImageUrl
+            ? `url(${backgroundImageUrl})`
+            : 'url(/images/무한열차.png)'  // 초기 로딩: 무한열차 카드 이미지
+        }}
+      />
+    );
+  };
+
   return (
     <div className="w-full h-full flex flex-col md:flex-row bg-gray-100">
       {/* 왼쪽: 컷신 이미지 영역 (50%) */}
       <div className="relative w-full md:w-1/2 h-[40vh] md:h-full overflow-hidden">
         {/* 컷신 배경 이미지 */}
-        <div
-          className={`w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-500 ${
-            isTransitioning ? 'opacity-0' : 'opacity-100'
-          }`}
-          style={{
-            backgroundImage: backgroundImageUrl
-              ? `url(${backgroundImageUrl})`
-              : 'url(/images/무한열차.png)'  // 초기 로딩: 무한열차 카드 이미지
-          }}
-        />
+        {renderBackgroundVisual()}
 
         {/* 왼쪽 아래: 친밀도 패널 */}
         <div className="absolute bottom-4 left-4 right-44 z-10">
@@ -1835,10 +1855,15 @@ export default function ChatInterface({
               </div>
 
               {message.isUser && (
-                <div className="w-16 h-16 rounded-full ml-3 flex-shrink-0">
-                  <div className="w-full h-full rounded-full bg-purple-600 flex items-center justify-center text-white font-medium">
-                    U
-                  </div>
+                <div className="w-16 h-16 rounded-full ml-3 flex-shrink-0 overflow-hidden border-2 border-purple-200">
+                  <img
+                    src={`${CDN_URL}/유저_이미지.jpg`}
+                    alt="사용자"
+                    className="w-full h-full object-cover rounded-full"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `${CDN_URL}/기본이미지.png`;
+                    }}
+                  />
                 </div>
               )}
               </div> {/* scale wrapper 닫기 */}
