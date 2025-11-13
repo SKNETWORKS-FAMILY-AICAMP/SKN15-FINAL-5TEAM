@@ -238,7 +238,7 @@ class UserUseCase:
         return {
             "success": True,
             "message": "Credits consumed successfully",
-            "remaining_credits": credits["current_credits"]
+            "remaining_credits": credits["bubble_count"]
         }
 
     async def get_my_gallery_images(

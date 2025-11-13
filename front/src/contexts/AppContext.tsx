@@ -27,7 +27,7 @@ interface AppContextType {
   setFontSize: (size: FontSize) => void;
   setChatWindowSize: (size: ChatWindowSize) => void;
   updateBubbles: (count: number) => void;
-  consumeBubbles: (amount: number) => boolean;
+  consumeBubbles: (amount: number, description?: string) => Promise<boolean>;
   openSidebar: () => void;
   closeSidebar: () => void;
   toggleSidebar: () => void;
@@ -213,12 +213,33 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const updateBubbles = (count: number) => {
     setCurrentBubbles(count);
   };
-  const consumeBubbles = (amount: number) => {
-    if (currentBubbles >= amount) {
-      setCurrentBubbles(prev => prev - amount);
-      return true;
+  const consumeBubbles = async (amount: number, description: string = 'chat_message') => {
+    if (currentBubbles < amount) {
+      return false;
     }
-    return false;
+
+    const previousBubbles = currentBubbles;
+    setCurrentBubbles(prev => prev - amount);
+
+    try {
+      const result = await apiClient.consumeCredits(amount, description);
+      if (typeof result?.remaining_credits === 'number') {
+        setCurrentBubbles(result.remaining_credits);
+      } else {
+        // 서버에서 남은 크레딧을 돌려주지 않으면 최신 값을 다시 조회
+        try {
+          const refreshed = await apiClient.getUserCredits();
+          setCurrentBubbles(refreshed.bubble_count);
+        } catch (refreshError) {
+          console.error('[AppContext] Failed to refresh credits after consume:', refreshError);
+        }
+      }
+      return result.success;
+    } catch (error) {
+      console.error('[AppContext] Failed to consume credits:', error);
+      setCurrentBubbles(previousBubbles);
+      return false;
+    }
   };
 
   return (

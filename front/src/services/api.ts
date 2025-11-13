@@ -94,6 +94,12 @@ export interface UserCredits {
   last_updated?: string
 }
 
+export interface ConsumeCreditsResult {
+  success: boolean
+  message: string
+  remaining_credits: number
+}
+
 export interface UserProgression {
   user_id: string
   rank_code: string
@@ -640,7 +646,7 @@ class ApiClient {
   /**
    * Consume user credits
    */
-  async consumeCredits(amount: number, description: string): Promise<{ success: boolean; message: string }> {
+  async consumeCredits(amount: number, description: string): Promise<ConsumeCreditsResult> {
     try {
       const response = await authenticatedApiClient.post('/api/users/me/credits/consume', {
         amount,

@@ -225,7 +225,7 @@ class UserRepository:
 
         # 크레딧 차감
         update_query = text("""
-            UPDATE user_credits
+            UPDATE auth.user_credits
             SET
                 bubble_count = bubble_count - :amount,
                 total_consumed = total_consumed + :amount,
