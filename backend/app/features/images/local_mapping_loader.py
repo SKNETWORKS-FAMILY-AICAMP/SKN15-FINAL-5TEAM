@@ -12,12 +12,35 @@ from typing import Any, Dict, Optional
 
 
 def _candidate_dirs() -> list[Path]:
+    """
+    Return possible directories that may contain image mapping files.
+
+    지원 환경:
+    1. Monorepo (호스트) - <repo>/backend 및 <repo>/data
+    2. Docker 컨테이너 - /app, /app/backend
+    """
     current = Path(__file__).resolve()
-    repo_root = current.parents[4]
-    return [
-        repo_root / "backend" / "data" / "image_mappings",
-        repo_root / "data" / "image_mappings",
-    ]
+    parents = list(current.parents)
+
+    potential_roots = []
+    for idx in range(min(len(parents), 5)):
+        potential_roots.append(parents[idx])
+
+    # Docker 컨테이너 기본 경로 추가 (/app)
+    potential_roots.append(Path("/app"))
+
+    candidate_dirs = []
+    seen = set()
+
+    for root in potential_roots:
+        for sub in ("data/image_mappings", "backend/data/image_mappings"):
+            candidate = (root / sub).resolve()
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            candidate_dirs.append(candidate)
+
+    return candidate_dirs
 
 
 def _candidate_names(scenario_id: str) -> list[str]:

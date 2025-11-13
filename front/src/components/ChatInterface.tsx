@@ -218,6 +218,23 @@ export default function ChatInterface({
   };
 
   // 백엔드 응답에서 받은 current_image를 처리하여 배경 변경 (페이드 효과 포함)
+  const extractFileName = (value: string) => {
+    if (!value) return '';
+    const cleaned = value.replace(/^["']|["']$/g, '');
+    const noQuery = cleaned.split(/[?#]/)[0];
+    const decoded = decodeURIComponent(noQuery);
+    const parts = decoded.split(/[/\\]/);
+    return parts[parts.length - 1] || decoded;
+  };
+
+  const getFileNameCandidates = (raw: string) => {
+    const candidates = new Set<string>();
+    const direct = extractFileName(raw);
+    if (raw) candidates.add(raw);
+    if (direct) candidates.add(direct);
+    return Array.from(candidates).filter(name => /\.[a-z0-9]+$/i.test(name));
+  };
+
   const handleBackgroundChange = (currentImage: string | null) => {
     if (!currentImage) return;
 
@@ -231,17 +248,24 @@ export default function ChatInterface({
       const trimmed = currentImage.trim();
       let handled = false;
 
-      const indexNum = Number(trimmed);
-      if (!Number.isNaN(indexNum) && indexNum >= 0) {
-        handled = setBackgroundByIndex(indexNum);
+      const fileNameCandidates = getFileNameCandidates(trimmed);
+      for (const fileName of fileNameCandidates) {
+        if (!fileName) continue;
+        if (setBackgroundByFileName(fileName)) {
+          handled = true;
+          break;
+        }
+      }
+
+      if (!handled) {
+        const indexNum = Number(trimmed);
+        if (!Number.isNaN(indexNum) && indexNum >= 0) {
+          handled = setBackgroundByIndex(indexNum);
+        }
       }
 
       if (!handled) {
         handled = setBackgroundById(trimmed);
-      }
-
-      if (!handled && trimmed.includes('.')) {
-        handled = setBackgroundByFileName(trimmed);
       }
 
       if (!handled) {

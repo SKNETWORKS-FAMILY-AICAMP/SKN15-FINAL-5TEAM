@@ -1,0 +1,120 @@
+{
+  "scenario_id": "mugen-train",
+  "default_background": {
+    "background_id": "derailed_train",
+    "index": "1",
+    "file_name": "탄지로_기본.png"
+  },
+  "stage_map": {
+    "TRAIN_PRELUDE": {
+      "background_id": "rengoku_bento",
+      "index": "23",
+      "file_name": "렌고쿠_식사.png"
+    },
+    "HEROES_ARRIVE": {
+      "background_id": "tanjiro_arrival",
+      "index": "22",
+      "file_name": "탄지로_등장.jpg"
+    },
+    "USER_INTRODUCTION": {
+      "background_id": "derailed_train",
+      "index": "1",
+      "file_name": "탄지로_기본.png"
+    },
+    "MISSION_BRIEFING": {
+      "background_id": "rengoku_standing",
+      "index": "2",
+      "file_name": "렌고쿠_기본.png"
+    },
+    "ENMU_APPEAR": {
+      "background_id": "everyone_asleep",
+      "index": "24",
+      "file_name": "잠든_모두.jpg"
+    },
+    "USER_DREAM_MEMORY": {
+      "background_id": "zenitsu_sleeping",
+      "index": "11",
+      "file_name": "젠이츠_숙면.png"
+    },
+    "DREAM_TEST": {
+      "background_id": "thunderclap_and_flash",
+      "index": "12",
+      "file_name": "젠이츠_각성.png"
+    },
+    "DREAM_QUESTION": {
+      "background_id": "thunderclap_and_flash",
+      "index": "12",
+      "file_name": "젠이츠_각성.png"
+    },
+    "DREAM_ESCAPE_SUCCESS": {
+      "background_id": "cooperation_towards_dawn",
+      "index": "15",
+      "file_name": "동료_합류.png"
+    },
+    "DREAM_ESCAPE_FAIL": {
+      "background_id": "remaining_flame",
+      "index": "14",
+      "file_name": "배드_엔딩.png"
+    },
+    "AWAKEN": {
+      "background_id": "derailed_train",
+      "index": "1",
+      "file_name": "탄지로_기본.png"
+    },
+    "ENMU_REAL_BATTLE": {
+      "background_id": "flame_vs_fighting_spirit",
+      "index": "6",
+      "file_name": "렌고쿠_전투2.png"
+    },
+    "UpperMoons3_appeared": {
+      "background_id": "akaza_arrival",
+      "index": "3",
+      "file_name": "아카자_기본.png"
+    },
+    "ROUTE_CHOICE": {
+      "background_id": "compass_battle",
+      "index": "4",
+      "file_name": "렌고쿠_전투1.png"
+    },
+    "INTERVENE": {
+      "background_id": "compass_technique",
+      "index": "5",
+      "file_name": "아카자_술식.mp4"
+    },
+    "RECRUIT": {
+      "background_id": "inosuke_sharpening",
+      "index": "8",
+      "file_name": "이노스케_기본.png"
+    },
+    "RECKLESS_SACRIFICE": {
+      "background_id": "pierced_abdomen",
+      "index": "13",
+      "file_name": "렌고쿠_패배.png"
+    },
+    "RETURN_TO_FRONT": {
+      "background_id": "three_united",
+      "index": "16",
+      "file_name": "동료_지원.png"
+    },
+    "END_ROUTER": {
+      "background_id": "fulfill_duty",
+      "index": "19",
+      "file_name": "렌고쿠_유언.jpg"
+    },
+    "END_HIDDEN": {
+      "background_id": "hidden_ending",
+      "index": "21",
+      "file_name": "히든엔딩2.png"
+    },
+    "END_BASIC": {
+      "background_id": "dawn_and_tears",
+      "index": "18",
+      "file_name": "배드_엔딩_2.png"
+    },
+    "END_BAD": {
+      "background_id": "set_heart_ablaze",
+      "index": "20",
+      "file_name": "히든엔딩1.png"
+    }
+  }
+}
