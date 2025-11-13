@@ -182,6 +182,17 @@ export interface LeaderboardEntry {
   scenarios_completed: number
 }
 
+export interface LongTermMemory {
+  memory_id: number
+  memory_key: string
+  memory_value: string
+  memory_type: string
+  importance: number | null
+  access_count: number
+  last_accessed_at: string | null
+  created_at: string | null
+}
+
 // Scenario interfaces
 export interface ScenarioCard {
   scenario_id: string
@@ -500,6 +511,25 @@ class ApiClient {
   }
 
   /**
+   * Finalize session: Extract remaining memories and deactivate session
+   * Should be called when user finishes a scenario or leaves the chat
+   */
+  async finalizeSession(sessionId: string): Promise<{
+    success: boolean
+    memories_created: number
+    message: string
+  }> {
+    try {
+      const response = await authenticatedApiClient.post(`/api/chat/${sessionId}/finalize`)
+      console.log(`Session finalized: ${sessionId}, memories created: ${response.data.memories_created}`)
+      return response.data
+    } catch (error) {
+      console.error('Error finalizing session:', error)
+      throw error
+    }
+  }
+
+  /**
    * List available scenarios (with JWT authentication)
    */
   async listScenarios(): Promise<ScenarioInfo[]> {
@@ -764,6 +794,25 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error('Error getting user equipment:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user long-term memories
+   */
+  async getUserLongTermMemories(memoryType?: string, limit: number = 50): Promise<LongTermMemory[]> {
+    try {
+      const params = new URLSearchParams()
+      if (memoryType) {
+        params.append('memory_type', memoryType)
+      }
+      params.append('limit', limit.toString())
+
+      const response = await authenticatedApiClient.get(`/api/users/me/long-term-memories?${params}`)
+      return response.data
+    } catch (error) {
+      console.error('Error getting long-term memories:', error)
       throw error
     }
   }

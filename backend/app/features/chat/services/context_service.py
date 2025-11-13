@@ -141,6 +141,9 @@ class ContextService:
         children_ctx["latest_user_input"] = state.get("user_input", "")
         children_ctx["recent_dialogues"] = self.collect_recent_dialogues(state, current_stage_tag=stage_tag)
 
+        # Long-term memories 추가 (장기기억)
+        children_ctx["long_term_memories"] = state.get("long_term_memories", [])
+
         # Character refs 및 scenario_id
         children_ctx.setdefault("character_refs", scenario.get("character_refs", {}))
         children_ctx.setdefault("scenario_id", scenario.get("scenario_id", "unknown"))

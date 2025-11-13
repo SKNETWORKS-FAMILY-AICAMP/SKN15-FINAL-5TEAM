@@ -114,12 +114,14 @@ class ChildrenAgent:
         # 컨텍스트 정보 준비
         # ✅ recent_dialogues는 ctx (children_ctx)에서 가져옴
         recent_dialogues = ctx.get("recent_dialogues", [])
+        long_term_memories = ctx.get("long_term_memories", [])
         user_input = state.get("user_input", "")
         current_turn = state.get("turn_count", 0)
         user_name = state.get("user_name", "츠구코")
 
         logger.info("_generate_dialogues", f"Post-processing will replace '{user_name}' with '{{user}}'")
         logger.info("_generate_dialogues", f"🔍 DEBUG: recent_dialogues count = {len(recent_dialogues)}")
+        logger.info("_generate_dialogues", f"🔍 DEBUG: long_term_memories count = {len(long_term_memories)}")
         if recent_dialogues:
             logger.info("_generate_dialogues", f"🔍 DEBUG: First dialogue = {recent_dialogues[0]}")
             logger.info("_generate_dialogues", f"🔍 DEBUG: Last dialogue = {recent_dialogues[-1]}")
@@ -145,7 +147,8 @@ class ChildrenAgent:
                     beats_description=beats_description,
                     user_input=user_input,
                     recent_dialogues=recent_dialogues,
-                    speaker_pool=speaker_pool
+                    speaker_pool=speaker_pool,
+                    long_term_memories=long_term_memories
                 )
 
                 dialogues_messages = await self.llm_service.generate_with_prompt(
@@ -169,7 +172,8 @@ class ChildrenAgent:
                     previous_emotion_tone=None,
                     spatial_continuity=None,
                     character_states=None,
-                    transition_hint=None
+                    transition_hint=None,
+                    long_term_memories=long_term_memories
                 )
 
                 dialogues_messages = await self.llm_service.generate_with_prompt(

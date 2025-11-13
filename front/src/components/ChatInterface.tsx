@@ -28,6 +28,7 @@ interface ChatInterfaceProps {
   initialSessionId?: string;  // 세션 복원용 session_id
   onInvitedCharactersChange?: (characters: string[]) => void;  // 참여 캐릭터 변경 콜백
   sessionCheckDone?: boolean;  // 세션 체크 완료 여부 (모달에서 사용자 선택 완료)
+  onSessionStart?: (sessionId: string) => void;  // 세션 시작 시 콜백 (세션 종료를 위해)
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
@@ -38,7 +39,8 @@ export default function ChatInterface({
   characterId = 'ending',
   initialSessionId,
   onInvitedCharactersChange,
-  sessionCheckDone = true  // 기본값: true (기존 동작 유지)
+  sessionCheckDone = true,  // 기본값: true (기존 동작 유지)
+  onSessionStart
 }: ChatInterfaceProps) {
   // App context (for bubble consumption and user info)
   const { consumeBubbles, currentUser, openMyAccount } = useApp();
@@ -886,6 +888,7 @@ export default function ChatInterface({
 
         // 세션 ID 저장
         setSessionId(response.session_id);
+        onSessionStart?.(response.session_id); // Notify parent of new session creation
 
         console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
         console.log('🔍 Full response:', response);
@@ -1295,6 +1298,7 @@ export default function ChatInterface({
       // Update session ID if it changed
       if (response.session_id !== sessionId) {
         setSessionId(response.session_id);
+        onSessionStart?.(response.session_id); // Notify parent of session change
       }
 
       // Update affinity_scores and current_stage from response

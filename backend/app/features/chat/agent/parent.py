@@ -165,6 +165,16 @@ class ParentAgent:
             current_stage_tag = self._resolve_current_stage(state, scenario)
             stage_def = self._get_stage_definition(scenario, current_stage_tag)
 
+            # Mountable 시나리오 (stages가 없는 경우) 처리
+            if not stage_def and scenario.get("mountable", False):
+                logger.info("run", "Mountable scenario without stages - using freeform", scenario_id=scenario_id)
+                stage_def = {
+                    "tag": current_stage_tag,
+                    "type": "freeform",
+                    "description": scenario.get("description", "Free conversation"),
+                    "character_refs": scenario.get("character_refs", {})
+                }
+
             if not stage_def:
                 logger.error("run", "Stage not found", stage_tag=current_stage_tag)
                 return self._fallback_response(state, f"스테이지 '{current_stage_tag}'를 찾을 수 없습니다.")
@@ -318,6 +328,9 @@ class ParentAgent:
             StageResult
         """
         stage_type = stage.get("type", "scene").lower()
+        # Freeform을 open_narrative로 매핑 (mountable 시나리오용)
+        if stage_type == "freeform":
+            stage_type = "open_narrative"
         handler = self.handlers.get(stage_type, self.handlers["scene"])
 
         logger.debug("_execute_stage_handler", f"Using handler: {stage_type}")

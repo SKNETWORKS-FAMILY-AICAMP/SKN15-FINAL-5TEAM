@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '@/contexts/AppContext'
-import { apiClient, UserInfo, UserProgression, UserCredits, CreditTransaction } from '@/services/api'
+import { apiClient, UserInfo, UserProgression, UserCredits, CreditTransaction, LongTermMemory } from '@/services/api'
 
 export default function MyAccountModal() {
   const { isMyAccountModalOpen, closeMyAccount, logout, updateBubbles } = useApp()
@@ -27,6 +27,12 @@ export default function MyAccountModal() {
   const [purchaseLoading, setPurchaseLoading] = useState(false)
   const [purchaseError, setPurchaseError] = useState('')
   const [purchaseSuccess, setPurchaseSuccess] = useState('')
+
+  // Long-term memory state
+  const [showMemorySection, setShowMemorySection] = useState(false)
+  const [memories, setMemories] = useState<LongTermMemory[]>([])
+  const [memoryFilter, setMemoryFilter] = useState<string>('')
+  const [memoryLoading, setMemoryLoading] = useState(false)
 
   useEffect(() => {
     if (isMyAccountModalOpen) {
@@ -71,6 +77,18 @@ export default function MyAccountModal() {
       setTransactions(txs)
     } catch (err) {
       console.error('Failed to load transactions:', err)
+    }
+  }
+
+  const loadLongTermMemories = async (filter?: string) => {
+    try {
+      setMemoryLoading(true)
+      const mems = await apiClient.getUserLongTermMemories(filter || undefined, 50)
+      setMemories(mems)
+    } catch (err) {
+      console.error('Failed to load memories:', err)
+    } finally {
+      setMemoryLoading(false)
     }
   }
 
@@ -440,6 +458,125 @@ export default function MyAccountModal() {
                   </div>
                 </div>
               )}
+
+              {/* 장기기억 (Long-term Memory) 정보 */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">💭 장기기억 (Long-term Memory)</h3>
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4">
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-600 mb-2">
+                      대화를 통해 학습된 나에 대한 기억들이 저장됩니다
+                    </p>
+                  </div>
+
+                  {!showMemorySection ? (
+                    <button
+                      onClick={async () => {
+                        setShowMemorySection(true)
+                        await loadLongTermMemories()
+                      }}
+                      className="w-full p-2 text-sm text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                    >
+                      🧠 내 기억 보기
+                    </button>
+                  ) : (
+                    <div className="mt-4 pt-3 border-t border-blue-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-gray-800">저장된 기억</h4>
+                        <button
+                          onClick={() => setShowMemorySection(false)}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          접기
+                        </button>
+                      </div>
+
+                      {/* Memory type filter */}
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          onClick={async () => {
+                            setMemoryFilter('')
+                            await loadLongTermMemories('')
+                          }}
+                          className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                            memoryFilter === ''
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                          }`}
+                        >
+                          전체
+                        </button>
+                        {['fact', 'event', 'relationship', 'preference'].map((type) => (
+                          <button
+                            key={type}
+                            onClick={async () => {
+                              setMemoryFilter(type)
+                              await loadLongTermMemories(type)
+                            }}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                              memoryFilter === type
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                            }`}
+                          >
+                            {type === 'fact' ? '사실' : type === 'event' ? '사건' : type === 'relationship' ? '관계' : '선호'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Memory list */}
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {memoryLoading ? (
+                          <div className="text-center py-8">
+                            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                            <p className="text-sm text-gray-500 mt-2">로딩 중...</p>
+                          </div>
+                        ) : memories.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">저장된 기억이 없습니다</p>
+                        ) : (
+                          memories.map((mem) => (
+                            <div key={mem.memory_id} className="bg-white p-3 rounded-lg border border-blue-100">
+                              <div className="flex items-start justify-between mb-1">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                                      {mem.memory_type === 'fact' ? '사실' :
+                                       mem.memory_type === 'event' ? '사건' :
+                                       mem.memory_type === 'relationship' ? '관계' : '선호'}
+                                    </span>
+                                    {mem.importance !== null && (
+                                      <span className="text-xs text-gray-500">
+                                        중요도: {(mem.importance * 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-800 leading-relaxed">{mem.memory_value}</p>
+                                  {mem.created_at && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      {new Date(mem.created_at).toLocaleDateString('ko-KR', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-blue-200">
+                        <p className="text-xs text-gray-500 text-center">
+                          총 {memories.length}개의 기억이 저장되어 있습니다
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* 계정 정보 */}
               <div className="mb-8">

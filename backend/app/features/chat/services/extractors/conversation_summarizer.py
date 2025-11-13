@@ -20,7 +20,7 @@ settings = get_settings()
 logger = get_parent_logger("ConversationSummarizer")
 
 # 요약 설정
-SUMMARY_TRIGGER_TURN_COUNT = 10  # 10턴마다 요약
+SUMMARY_TRIGGER_DIALOGUE_COUNT = 5  # 5개 대화마다 요약 (turn 대신 dialogue 기준)
 KEEP_RECENT_TURNS = 5  # 최근 5턴은 전문 유지
 
 
@@ -46,20 +46,20 @@ class ConversationSummarizer:
 
     def should_create_summary(
         self,
-        current_turn_count: int,
-        last_summary_turn_count: int
+        current_dialogue_count: int,
+        last_summary_dialogue_count: int
     ) -> bool:
         """
-        요약 생성 필요 여부 판단
+        요약 생성 필요 여부 판단 (대화 개수 기준)
 
         Args:
-            current_turn_count: 현재 턴 수
-            last_summary_turn_count: 마지막 요약 시점 턴 수
+            current_dialogue_count: 현재 총 대화 개수
+            last_summary_dialogue_count: 마지막 요약 시점 대화 개수
 
         Returns:
             요약 생성 필요 여부
         """
-        return (current_turn_count - last_summary_turn_count) >= SUMMARY_TRIGGER_TURN_COUNT
+        return (current_dialogue_count - last_summary_dialogue_count) >= SUMMARY_TRIGGER_DIALOGUE_COUNT
 
     def extract_conversations_to_summarize(
         self,
@@ -245,40 +245,40 @@ class ConversationSummarizer:
         message_history: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        대화 요약 업데이트 (메인 함수)
+        대화 요약 업데이트 (메인 함수) - 대화 개수 기준으로 트리거
 
         Args:
             state: Session state
             message_history: 메시지 히스토리
 
         Returns:
-            {"summary": str, "summary_turn_count": int}
+            {"summary": str, "summary_dialogue_count": int}
         """
-        current_turn_count = state.get("turn_count", 0)
-        last_summary_turn_count = state.get("summary_turn_count", 0)
+        # 대화 개수 기준으로 변경 (turn_count 대신 total_dialogue_count 사용)
+        current_dialogue_count = state.get("total_dialogue_count", 0)
+        last_summary_dialogue_count = state.get("summary_dialogue_count", 0)
         existing_summary = state.get("conversation_summary", "")
 
-        # 요약 필요 여부 확인
-        if not self.should_create_summary(current_turn_count, last_summary_turn_count):
+        logger.debug("update_summary", f"Checking summary trigger: current={current_dialogue_count}, last={last_summary_dialogue_count}")
+
+        # 요약 필요 여부 확인 (대화 개수 기준)
+        if not self.should_create_summary(current_dialogue_count, last_summary_dialogue_count):
             return {
                 "summary": existing_summary,
-                "summary_turn_count": last_summary_turn_count
+                "summary_dialogue_count": last_summary_dialogue_count
             }
 
-        logger.info("update_summary", f"Generating summary at turn {current_turn_count}")
+        logger.info("update_summary", f"Generating summary at dialogue count {current_dialogue_count}")
 
-        # 요약할 대화 추출
-        conversations_to_summarize = self.extract_conversations_to_summarize(
-            message_history,
-            last_summary_turn_count,
-            current_turn_count
-        )
+        # 요약할 대화 추출 (전체 히스토리에서 요약되지 않은 부분만)
+        # message_history는 이미 시간순으로 정렬되어 있음
+        conversations_to_summarize = message_history  # 모든 메시지를 LLM에 전달 (LLM이 스스로 요약)
 
         if not conversations_to_summarize:
             logger.warning("update_summary", "No conversations to summarize")
             return {
                 "summary": existing_summary,
-                "summary_turn_count": last_summary_turn_count
+                "summary_dialogue_count": last_summary_dialogue_count
             }
 
         # 시나리오 컨텍스트
@@ -292,11 +292,11 @@ class ConversationSummarizer:
         )
 
         logger.info("update_summary", "Summary generated",
-                   turns_summarized=f"{last_summary_turn_count + 1}~{current_turn_count - KEEP_RECENT_TURNS}")
+                   dialogue_count=current_dialogue_count)
 
         return {
             "summary": new_summary,
-            "summary_turn_count": current_turn_count - KEEP_RECENT_TURNS
+            "summary_dialogue_count": current_dialogue_count
         }
 
     def get_recent_conversations(

@@ -53,9 +53,11 @@ class MemoryRepository:
         Returns:
             생성된 UserMemory
         """
-        # memory_key 생성 (memory_type과 타임스탬프 기반)
+        # memory_key 생성 (memory_type, 타임스탬프, UUID 기반 - 고유성 보장)
+        import uuid
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        memory_key = f"{memory_type}_{timestamp}"
+        unique_id = str(uuid.uuid4())[:8]  # UUID 앞 8자리
+        memory_key = f"{memory_type}_{timestamp}_{unique_id}"
 
         memory = UserMemory(
             user_id=user_id,

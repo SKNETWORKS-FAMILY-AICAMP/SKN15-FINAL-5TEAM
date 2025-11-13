@@ -695,3 +695,59 @@ class UserUseCase:
             transaction_type="bonus",
             description=description or f"보너스 크레딧: {amount}개"
         )
+
+    # ============================================================
+    # 장기기억 (Memory) 관리
+    # ============================================================
+
+    async def get_user_memories(
+        self,
+        user_id: str,
+        memory_type: Optional[str] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        사용자의 장기기억 조회
+
+        Args:
+            user_id: 사용자 ID
+            memory_type: 메모리 타입 필터 (fact, event, relationship, preference)
+            limit: 조회 개수
+
+        Returns:
+            메모리 리스트
+        """
+        logger.info("get_user_memories", f"Getting memories for user",
+                   user_id=user_id, memory_type=memory_type, limit=limit)
+
+        # Repository에서 메모리 조회
+        memories = await self.memory_repository.get_user_memories(
+            user_id=user_id,
+            scenario_id=None,  # 모든 시나리오의 메모리 조회
+            memory_type=memory_type,
+            limit=limit
+        )
+
+        # 중요도 순으로 정렬
+        memories_sorted = sorted(
+            memories,
+            key=lambda m: (m.importance or 0, m.created_at or datetime.min),
+            reverse=True
+        )
+
+        # 응답 형식으로 변환
+        result = []
+        for memory in memories_sorted:
+            result.append({
+                "memory_id": memory.id,
+                "memory_key": memory.memory_key,
+                "memory_value": memory.memory_value,
+                "memory_type": memory.memory_type,
+                "importance": memory.importance,
+                "access_count": memory.access_count or 0,
+                "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                "last_accessed_at": memory.last_accessed_at.isoformat() if memory.last_accessed_at else None
+            })
+
+        logger.info("get_user_memories", f"Retrieved {len(result)} memories", user_id=user_id)
+        return result

@@ -727,3 +727,38 @@ async def grant_bonus_credits(
     except Exception as e:
         logger.error("grant_bonus_credits", "Failed", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to grant bonus credits")
+
+
+# ============================================================
+# 장기기억 (Memory) 엔드포인트
+# ============================================================
+
+@router.get("/me/long-term-memories", response_model=List[MemoryResponse])
+async def get_my_long_term_memories(
+    user_id: str = Depends(get_current_user_id),
+    memory_type: Optional[str] = Query(None, description="메모리 타입 필터 (fact, event, relationship, preference)"),
+    limit: int = Query(50, ge=1, le=200, description="조회 개수 (1-200)"),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 장기기억 조회
+
+    - 사용자의 장기기억(long-term memory)을 조회합니다
+    - 중요도 순으로 정렬되어 반환됩니다
+    """
+    logger.info("get_my_long_term_memories", "Getting user long-term memories",
+               user_id=user_id, memory_type=memory_type, limit=limit)
+
+    try:
+        memories = await usecase.get_user_memories(
+            user_id=user_id,
+            memory_type=memory_type,
+            limit=limit
+        )
+
+        logger.info("get_my_long_term_memories", f"Retrieved {len(memories)} memories", user_id=user_id)
+        return memories
+
+    except Exception as e:
+        logger.error("get_my_long_term_memories", "Failed to get memories", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve memories")
