@@ -1707,13 +1707,22 @@ export default function ChatInterface({
       );
     }
 
+    // 시나리오별 기본 배경 이미지 설정
+    const getDefaultBackgroundImage = () => {
+      if (characterId === 'counseling') {
+        return 'url(/images/scenarios/counseling.jpg)';
+      }
+      // 기본값: 무한열차
+      return 'url(/images/무한열차.png)';
+    };
+
     return (
       <div
         className={`${transitionClass} bg-cover bg-center bg-no-repeat`}
         style={{
           backgroundImage: backgroundImageUrl
             ? `url(${backgroundImageUrl})`
-            : 'url(/images/무한열차.png)'  // 초기 로딩: 무한열차 카드 이미지
+            : getDefaultBackgroundImage()
         }}
       />
     );
