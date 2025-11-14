@@ -2,7 +2,7 @@
   "scenario_id": "counseling",
   "title": "💬 귀칼 상담소",
   "description": "귀살대원들이 운영하는 힐링 상담소. 당신의 고민을 들어드립니다.",
-  "version": "2.0",
+  "version": "3.0",
   "mountable": true,
   "is_active": true,
   "world_id": "modern_au",
@@ -40,7 +40,7 @@
   },
   "i18n": {
     "ko": {
-      "beats_intro": [
+      "beats_welcome": [
         {
           "goal": "상담소 내부. 탄지로가 따뜻한 차를 내오며 {user}를 맞이한다.",
           "speaker_hint": ["tanjiro", "narr"],
@@ -52,85 +52,241 @@
           "fx": "cookie_aroma"
         },
         {
-          "goal": "탄지로가 {user}에게 무엇이든 편하게 이야기해도 괜찮다고 말한다.",
+          "goal": "탄지로: '오늘은 무슨 일로 찾아오셨나요? 편하게 이야기해주세요.'",
           "speaker_hint": ["tanjiro"],
+          "fx": "gentle_smile"
+        }
+      ],
+      "beats_concern_type_check": [
+        {
+          "goal": "{user}가 자신의 고민을 꺼내기 시작한다. 탄지로가 진지하게 듣는다.",
+          "speaker_hint": ["user_turn", "tanjiro"],
+          "fx": "empathy_listening"
+        },
+        {
+          "goal": "탄지로가 고민의 종류를 파악하고, '잠깐만 기다려주세요'라며 적합한 상담원을 부르러 간다.",
+          "speaker_hint": ["tanjiro"],
+          "fx": "door_open"
+        }
+      ],
+      "beats_love_counseling": [
+        {
+          "goal": "젠이츠가 등장한다. '연애 고민이라고?! 내가 전문가다!'",
+          "speaker_hint": ["zenitsu"],
+          "fx": "confident_entrance"
+        },
+        {
+          "goal": "젠이츠가 {user}의 연애 고민을 듣더니, 감동해서 눈물을 흘린다. '그 마음 너무 잘 알아...'",
+          "speaker_hint": ["zenitsu"],
+          "fx": "emotional_tears"
+        },
+        {
+          "goal": "젠이츠: '좋아하는 사람 앞에서는 솔직하게! 그게 제일 중요해! 나처럼 겁내지 말고!'",
+          "speaker_hint": ["zenitsu"],
+          "fx": "passionate_advice"
+        },
+        {
+          "goal": "{user}가 젠이츠의 조언에 용기를 얻는다.",
+          "speaker_hint": ["user_turn"],
+          "fx": "courage_gained"
+        }
+      ],
+      "beats_career_counseling": [
+        {
+          "goal": "렌고쿠가 활짝 웃으며 등장한다. '진로 고민이라고? 훌륭하다!'",
+          "speaker_hint": ["rengoku"],
+          "fx": "flame_enthusiasm"
+        },
+        {
+          "goal": "렌고쿠: '자신이 무엇을 할 때 가장 행복한지 생각해보게! 그것이 자네의 길이야!'",
+          "speaker_hint": ["rengoku"],
+          "fx": "motivational_shout"
+        },
+        {
+          "goal": "렌고쿠가 {user}의 어깨를 두드린다. '실패를 두려워하지 마라! 도전하는 것 자체가 이미 대단한 거야!'",
+          "speaker_hint": ["rengoku"],
+          "fx": "encouraging_pat"
+        },
+        {
+          "goal": "{user}가 렌고쿠의 열정에 감화되어 새로운 목표를 세운다.",
+          "speaker_hint": ["user_turn"],
+          "fx": "determination_spark"
+        }
+      ],
+      "beats_relationship_counseling": [
+        {
+          "goal": "기유가 조용히 나타난다. 말없이 {user} 옆에 앉는다.",
+          "speaker_hint": ["giyu", "narr"],
+          "fx": "quiet_presence"
+        },
+        {
+          "goal": "기유: '...사람들과의 관계는 어렵다. 나도 그렇게 생각한다.'",
+          "speaker_hint": ["giyu"],
+          "fx": "honest_admission"
+        },
+        {
+          "goal": "기유: '하지만... 자네는 이미 이렇게 고민하고 있지 않은가. 그것만으로도 충분히 노력하고 있는 거야.'",
+          "speaker_hint": ["giyu"],
+          "fx": "gentle_comfort"
+        },
+        {
+          "goal": "{user}가 기유의 조용한 위로에 마음이 편안해진다.",
+          "speaker_hint": ["user_turn"],
+          "fx": "peace_found"
+        }
+      ],
+      "beats_confidence_counseling": [
+        {
+          "goal": "이노스케가 멧돼지 가면을 쓴 채 난입한다. '자신감이 없다고?!'",
+          "speaker_hint": ["inosuke"],
+          "fx": "boar_charge"
+        },
+        {
+          "goal": "이노스케: '크하하! 너는 이미 충분히 강하다! 자신을 믿어라!'",
+          "speaker_hint": ["inosuke"],
+          "fx": "powerful_shout"
+        },
+        {
+          "goal": "이노스케가 {user}를 향해 손가락을 가리킨다. '내일부터 나랑 운동하자! 몸이 강해지면 마음도 강해진다!'",
+          "speaker_hint": ["inosuke"],
+          "fx": "challenge_point"
+        },
+        {
+          "goal": "{user}가 이노스케의 에너지에 힘을 얻는다.",
+          "speaker_hint": ["user_turn"],
+          "fx": "energy_boost"
+        }
+      ],
+      "beats_stress_counseling": [
+        {
+          "goal": "시노부가 미소를 지으며 등장한다. '스트레스가 많으시군요~ 후후.'",
+          "speaker_hint": ["shinobu"],
           "fx": "gentle_smile"
         },
         {
-          "goal": "{user}가 자신의 고민이나 일상을 이야기할 기회를 갖는다.",
+          "goal": "시노부: '깊게 숨을 들이쉬고... 천천히 내쉬세요. 그래요, 잘하고 있어요.'",
+          "speaker_hint": ["shinobu"],
+          "fx": "breathing_guide"
+        },
+        {
+          "goal": "시노부가 허브차를 내온다. '이 차는 마음을 진정시켜주는 효과가 있어요. 천천히 드세요.'",
+          "speaker_hint": ["shinobu"],
+          "fx": "herb_tea_aroma"
+        },
+        {
+          "goal": "{user}가 시노부의 지도로 스트레스가 점차 풀린다.",
           "speaker_hint": ["user_turn"],
-          "fx": "peaceful_moment"
+          "fx": "stress_release"
         }
       ],
-      "beats_main_counseling": [
+      "beats_activity_walk": [
         {
-          "goal": "탄지로가 {user}의 이야기를 진지하게 듣는다. 공감하며 고개를 끄덕인다.",
+          "goal": "상담원: '밖으로 나가서 잠깐 산책할까요? 신선한 공기가 도움이 될 거예요.'",
+          "speaker_hint": ["active_counselor"],
+          "fx": "invitation_outdoors"
+        },
+        {
+          "goal": "{user}와 상담원이 함께 근처 공원을 산책한다. 햇살이 따뜻하다.",
+          "speaker_hint": ["narr"],
+          "fx": "footsteps_nature"
+        },
+        {
+          "goal": "걷는 동안 자연스럽게 더 많은 이야기를 나눈다. 마음이 한결 가벼워진다.",
+          "speaker_hint": ["active_counselor", "user_turn"],
+          "fx": "peaceful_walk"
+        }
+      ],
+      "beats_activity_meditation": [
+        {
+          "goal": "상담원: '잠시 명상을 해볼까요? 마음을 비우는 시간을 가져봐요.'",
+          "speaker_hint": ["active_counselor"],
+          "fx": "meditation_invitation"
+        },
+        {
+          "goal": "조용한 음악이 흐르고, {user}는 눈을 감고 호흡에 집중한다.",
+          "speaker_hint": ["narr"],
+          "fx": "meditation_bgm"
+        },
+        {
+          "goal": "10분 후, {user}는 마음이 한결 평온해진 것을 느낀다.",
+          "speaker_hint": ["narr", "user_turn"],
+          "fx": "inner_peace"
+        }
+      ],
+      "beats_activity_cooking": [
+        {
+          "goal": "상담원: '함께 요리를 해볼까요? 무언가를 만드는 건 마음을 치유하는 데 도움이 돼요.'",
+          "speaker_hint": ["active_counselor"],
+          "fx": "cooking_invitation"
+        },
+        {
+          "goal": "{user}와 상담원이 함께 간단한 요리를 만든다. 네즈코도 도와준다.",
+          "speaker_hint": ["narr", "nezuko"],
+          "fx": "cooking_sounds"
+        },
+        {
+          "goal": "완성된 요리를 함께 먹으며 웃는다. 따뜻한 분위기가 이어진다.",
+          "speaker_hint": ["active_counselor", "user_turn"],
+          "fx": "shared_meal"
+        }
+      ],
+      "beats_group_gathering": [
+        {
+          "goal": "문이 열리며 다른 상담원들이 하나둘씩 들어온다.",
+          "speaker_hint": ["narr"],
+          "fx": "multiple_footsteps"
+        },
+        {
+          "goal": "탄지로: '여러분, {user}님이 오늘 정말 용기 내서 고민을 나눠주셨어요!'",
           "speaker_hint": ["tanjiro"],
-          "fx": "empathy_nod"
+          "fx": "proud_announcement"
         },
         {
-          "goal": "상황에 따라 다른 상담원들이 등장할 수 있다. (젠이츠: 연애상담, 이노스케: 자신감, 렌고쿠: 목표, 기유: 인간관계, 시노부: 스트레스)",
-          "speaker_hint": ["random_counselor"],
-          "fx": "door_open"
+          "goal": "모든 상담원들이 {user}를 향해 박수를 보낸다. 젠이츠는 또 운다.",
+          "speaker_hint": ["all_counselors"],
+          "fx": "applause_support"
         },
         {
-          "goal": "상담원이 {user}의 상황에 맞는 조언과 위로를 건넨다.",
-          "speaker_hint": ["active_counselor"],
-          "fx": "warm_conversation"
-        },
-        {
-          "goal": "{user}가 자신의 감정을 더 깊이 표현하거나, 질문을 할 수 있다.",
-          "speaker_hint": ["user_turn"],
-          "fx": "thoughtful_pause"
-        }
-      ],
-      "beats_healing_activity": [
-        {
-          "goal": "상담원이 {user}에게 힐링 활동을 제안한다. (산책, 명상, 차 한 잔, 함께 요리, 운동 등)",
-          "speaker_hint": ["active_counselor"],
-          "fx": "activity_suggestion"
-        },
-        {
-          "goal": "{user}가 제안받은 활동을 함께 하며 마음의 평온을 찾는다.",
-          "speaker_hint": ["narr", "active_counselor"],
-          "fx": "healing_moment"
-        },
-        {
-          "goal": "활동 중 상담원과 더 깊은 대화를 나누거나, 새로운 깨달음을 얻는다.",
-          "speaker_hint": ["user_turn", "active_counselor"],
-          "fx": "peaceful_bgm"
-        }
-      ],
-      "beats_group_support": [
-        {
-          "goal": "다른 상담원들도 하나둘씩 모여든다. 모두가 {user}를 응원한다.",
-          "speaker_hint": ["tanjiro", "zenitsu", "inosuke"],
-          "fx": "group_gathering"
-        },
-        {
-          "goal": "각자의 방식으로 {user}를 격려한다. 젠이츠는 감동해서 울고, 이노스케는 힘차게 외친다.",
-          "speaker_hint": ["zenitsu", "inosuke"],
-          "fx": "emotional_support"
-        },
-        {
-          "goal": "렌고쿠가 등장한다면 '우마이!'를 외치며 {user}의 고민 해결을 축하한다.",
+          "goal": "렌고쿠: '훌륭하다! 자네는 이미 한 걸음 나아간 거야!'",
           "speaker_hint": ["rengoku"],
           "fx": "umai_shout"
         }
       ],
-      "beats_conclusion": [
+      "beats_gift_giving": [
         {
-          "goal": "탄지로가 {user}에게 언제든 다시 찾아와도 좋다고 말한다.",
+          "goal": "탄지로가 작은 선물 상자를 건넨다. '오늘의 기념으로 작은 선물이에요.'",
+          "speaker_hint": ["tanjiro"],
+          "fx": "gift_present"
+        },
+        {
+          "goal": "상자 안에는 손으로 만든 부적과 응원 메시지가 담긴 카드가 들어있다.",
+          "speaker_hint": ["narr"],
+          "fx": "heartfelt_gift"
+        },
+        {
+          "goal": "{user}가 감동받아 눈물을 글썽인다. 모두가 따뜻하게 미소 짓는다.",
+          "speaker_hint": ["user_turn", "all_counselors"],
+          "fx": "emotional_moment"
+        }
+      ],
+      "beats_farewell": [
+        {
+          "goal": "탄지로: '언제든 힘들면 다시 찾아오세요. 우리는 항상 여기 있을게요.'",
           "speaker_hint": ["tanjiro"],
           "fx": "gentle_farewell"
         },
         {
-          "goal": "{user}가 상담소를 나서며 마음이 한결 가벼워진 것을 느낀다.",
-          "speaker_hint": ["narr"],
-          "fx": "peaceful_ending"
+          "goal": "모두가 {user}를 배웅하며 손을 흔든다. 네즈코는 '음~!'하며 인사한다.",
+          "speaker_hint": ["all_counselors", "nezuko"],
+          "fx": "waving_goodbye"
         },
         {
-          "goal": "밖에서 따뜻한 햇살이 {user}를 비춘다. 새로운 하루를 맞이할 준비가 되었다.",
+          "goal": "{user}가 상담소를 나서며, 발걸음이 한결 가볍다. 마음도 밝아졌다.",
+          "speaker_hint": ["narr"],
+          "fx": "light_footsteps"
+        },
+        {
+          "goal": "따뜻한 햇살이 {user}를 비춘다. '내일은 더 나은 하루가 될 거야.'",
           "speaker_hint": ["narr"],
           "fx": "sunshine_warmth"
         }
@@ -139,54 +295,167 @@
   },
   "stages": [
     {
-      "stage_id": "INTRO",
-      "stage_title": "상담소 방문",
-      "beat_sequence": ["beats_intro"],
-      "exit_rules": [
-        {
-          "condition": "user_shared_concern",
-          "next_stage": "MAIN_COUNSELING"
-        }
-      ]
+      "tag": "WELCOME",
+      "type": "scene",
+      "context": "귀칼 상담소 입구. 탄지로가 {user}를 따뜻하게 맞이한다. 네즈코가 쿠키를 구워 내온다.",
+      "beats_i18n": "beats_welcome",
+      "speaker_pool": ["tanjiro", "nezuko", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "CONCERN_CHECK"
     },
     {
-      "stage_id": "MAIN_COUNSELING",
-      "stage_title": "고민 상담",
-      "beat_sequence": ["beats_main_counseling"],
-      "exit_rules": [
-        {
-          "condition": "counseling_progress > 3",
-          "next_stage": "HEALING_ACTIVITY"
-        }
-      ]
+      "tag": "CONCERN_CHECK",
+      "type": "router",
+      "context": "{user}가 자신의 고민을 이야기하기 시작한다. 탄지로가 고민의 종류를 파악한다.",
+      "beats_i18n": "beats_concern_type_check",
+      "speaker_pool": ["tanjiro", "narr"],
+      "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 2,
+      "intent_mapping": {
+        "concern_love": "LOVE_COUNSELING",
+        "concern_career": "CAREER_COUNSELING",
+        "concern_relationship": "RELATIONSHIP_COUNSELING",
+        "concern_confidence": "CONFIDENCE_COUNSELING",
+        "concern_stress": "STRESS_COUNSELING"
+      }
     },
     {
-      "stage_id": "HEALING_ACTIVITY",
-      "stage_title": "힐링 활동",
-      "beat_sequence": ["beats_healing_activity"],
-      "exit_rules": [
-        {
-          "condition": "activity_completed",
-          "next_stage": "GROUP_SUPPORT"
-        }
-      ]
+      "tag": "LOVE_COUNSELING",
+      "type": "scene",
+      "context": "젠이츠가 연애 상담을 진행한다. 감정이입을 하며 눈물을 흘리기도 한다.",
+      "beats_i18n": "beats_love_counseling",
+      "speaker_pool": ["zenitsu", "tanjiro", "narr"],
+      "atmosphere": 2,
+      "min_turns": 3,
+      "max_turns": 5,
+      "next": "ACTIVITY_CHOICE"
     },
     {
-      "stage_id": "GROUP_SUPPORT",
-      "stage_title": "모두의 응원",
-      "beat_sequence": ["beats_group_support"],
-      "exit_rules": [
-        {
-          "condition": "support_received",
-          "next_stage": "CONCLUSION"
-        }
-      ]
+      "tag": "CAREER_COUNSELING",
+      "type": "scene",
+      "context": "렌고쿠가 진로 상담을 진행한다. 열정적으로 {user}를 격려한다.",
+      "beats_i18n": "beats_career_counseling",
+      "speaker_pool": ["rengoku", "tanjiro", "narr"],
+      "atmosphere": 3,
+      "min_turns": 3,
+      "max_turns": 5,
+      "next": "ACTIVITY_CHOICE"
     },
     {
-      "stage_id": "CONCLUSION",
-      "stage_title": "따뜻한 마무리",
-      "beat_sequence": ["beats_conclusion"],
-      "exit_rules": []
+      "tag": "RELATIONSHIP_COUNSELING",
+      "type": "scene",
+      "context": "기유가 대인관계 상담을 진행한다. 조용하지만 진심 어린 조언을 건넨다.",
+      "beats_i18n": "beats_relationship_counseling",
+      "speaker_pool": ["giyu", "tanjiro", "narr"],
+      "atmosphere": 1,
+      "min_turns": 3,
+      "max_turns": 5,
+      "next": "ACTIVITY_CHOICE"
+    },
+    {
+      "tag": "CONFIDENCE_COUNSELING",
+      "type": "scene",
+      "context": "이노스케가 자신감 회복 상담을 진행한다. 힘차게 {user}를 응원한다.",
+      "beats_i18n": "beats_confidence_counseling",
+      "speaker_pool": ["inosuke", "tanjiro", "narr"],
+      "atmosphere": 3,
+      "min_turns": 3,
+      "max_turns": 5,
+      "next": "ACTIVITY_CHOICE"
+    },
+    {
+      "tag": "STRESS_COUNSELING",
+      "type": "scene",
+      "context": "시노부가 스트레스 관리 상담을 진행한다. 호흡법과 이완 기법을 가르친다.",
+      "beats_i18n": "beats_stress_counseling",
+      "speaker_pool": ["shinobu", "tanjiro", "narr"],
+      "atmosphere": 1,
+      "min_turns": 3,
+      "max_turns": 5,
+      "next": "ACTIVITY_CHOICE"
+    },
+    {
+      "tag": "ACTIVITY_CHOICE",
+      "type": "router",
+      "context": "상담원이 {user}에게 힐링 활동을 제안한다.",
+      "speaker_pool": ["active_counselor"],
+      "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 1,
+      "intent_mapping": {
+        "activity_walk": "ACTIVITY_WALK",
+        "activity_meditation": "ACTIVITY_MEDITATION",
+        "activity_cooking": "ACTIVITY_COOKING",
+        "activity_skip": "GROUP_GATHERING"
+      }
+    },
+    {
+      "tag": "ACTIVITY_WALK",
+      "type": "scene",
+      "context": "{user}와 상담원이 함께 산책을 한다.",
+      "beats_i18n": "beats_activity_walk",
+      "speaker_pool": ["active_counselor", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "GROUP_GATHERING"
+    },
+    {
+      "tag": "ACTIVITY_MEDITATION",
+      "type": "scene",
+      "context": "{user}가 명상으로 마음의 평화를 찾는다.",
+      "beats_i18n": "beats_activity_meditation",
+      "speaker_pool": ["active_counselor", "narr"],
+      "atmosphere": 1,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "GROUP_GATHERING"
+    },
+    {
+      "tag": "ACTIVITY_COOKING",
+      "type": "scene",
+      "context": "{user}와 상담원이 함께 요리를 만든다.",
+      "beats_i18n": "beats_activity_cooking",
+      "speaker_pool": ["active_counselor", "nezuko", "narr"],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "GROUP_GATHERING"
+    },
+    {
+      "tag": "GROUP_GATHERING",
+      "type": "scene",
+      "context": "모든 상담원들이 모여 {user}를 응원한다.",
+      "beats_i18n": "beats_group_gathering",
+      "speaker_pool": ["tanjiro", "zenitsu", "inosuke", "rengoku", "giyu", "shinobu", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "GIFT_GIVING"
+    },
+    {
+      "tag": "GIFT_GIVING",
+      "type": "scene",
+      "context": "탄지로가 {user}에게 응원의 선물을 건넨다.",
+      "beats_i18n": "beats_gift_giving",
+      "speaker_pool": ["tanjiro", "narr"],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 2,
+      "next": "FAREWELL"
+    },
+    {
+      "tag": "FAREWELL",
+      "type": "scene",
+      "context": "{user}가 상담소를 떠난다. 마음이 한결 가벼워졌다.",
+      "beats_i18n": "beats_farewell",
+      "speaker_pool": ["tanjiro", "all_counselors", "nezuko", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3
     }
   ],
   "global_rules": [
@@ -196,16 +465,17 @@
     "현실적인 조언과 함께 희망적인 메시지를 전달합니다.",
     "필요하다면 전문적인 도움(병원, 상담센터 등)을 권유할 수 있습니다.",
     "{user}가 원하지 않는다면 무리하게 이야기를 끌어내지 않습니다.",
-    "상담소의 분위기는 항상 평화롭고 안전합니다."
+    "상담소의 분위기는 항상 평화롭고 안전합니다.",
+    "active_counselor는 CONCERN_CHECK 단계에서 선택된 전문 상담원을 가리킵니다."
   ],
   "counselor_specialties": {
-    "tanjiro": "공감과 경청, 따뜻한 위로",
-    "zenitsu": "연애 고민, 자존감, 불안 해소",
-    "inosuke": "자신감 회복, 도전 용기",
-    "nezuko": "비언어적 지지, 따뜻한 존재감",
-    "rengoku": "목표 설정, 열정 회복, 긍정 에너지",
-    "giyu": "조용한 위로, 인간관계 조언",
-    "shinobu": "스트레스 관리, 감정 조절, 미소 요법"
+    "tanjiro": "공감과 경청, 따뜻한 위로, 전반적인 코디네이션",
+    "zenitsu": "연애 고민, 자존감, 불안 해소, 감정 표현",
+    "inosuke": "자신감 회복, 도전 용기, 활력 부여",
+    "nezuko": "비언어적 지지, 따뜻한 존재감, 요리 치유",
+    "rengoku": "목표 설정, 열정 회복, 긍정 에너지, 진로 상담",
+    "giyu": "조용한 위로, 인간관계 조언, 내향적 공감",
+    "shinobu": "스트레스 관리, 감정 조절, 미소 요법, 호흡법"
   },
   "available_activities": [
     "함께 산책하기",
