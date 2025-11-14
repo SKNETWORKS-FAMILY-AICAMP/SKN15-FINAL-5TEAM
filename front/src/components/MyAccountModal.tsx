@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '@/contexts/AppContext'
 import { apiClient, UserInfo, UserProgression, UserCredits, CreditTransaction, LongTermMemory } from '@/services/api'
+import { getUserData, setUserData } from '@/utils/authUtils'
 
 export default function MyAccountModal() {
-  const { isMyAccountModalOpen, closeMyAccount, logout, updateBubbles } = useApp()
+  const { isMyAccountModalOpen, closeMyAccount, logout, updateBubbles, refreshCurrentUser } = useApp()
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [progression, setProgression] = useState<UserProgression | null>(null)
   const [credits, setCredits] = useState<UserCredits | null>(null)
@@ -11,8 +12,15 @@ export default function MyAccountModal() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Privacy and account settings state
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false)
+  const [showHelpInfo, setShowHelpInfo] = useState(false)
+  const [displayNameInput, setDisplayNameInput] = useState('')
+  const [displayNameLoading, setDisplayNameLoading] = useState(false)
+  const [displayNameError, setDisplayNameError] = useState('')
+  const [displayNameSuccess, setDisplayNameSuccess] = useState('')
+
   // Password change state
-  const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -39,6 +47,24 @@ export default function MyAccountModal() {
       loadUserInfo()
     }
   }, [isMyAccountModalOpen])
+
+  useEffect(() => {
+    if (userInfo) {
+      setDisplayNameInput(userInfo.display_name || userInfo.username || '')
+    }
+  }, [userInfo])
+
+  useEffect(() => {
+    if (!showPrivacySettings) {
+      setDisplayNameError('')
+      setDisplayNameSuccess('')
+      setPasswordChangeError('')
+      setPasswordChangeSuccess('')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    }
+  }, [showPrivacySettings])
 
   const loadUserInfo = async () => {
     try {
@@ -132,6 +158,60 @@ export default function MyAccountModal() {
     }
   }
 
+  const handleDisplayNameUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setDisplayNameError('')
+    setDisplayNameSuccess('')
+
+    if (!userInfo) {
+      setDisplayNameError('사용자 정보를 불러오지 못했습니다.')
+      return
+    }
+
+    const trimmedName = displayNameInput.trim()
+    const currentDisplayName = userInfo.display_name || userInfo.username || ''
+
+    if (!trimmedName) {
+      setDisplayNameError('표시 이름을 입력해주세요.')
+      return
+    }
+
+    if (trimmedName.length > 50) {
+      setDisplayNameError('표시 이름은 50자 이하여야 합니다.')
+      return
+    }
+
+    if (trimmedName === currentDisplayName) {
+      setDisplayNameError('새 표시 이름이 기존과 동일합니다.')
+      return
+    }
+
+    try {
+      setDisplayNameLoading(true)
+      const updatedProfile = await apiClient.updateUserProfile({ display_name: trimmedName })
+      setUserInfo((prev) => prev ? { ...prev, ...updatedProfile } : updatedProfile)
+
+      const storedUser = getUserData()
+      if (storedUser) {
+        setUserData({ ...storedUser, display_name: updatedProfile.display_name || trimmedName })
+      } else {
+        setUserData({
+          user_id: updatedProfile.user_id,
+          username: updatedProfile.username,
+          display_name: updatedProfile.display_name || trimmedName
+        })
+      }
+
+      refreshCurrentUser(updatedProfile.display_name || updatedProfile.username || null)
+      setDisplayNameSuccess('표시 이름이 업데이트되었습니다.')
+      setTimeout(() => setDisplayNameSuccess(''), 2000)
+    } catch (err: any) {
+      setDisplayNameError(err.message || '표시 이름 변경에 실패했습니다.')
+    } finally {
+      setDisplayNameLoading(false)
+    }
+  }
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
     setPasswordChangeError('')
@@ -168,9 +248,8 @@ export default function MyAccountModal() {
       setNewPassword('')
       setConfirmPassword('')
 
-      // Hide form after 2 seconds
+      // Fade success message after 2 seconds
       setTimeout(() => {
-        setShowPasswordChange(false)
         setPasswordChangeSuccess('')
       }, 2000)
     } catch (err: any) {
@@ -608,111 +687,148 @@ export default function MyAccountModal() {
                 </div>
               </div>
 
-              {/* 비밀번호 변경 섹션 */}
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">보안 설정</h3>
-
-                {!showPasswordChange ? (
-                  <button
-                    onClick={() => setShowPasswordChange(true)}
-                    className="w-full p-3 bg-purple-50 rounded-lg text-left hover:bg-purple-100 transition-colors"
-                  >
-                    <span className="text-purple-600 font-medium">🔒 비밀번호 변경</span>
-                  </button>
-                ) : (
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-gray-800">비밀번호 변경</h4>
-                      <button
-                        onClick={() => {
-                          setShowPasswordChange(false)
-                          setPasswordChangeError('')
-                          setPasswordChangeSuccess('')
-                          setCurrentPassword('')
-                          setNewPassword('')
-                          setConfirmPassword('')
-                        }}
-                        className="text-gray-500 hover:text-gray-700"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <form onSubmit={handlePasswordChange} className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          현재 비밀번호
-                        </label>
-                        <input
-                          type="password"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="현재 비밀번호를 입력하세요"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          새 비밀번호
-                        </label>
-                        <input
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="새 비밀번호를 입력하세요 (최소 6자)"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          새 비밀번호 확인
-                        </label>
-                        <input
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="새 비밀번호를 다시 입력하세요"
-                        />
-                      </div>
-
-                      {passwordChangeError && (
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                          <p className="text-sm text-red-600">{passwordChangeError}</p>
-                        </div>
-                      )}
-
-                      {passwordChangeSuccess && (
-                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <p className="text-sm text-green-600">{passwordChangeSuccess}</p>
-                        </div>
-                      )}
-
-                      <button
-                        type="submit"
-                        disabled={passwordChangeLoading}
-                        className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                      >
-                        {passwordChangeLoading ? '변경 중...' : '비밀번호 변경'}
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
-
               {/* 설정 및 액션 */}
               <div className="space-y-3">
-                <button className="w-full p-3 bg-gray-50 rounded-lg text-left hover:bg-gray-100 transition-colors">
-                  <span className="text-gray-800">개인정보 설정</span>
-                </button>
-                <button className="w-full p-3 bg-gray-50 rounded-lg text-left hover:bg-gray-100 transition-colors">
-                  <span className="text-gray-800">알림 설정</span>
-                </button>
-                <button className="w-full p-3 bg-gray-50 rounded-lg text-left hover:bg-gray-100 transition-colors">
-                  <span className="text-gray-800">도움말</span>
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setShowPrivacySettings((prev) => !prev)}
+                    className="w-full p-3 bg-gray-50 rounded-lg text-left hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  >
+                    <span className="text-gray-800">개인정보 설정</span>
+                    <span className="text-sm text-gray-500">{showPrivacySettings ? '접기' : '열기'}</span>
+                  </button>
+
+                  {showPrivacySettings && (
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-6 border border-gray-100">
+                      <div>
+                        <h4 className="font-semibold text-gray-800 mb-3">표시 이름 변경</h4>
+                        <form onSubmit={handleDisplayNameUpdate} className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              화면에 표시될 이름
+                            </label>
+                            <input
+                              type="text"
+                              value={displayNameInput}
+                              onChange={(e) => setDisplayNameInput(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                              placeholder="표시 이름을 입력하세요"
+                              maxLength={50}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">채팅 및 캐릭터 반응에 사용되는 이름입니다.</p>
+                          </div>
+
+                          {displayNameError && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <p className="text-sm text-red-600">{displayNameError}</p>
+                            </div>
+                          )}
+
+                          {displayNameSuccess && (
+                            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <p className="text-sm text-green-600">{displayNameSuccess}</p>
+                            </div>
+                          )}
+
+                          <button
+                            type="submit"
+                            disabled={
+                              displayNameLoading ||
+                              !displayNameInput.trim() ||
+                              displayNameInput.trim() === (userInfo?.display_name || userInfo?.username || '')
+                            }
+                            className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          >
+                            {displayNameLoading ? '저장 중...' : '표시 이름 저장'}
+                          </button>
+                        </form>
+                      </div>
+
+                      <div className="pt-4 border-t border-gray-200">
+                        <h4 className="font-semibold text-gray-800 mb-3">비밀번호 변경</h4>
+                        <form onSubmit={handlePasswordChange} className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              현재 비밀번호
+                            </label>
+                            <input
+                              type="password"
+                              value={currentPassword}
+                              onChange={(e) => setCurrentPassword(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                              placeholder="현재 비밀번호를 입력하세요"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              새 비밀번호
+                            </label>
+                            <input
+                              type="password"
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                              placeholder="새 비밀번호를 입력하세요 (최소 6자)"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              새 비밀번호 확인
+                            </label>
+                            <input
+                              type="password"
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                              placeholder="새 비밀번호를 다시 입력하세요"
+                            />
+                          </div>
+
+                          {passwordChangeError && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <p className="text-sm text-red-600">{passwordChangeError}</p>
+                            </div>
+                          )}
+
+                          {passwordChangeSuccess && (
+                            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <p className="text-sm text-green-600">{passwordChangeSuccess}</p>
+                            </div>
+                          )}
+
+                          <button
+                            type="submit"
+                            disabled={passwordChangeLoading}
+                            className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          >
+                            {passwordChangeLoading ? '변경 중...' : '비밀번호 변경'}
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setShowHelpInfo((prev) => !prev)}
+                    className="w-full p-3 bg-gray-50 rounded-lg text-left hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  >
+                    <span className="text-gray-800">도움말</span>
+                    <span className="text-sm text-gray-500">{showHelpInfo ? '접기' : '열기'}</span>
+                  </button>
+
+                  {showHelpInfo && (
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                      <p className="text-sm text-gray-600 mb-2">개발한 사람</p>
+                      <p className="text-base font-semibold text-gray-800">권도원 · 이준원 · 조태민</p>
+                      <p className="text-xs text-gray-500 mt-3">© KIME Chat Studio. All rights reserved.</p>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={() => {
                     logout()

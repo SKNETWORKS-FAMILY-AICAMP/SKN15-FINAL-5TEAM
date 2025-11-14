@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import CharacterSelectionModal from './CharacterSelectionModal';
 import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
-import MemoryToastContainer from './MemoryToastContainer';
+import MemoryUpdateLog from './MemoryUpdateLog';
 import { sendChatMessage, ChatResponse, MemoryEvent } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
@@ -89,7 +89,7 @@ export default function ChatInterface({
   const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
   const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
   const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
-  const [memoryToasts, setMemoryToasts] = useState<Array<MemoryEvent & { id: string }>>([]); // 메모리 이벤트 토스트
+  const [memoryEvents, setMemoryEvents] = useState<Array<MemoryEvent & { id: string; timestamp: number }>>([]); // 메모리 이벤트 히스토리
 
   // Skip 기능을 위한 ref
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
@@ -145,19 +145,28 @@ export default function ChatInterface({
           if (dialogues && dialogues.length > 0) {
             console.log(`[ChatInterface] Loaded ${dialogues.length} messages from history`);
 
-            // NPC 리스트 (백엔드 character_refs에서 가져온 것)
-            const npcSpeakers = new Set(['narr', 'system', 'rengoku', 'tanjiro', 'zenitsu', 'inosuke', 'nezuko', 'akaza', 'enmu', 'kasugai_crow']);
+            // 현재 로그인한 사용자의 이름 가져오기
+            const userName = currentUser || '';
 
-            const historyMessages: Message[] = dialogues.map((d, idx) => ({
-              id: messageIdCounter.current++,
-              text: d.text,
-              isUser: !npcSpeakers.has(d.speaker),  // NPC가 아니면 유저 메시지
-              timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
-              characterId: d.speaker,
-              isSystemMessage: d.speaker === 'narr' || d.speaker === 'system'
-            }));
+            // 시스템/나레이터 speaker 목록
+            const systemSpeakers = new Set(['narr', 'system']);
 
-            console.log('[ChatInterface] 🔍 History messages:');
+            const historyMessages: Message[] = dialogues.map((d, idx) => {
+              // speaker가 현재 사용자 이름과 일치하면 유저 메시지
+              const isUserMessage = d.speaker === userName;
+              const isSystemMsg = systemSpeakers.has(d.speaker);
+
+              return {
+                id: messageIdCounter.current++,
+                text: d.text,
+                isUser: isUserMessage,  // speaker가 사용자 이름과 일치하는지 확인
+                timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
+                characterId: d.speaker,
+                isSystemMessage: isSystemMsg
+              };
+            });
+
+            console.log('[ChatInterface] 🔍 History messages (userName:', userName, '):');
             historyMessages.forEach((m, idx) => {
               console.log(`  [${idx}] ${m.isUser ? 'USER' : 'NPC '} ${m.characterId}: ${m.text.substring(0, 50)}`);
             });
@@ -171,7 +180,7 @@ export default function ChatInterface({
 
       loadHistory();
     }
-  }, [initialSessionId]);
+  }, [initialSessionId, currentUser]);
 
   // 배경 이미지 변경 추적 (디버깅)
   useEffect(() => {
@@ -643,21 +652,18 @@ export default function ChatInterface({
     }
   };
 
-  // 메모리 이벤트 토스트 추가
+  // 메모리 이벤트 히스토리에 추가
   const handleMemoryEvents = (events: MemoryEvent[] | undefined) => {
     if (!events || events.length === 0) return;
 
-    const newToasts = events.map((event) => ({
+    const now = Date.now();
+    const newEvents = events.map((event, index) => ({
       ...event,
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      id: `${now}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: now + index // 각 이벤트에 약간씩 다른 타임스탬프
     }));
 
-    setMemoryToasts((prev) => [...prev, ...newToasts]);
-  };
-
-  // 메모리 토스트 제거 핸들러
-  const handleRemoveMemoryToast = (id: string) => {
-    setMemoryToasts((prev) => prev.filter((toast) => toast.id !== id));
+    setMemoryEvents((prev) => [...prev, ...newEvents]);
   };
 
   // 메시지 스크롤 자동화
@@ -2269,11 +2275,8 @@ export default function ChatInterface({
         </div>
       )}
 
-      {/* Memory Toast Notifications */}
-      <MemoryToastContainer
-        events={memoryToasts}
-        onRemove={handleRemoveMemoryToast}
-      />
+      {/* Memory Update Log (Hover-based) */}
+      <MemoryUpdateLog events={memoryEvents} />
     </div>
   );
 }

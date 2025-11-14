@@ -330,9 +330,10 @@ export default function ChatPage() {
       <LoginModal />
 
       {/* Session Resume Modal */}
-      {showResumeModal && lastSession && (
+      {showResumeModal && lastSession && characterId && (
         <SessionResumeModal
           lastSession={lastSession}
+          scenarioId={characterId}
           onResume={handleResume}
           onNewSession={handleNewSession}
           onClose={() => setShowResumeModal(false)}

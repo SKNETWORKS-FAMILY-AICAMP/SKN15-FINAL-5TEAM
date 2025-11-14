@@ -430,9 +430,12 @@ class ChatUseCase:
             logger.info("create_dialogue", "DEBUG: About to check user_id for memory loading",
                        user_id=user_id, user_id_type=type(user_id).__name__, user_id_bool=bool(user_id))
 
-            if user_id:
+            # 🔥 시나리오 모드에서는 장기기억을 사용하지 않음 (세계관 충돌 방지)
+            is_free_talk = scenario_id == "free-talk"
+
+            if user_id and is_free_talk:
                 try:
-                    logger.info("create_dialogue", "Loading long-term memories",
+                    logger.info("create_dialogue", "Loading long-term memories (free-talk mode only)",
                                user_id=user_id, scenario_id=scenario_id)
 
                     # 사용자의 메모리 조회 (scenario_id는 문자열이므로 필터링 안함)
@@ -483,6 +486,9 @@ class ChatUseCase:
                     logger.error("create_dialogue", f"Failed to load long-term memories: {mem_load_err}",
                                 user_id=user_id, scenario_id=scenario_id, exc=mem_load_err)
                     # 메모리 로딩 실패해도 대화는 계속 진행
+            elif user_id and not is_free_talk:
+                logger.info("create_dialogue", "Skipping long-term memories (scenario mode - preventing world-building conflicts)",
+                           user_id=user_id, scenario_id=scenario_id)
 
             logger.info("create_dialogue", "DEBUG: Finished memory loading section")
 
