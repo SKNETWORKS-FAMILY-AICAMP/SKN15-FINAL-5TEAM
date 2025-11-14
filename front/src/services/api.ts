@@ -594,6 +594,26 @@ class ApiClient {
   }
 
   /**
+   * Get user's sessions (with JWT authentication)
+   * Can filter by scenario_id
+   */
+  async getUserSessions(scenarioId?: string, limit: number = 20, offset: number = 0): Promise<RecentSession[]> {
+    try {
+      const params: any = { limit, offset }
+      if (scenarioId) {
+        params.scenario_id = scenarioId
+      }
+      const response = await authenticatedApiClient.get('/api/sessions', {
+        params
+      })
+      return response.data.sessions || []
+    } catch (error) {
+      console.error('Error getting user sessions:', error)
+      return []
+    }
+  }
+
+  /**
    * Get user's recent sessions (with JWT authentication)
    */
   async getRecentSessions(limit: number = 4): Promise<RecentSession[]> {
