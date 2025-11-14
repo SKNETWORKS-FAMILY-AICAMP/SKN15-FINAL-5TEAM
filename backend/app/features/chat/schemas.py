@@ -47,6 +47,18 @@ class ChatMessage(BaseModel):
     emotion_intensity: Optional[str] = Field(None, description="Emotion intensity")
 
 
+class MemoryEvent(BaseModel):
+    """
+    메모리 이벤트 (UI 표시용)
+    """
+    event_type: str = Field(..., description="Event type: 'saved' or 'recalled'")
+    character_name: str = Field(..., description="Character who saved/recalled the memory")
+    memory_type: str = Field(..., description="Memory type: fact, event, relationship, preference")
+    memory_content: str = Field(..., description="Memory content (max 100 chars)")
+    importance: float = Field(..., description="Importance score (0.0-1.0)")
+    count: Optional[int] = Field(None, description="Number of memories (for batch events)")
+
+
 class ChatResponse(BaseModel):
     """
     채팅 응답
@@ -63,6 +75,7 @@ class ChatResponse(BaseModel):
     system_message: Optional[str] = None
     current_image: Optional[str] = None
     output: Optional[Dict] = None
+    memory_events: Optional[List[MemoryEvent]] = Field(None, description="Memory save/recall events for UI display")
 
 
 # ============================================================
@@ -80,6 +93,7 @@ class DialogueResult(BaseModel):
     affinity_delta: Optional[Dict[str, float]] = None
     affinity_scores: Optional[Dict[str, float]] = None  # 현재 친밀도 (DB 로드 + 델타 적용)
     current_image: Optional[str] = Field(None, description="선택된 배경 이미지 식별자")
+    memory_events: List[MemoryEvent] = Field(default_factory=list, description="Memory events during this turn")
 
 
 class StageResult(BaseModel):
@@ -98,17 +112,15 @@ class StageResult(BaseModel):
 # ========================================
 
 class MemoryResponse(BaseModel):
-    """사용자 기억 응답"""
+    """사용자 장기기억 응답"""
     memory_id: int = Field(..., description="기억 ID")
-    user_id: str = Field(..., description="사용자 ID")
-    scenario_id: Optional[str] = Field(None, description="시나리오 ID")
-    memory_type: str = Field(..., description="기억 유형 (episodic/semantic/procedural)")
-    content: str = Field(..., description="기억 내용")
-    importance_score: Optional[float] = Field(None, description="중요도 점수 (0.0-1.0)")
+    memory_key: str = Field(..., description="기억 키")
+    memory_value: str = Field(..., description="기억 내용")
+    memory_type: str = Field(..., description="기억 유형 (fact/event/relationship/preference)")
+    importance: Optional[float] = Field(None, description="중요도 점수 (0.0-1.0)")
     access_count: int = Field(default=0, description="액세스 횟수")
     last_accessed_at: Optional[str] = Field(None, description="마지막 액세스 시간")
     created_at: Optional[str] = Field(None, description="생성일시")
-    updated_at: Optional[str] = Field(None, description="수정일시")
 
     class Config:
         from_attributes = True

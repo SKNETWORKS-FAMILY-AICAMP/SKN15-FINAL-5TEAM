@@ -44,23 +44,31 @@ class MemoryRepository:
 
         Args:
             user_id: 사용자 ID
-            content: 기억 내용
-            memory_type: 기억 유형 (episodic/semantic/procedural)
+            content: 기억 내용 (memory_value로 저장됨)
+            memory_type: 기억 유형 (fact, event, relationship, preference)
             embedding: 임베딩 벡터 (1536차원)
-            scenario_id: 시나리오 ID
-            importance_score: 중요도 점수 (0.0 ~ 1.0)
+            scenario_id: 시나리오 ID (source_session_id로 저장)
+            importance_score: 중요도 점수 (0.0 ~ 1.0, importance로 저장)
 
         Returns:
             생성된 UserMemory
         """
+        # memory_key 생성 (memory_type, 타임스탬프, UUID 기반 - 고유성 보장)
+        import uuid
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]  # UUID 앞 8자리
+        memory_key = f"{memory_type}_{timestamp}_{unique_id}"
+
         memory = UserMemory(
             user_id=user_id,
-            content=content,
+            memory_key=memory_key,
+            memory_value=content,  # content -> memory_value
             memory_type=memory_type,
             embedding=embedding,
-            scenario_id=scenario_id,
-            importance_score=importance_score or 0.5,
+            source_session_id=scenario_id,  # scenario_id를 source_session_id로 매핑
+            importance=importance_score or 0.5,  # importance_score -> importance
             access_count=0,
+            is_active=True,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -68,8 +76,8 @@ class MemoryRepository:
         self.db.add(memory)
         await self.db.flush()
 
-        logger.info("create_memory", f"Memory created: {memory.memory_id}",
-                   user_id=user_id, type=memory_type)
+        logger.info("create_memory", f"Memory created: {memory.id}",
+                   user_id=user_id, type=memory_type, key=memory_key)
 
         return memory
 
@@ -84,7 +92,7 @@ class MemoryRepository:
             UserMemory 또는 None
         """
         result = await self.db.execute(
-            select(UserMemory).where(UserMemory.memory_id == memory_id)
+            select(UserMemory).where(UserMemory.id == memory_id)
         )
         return result.scalar_one_or_none()
 
@@ -146,10 +154,11 @@ class MemoryRepository:
             similarity = row[1]
 
             memories.append({
-                "memory_id": memory.memory_id,
-                "content": memory.content,
+                "memory_id": memory.id,  # id 필드 사용
+                "content": memory.memory_value,  # memory_value 필드 사용
+                "memory_key": memory.memory_key,
                 "memory_type": memory.memory_type,
-                "importance_score": memory.importance_score,
+                "importance_score": memory.importance,  # importance 필드 사용
                 "similarity": float(similarity),
                 "created_at": memory.created_at.isoformat() if memory.created_at else None
             })
@@ -171,17 +180,20 @@ class MemoryRepository:
 
         Args:
             user_id: 사용자 ID
-            scenario_id: 시나리오 ID 필터
+            scenario_id: 시나리오 ID 필터 (source_session_id로 매핑됨)
             memory_type: 기억 유형 필터
             limit: 결과 개수
 
         Returns:
             UserMemory 리스트
         """
-        query = select(UserMemory).where(UserMemory.user_id == user_id)
+        query = select(UserMemory).where(
+            UserMemory.user_id == user_id,
+            UserMemory.is_active == True  # 활성화된 메모리만 조회
+        )
 
         if scenario_id:
-            query = query.where(UserMemory.scenario_id == scenario_id)
+            query = query.where(UserMemory.source_session_id == scenario_id)  # scenario_id -> source_session_id
         if memory_type:
             query = query.where(UserMemory.memory_type == memory_type)
 

@@ -765,3 +765,194 @@ class UserRepository:
         rows = result.fetchall()
 
         return [dict(row._mapping) for row in rows]
+
+    # ========================================
+    # 크레딧 트랜잭션 관련 메서드
+    # ========================================
+
+    async def create_credit_transaction(
+        self,
+        user_id: str,
+        amount: int,
+        transaction_type: str,
+        description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        크레딧 트랜잭션 생성 (잔액 자동 계산)
+
+        Args:
+            user_id: 사용자 ID
+            amount: 변동량 (양수: 획득, 음수: 소비)
+            transaction_type: 트랜잭션 타입 (purchase, consume, refund, bonus, initial)
+            description: 설명
+
+        Returns:
+            생성된 트랜잭션 정보
+        """
+        import uuid
+
+        # 현재 잔액 조회
+        credit_query = text("""
+            SELECT bubble_count
+            FROM auth.user_credits
+            WHERE user_id = :user_id
+        """)
+        result = await self.db.execute(credit_query, {"user_id": user_id})
+        row = result.fetchone()
+
+        current_balance = row[0] if row else 0
+        new_balance = current_balance + amount
+
+        # 잔액이 음수가 되지 않도록 확인
+        if new_balance < 0:
+            logger.warning("create_credit_transaction", "Insufficient credits",
+                         user_id=user_id, current=current_balance, amount=amount)
+            raise ValueError(f"Insufficient credits. Current: {current_balance}, Requested: {amount}")
+
+        # 트랜잭션 생성
+        transaction_id = str(uuid.uuid4())
+        insert_query = text("""
+            INSERT INTO auth.credit_transactions (
+                transaction_id, user_id, amount,
+                transaction_type, balance_after, description, created_at
+            ) VALUES (
+                :transaction_id, :user_id, :amount,
+                :transaction_type, :balance_after, :description, :created_at
+            )
+        """)
+
+        await self.db.execute(insert_query, {
+            "transaction_id": transaction_id,
+            "user_id": user_id,
+            "amount": amount,
+            "transaction_type": transaction_type,
+            "balance_after": new_balance,
+            "description": description,
+            "created_at": datetime.utcnow()
+        })
+
+        # user_credits 테이블 업데이트
+        update_query = text("""
+            UPDATE auth.user_credits
+            SET
+                bubble_count = :new_balance,
+                total_consumed = total_consumed + CASE WHEN :amount < 0 THEN ABS(:amount) ELSE 0 END,
+                total_purchased = total_purchased + CASE WHEN :amount > 0 THEN :amount ELSE 0 END,
+                last_updated = :updated_at
+            WHERE user_id = :user_id
+        """)
+
+        await self.db.execute(update_query, {
+            "user_id": user_id,
+            "new_balance": new_balance,
+            "amount": amount,
+            "updated_at": datetime.utcnow()
+        })
+
+        await self.db.commit()
+
+        logger.info("create_credit_transaction", "Transaction created",
+                   user_id=user_id, amount=amount, type=transaction_type,
+                   balance_after=new_balance)
+
+        return {
+            "transaction_id": transaction_id,
+            "user_id": user_id,
+            "amount": amount,
+            "transaction_type": transaction_type,
+            "balance_after": new_balance,
+            "description": description,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+
+    async def get_credit_transactions(
+        self,
+        user_id: str,
+        transaction_type: Optional[str] = None,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """
+        크레딧 트랜잭션 조회
+
+        Args:
+            user_id: 사용자 ID
+            transaction_type: 트랜잭션 타입 필터 (선택)
+            limit: 조회 개수
+
+        Returns:
+            트랜잭션 리스트
+        """
+        conditions = ["user_id = :user_id"]
+        params = {"user_id": user_id, "limit": limit}
+
+        if transaction_type:
+            conditions.append("transaction_type = :transaction_type")
+            params["transaction_type"] = transaction_type
+
+        query = text(f"""
+            SELECT
+                transaction_id, user_id, amount,
+                transaction_type, balance_after, description, created_at
+            FROM auth.credit_transactions
+            WHERE {" AND ".join(conditions)}
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """)
+
+        result = await self.db.execute(query, params)
+        rows = result.fetchall()
+
+        transactions = []
+        for row in rows:
+            tx_dict = dict(row._mapping)
+            # Convert UUID fields to strings
+            if tx_dict.get("transaction_id"):
+                tx_dict["transaction_id"] = str(tx_dict["transaction_id"])
+            if tx_dict.get("user_id"):
+                tx_dict["user_id"] = str(tx_dict["user_id"])
+            # Convert datetime to ISO format string
+            if tx_dict.get("created_at"):
+                tx_dict["created_at"] = tx_dict["created_at"].isoformat() + "Z"
+            transactions.append(tx_dict)
+
+        return transactions
+
+    async def get_credit_transaction_stats(
+        self,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        크레딧 트랜잭션 통계
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            통계 정보 (타입별 합계, 총 트랜잭션 수 등)
+        """
+        query = text("""
+            SELECT
+                transaction_type,
+                COUNT(*) as count,
+                SUM(amount) as total_amount
+            FROM auth.credit_transactions
+            WHERE user_id = :user_id
+            GROUP BY transaction_type
+        """)
+
+        result = await self.db.execute(query, {"user_id": user_id})
+        rows = result.fetchall()
+
+        stats = {
+            "by_type": {},
+            "total_transactions": 0
+        }
+
+        for row in rows:
+            stats["by_type"][row.transaction_type] = {
+                "count": row.count,
+                "total_amount": row.total_amount
+            }
+            stats["total_transactions"] += row.count
+
+        return stats

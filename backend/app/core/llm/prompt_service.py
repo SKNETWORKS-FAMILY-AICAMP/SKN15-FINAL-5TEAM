@@ -79,6 +79,7 @@ class PromptService:
         character_states: Optional[str] = None,
         transition_hint: Optional[str] = None,
         world_context: Optional[str] = None
+        long_term_memories: Optional[list] = None
     ) -> str:
         """
         children.dialogue_generation 프롬프트 생성
@@ -99,6 +100,7 @@ class PromptService:
             character_states: 캐릭터 상태
             transition_hint: 전환 힌트
             world_context: 세계관 설정 (YAML에서 로드)
+            long_term_memories: 장기 기억 목록
 
         Returns:
             완성된 프롬프트
@@ -114,12 +116,18 @@ class PromptService:
         logger.debug("get_dialogue_generation_prompt",
                     f"🔍 DEBUG: Formatted recent_history length = {len(recent_history)} chars")
 
+        # 장기 기억 포맷팅
+        formatted_memories = self._format_long_term_memories(long_term_memories)
+        logger.debug("get_dialogue_generation_prompt",
+                    f"🔍 DEBUG: Formatted {len(long_term_memories or [])} long-term memories")
+
         # 변수 치환을 위한 컨텍스트 준비
         context = {
             "상황 요약": beats_description,
             "speaker_pool": ", ".join(speaker_pool),
             "사용자 입력": user_input or "(없음)",
             "최근 대화": recent_history or "(없음)",
+            "장기 기억": formatted_memories,
             "현재 턴": str(current_turn),
             "max_turns": str(max_turns),
             "tone_profile": tone_profile or "(제공되지 않음)",
@@ -156,6 +164,30 @@ class PromptService:
                 lines.append(f"{d.speaker}: {d.text}")
 
         return "\n".join(lines) if lines else "(없음)"
+
+    def _format_long_term_memories(self, memories: Optional[list]) -> str:
+        """장기 기억을 텍스트로 포맷팅"""
+        logger.debug("_format_long_term_memories", f"DEBUG: Formatting memories, count={len(memories) if memories else 0}")
+        if memories:
+            logger.debug("_format_long_term_memories", f"DEBUG: First memory = {memories[0]}")
+
+        if not memories:
+            return "(없음)"
+
+        lines = []
+        for m in memories:
+            if isinstance(m, dict):
+                memory_type = m.get("type", "unknown")
+                content = m.get("content", "")
+                importance = m.get("importance", 0.0)
+                # 중요도를 별로 표시 (0.7 이상: ★★★, 0.5 이상: ★★, 그 외: ★)
+                stars = "★★★" if importance >= 0.7 else ("★★" if importance >= 0.5 else "★")
+                lines.append(f"[{memory_type}] {stars} {content}")
+                logger.debug("_format_long_term_memories", f"DEBUG: Formatted memory: [{memory_type}] {stars} {content}")
+
+        result = "\n".join(lines) if lines else "(없음)"
+        logger.debug("_format_long_term_memories", f"DEBUG: Final formatted result length = {len(result)}")
+        return result
 
     def _substitute_variables(self, template: str, context: Dict[str, str]) -> str:
         """

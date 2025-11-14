@@ -94,6 +94,22 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """
+    Should you include this object in the autogenerate sweep?
+
+    This function helps Alembic ignore tables that already exist in the database
+    but are not perfectly matched with the model definitions.
+    """
+    # Always include operations from migration files
+    if not reflected:
+        return True
+
+    # For reflected objects (from database), only show real differences
+    # This prevents Alembic from constantly detecting "new" tables that actually exist
+    return False
+
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     connectable = engine_from_config(
@@ -105,7 +121,14 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
-            target_metadata=target_metadata
+            target_metadata=target_metadata,
+            include_schemas=True,
+            # Less strict comparison to avoid false positives
+            compare_type=False,
+            compare_server_default=False,
+            include_object=include_object,
+            # Ignore rendering of comments
+            render_item=None,
         )
 
         with context.begin_transaction():

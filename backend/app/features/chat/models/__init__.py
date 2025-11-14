@@ -10,10 +10,14 @@ from .entity_mention import EntityMention
 from .user_character_affinity import UserCharacterAffinity
 from .affinity_record import AffinityRecord
 
+# UserInput은 progression 모듈에 정의되어 있음
+from app.features.progression.models import UserInput
+
 __all__ = [
     "DialogueTurn",
     "ConversationSummary",
     "UserMemory",
+    "UserInput",
     "Entity",
     "Relationship",
     "EntityMention",

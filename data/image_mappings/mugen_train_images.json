@@ -1,175 +1,628 @@
 {
   "scenario_id": "mugen_train",
   "description": "무한열차 시나리오의 배경 이미지 메타데이터 (LLM 이미지 선택용)",
-  "total_images": 21,
+  "total_images": 25,
   "images": [
     {
       "index": "1",
-      "id": "derailed_train",
+      "id": "탄지로_기본.png",
       "name": "무너진 열차, 필사의 질주",
       "description": "탄지로가 열차 탈선 현장에서 필사적으로 달리는 장면",
-      "tags": ["train", "disaster", "desperate", "tanjiro"],
-      "keywords": ["탈선", "혼란", "열차", "사고", "탄지로", "달리다", "필사적", "부상자", "현장", "무너진"]
+      "tags": [
+        "train",
+        "disaster",
+        "desperate",
+        "tanjiro"
+      ],
+      "keywords": [
+        "탈선",
+        "혼란",
+        "열차",
+        "사고",
+        "탄지로",
+        "달리다",
+        "필사적",
+        "부상자",
+        "현장",
+        "무너진"
+      ]
     },
     {
       "index": "2",
-      "id": "rengoku_standing",
+      "id": "렌고쿠_기본.png",
       "name": "염주, 렌고쿠 쿄쥬로",
       "description": "열차가 탈선 됐지만 당황하지 않고 굳건히 서 있는 렌고쿠의 모습",
-      "tags": ["rengoku", "hashira", "strong", "flame"],
-      "keywords": ["렌고쿠", "염주", "쿄쥬로", "굳건", "침착", "안정", "서있다", "강인", "주柱"]
+      "tags": [
+        "rengoku",
+        "hashira",
+        "strong",
+        "flame"
+      ],
+      "keywords": [
+        "렌고쿠",
+        "염주",
+        "쿄쥬로",
+        "굳건",
+        "침착",
+        "안정",
+        "서있다",
+        "강인",
+        "주柱"
+      ]
     },
     {
       "index": "3",
-      "id": "akaza_arrival",
+      "id": "아카자_기본.png",
       "name": "상현의 등장",
       "description": "상현 3 아카자가 압도적인 기운과 함께 처음 등장하는 장면",
-      "tags": ["akaza", "upper_rank", "demon", "arrival", "threatening"],
-      "keywords": ["아카자", "상현", "등장", "압도적", "기운", "혈귀", "나타나다", "위협", "삼"]
+      "tags": [
+        "akaza",
+        "upper_rank",
+        "demon",
+        "arrival",
+        "threatening"
+      ],
+      "keywords": [
+        "아카자",
+        "상현",
+        "등장",
+        "압도적",
+        "기운",
+        "혈귀",
+        "나타나다",
+        "위협",
+        "삼"
+      ]
     },
     {
       "index": "4",
-      "id": "compass_battle",
+      "id": "렌고쿠_전투1.png",
       "name": "나침반 위의 사투",
       "description": "아카자의 술식 '파괴살: 나침' 위에서 렌고쿠와 격돌하는 장면",
-      "tags": ["battle", "rengoku", "akaza", "technique", "intense"],
-      "keywords": ["나침", "파괴살", "술식", "격돌", "전투", "렌고쿠", "아카자", "싸우다"]
+      "tags": [
+        "battle",
+        "rengoku",
+        "akaza",
+        "technique",
+        "intense"
+      ],
+      "keywords": [
+        "나침",
+        "파괴살",
+        "술식",
+        "격돌",
+        "전투",
+        "렌고쿠",
+        "아카자",
+        "싸우다"
+      ]
     },
     {
       "index": "5",
-      "id": "compass_technique",
-      "name": "술식 전개: 파괴살 나침",
-      "description": "아카자가 본격적인 전투를 위해 자세를 잡고 기술을 전개하는 장면",
-      "tags": ["akaza", "technique", "blood_demon_art", "battle_start"],
-      "keywords": ["파괴살", "나침", "술식", "전개", "아카자", "기술", "혈귀술", "준비", "자세"]
+      "id": "아카자_술식.mp4",
+      "name": "술식 전개: 파괴살 나침 (동영상)",
+      "description": "아카자가 본격적인 전투를 위해 자세를 잡고 기술을 전개하는 장면을 동영상으로 담았습니다",
+      "tags": [
+        "akaza",
+        "technique",
+        "blood_demon_art",
+        "battle_start"
+      ],
+      "keywords": [
+        "파괴살",
+        "나침",
+        "술식",
+        "전개",
+        "아카자",
+        "기술",
+        "혈귀술",
+        "준비",
+        "자세"
+      ]
     },
     {
       "index": "6",
-      "id": "flame_vs_fighting_spirit",
+      "id": "렌고쿠_전투2.png",
       "name": "붉은 화염, 푸른 투기",
       "description": "렌고쿠의 화염과 아카자의 푸른 투기가 정면으로 충돌하는 모습",
-      "tags": ["battle", "rengoku", "akaza", "clash", "intense", "fire"],
-      "keywords": ["화염", "투기", "충돌", "붉은", "푸른", "렌고쿠", "아카자", "전투", "격렬", "불꽃"]
+      "tags": [
+        "battle",
+        "rengoku",
+        "akaza",
+        "clash",
+        "intense",
+        "fire"
+      ],
+      "keywords": [
+        "화염",
+        "투기",
+        "충돌",
+        "붉은",
+        "푸른",
+        "렌고쿠",
+        "아카자",
+        "전투",
+        "격렬",
+        "불꽃"
+      ]
     },
     {
       "index": "7",
-      "id": "hashira_vs_upper_rank",
+      "id": "렌고쿠_발악.jpg",
       "name": "염주와 상현의 격돌",
       "description": "렌고쿠가 아카자의 공격을 정면으로 받아치며 싸우는 격전",
-      "tags": ["battle", "rengoku", "akaza", "intense", "clash"],
-      "keywords": ["염주", "상현", "격돌", "격전", "렌고쿠", "아카자", "싸우다", "전투", "치열"]
+      "tags": [
+        "battle",
+        "rengoku",
+        "akaza",
+        "intense",
+        "clash"
+      ],
+      "keywords": [
+        "염주",
+        "상현",
+        "격돌",
+        "격전",
+        "렌고쿠",
+        "아카자",
+        "싸우다",
+        "전투",
+        "치열"
+      ]
     },
     {
       "index": "8",
-      "id": "inosuke_sharpening",
+      "id": "이노스케_기본.png",
       "name": "어둠 속의 칼날갈이",
       "description": "이노스케를 만났을 때, 이노스케가 다음 전투를 준비하며 칼을 가는 장면",
-      "tags": ["inosuke", "preparation", "dark", "beast"],
-      "keywords": ["이노스케", "칼", "갈다", "준비", "어둠", "발견", "찾다", "짐승"]
+      "tags": [
+        "inosuke",
+        "preparation",
+        "dark",
+        "beast"
+      ],
+      "keywords": [
+        "이노스케",
+        "칼",
+        "갈다",
+        "준비",
+        "어둠",
+        "발견",
+        "찾다",
+        "짐승"
+      ]
     },
     {
       "index": "9",
-      "id": "inosuke_charge",
+      "id": "이노스케_흥분.png",
       "name": "짐승의 호흡, 돌격!",
       "description": "이노스케를 설득했을 때 이노스케가 투지가 생긴 모습",
-      "tags": ["inosuke", "beast_breathing", "charge", "motivated"],
-      "keywords": ["이노스케", "짐승", "호흡", "돌격", "투지", "설득", "합류", "각오", "싸우다"]
+      "tags": [
+        "inosuke",
+        "beast_breathing",
+        "charge",
+        "motivated"
+      ],
+      "keywords": [
+        "이노스케",
+        "짐승",
+        "호흡",
+        "돌격",
+        "투지",
+        "설득",
+        "합류",
+        "각오",
+        "싸우다"
+      ]
     },
     {
       "index": "10",
-      "id": "duel_flame_and_fist",
+      "id": "엔무_등장.png",
       "name": "일기토: 불꽃과 권무",
       "description": "렌고쿠와 아카자가 서로의 모든 것을 걸고 싸우는 치열한 근접전",
-      "tags": ["battle", "rengoku", "akaza", "intense", "duel", "climax"],
-      "keywords": ["일기토", "불꽃", "권무", "렌고쿠", "아카자", "결전", "근접전", "치열", "클라이맥스"]
+      "tags": [
+        "battle",
+        "rengoku",
+        "akaza",
+        "intense",
+        "duel",
+        "climax"
+      ],
+      "keywords": [
+        "일기토",
+        "불꽃",
+        "권무",
+        "렌고쿠",
+        "아카자",
+        "결전",
+        "근접전",
+        "치열",
+        "클라이맥스"
+      ]
     },
     {
       "index": "11",
-      "id": "zenitsu_sleeping",
+      "id": "젠이츠_숙면.png",
       "name": "고요한 열차, 잠든 번개",
       "description": "젠이츠가 파괴된 열차 안에서 잠들어 있는 모습",
-      "tags": ["zenitsu", "sleeping", "train", "calm"],
-      "keywords": ["젠이츠", "선이츠", "잠", "자다", "발견", "찾다", "고요", "열차", "번개"]
+      "tags": [
+        "zenitsu",
+        "sleeping",
+        "train",
+        "calm"
+      ],
+      "keywords": [
+        "젠이츠",
+        "선이츠",
+        "잠",
+        "자다",
+        "발견",
+        "찾다",
+        "고요",
+        "열차",
+        "번개"
+      ]
     },
     {
       "index": "12",
-      "id": "thunderclap_and_flash",
+      "id": "젠이츠_각성.png",
       "name": "벽력일섬",
       "description": "젠이츠를 설득하는데 성공했을 때 투지가 생긴 젠이츠",
-      "tags": ["zenitsu", "thunder_breathing", "motivated", "lightning"],
-      "keywords": ["젠이츠", "선이츠", "벽력일섬", "번개", "호흡", "설득", "합류", "투지", "각오"]
+      "tags": [
+        "zenitsu",
+        "thunder_breathing",
+        "motivated",
+        "lightning"
+      ],
+      "keywords": [
+        "젠이츠",
+        "선이츠",
+        "벽력일섬",
+        "번개",
+        "호흡",
+        "설득",
+        "합류",
+        "투지",
+        "각오"
+      ]
     },
     {
       "index": "13",
-      "id": "pierced_abdomen",
+      "id": "렌고쿠_패배.png",
       "name": "최후의 일격, 꿰뚫린 복부",
       "description": "아카자의 팔이 렌고쿠의 복부를 꿰뚫은 결정적인 장면",
-      "tags": ["rengoku", "akaza", "critical", "injury", "dramatic", "tragic"],
-      "keywords": ["꿰뚫다", "복부", "부상", "중상", "렌고쿠", "아카자", "희생", "치명적", "최후"]
+      "tags": [
+        "rengoku",
+        "akaza",
+        "critical",
+        "injury",
+        "dramatic",
+        "tragic"
+      ],
+      "keywords": [
+        "꿰뚫다",
+        "복부",
+        "부상",
+        "중상",
+        "렌고쿠",
+        "아카자",
+        "희생",
+        "치명적",
+        "최후"
+      ]
     },
     {
       "index": "14",
-      "id": "remaining_flame",
+      "id": "배드_엔딩.png",
       "name": "남겨진 불꽃",
       "description": "싸움이 끝난 후, 렌고쿠의 일륜도와 하오리만 남아있는 장면",
-      "tags": ["rengoku", "aftermath", "tragic", "emotional", "sword", "haori"],
-      "keywords": ["남다", "불꽃", "일륜도", "하오리", "유품", "전투", "끝", "쓸쓸", "여운", "비극"]
+      "tags": [
+        "rengoku",
+        "aftermath",
+        "tragic",
+        "emotional",
+        "sword",
+        "haori"
+      ],
+      "keywords": [
+        "남다",
+        "불꽃",
+        "일륜도",
+        "하오리",
+        "유품",
+        "전투",
+        "끝",
+        "쓸쓸",
+        "여운",
+        "비극"
+      ]
     },
     {
       "index": "15",
-      "id": "cooperation_towards_dawn",
+      "id": "동료_합류.png",
       "name": "새벽을 향한 공조",
       "description": "이노스케와 젠이츠가 함께 전장을 달리는 모습",
-      "tags": ["inosuke", "zenitsu", "cooperation", "running", "dawn"],
-      "keywords": ["이노스케", "젠이츠", "공조", "협력", "함께", "달리다", "새벽", "둘"]
+      "tags": [
+        "inosuke",
+        "zenitsu",
+        "cooperation",
+        "running",
+        "dawn"
+      ],
+      "keywords": [
+        "이노스케",
+        "젠이츠",
+        "공조",
+        "협력",
+        "함께",
+        "달리다",
+        "새벽",
+        "둘"
+      ]
     },
     {
       "index": "16",
-      "id": "three_united",
+      "id": "동료_지원.png",
       "name": "삼인삼색, 합동 전선",
       "description": "탄지로, 젠이츠, 이노스케가 각자의 기술을 상징하는 형상과 함께 싸우는 모습",
-      "tags": ["tanjiro", "zenitsu", "inosuke", "trio", "united", "breathing", "hidden_ending_route"],
-      "keywords": ["탄지로", "젠이츠", "이노스케", "삼인", "셋", "합동", "단결", "협력", "함께", "싸우다"]
+      "tags": [
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "trio",
+        "united",
+        "breathing",
+        "hidden_ending_route"
+      ],
+      "keywords": [
+        "탄지로",
+        "젠이츠",
+        "이노스케",
+        "삼인",
+        "셋",
+        "합동",
+        "단결",
+        "협력",
+        "함께",
+        "싸우다"
+      ]
     },
     {
       "index": "17",
-      "id": "rengoku_ninth_form",
+      "id": "렌고쿠_각성.mp4",
       "name": "불꽃의 호흡, 오의: 연옥",
       "description": "렌고쿠가 화룡의 형상과 함께 최후의 오의를 사용하는 장면",
-      "tags": ["rengoku", "flame_breathing", "ninth_form", "ultimate", "dragon", "climax"],
-      "keywords": ["렌고쿠", "오의", "연옥", "불꽃", "호흡", "구형", "화룡", "최후", "필살"]
+      "tags": [
+        "rengoku",
+        "flame_breathing",
+        "ninth_form",
+        "ultimate",
+        "dragon",
+        "climax"
+      ],
+      "keywords": [
+        "렌고쿠",
+        "오의",
+        "연옥",
+        "불꽃",
+        "호흡",
+        "구형",
+        "화룡",
+        "최후",
+        "필살"
+      ]
     },
     {
       "index": "18",
-      "id": "dawn_and_tears",
+      "id": "배드_엔딩_2.png",
       "name": "여명, 그리고 패배의 눈물",
       "description": "해가 뜨고, 렌고쿠의 곁에서 오열하는 탄지로와 젠이츠, 그리고 분노하는 이노스케",
-      "tags": ["dawn", "tanjiro", "zenitsu", "inosuke", "rengoku", "tears", "grief", "anger", "tragic"],
-      "keywords": ["여명", "새벽", "해", "눈물", "오열", "탄지로", "젠이츠", "이노스케", "슬픔", "비극", "패배"]
+      "tags": [
+        "dawn",
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "rengoku",
+        "tears",
+        "grief",
+        "anger",
+        "tragic"
+      ],
+      "keywords": [
+        "여명",
+        "새벽",
+        "해",
+        "눈물",
+        "오열",
+        "탄지로",
+        "젠이츠",
+        "이노스케",
+        "슬픔",
+        "비극",
+        "패배"
+      ]
     },
     {
       "index": "19",
-      "id": "fulfill_duty",
+      "id": "렌고쿠_유언.jpg",
       "name": "책무를 다하다",
       "description": "모든 싸움을 마치고 어머니를 떠올리며 미소 짓는 렌고쿠의 마지막 모습",
-      "tags": ["rengoku", "final_moment", "smile", "duty", "mother", "tragic", "emotional"],
-      "keywords": ["렌고쿠", "책무", "의무", "미소", "어머니", "마지막", "끝", "평화", "죽음"]
+      "tags": [
+        "rengoku",
+        "final_moment",
+        "smile",
+        "duty",
+        "mother",
+        "tragic",
+        "emotional"
+      ],
+      "keywords": [
+        "렌고쿠",
+        "책무",
+        "의무",
+        "미소",
+        "어머니",
+        "마지막",
+        "끝",
+        "평화",
+        "죽음"
+      ]
     },
     {
       "index": "20",
-      "id": "set_heart_ablaze",
+      "id": "히든엔딩1.png",
       "name": "마음을 불태워라",
       "description": "렌고쿠가 죽기 직전, 탄지로에게 마지막 유언을 남기며 격려하는 장면",
-      "tags": ["rengoku", "tanjiro", "last_words", "encouragement", "emotional", "legacy"],
-      "keywords": ["마음", "불태우다", "렌고쿠", "탄지로", "유언", "격려", "마지막", "말", "죽음"]
+      "tags": [
+        "rengoku",
+        "tanjiro",
+        "last_words",
+        "encouragement",
+        "emotional",
+        "legacy"
+      ],
+      "keywords": [
+        "마음",
+        "불태우다",
+        "렌고쿠",
+        "탄지로",
+        "유언",
+        "격려",
+        "마지막",
+        "말",
+        "죽음"
+      ]
     },
     {
       "index": "21",
-      "id": "hidden_ending",
+      "id": "히든엔딩2.png",
       "name": "[히든 엔딩] 불꽃과 함께 맞이한 여명",
       "description": "염주 렌고쿠 쿄쥬로가 살아남아, 탄지로 일행과 함께 폐허 속에서 떠오르는 태양을 바라보는, 또 다른 이야기의 결말",
-      "tags": ["hidden_ending", "rengoku", "tanjiro", "zenitsu", "inosuke", "sunrise", "victory", "happy", "alternative"],
-      "keywords": ["히든", "숨겨진", "승리", "살아남다", "렌고쿠", "탄지로", "여명", "태양", "희망", "행복", "승리"]
+      "tags": [
+        "hidden_ending",
+        "rengoku",
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "sunrise",
+        "victory",
+        "happy",
+        "alternative"
+      ],
+      "keywords": [
+        "히든",
+        "숨겨진",
+        "승리",
+        "살아남다",
+        "렌고쿠",
+        "탄지로",
+        "여명",
+        "태양",
+        "희망",
+        "행복",
+        "승리"
+      ]
+    },
+    {
+      "index": "22",
+      "id": "탄지로_등장.jpg",
+      "name": "귀살대의 합류",
+      "description": "탄지로, 젠이츠, 이노스케가 객차 문을 열고 등장해 렌고쿠와 처음 마주하는 순간",
+      "tags": [
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "arrival",
+        "train",
+        "team"
+      ],
+      "keywords": [
+        "탄지로",
+        "젠이츠",
+        "이노스케",
+        "등장",
+        "합류",
+        "객차",
+        "문",
+        "동료",
+        "첫만남",
+        "귀살대"
+      ]
+    },
+    {
+      "index": "23",
+      "id": "렌고쿠_식사.png",
+      "name": "우마이! 도시락 시간",
+      "description": "렌고쿠가 연신 '우마이!'를 외치며 도시락을 흡입하는 즐거운 식사 장면",
+      "tags": [
+        "rengoku",
+        "bento",
+        "calm",
+        "humor",
+        "train"
+      ],
+      "keywords": [
+        "렌고쿠",
+        "우마이",
+        "도시락",
+        "식사",
+        "평화",
+        "웃음",
+        "즐거움",
+        "객차",
+        "츠구코",
+        "스승"
+      ]
+    },
+    {
+      "index": "24",
+      "id": "잠든_모두.jpg",
+      "name": "엔무의 최면",
+      "description": "엔무의 혈귀술에 걸려 승객들과 동료들이 모두 깊은 잠에 빠진 장면",
+      "tags": [
+        "enmu",
+        "sleep",
+        "spell",
+        "train",
+        "suspense"
+      ],
+      "keywords": [
+        "잠",
+        "최면",
+        "엔무",
+        "혈귀술",
+        "꿈",
+        "동료",
+        "승객",
+        "위기",
+        "정적",
+        "악몽"
+      ]
+    },
+    {
+      "index": "25",
+      "id": "렌고쿠_섬멸.mp4",
+      "name": "염주의 일도, 섬멸",
+      "description": "렌고쿠가 불꽃의 호흡으로 혈귀를 섬멸하는 장면을 영상으로 담은 클라이맥스 컷신",
+      "tags": [
+        "rengoku",
+        "ultimate",
+        "flame",
+        "finisher",
+        "cinematic"
+      ],
+      "keywords": [
+        "렌고쿠",
+        "섬멸",
+        "필살",
+        "불꽃",
+        "호흡",
+        "클라이맥스",
+        "훈련",
+        "결전",
+        "영상",
+        "폭발"
+      ]
     }
   ]
 }

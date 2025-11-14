@@ -147,7 +147,8 @@ async def create_chat(
                 is_ended=False,
                 has_more=False,
                 current_image=current_image,
-                output={}
+                output={},
+                memory_events=dialogue_result.memory_events
             ),
             media_type="text/event-stream",
             headers={
@@ -247,4 +248,57 @@ async def delete_chat_session(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete session"
+        )
+
+
+@router.post("/{session_id}/finalize")
+async def finalize_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user_id),
+    usecase: ChatUseCase = Depends(get_chat_usecase)
+) -> Dict[str, Any]:
+    """
+    세션 종료: 남은 대화 요약 및 메모리 추출
+
+    Args:
+        session_id: 세션 ID
+        user_id: 사용자 ID (자동 주입)
+        usecase: ChatUseCase
+
+    Returns:
+        종료 결과 (생성된 메모리 개수 포함)
+    """
+    logger.info("finalize_session", "Finalize request received",
+               session_id=session_id, user_id=user_id)
+
+    try:
+        result = await usecase.finalize_session(
+            session_id=session_id,
+            user_id=user_id
+        )
+
+        if not result["success"]:
+            logger.warning("finalize_session", "Finalization failed",
+                          session_id=session_id, error=result.get("error"))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "Session finalization failed")
+            )
+
+        logger.info("finalize_session", "Session finalized successfully",
+                   session_id=session_id, memories_created=result["memories_created"])
+
+        return {
+            "success": True,
+            "message": result.get("message", "Session finalized"),
+            "memories_created": result["memories_created"]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("finalize_session", "Error", exc=e, session_id=session_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to finalize session"
         )

@@ -32,6 +32,15 @@ export interface ChatRequest {
   user_name?: string
 }
 
+export interface MemoryEvent {
+  event_type: 'saved' | 'recalled'
+  character_name: string
+  memory_type: string
+  memory_content: string
+  importance: number
+  count?: number
+}
+
 export interface ChatResponse {
   session_id: string
   turn_count: number
@@ -43,6 +52,7 @@ export interface ChatResponse {
   system_message?: string
   current_image?: string  // 현재 표시할 이미지 경로 (ImageManager 제공)
   output?: Record<string, unknown>
+  memory_events?: MemoryEvent[]
 }
 
 export interface SessionInfo {
@@ -95,9 +105,37 @@ export interface UserCredits {
 }
 
 export interface ConsumeCreditsResult {
-  success: boolean
-  message: string
-  remaining_credits: number
+  success?: boolean  // Optional for backward compatibility
+  message?: string
+  remaining_credits?: number
+  // Backend returns CreditTransactionResponse
+  transaction_id?: string
+  user_id?: string
+  amount?: number
+  transaction_type?: string
+  balance_after?: number
+  description?: string
+  created_at?: string
+}
+
+export interface CreditTransaction {
+  transaction_id: string
+  user_id: string
+  amount: number
+  transaction_type: 'purchase' | 'consume' | 'refund' | 'bonus' | 'initial'
+  balance_after: number
+  description?: string
+  created_at: string
+}
+
+export interface CreditStats {
+  total_transactions: number
+  by_type: {
+    [key: string]: {
+      count: number
+      total_amount: number
+    }
+  }
 }
 
 export interface UserProgression {
@@ -152,6 +190,17 @@ export interface LeaderboardEntry {
   level: number
   total_messages: number
   scenarios_completed: number
+}
+
+export interface LongTermMemory {
+  memory_id: number
+  memory_key: string
+  memory_value: string
+  memory_type: string
+  importance: number | null
+  access_count: number
+  last_accessed_at: string | null
+  created_at: string | null
 }
 
 // Scenario interfaces
@@ -376,6 +425,7 @@ class ApiClient {
                       has_more: metadata.has_more || false,
                       current_image: metadata.current_image,
                       output: metadata.output || {},
+                      memory_events: metadata.memory_events || [],
                     })
                   } else {
                     reject(new Error('No metadata received'))
@@ -414,6 +464,7 @@ class ApiClient {
                           affinity_scores: parsed.affinity_scores || {},
                           is_ended: parsed.is_ended || false,
                           output: parsed.output || {},
+                          memory_events: parsed.memory_events || [],
                         }
                       } else if (parsed.type === 'error') {
                         reject(new Error(parsed.message))
@@ -467,6 +518,25 @@ class ApiClient {
       await authenticatedApiClient.delete(`/api/session/${sessionId}`)
     } catch (error) {
       console.error('Error deleting session:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Finalize session: Extract remaining memories and deactivate session
+   * Should be called when user finishes a scenario or leaves the chat
+   */
+  async finalizeSession(sessionId: string): Promise<{
+    success: boolean
+    memories_created: number
+    message: string
+  }> {
+    try {
+      const response = await authenticatedApiClient.post(`/api/chat/${sessionId}/finalize`)
+      console.log(`Session finalized: ${sessionId}, memories created: ${response.data.memories_created}`)
+      return response.data
+    } catch (error) {
+      console.error('Error finalizing session:', error)
       throw error
     }
   }
@@ -648,13 +718,64 @@ class ApiClient {
    */
   async consumeCredits(amount: number, description: string): Promise<ConsumeCreditsResult> {
     try {
-      const response = await authenticatedApiClient.post('/api/users/me/credits/consume', {
-        amount,
-        description
-      })
+      const params = new URLSearchParams()
+      params.append('amount', amount.toString())
+      if (description) {
+        params.append('description', description)
+      }
+
+      const response = await authenticatedApiClient.post(`/api/users/me/credits/consume?${params.toString()}`)
       return response.data
     } catch (error) {
       console.error('Error consuming credits:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Purchase credits
+   */
+  async purchaseCredits(amount: number, description?: string): Promise<CreditTransaction> {
+    try {
+      const params = new URLSearchParams()
+      params.append('amount', amount.toString())
+      if (description) {
+        params.append('description', description)
+      }
+      const response = await authenticatedApiClient.post(`/api/users/me/credits/purchase?${params.toString()}`)
+      return response.data
+    } catch (error) {
+      console.error('Error purchasing credits:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get credit transactions
+   */
+  async getCreditTransactions(transactionType?: string, limit: number = 20): Promise<CreditTransaction[]> {
+    try {
+      const params: any = { limit }
+      if (transactionType) {
+        params.transaction_type = transactionType
+      }
+      const response = await authenticatedApiClient.get('/api/users/me/credits/transactions', { params })
+      return response.data
+    } catch (error) {
+      console.error('Error getting credit transactions:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get credit transaction statistics
+   */
+  async getCreditStats(): Promise<CreditStats> {
+    try {
+      const response = await authenticatedApiClient.get('/api/users/me/credits/stats')
+      return response.data
+    } catch (error) {
+      console.error('Error getting credit stats:', error)
       throw error
     }
   }
@@ -685,6 +806,25 @@ class ApiClient {
       return response.data
     } catch (error) {
       console.error('Error getting user equipment:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get user long-term memories
+   */
+  async getUserLongTermMemories(memoryType?: string, limit: number = 50): Promise<LongTermMemory[]> {
+    try {
+      const params = new URLSearchParams()
+      if (memoryType) {
+        params.append('memory_type', memoryType)
+      }
+      params.append('limit', limit.toString())
+
+      const response = await authenticatedApiClient.get(`/api/users/me/long-term-memories?${params}`)
+      return response.data
+    } catch (error) {
+      console.error('Error getting long-term memories:', error)
       throw error
     }
   }

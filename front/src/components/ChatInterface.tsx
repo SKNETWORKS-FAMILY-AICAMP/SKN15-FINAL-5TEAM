@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import CharacterSelectionModal from './CharacterSelectionModal';
 import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
-import { sendChatMessage, ChatResponse } from '@/services/api';
+import MemoryToastContainer from './MemoryToastContainer';
+import { sendChatMessage, ChatResponse, MemoryEvent } from '@/services/api';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
@@ -28,6 +29,7 @@ interface ChatInterfaceProps {
   initialSessionId?: string;  // 세션 복원용 session_id
   onInvitedCharactersChange?: (characters: string[]) => void;  // 참여 캐릭터 변경 콜백
   sessionCheckDone?: boolean;  // 세션 체크 완료 여부 (모달에서 사용자 선택 완료)
+  onSessionStart?: (sessionId: string) => void;  // 세션 시작 시 콜백 (세션 종료를 위해)
 }
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
@@ -38,7 +40,8 @@ export default function ChatInterface({
   characterId = 'ending',
   initialSessionId,
   onInvitedCharactersChange,
-  sessionCheckDone = true  // 기본값: true (기존 동작 유지)
+  sessionCheckDone = true,  // 기본값: true (기존 동작 유지)
+  onSessionStart
 }: ChatInterfaceProps) {
   // App context (for bubble consumption and user info)
   const { consumeBubbles, currentUser, openMyAccount } = useApp();
@@ -68,6 +71,7 @@ export default function ChatInterface({
   const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
   const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
   const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
+  const [memoryToasts, setMemoryToasts] = useState<Array<MemoryEvent & { id: string }>>([]); // 메모리 이벤트 토스트
 
   // Skip 기능을 위한 ref
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
@@ -218,6 +222,23 @@ export default function ChatInterface({
   };
 
   // 백엔드 응답에서 받은 current_image를 처리하여 배경 변경 (페이드 효과 포함)
+  const extractFileName = (value: string) => {
+    if (!value) return '';
+    const cleaned = value.replace(/^["']|["']$/g, '');
+    const noQuery = cleaned.split(/[?#]/)[0];
+    const decoded = decodeURIComponent(noQuery);
+    const parts = decoded.split(/[/\\]/);
+    return parts[parts.length - 1] || decoded;
+  };
+
+  const getFileNameCandidates = (raw: string) => {
+    const candidates = new Set<string>();
+    const direct = extractFileName(raw);
+    if (raw) candidates.add(raw);
+    if (direct) candidates.add(direct);
+    return Array.from(candidates).filter(name => /\.[a-z0-9]+$/i.test(name));
+  };
+
   const handleBackgroundChange = (currentImage: string | null) => {
     if (!currentImage) return;
 
@@ -231,17 +252,24 @@ export default function ChatInterface({
       const trimmed = currentImage.trim();
       let handled = false;
 
-      const indexNum = Number(trimmed);
-      if (!Number.isNaN(indexNum) && indexNum >= 0) {
-        handled = setBackgroundByIndex(indexNum);
+      const fileNameCandidates = getFileNameCandidates(trimmed);
+      for (const fileName of fileNameCandidates) {
+        if (!fileName) continue;
+        if (setBackgroundByFileName(fileName)) {
+          handled = true;
+          break;
+        }
+      }
+
+      if (!handled) {
+        const indexNum = Number(trimmed);
+        if (!Number.isNaN(indexNum) && indexNum >= 0) {
+          handled = setBackgroundByIndex(indexNum);
+        }
       }
 
       if (!handled) {
         handled = setBackgroundById(trimmed);
-      }
-
-      if (!handled && trimmed.includes('.')) {
-        handled = setBackgroundByFileName(trimmed);
       }
 
       if (!handled) {
@@ -597,6 +625,23 @@ export default function ChatInterface({
     }
   };
 
+  // 메모리 이벤트 토스트 추가
+  const handleMemoryEvents = (events: MemoryEvent[] | undefined) => {
+    if (!events || events.length === 0) return;
+
+    const newToasts = events.map((event) => ({
+      ...event,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }));
+
+    setMemoryToasts((prev) => [...prev, ...newToasts]);
+  };
+
+  // 메모리 토스트 제거 핸들러
+  const handleRemoveMemoryToast = (id: string) => {
+    setMemoryToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
   // 메시지 스크롤 자동화
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -771,6 +816,9 @@ export default function ChatInterface({
       setAffinityScores(response.affinity_scores || {});
       setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
 
+      // 메모리 이벤트 처리 (토스트 알림 표시)
+      handleMemoryEvents(response.memory_events);
+
       // 배경 이미지 변경 (current_image 사용)
       if (response.current_image) {
         console.log(`🖼️ [Auto-request] Changing background to: ${response.current_image}`);
@@ -862,6 +910,7 @@ export default function ChatInterface({
 
         // 세션 ID 저장
         setSessionId(response.session_id);
+        onSessionStart?.(response.session_id); // Notify parent of new session creation
 
         console.log(`🎬 Initial response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);
         console.log('🔍 Full response:', response);
@@ -869,6 +918,9 @@ export default function ChatInterface({
         // Update affinity_scores and current_stage from response
         setAffinityScores(response.affinity_scores || {});
         setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
+
+        // 메모리 이벤트 처리 (토스트 알림 표시)
+        handleMemoryEvents(response.memory_events);
 
         // 배경 이미지 변경 (current_image 사용)
         if (response.current_image) {
@@ -1209,6 +1261,7 @@ export default function ChatInterface({
 
     if (!consumed) {
       setBackendError(`버블이 부족합니다. 최소 ${bubbleCost}개의 버블이 필요합니다.`);
+      isSendingRef.current = false;  // 실패 시 플래그 리셋
       return;
     }
 
@@ -1226,6 +1279,7 @@ export default function ChatInterface({
     // 🔥 자동 요청 중일 때는 사용자 입력 차단
     if (isAutoRequesting) {
       console.log('⚠️ Auto-requesting in progress, user input blocked');
+      isSendingRef.current = false;  // 차단 시 플래그 리셋
       return;
     }
 
@@ -1269,11 +1323,15 @@ export default function ChatInterface({
       // Update session ID if it changed
       if (response.session_id !== sessionId) {
         setSessionId(response.session_id);
+        onSessionStart?.(response.session_id); // Notify parent of session change
       }
 
       // Update affinity_scores and current_stage from response
       setAffinityScores(response.affinity_scores || {});
       setCurrentStage(response.current_stage); // INTRO 판별을 위한 현재 스테이지 저장
+
+      // 메모리 이벤트 처리 (토스트 알림 표시)
+      handleMemoryEvents(response.memory_events);
 
       // 배경 이미지 변경 (current_image 사용)
       if (response.current_image) {
@@ -1660,21 +1718,50 @@ export default function ChatInterface({
     setIsListening(false);
   };
 
+  const renderBackgroundVisual = () => {
+    const transitionClass = `w-full h-full transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`;
+
+    if (currentBackground?.isVideo && backgroundImageUrl) {
+      return (
+        <video
+          key={backgroundImageUrl}
+          className={`${transitionClass} object-cover`}
+          src={backgroundImageUrl}
+          autoPlay
+          loop
+          muted
+          playsInline
+        />
+      );
+    }
+
+    // 시나리오별 기본 배경 이미지 설정
+    const getDefaultBackgroundImage = () => {
+      if (characterId === 'counseling') {
+        return 'url(/images/scenarios/counseling.jpg)';
+      }
+      // 기본값: 무한열차
+      return 'url(/images/무한열차.png)';
+    };
+
+    return (
+      <div
+        className={`${transitionClass} bg-cover bg-center bg-no-repeat`}
+        style={{
+          backgroundImage: backgroundImageUrl
+            ? `url(${backgroundImageUrl})`
+            : getDefaultBackgroundImage()
+        }}
+      />
+    );
+  };
+
   return (
     <div className="w-full h-full flex flex-col md:flex-row bg-gray-100">
       {/* 왼쪽: 컷신 이미지 영역 (50%) */}
       <div className="relative w-full md:w-1/2 h-[40vh] md:h-full overflow-hidden">
         {/* 컷신 배경 이미지 */}
-        <div
-          className={`w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-500 ${
-            isTransitioning ? 'opacity-0' : 'opacity-100'
-          }`}
-          style={{
-            backgroundImage: backgroundImageUrl
-              ? `url(${backgroundImageUrl})`
-              : 'url(/images/무한열차.png)'  // 초기 로딩: 무한열차 카드 이미지
-          }}
-        />
+        {renderBackgroundVisual()}
 
         {/* 왼쪽 아래: 친밀도 패널 */}
         <div className="absolute bottom-4 left-4 right-44 z-10">
@@ -1835,10 +1922,15 @@ export default function ChatInterface({
               </div>
 
               {message.isUser && (
-                <div className="w-16 h-16 rounded-full ml-3 flex-shrink-0">
-                  <div className="w-full h-full rounded-full bg-purple-600 flex items-center justify-center text-white font-medium">
-                    U
-                  </div>
+                <div className="w-16 h-16 rounded-full ml-3 flex-shrink-0 overflow-hidden border-2 border-purple-200">
+                  <img
+                    src={`${CDN_URL}/유저_이미지.jpg`}
+                    alt="사용자"
+                    className="w-full h-full object-cover rounded-full"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `${CDN_URL}/기본이미지.png`;
+                    }}
+                  />
                 </div>
               )}
               </div> {/* scale wrapper 닫기 */}
@@ -2158,6 +2250,12 @@ export default function ChatInterface({
           </div>
         </div>
       )}
+
+      {/* Memory Toast Notifications */}
+      <MemoryToastContainer
+        events={memoryToasts}
+        onRemove={handleRemoveMemoryToast}
+      />
     </div>
   );
 }

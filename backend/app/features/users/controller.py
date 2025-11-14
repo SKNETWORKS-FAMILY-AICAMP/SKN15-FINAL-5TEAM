@@ -24,6 +24,9 @@ from .schemas import (
     UserProgressionResponse,
     UserSettingsBase,
     UserSettingsResponse,
+    CreditTransactionResponse,
+    CreateCreditTransactionRequest,
+    CreditTransactionStatsResponse,
 )
 from app.features.galleries.schemas import ImageResponse, ImageListResponse
 from app.features.chat.schemas import MemoryResponse
@@ -186,36 +189,6 @@ async def get_my_credits(
         logger.error("get_my_credits", f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@router.post("/me/credits/consume", response_model=ConsumeCreditsResponse)
-async def consume_my_credits(
-    request: ConsumeCreditsRequest,
-    user_id: str = Depends(get_current_user_id),
-    usecase: UserUseCase = Depends(get_user_usecase)
-):
-    """
-    크레딧 소비
-
-    Controller → UseCase → Repository
-    """
-    logger.info("consume_my_credits", "Consuming credits",
-               user_id=user_id, amount=request.amount)
-
-    try:
-        result = await usecase.consume_user_credits(
-            user_id=user_id,
-            amount=request.amount,
-            description=request.description
-        )
-
-        return ConsumeCreditsResponse(**result)
-
-    except BusinessException as e:
-        logger.error("consume_my_credits", f"Business error: {e.message}")
-        raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        logger.error("consume_my_credits", f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/me/gallery", response_model=ImageListResponse)
@@ -531,3 +504,261 @@ async def get_my_xp_transactions(
 
     # TODO: Phase 2에서 실제 구현
     return []
+
+
+# ============================================================
+# 크레딧 트랜잭션 엔드포인트
+# ============================================================
+
+@router.post("/me/credits/transactions", response_model=CreditTransactionResponse)
+async def create_my_credit_transaction(
+    request: CreateCreditTransactionRequest,
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    크레딧 트랜잭션 생성
+
+    Controller → UseCase → Repository
+
+    트랜잭션 타입:
+    - purchase: 구매
+    - consume: 소비
+    - refund: 환불
+    - bonus: 보너스
+    - initial: 초기 지급
+    """
+    logger.info("create_my_credit_transaction", "Creating transaction",
+               user_id=user_id, amount=request.amount, type=request.transaction_type)
+
+    try:
+        transaction = await usecase.create_credit_transaction(
+            user_id=user_id,
+            amount=request.amount,
+            transaction_type=request.transaction_type,
+            description=request.description
+        )
+
+        logger.info("create_my_credit_transaction", "Transaction created",
+                   transaction_id=transaction["transaction_id"])
+
+        return CreditTransactionResponse(**transaction)
+
+    except ValueError as e:
+        logger.error("create_my_credit_transaction", "Validation error", error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception as e:
+        logger.error("create_my_credit_transaction", "Unexpected error", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create credit transaction")
+
+
+@router.get("/me/credits/transactions", response_model=List[CreditTransactionResponse])
+async def get_my_credit_transactions(
+    transaction_type: Optional[str] = Query(None, description="트랜잭션 타입 필터"),
+    limit: int = Query(20, ge=1, le=100, description="조회 개수"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 크레딧 트랜잭션 조회
+
+    Controller → UseCase → Repository
+
+    필터:
+    - transaction_type: purchase, consume, refund, bonus, initial
+    """
+    logger.info("get_my_credit_transactions", "Getting transactions",
+               user_id=user_id, type=transaction_type, limit=limit)
+
+    try:
+        transactions = await usecase.get_my_credit_transactions(
+            user_id=user_id,
+            transaction_type=transaction_type,
+            limit=limit
+        )
+
+        logger.info("get_my_credit_transactions", f"Retrieved {len(transactions)} transactions",
+                   user_id=user_id)
+
+        return [CreditTransactionResponse(**tx) for tx in transactions]
+
+    except Exception as e:
+        logger.error("get_my_credit_transactions", "Failed to get transactions", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve credit transactions")
+
+
+@router.get("/me/credits/stats", response_model=CreditTransactionStatsResponse)
+async def get_my_credit_stats(
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 크레딧 트랜잭션 통계
+
+    Controller → UseCase → Repository
+
+    반환 정보:
+    - 총 트랜잭션 수
+    - 타입별 통계 (개수, 총 금액)
+    """
+    logger.info("get_my_credit_stats", "Getting credit stats", user_id=user_id)
+
+    try:
+        stats = await usecase.get_my_credit_stats(user_id)
+
+        logger.info("get_my_credit_stats", "Stats retrieved",
+                   user_id=user_id, total=stats["total_transactions"])
+
+        return CreditTransactionStatsResponse(**stats)
+
+    except Exception as e:
+        logger.error("get_my_credit_stats", "Failed to get stats", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve credit statistics")
+
+
+# 편의 엔드포인트들
+
+@router.post("/me/credits/purchase", response_model=CreditTransactionResponse)
+async def purchase_credits(
+    amount: int = Query(..., ge=1, description="구매할 크레딧 수"),
+    description: Optional[str] = Query(None, description="설명"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """크레딧 구매 (편의 엔드포인트)"""
+    logger.info("purchase_credits", "Purchasing credits", user_id=user_id, amount=amount)
+
+    try:
+        transaction = await usecase.purchase_credits(
+            user_id=user_id,
+            amount=amount,
+            description=description
+        )
+        return CreditTransactionResponse(**transaction)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("purchase_credits", "Failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to purchase credits")
+
+
+@router.post("/me/credits/consume", response_model=CreditTransactionResponse)
+async def consume_credits_endpoint(
+    amount: int = Query(..., ge=1, description="소비할 크레딧 수"),
+    description: Optional[str] = Query(None, description="설명"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """크레딧 소비 (편의 엔드포인트)"""
+    logger.info("consume_credits", "Consuming credits", user_id=user_id, amount=amount)
+
+    try:
+        transaction = await usecase.consume_credits(
+            user_id=user_id,
+            amount=amount,
+            description=description
+        )
+        return CreditTransactionResponse(**transaction)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("consume_credits", "Failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to consume credits")
+
+
+@router.post("/me/credits/refund", response_model=CreditTransactionResponse)
+async def refund_credits(
+    amount: int = Query(..., ge=1, description="환불할 크레딧 수"),
+    description: Optional[str] = Query(None, description="설명"),
+    user_id: str = Depends(get_current_user_id),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """크레딧 환불 (편의 엔드포인트)"""
+    logger.info("refund_credits", "Refunding credits", user_id=user_id, amount=amount)
+
+    try:
+        transaction = await usecase.refund_credits(
+            user_id=user_id,
+            amount=amount,
+            description=description
+        )
+        return CreditTransactionResponse(**transaction)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("refund_credits", "Failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to refund credits")
+
+
+@router.post("/admin/credits/bonus", response_model=CreditTransactionResponse)
+async def grant_bonus_credits(
+    target_user_id: str = Query(..., description="대상 사용자 ID"),
+    amount: int = Query(..., ge=1, description="지급할 크레딧 수"),
+    description: Optional[str] = Query(None, description="설명"),
+    current_user: CurrentUser = Depends(get_current_user),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    보너스 크레딧 지급 (관리자 전용)
+
+    TODO: 관리자 권한 체크 추가
+    """
+    # TODO: 관리자 권한 체크
+    # if current_user.role != "admin":
+    #     raise HTTPException(status_code=403, detail="Admin access required")
+
+    logger.info("grant_bonus_credits", "Granting bonus",
+               admin_id=current_user.user_id, target_user=target_user_id, amount=amount)
+
+    try:
+        transaction = await usecase.grant_bonus_credits(
+            user_id=target_user_id,
+            amount=amount,
+            description=description
+        )
+        return CreditTransactionResponse(**transaction)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("grant_bonus_credits", "Failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to grant bonus credits")
+
+
+# ============================================================
+# 장기기억 (Memory) 엔드포인트
+# ============================================================
+
+@router.get("/me/long-term-memories", response_model=List[MemoryResponse])
+async def get_my_long_term_memories(
+    user_id: str = Depends(get_current_user_id),
+    memory_type: Optional[str] = Query(None, description="메모리 타입 필터 (fact, event, relationship, preference)"),
+    limit: int = Query(50, ge=1, le=200, description="조회 개수 (1-200)"),
+    usecase: UserUseCase = Depends(get_user_usecase)
+):
+    """
+    내 장기기억 조회
+
+    - 사용자의 장기기억(long-term memory)을 조회합니다
+    - 중요도 순으로 정렬되어 반환됩니다
+    """
+    logger.info("get_my_long_term_memories", "Getting user long-term memories",
+               user_id=user_id, memory_type=memory_type, limit=limit)
+
+    try:
+        memories = await usecase.get_user_memories(
+            user_id=user_id,
+            memory_type=memory_type,
+            limit=limit
+        )
+
+        logger.info("get_my_long_term_memories", f"Retrieved {len(memories)} memories", user_id=user_id)
+        return memories
+
+    except Exception as e:
+        logger.error("get_my_long_term_memories", "Failed to get memories", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve memories")

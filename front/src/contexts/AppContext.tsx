@@ -135,9 +135,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               status: error?.response?.status,
               config: error?.config?.url
             });
-            // 기본값 0 설정 (실제 DB에 크레딧이 있어도 API 호출 실패 시)
-            console.warn('[AppContext] Setting bubbles to 0 due to API error');
-            setCurrentBubbles(0);
+            // 에러 발생 시 0으로 설정하지 않고 이전 값 유지
+            // 실제 크레딧 정보는 페이지 진입 시 다시 로드됨
+            console.warn('[AppContext] Failed to load credits on initial load, will retry on page navigation');
           }
         } catch (error: any) {
           // Only clear tokens if it's a 401 (unauthorized) error
@@ -223,7 +223,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const result = await apiClient.consumeCredits(amount, description);
-      if (typeof result?.remaining_credits === 'number') {
+
+      // 백엔드는 CreditTransactionResponse를 반환 (balance_after 포함)
+      if (typeof result?.balance_after === 'number') {
+        setCurrentBubbles(result.balance_after);
+      } else if (typeof result?.remaining_credits === 'number') {
         setCurrentBubbles(result.remaining_credits);
       } else {
         // 서버에서 남은 크레딧을 돌려주지 않으면 최신 값을 다시 조회
@@ -234,7 +238,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           console.error('[AppContext] Failed to refresh credits after consume:', refreshError);
         }
       }
-      return result.success;
+
+      // API 호출 성공 시 true 반환 (백엔드는 success 필드를 반환하지 않음)
+      return true;
     } catch (error) {
       console.error('[AppContext] Failed to consume credits:', error);
       setCurrentBubbles(previousBubbles);

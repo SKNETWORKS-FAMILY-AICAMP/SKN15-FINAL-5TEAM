@@ -11,7 +11,7 @@ import { normalizeScenarioId } from '@/utils/scenario';
 
 export default function ChatPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId, updateBubbles } = useApp();
   const navigate = useNavigate();
 
   // Scenario loading state
@@ -31,6 +31,9 @@ export default function ChatPage() {
   // Track if user has interacted with chat (to show exit warning)
   const [hasStartedChat, setHasStartedChat] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+
+  // Track current session for finalization
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // Load scenario data from API
   useEffect(() => {
@@ -57,6 +60,25 @@ export default function ChatPage() {
 
     loadScenario();
   }, [characterId]);
+
+  // Refresh user credits when page loads (after login)
+  useEffect(() => {
+    const refreshCredits = async () => {
+      if (!isAuthLoading && isLoggedIn) {
+        try {
+          console.log('[ChatPage] Refreshing user credits...');
+          const credits = await apiClient.getUserCredits();
+          console.log('[ChatPage] Credits refreshed:', credits);
+          updateBubbles(credits.bubble_count);
+        } catch (error) {
+          console.error('[ChatPage] Failed to refresh credits:', error);
+          // 에러가 발생해도 기존 값 유지 (0으로 설정하지 않음)
+        }
+      }
+    };
+
+    refreshCredits();
+  }, [isAuthLoading, isLoggedIn, updateBubbles]);
 
   // Authentication guard: show login modal if not authenticated (after auth loading completes)
   useEffect(() => {
@@ -133,17 +155,28 @@ export default function ChatPage() {
     }, [hasStartedChat])
   );
 
-  // Handle back button navigation with confirmation
-  const handleBackNavigation = useCallback(() => {
+  // Handle back button navigation with confirmation and session finalization
+  const handleBackNavigation = useCallback(async () => {
     if (hasStartedChat) {
       const confirmed = window.confirm('정말 나가시겠습니까? 진행 중인 대화가 저장되지 않을 수 있습니다.');
       if (confirmed) {
+        // Finalize session before leaving
+        if (currentSessionId) {
+          try {
+            console.log('[ChatPage] Finalizing session before exit:', currentSessionId);
+            const result = await apiClient.finalizeSession(currentSessionId);
+            console.log('[ChatPage] Session finalized:', result);
+          } catch (error) {
+            console.error('[ChatPage] Failed to finalize session:', error);
+            // Continue navigation even if finalization fails
+          }
+        }
         navigate('/');
       }
     } else {
       navigate('/');
     }
-  }, [hasStartedChat, navigate]);
+  }, [hasStartedChat, currentSessionId, navigate]);
 
   // Loading state for scenario
   if (scenarioLoading) {
@@ -289,6 +322,7 @@ export default function ChatPage() {
           initialSessionId={resumeSessionId}
           onInvitedCharactersChange={setInvitedCharacters}
           onMessageSent={() => setHasStartedChat(true)}
+          onSessionStart={setCurrentSessionId}
           sessionCheckDone={sessionCheckDone}
         />
       </main>

@@ -19,6 +19,7 @@ from .repositories import (
 from .agent.parent import ParentAgent  # Legacy ParentAgent (not LangGraph)
 from .services import AffinityService, MemoryService, MissionService, ScenarioService
 from .services.extractors.conversation_summarizer import ConversationSummarizer
+from .services.extractors.memory_extractor import MemoryExtractor
 from .models import DialogueTurn
 from .schemas import DialogueResult, ChatMessage
 from app.core.logging import get_usecase_logger, print_layer_debug
@@ -26,6 +27,7 @@ from app.shared.exceptions import DailyLimitExceededException
 from app.features.users.repository import UserRepository
 from app.features.progression.repository import ProgressionRepository
 from app.core.llm.client import LLMClient
+from app.core.embeddings import EmbeddingsService
 from app.features.images.local_mapping_loader import get_stage_image_identifier
 
 # LangGraph imports (optional - only used if USE_LANGGRAPH=true)
@@ -82,6 +84,22 @@ class ChatUseCase:
         except Exception as e:
             logger.warning("__init__", f"Failed to initialize ConversationSummarizer: {e}")
             self.summarizer = None
+
+        # Memory Extractor (장기기억 추출)
+        try:
+            self.memory_extractor = MemoryExtractor(llm_client=llm_client if self.summarizer else None)
+            logger.info("__init__", "MemoryExtractor initialized")
+        except Exception as e:
+            logger.warning("__init__", f"Failed to initialize MemoryExtractor: {e}")
+            self.memory_extractor = None
+
+        # Embeddings Service (벡터 임베딩 생성)
+        try:
+            self.embeddings_service = EmbeddingsService()
+            logger.info("__init__", "EmbeddingsService initialized")
+        except Exception as e:
+            logger.warning("__init__", f"Failed to initialize EmbeddingsService: {e}")
+            self.embeddings_service = None
 
         # LangGraph 워크플로우 (feature flag)
         self.use_langgraph = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
@@ -407,6 +425,68 @@ class ChatUseCase:
                 )
 
             # ============================================================
+            # 1.5 장기기억 로딩 (세션 초기화 또는 로드 후)
+            # ============================================================
+            logger.info("create_dialogue", "DEBUG: About to check user_id for memory loading",
+                       user_id=user_id, user_id_type=type(user_id).__name__, user_id_bool=bool(user_id))
+
+            if user_id:
+                try:
+                    logger.info("create_dialogue", "Loading long-term memories",
+                               user_id=user_id, scenario_id=scenario_id)
+
+                    # 사용자의 메모리 조회 (scenario_id는 문자열이므로 필터링 안함)
+                    # source_session_id는 UUID 타입이고, scenario_id는 문자열이므로 호환 불가
+                    memories = await self.memory_repository.get_user_memories(
+                        user_id=user_id,
+                        scenario_id=None,  # scenario_id 필터 제거 (타입 불일치)
+                        limit=20  # 최대 20개까지 로드
+                    )
+
+                    if memories:
+                        # 중요도 순으로 정렬
+                        memories_sorted = sorted(
+                            memories,
+                            key=lambda m: (m.importance or 0, m.created_at or datetime.min),  # importance_score -> importance
+                            reverse=True
+                        )
+
+                        # 상위 5개를 세션 상태에 추가
+                        session_state["long_term_memories"] = [
+                            {
+                                "memory_id": m.id,  # memory_id -> id
+                                "memory_key": m.memory_key,
+                                "content": m.memory_value,  # content -> memory_value
+                                "type": m.memory_type,
+                                "importance": m.importance,  # importance_score -> importance
+                                "created_at": m.created_at.isoformat() if m.created_at else None
+                            }
+                            for m in memories_sorted[:5]
+                        ]
+
+                        logger.info("create_dialogue", f"Loaded {len(memories_sorted[:5])} long-term memories",
+                                   user_id=user_id, scenario_id=scenario_id)
+
+                        # 접근 통계 업데이트 (상위 5개만)
+                        for memory in memories_sorted[:5]:
+                            try:
+                                await self.memory_repository.update_access_stats(memory.id)  # memory_id -> id
+                            except Exception as stats_err:
+                                logger.warning("create_dialogue", f"Failed to update memory access stats: {stats_err}",
+                                             memory_id=memory.id)
+
+                    else:
+                        logger.info("create_dialogue", "No long-term memories found",
+                                   user_id=user_id, scenario_id=scenario_id)
+
+                except Exception as mem_load_err:
+                    logger.error("create_dialogue", f"Failed to load long-term memories: {mem_load_err}",
+                                user_id=user_id, scenario_id=scenario_id, exc=mem_load_err)
+                    # 메모리 로딩 실패해도 대화는 계속 진행
+
+            logger.info("create_dialogue", "DEBUG: Finished memory loading section")
+
+            # ============================================================
             # 2. 정책: 일일 대화 제한 체크
             # ============================================================
             today_count = await self.dialogue_repository.count_today(user_id)
@@ -613,6 +693,14 @@ class ChatUseCase:
             # ============================================================
             turn_count = session_state.get("turn_count", 0) + 1
 
+            # turn_count를 updated_state에 반영 (중요!)
+            dialogue_result.updated_state["turn_count"] = turn_count
+
+            # 총 대화 개수 증가 (AI 응답 개수만큼 증가 - 메모리 추출 트리거용)
+            total_dialogue_count = session_state.get("total_dialogue_count", 0) + len(dialogue_result.dialogues)
+            dialogue_result.updated_state["total_dialogue_count"] = total_dialogue_count
+            logger.info("create_dialogue", f"Total dialogue count updated: {total_dialogue_count}")
+
             dialogue_models = []
             for idx, dialogue in enumerate(dialogue_result.dialogues):
                 model = DialogueTurn(
@@ -634,6 +722,26 @@ class ChatUseCase:
             await self.dialogue_repository.save_dialogues_batch(dialogue_models)
 
             # ============================================================
+            # 3-2. 사용자 입력 저장 (메모리 추출을 위해)
+            # ============================================================
+            if user_message:  # user_input → user_message
+                from ..chat.models import UserInput
+
+                user_input_model = UserInput(
+                    session_id=session_id,
+                    user_id=user_id,
+                    turn_number=turn_count,
+                    user_input=user_message,  # user_input → user_message
+                    timestamp=datetime.utcnow(),
+                    created_at=datetime.utcnow()
+                )
+
+                self.db.add(user_input_model)
+                await self.db.flush()
+
+                logger.debug("create_dialogue", f"User input saved for turn {turn_count}")
+
+            # ============================================================
             # 4. 대화 요약 생성 및 Memory 저장
             # ============================================================
             if self.summarizer and user_id:
@@ -641,16 +749,40 @@ class ChatUseCase:
                     # 최근 대화 조회
                     recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
 
-                    # 대화 히스토리 구성
-                    message_history = []
+                    # 사용자 입력 조회
+                    from ..chat.models import UserInput
+                    from sqlalchemy import select
+
+                    user_inputs_query = select(UserInput).where(
+                        UserInput.session_id == session_id
+                    ).order_by(UserInput.turn_number)
+
+                    user_inputs_result = await self.db.execute(user_inputs_query)
+                    user_inputs_list = list(user_inputs_result.scalars().all())
+
+                    # turn_number → user_input 매핑
+                    user_inputs_map = {
+                        ui.turn_number: ui.user_input
+                        for ui in user_inputs_list
+                    }
+
+                    # 대화 히스토리 구성 (turn별로 그룹화)
+                    turn_dialogues = {}
                     for dlg in recent_dialogues:
+                        if dlg.turn_number not in turn_dialogues:
+                            turn_dialogues[dlg.turn_number] = []
+                        turn_dialogues[dlg.turn_number].append({
+                            "speaker": dlg.speaker,
+                            "text": dlg.content
+                        })
+
+                    # message_history 구성
+                    message_history = []
+                    for turn_num in sorted(turn_dialogues.keys()):
                         message_history.append({
-                            "turn": dlg.turn_number,
-                            "user_input": "",  # 사용자 입력은 별도 저장 필요
-                            "agent_responses": [{
-                                "speaker": dlg.speaker,
-                                "text": dlg.content
-                            }]
+                            "turn": turn_num,
+                            "user_input": user_inputs_map.get(turn_num, ""),  # 실제 사용자 입력
+                            "agent_responses": turn_dialogues[turn_num]
                         })
 
                     # 요약 업데이트 체크
@@ -662,7 +794,8 @@ class ChatUseCase:
                     # 새 요약이 생성되었으면 저장
                     if summary_result["summary"] != dialogue_result.updated_state.get("conversation_summary"):
                         dialogue_result.updated_state["conversation_summary"] = summary_result["summary"]
-                        dialogue_result.updated_state["summary_turn_count"] = summary_result["summary_turn_count"]
+                        dialogue_result.updated_state["summary_dialogue_count"] = summary_result["summary_dialogue_count"]
+                        logger.info("create_dialogue", f"Summary updated at dialogue count {summary_result['summary_dialogue_count']}")
 
                         # 임베딩 생성
                         embedding = await self.summarizer.generate_embedding(summary_result["summary"])
@@ -674,11 +807,81 @@ class ChatUseCase:
                                 content=summary_result["summary"],
                                 memory_type="episodic",
                                 embedding=embedding,
-                                scenario_id=scenario_id,
+                                scenario_id=None,  # scenario_id는 string이므로 UUID 타입 필드에 매핑 불가
                                 importance_score=0.8  # 요약은 높은 중요도
                             )
                             logger.info("create_dialogue", "Summary saved to memories",
                                        session_id=session_id, summary_length=len(summary_result["summary"]))
+
+                        # ============================================================
+                        # 4.5 장기기억 추출 (요약에서 중요한 정보 추출)
+                        # ============================================================
+                        if self.memory_extractor and self.embeddings_service:
+                            try:
+                                logger.info("create_dialogue", "Extracting long-term memories from summary",
+                                           session_id=session_id)
+
+                                # 요약에서 장기기억 추출 (relationship, preference, event, fact)
+                                extracted_memories = await self.memory_extractor.extract_memories(
+                                    conversation_summary=summary_result["summary"]
+                                )
+
+                                logger.info("create_dialogue", f"Extracted {len(extracted_memories)} long-term memories",
+                                           session_id=session_id)
+
+                                # 추출된 메모리 각각 저장 및 이벤트 생성
+                                saved_memories = []
+                                for memory in extracted_memories:
+                                    try:
+                                        # 임베딩 생성
+                                        memory_embedding = self.embeddings_service.embed(memory.memory_value)
+
+                                        # memory_type은 MemoryExtractor에서 반환한 값을 그대로 사용
+                                        # (relationship, preference, event, fact)
+                                        # DB 스키마는 이 값들을 모두 지원함
+
+                                        # 메모리 저장
+                                        await self.memory_repository.create_memory(
+                                            user_id=user_id,
+                                            content=memory.memory_value,
+                                            memory_type=memory.memory_type,  # 변환 없이 그대로 사용
+                                            embedding=memory_embedding,
+                                            scenario_id=None,  # scenario_id는 string이므로 UUID 타입 필드에 매핑 불가
+                                            importance_score=memory.importance
+                                        )
+
+                                        logger.debug("create_dialogue", f"Saved memory: {memory.memory_key}",
+                                                    type=memory.memory_type, importance=memory.importance)
+
+                                        saved_memories.append(memory)
+
+                                    except Exception as mem_err:
+                                        logger.error("create_dialogue", f"Failed to save individual memory: {mem_err}",
+                                                    memory_key=memory.memory_key, exc=mem_err)
+
+                                logger.info("create_dialogue", f"Successfully saved {len(extracted_memories)} long-term memories",
+                                           session_id=session_id, user_id=user_id)
+
+                                # 메모리 저장 이벤트 생성 (UI 표시용)
+                                if saved_memories:
+                                    from .schemas import MemoryEvent
+                                    # 대표 캐릭터 이름 가져오기 (마지막 dialogue의 speaker)
+                                    character_name = dialogue_result.dialogues[-1].speaker if dialogue_result.dialogues else "AI"
+
+                                    for memory in saved_memories:
+                                        event = MemoryEvent(
+                                            event_type="saved",
+                                            character_name=character_name,
+                                            memory_type=memory.memory_type,
+                                            memory_content=memory.memory_value[:100],  # 최대 100자
+                                            importance=memory.importance,
+                                            count=None
+                                        )
+                                        dialogue_result.memory_events.append(event)
+
+                            except Exception as extract_err:
+                                logger.error("create_dialogue", f"Memory extraction failed: {extract_err}",
+                                           session_id=session_id, exc=extract_err)
 
                 except Exception as e:
                     logger.error("create_dialogue", f"Summary generation failed: {e}", exc=e)
@@ -686,13 +889,18 @@ class ChatUseCase:
             # ============================================================
             # 5. 세션 상태 저장
             # ============================================================
-            logger.info("create_dialogue", "Saving session state")
-            await self.session_repository.save_session(
-                session_id=session_id,
-                user_id=user_id,
-                scenario_id=scenario_id,
-                state=dialogue_result.updated_state
-            )
+            try:
+                logger.info("create_dialogue", "Saving session state")
+                await self.session_repository.save_session(
+                    session_id=session_id,
+                    user_id=user_id,
+                    scenario_id=scenario_id,
+                    state=dialogue_result.updated_state
+                )
+            except Exception as session_save_err:
+                # 메모리는 이미 저장되었으므로, 세션 저장 실패는 경고만 출력
+                logger.warning("create_dialogue", f"Session save failed (memories already saved): {session_save_err}",
+                             session_id=session_id)
 
             # ============================================================
             # 5.5 친밀도를 user_character_affinity 테이블에 저장
@@ -1187,4 +1395,167 @@ class ChatUseCase:
                 "success": False,
                 "feedback_beats": [],
                 "mission_active": False
+            }
+
+    async def finalize_session(
+        self,
+        session_id: str,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        세션 종료 처리: 남은 대화 요약 및 메모리 추출
+
+        Args:
+            session_id: 세션 ID
+            user_id: 사용자 ID
+
+        Returns:
+            종료 결과 dict
+        """
+        logger.info("finalize_session", f"Finalizing session {session_id}", user_id=user_id)
+
+        try:
+            # 1. 세션 상태 조회
+            session_data = await self.session_repository.get_session(session_id)
+            if not session_data:
+                logger.warning("finalize_session", f"Session not found: {session_id}")
+                return {
+                    "success": False,
+                    "error": "Session not found",
+                    "memories_created": 0
+                }
+
+            session_state = session_data["state"]
+            scenario_id = session_data["scenario_id"]
+
+            # 2. 최근 대화 조회
+            recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
+
+            if not recent_dialogues:
+                logger.info("finalize_session", "No dialogues to process", session_id=session_id)
+                # 세션을 비활성화
+                await self.session_repository.delete_session(session_id)
+                return {
+                    "success": True,
+                    "memories_created": 0,
+                    "message": "No dialogues to process"
+                }
+
+            # 3. 사용자 입력 조회
+            from ..chat.models import UserInput
+            from sqlalchemy import select
+
+            user_inputs_query = select(UserInput).where(
+                UserInput.session_id == session_id
+            ).order_by(UserInput.turn_number)
+
+            user_inputs_result = await self.db.execute(user_inputs_query)
+            user_inputs_list = list(user_inputs_result.scalars().all())
+
+            # turn_number → user_input 매핑
+            user_inputs_map = {
+                ui.turn_number: ui.user_input
+                for ui in user_inputs_list
+            }
+
+            # 4. 대화 히스토리 구성 (turn별로 그룹화)
+            turn_dialogues = {}
+            for dlg in recent_dialogues:
+                if dlg.turn_number not in turn_dialogues:
+                    turn_dialogues[dlg.turn_number] = []
+                turn_dialogues[dlg.turn_number].append({
+                    "speaker": dlg.speaker,
+                    "text": dlg.content
+                })
+
+            # message_history 구성
+            message_history = []
+            for turn_num in sorted(turn_dialogues.keys()):
+                message_history.append({
+                    "turn": turn_num,
+                    "user_input": user_inputs_map.get(turn_num, ""),
+                    "agent_responses": turn_dialogues[turn_num]
+                })
+
+            # 5. 강제 요약 생성 (summarizer가 있는 경우)
+            memories_created = 0
+            if self.summarizer and message_history:
+                try:
+                    logger.info("finalize_session", "Generating final summary", session_id=session_id)
+
+                    # 시나리오 컨텍스트
+                    scenario_context = f"시나리오: {scenario_id}"
+
+                    # 요약 생성
+                    summary_text = await self.summarizer.generate_summary(
+                        conversations=message_history,
+                        existing_summary=session_state.get("conversation_summary", ""),
+                        scenario_context=scenario_context
+                    )
+
+                    logger.info("finalize_session", f"Final summary generated ({len(summary_text)} chars)",
+                               session_id=session_id)
+
+                    # 6. 장기기억 추출 (요약에서)
+                    if self.memory_extractor and self.embeddings_service and summary_text:
+                        try:
+                            logger.info("finalize_session", "Extracting final memories", session_id=session_id)
+
+                            # 메모리 추출
+                            extracted_memories = await self.memory_extractor.extract_memories(
+                                conversation_summary=summary_text
+                            )
+
+                            logger.info("finalize_session", f"Extracted {len(extracted_memories)} memories",
+                                       session_id=session_id)
+
+                            # 메모리 저장
+                            for memory in extracted_memories:
+                                try:
+                                    # 임베딩 생성
+                                    memory_embedding = self.embeddings_service.embed(memory.memory_value)
+
+                                    # 메모리 저장
+                                    await self.memory_repository.create_memory(
+                                        user_id=user_id,
+                                        content=memory.memory_value,
+                                        memory_type=memory.memory_type,
+                                        embedding=memory_embedding,
+                                        scenario_id=None,
+                                        importance_score=memory.importance
+                                    )
+                                    memories_created += 1
+                                except Exception as mem_err:
+                                    logger.error("finalize_session", f"Failed to save memory: {mem_err}",
+                                               session_id=session_id)
+
+                            logger.info("finalize_session", f"Saved {memories_created} memories",
+                                       session_id=session_id)
+
+                        except Exception as extract_err:
+                            logger.error("finalize_session", f"Memory extraction failed: {extract_err}",
+                                       session_id=session_id)
+
+                except Exception as summary_err:
+                    logger.error("finalize_session", f"Summary generation failed: {summary_err}",
+                               session_id=session_id)
+
+            # 7. 세션 비활성화
+            await self.session_repository.delete_session(session_id)
+            logger.info("finalize_session", "Session finalized successfully",
+                       session_id=session_id, memories_created=memories_created)
+
+            return {
+                "success": True,
+                "memories_created": memories_created,
+                "message": "Session finalized successfully"
+            }
+
+        except Exception as e:
+            logger.error("finalize_session", f"Session finalization failed: {e}",
+                        session_id=session_id, exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "memories_created": 0
             }
