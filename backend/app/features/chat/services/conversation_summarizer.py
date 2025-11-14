@@ -25,7 +25,7 @@ EMBEDDING_MODEL = "text-embedding-ada-002"
 SUMMARY_MODEL = os.getenv("LLM_MODEL", "gpt-4")
 
 # 요약 트리거 설정
-SUMMARY_UPDATE_THRESHOLD = 10  # N개 메시지마다 요약 업데이트
+USER_INPUT_THRESHOLD = 5  # N개 유저 입력마다 요약 업데이트 (DialogueTurn 전체가 아닌 user speaker만 카운트)
 
 
 class ConversationSummarizerService:
@@ -240,13 +240,15 @@ class ConversationSummarizerService:
         turns_result = await self.db.execute(turns_query)
         new_turns = list(turns_result.scalars().all())
 
-        # 업데이트 필요 여부 확인
-        if not force_update and len(new_turns) < SUMMARY_UPDATE_THRESHOLD:
-            logger.debug(
-                "update_conversation_summary",
-                f"Not enough new turns ({len(new_turns)}) to trigger update"
-            )
-            return summary
+        # 업데이트 필요 여부 확인 (user 입력만 카운트)
+        if not force_update:
+            user_turns = [t for t in new_turns if t.speaker == "user"]
+            if len(user_turns) < USER_INPUT_THRESHOLD:
+                logger.debug(
+                    "update_conversation_summary",
+                    f"Not enough user inputs ({len(user_turns)}/{USER_INPUT_THRESHOLD}) to trigger update"
+                )
+                return summary
 
         if not new_turns:
             logger.debug("update_conversation_summary", "No new turns to summarize")

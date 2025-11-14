@@ -226,7 +226,7 @@ class ContextService:
 
         message_history = state.get("message_history") or []
         if isinstance(message_history, list):
-            for entry in message_history[-4:]:
+            for entry in message_history[-10:]:
                 if not isinstance(entry, dict):
                     continue
                 speaker = entry.get("speaker") or entry.get("role") or "unknown"
@@ -246,7 +246,7 @@ class ContextService:
         최근 대화 수집 (전체 히스토리에서 최근 6개만 전문 전달)
 
         전략:
-        - 전체 message_history에서 최근 6개 대화만 선택
+        - 전체 message_history에서 최근 6개 대화만 선택 -> 15로 수정. 맥락 이해를 못함 캐릭터들이
         - 맥락 유지하면서 토큰 절약
         - 반복 방지 (LLM이 최근 대화 보고 이미 한 말 인지)
 
@@ -267,7 +267,7 @@ class ContextService:
             return recent_dialogues
 
         # 최근 6개 대화만 선택
-        recent_messages = message_history[- 6:] if len(message_history) > 4 else message_history
+        recent_messages = message_history[-6:] if len(message_history) > 4 else message_history
 
         logger.info("collect_recent_dialogues",
                    f"🔍 Selected {len(recent_messages)} recent messages (from total {len(message_history)})")
@@ -328,7 +328,8 @@ class ContextService:
         stage_context = stage_data.get("context", f"현재 {stage_tag} 장면이 진행 중입니다.")
 
         # 사용자 프롬프트 구성
-        recent_history = "\n".join(recent_dialogues[-3:]) if recent_dialogues else "(대화 없음)"
+        # Beats 생성 시에는 최근 6개 대화를 참고 (맥락 유지)
+        recent_history = "\n".join(recent_dialogues[-6:]) if recent_dialogues else "(대화 없음)"
 
         user_prompt = f"""이전 대화:
 {recent_history}
