@@ -34,6 +34,25 @@ interface ChatInterfaceProps {
 
 const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
 
+// Placeholder 치환 함수: 백엔드에서 렌더링되지 않은 {admin}, {user} 등을 실제 값으로 변환
+const replacePlaceholders = (text: string, userName?: string): string => {
+  if (!text) return text;
+
+  const name = userName || '츠구코';
+
+  // 1. 이중 중괄호 {{user}} 형태 처리
+  let result = text
+    .replace(/\{\{user\}\}/g, name)
+    .replace(/\{\{user_name\}\}/g, name)
+    .replace(/\{\{admin\}\}/g, 'Admin');
+
+  // 2. 단일 중괄호 {user}, {Administrator} 등 모든 형태 처리
+  // {단어} 형태를 사용자 이름으로 치환 (일반적으로 사용자 이름을 의미)
+  result = result.replace(/\{([A-Za-z가-힣0-9_]+)\}/g, name);
+
+  return result;
+};
+
 export default function ChatInterface({
   onUserLogin,
   onMessageSent,
@@ -1822,7 +1841,7 @@ export default function ChatInterface({
                       isWarning ? 'text-red-700' : 'text-gray-700 italic'
                     }`}>
                       {isWarning && <span className="font-bold">⚠️ 꺾쇄까마귀: </span>}
-                      {message.text}
+                      {replacePlaceholders(message.text, currentUser || undefined)}
                     </p>
                     <div className={`text-xs text-center mt-1 ${
                       isWarning ? 'text-red-400' : 'text-gray-400'
@@ -1896,7 +1915,7 @@ export default function ChatInterface({
                       boxShadow: '0 4px 30px rgba(147, 51, 234, 0.4), 0 8px 50px rgba(147, 51, 234, 0.2)'
                     } : {}}
                   >
-                    <p className="text-sm leading-relaxed">{message.text}</p>
+                    <p className="text-sm leading-relaxed">{replacePlaceholders(message.text, currentUser || undefined)}</p>
                     <div className={`text-xs mt-1 ${message.isUser ? 'text-purple-100' : 'text-gray-400'}`}>
                       {message.timestamp.toLocaleTimeString('ko-KR', {
                         hour: '2-digit',
@@ -1908,7 +1927,7 @@ export default function ChatInterface({
                   {/* AI 메시지에만 스피커 아이콘 추가 */}
                   {!message.isUser && (
                     <button
-                      onClick={() => handlePlayAudio(message.text)}
+                      onClick={() => handlePlayAudio(replacePlaceholders(message.text, currentUser || undefined))}
                       className="ml-2 p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
                       aria-label="음성으로 듣기"
                     >

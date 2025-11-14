@@ -148,14 +148,18 @@ class ChildrenAgent:
             logger.info("_generate_dialogues", f"🔍 DEBUG: First dialogue = {recent_dialogues[0]}")
             logger.info("_generate_dialogues", f"🔍 DEBUG: Last dialogue = {recent_dialogues[-1]}")
 
-        # Beat goal 정리
+        # Beat goal 정리 ({{user}} → user_name 치환)
         beat_descriptions = []
         for beat in beats:
             if isinstance(beat, dict):
                 desc = beat.get("goal") or beat.get("description") or beat.get("text") or str(beat)
+                # ✅ {{user}} 치환 (프롬프트용)
+                desc = desc.replace("{{user}}", user_name)
                 beat_descriptions.append(desc)
             elif isinstance(beat, str):
-                beat_descriptions.append(beat)
+                # ✅ {{user}} 치환 (프롬프트용)
+                desc = beat.replace("{{user}}", user_name)
+                beat_descriptions.append(desc)
         beats_description = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
 
         # ✅ World context 로드
@@ -172,8 +176,25 @@ class ChildrenAgent:
                 speaker_pool=speaker_pool,
                 user_input=user_input,
                 recent_dialogues=recent_dialogues,
-                world_context=world_context
+                world_context=world_context,
+                user_name=user_name  # ✅ user_name 전달 (프롬프트에서 {{user}} 치환용)
             )
+
+            # 🔍 DEBUG: 프롬프트에 중괄호 패턴이 있는지 확인
+            if "{" in prompt and "}" in prompt:
+                logger.warning("_generate_dialogues",
+                              f"⚠️ Prompt contains braces! Checking for patterns...")
+                import re
+                brace_patterns = re.findall(r'\{[^}]+\}', prompt)
+                if brace_patterns:
+                    logger.warning("_generate_dialogues",
+                                  f"⚠️ Found brace patterns in prompt: {brace_patterns[:5]}")
+
+            # 🔍 DEBUG: 프롬프트 일부 출력
+            logger.info("_generate_dialogues",
+                       f"🔍 Prompt preview (first 500 chars): {prompt[:500]}")
+            logger.info("_generate_dialogues",
+                       f"🔍 Prompt preview (last 500 chars): {prompt[-500:]}")
 
             dialogues_messages = await self.llm_service.generate_with_prompt(
                 prompt=prompt,
@@ -213,12 +234,12 @@ class ChildrenAgent:
                                    f"Unexpected message type at index {i}: {type(msg)}, value: {msg}")
                     continue
 
-                # ❌ 역치환 제거: LLM이 생성한 실제 이름을 그대로 사용
-                # if user_name in dialogue_dict["text"]:
-                #     original_text = dialogue_dict["text"]
-                #     dialogue_dict["text"] = dialogue_dict["text"].replace(user_name, "{user}")
-                #     logger.info("_generate_dialogues",
-                #                 f"✏️ Replaced '{user_name}' → '{{user}}' | {original_text} → {dialogue_dict['text']}")
+                # ✅ 역치환: 사용자 이름 → {{user}} 플레이스홀더로 변환 (DB 저장용)
+                if user_name in dialogue_dict["text"]:
+                    original_text = dialogue_dict["text"]
+                    dialogue_dict["text"] = dialogue_dict["text"].replace(user_name, "{{user}}")
+                    logger.info("_generate_dialogues",
+                                f"✏️ Replaced '{user_name}' → '{{{{user}}}}' | {original_text} → {dialogue_dict['text']}")
 
                 if dialogue_dict["speaker"] == user_name:
                     logger.warning("_generate_dialogues",

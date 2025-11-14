@@ -78,8 +78,9 @@ class PromptService:
         spatial_continuity: Optional[str] = None,
         character_states: Optional[str] = None,
         transition_hint: Optional[str] = None,
-        world_context: Optional[str] = None
-        long_term_memories: Optional[list] = None
+        world_context: Optional[str] = None,
+        long_term_memories: Optional[list] = None,
+        user_name: Optional[str] = None
     ) -> str:
         """
         children.dialogue_generation 프롬프트 생성
@@ -111,8 +112,8 @@ class PromptService:
             logger.warning("get_dialogue_generation_prompt", "dialogue_generation prompt not found in YAML")
             return self._get_fallback_prompt(beats_description, speaker_pool, user_input)
 
-        # 최근 대화 포맷팅
-        recent_history = self._format_recent_dialogues(recent_dialogues)
+        # 최근 대화 포맷팅 ({{user}} 그대로 유지 - LLM이 학습)
+        recent_history = self._format_recent_dialogues(recent_dialogues, user_name=None)
         logger.debug("get_dialogue_generation_prompt",
                     f"🔍 DEBUG: Formatted recent_history length = {len(recent_history)} chars")
 
@@ -149,8 +150,17 @@ class PromptService:
 
         return prompt
 
-    def _format_recent_dialogues(self, dialogues: list) -> str:
-        """최근 대화를 텍스트로 포맷팅"""
+    def _format_recent_dialogues(self, dialogues: list, user_name: Optional[str] = None) -> str:
+        """
+        최근 대화를 텍스트로 포맷팅
+
+        중요: {{user}} 플레이스홀더를 그대로 유지합니다.
+        LLM이 {{user}} 패턴을 학습하고 동일한 형식으로 생성하도록 합니다.
+
+        Args:
+            dialogues: 대화 목록
+            user_name: 사용하지 않음 (하위 호환성 유지)
+        """
         if not dialogues:
             return "(없음)"
 
@@ -159,6 +169,7 @@ class PromptService:
             if isinstance(d, dict):
                 speaker = d.get("speaker", "Unknown")
                 text = d.get("text", "")
+                # ✅ {{user}} 플레이스홀더 그대로 유지
                 lines.append(f"{speaker}: {text}")
             elif hasattr(d, "speaker") and hasattr(d, "text"):
                 lines.append(f"{d.speaker}: {d.text}")

@@ -637,7 +637,7 @@ class ChatUseCase:
                     # 유저 입력 추가 (같은 턴의 NPC 대화에서 stage_tag 추론)
                     for turn_num, user_text in user_inputs_by_turn.items():
                         all_messages.append({
-                            "speaker": user_name,  # ✅ 유저 이름 사용
+                            "speaker": "{{user}}",  # ✅ 플레이스홀더 사용 (LLM 프롬프트용)
                             "text": user_text,
                             "emotion": "neutral",
                             "turn": turn_num,
@@ -1052,11 +1052,17 @@ class ChatUseCase:
         # 4. 통합 메시지 리스트 생성
         all_messages = []
 
-        # NPC 대화 추가
+        # NPC 대화 추가 ({{user}} 치환 적용)
         for d in dialogue_models:
+            # ✅ {{user}} → user_name 치환
+            content = d.content
+            if content:
+                content = content.replace("{{user}}", user_name)
+                content = content.replace("{user}", user_name)
+
             all_messages.append({
                 "speaker": d.speaker,
-                "text": d.content,  # ✅ DialogueTurn.content 사용
+                "text": content,  # ✅ 치환된 content 사용
                 "emotion": d.emotion or "neutral",
                 "timestamp": d.created_at,
                 "turn": d.turn_number,
