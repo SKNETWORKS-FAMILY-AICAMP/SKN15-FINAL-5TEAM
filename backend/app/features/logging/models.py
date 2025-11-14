@@ -5,6 +5,7 @@ Logging Feature - SQLAlchemy Models
 from sqlalchemy import Column, String, BigInteger, Integer, Float, Text, DateTime, JSON, Boolean, CheckConstraint, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 from app.core.db.base import Base
 
 
@@ -109,9 +110,7 @@ class TrainingLog(Base):
     error_message = Column(Text, nullable=True)
 
     # Vector embedding (pgvector extension)
-    # Note: vector(1536) type requires pgvector extension
-    # Using String as placeholder - convert to proper vector type if pgvector is installed
-    embedding = Column(String, nullable=True)  # Originally: vector(1536)
+    embedding = Column(Vector(1536), nullable=True)
 
     # 엔티티 참조
     mentioned_entity_ids = Column(ARRAY(Integer), nullable=True, server_default='{}')
