@@ -43,8 +43,7 @@ const replacePlaceholders = (text: string, userName?: string): string => {
   // 1. 이중 중괄호 {{user}} 형태 처리
   let result = text
     .replace(/\{\{user\}\}/g, name)
-    .replace(/\{\{user_name\}\}/g, name)
-    .replace(/\{\{admin\}\}/g, 'Admin');
+    .replace(/\{\{user_name\}\}/g, name);
 
   // 2. 단일 중괄호 {user}, {Administrator} 등 모든 형태 처리
   // {단어} 형태를 사용자 이름으로 치환 (일반적으로 사용자 이름을 의미)
