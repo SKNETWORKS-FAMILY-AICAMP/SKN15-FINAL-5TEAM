@@ -4,7 +4,7 @@ Sessions Feature - Repository
 Layer 4: Repository (4-Layer Architecture)
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc, func, literal
+from sqlalchemy import select, and_, desc, func, literal, String, text
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import uuid
@@ -96,7 +96,7 @@ class SessionRepository:
             )
             .where(
                 and_(
-                    DialogueTurn.session_id == Session.session_id.cast(String),
+                    DialogueTurn.session_id == Session.session_id,
                     DialogueTurn.speaker != 'user'
                 )
             )
@@ -112,7 +112,7 @@ class SessionRepository:
                 Scenarios.title,
                 Scenarios.thumbnail_url,
                 last_dialogue_subq.c.speaker,
-                last_dialogue_subq.c.text
+                last_dialogue_subq.c.content
             )
             .outerjoin(Scenarios, Session.scenario_id == Scenarios.scenario_id)
             .outerjoin(last_dialogue_subq, literal(True))
