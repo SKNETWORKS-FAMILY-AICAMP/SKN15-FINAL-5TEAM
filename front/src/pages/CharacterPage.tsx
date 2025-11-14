@@ -1,7 +1,8 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChatHeader from '@/components/ChatHeader';
 import { useApp } from '@/contexts/AppContext';
+import { apiClient, Comment } from '@/services/api';
 import scenariosData from '@/data/scenarios.json';
 
 interface Character {
@@ -79,13 +80,59 @@ function getTagBadgeTone(tag: string) {
 
 export default function CharacterPage() {
   const { characterId } = useParams<{ characterId: string }>();
-  const { toggleSidebar, openSettings } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn, openLoginModal } = useApp();
   const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentCount, setCommentCount] = useState(0);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState('');
+  const [newComment, setNewComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentSubmitError, setCommentSubmitError] = useState('');
+  const [commentSubmitSuccess, setCommentSubmitSuccess] = useState('');
+  const [commentSort, setCommentSort] = useState<'popular' | 'recent'>('popular');
+  const [likingCommentIds, setLikingCommentIds] = useState<Set<number>>(() => new Set());
+  const commentSectionRef = useRef<HTMLDivElement | null>(null);
+  const commentFormContainerRef = useRef<HTMLDivElement | null>(null);
+  const commentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const scenarios = scenariosData as Record<string, ScenarioData>;
   const scenario = characterId ? scenarios[characterId] : null;
+
+  useEffect(() => {
+    if (scenario) {
+      setCommentCount(scenario.comments || 0);
+    }
+  }, [scenario]);
+
+  const loadComments = useCallback(async () => {
+    if (!scenario?.id) return;
+    try {
+      setCommentsLoading(true);
+      setCommentsError('');
+      const response = await apiClient.getScenarioComments(scenario.id, {
+        limit: 50,
+        sortBy: commentSort
+      });
+      setComments(response.items || []);
+      if (typeof response.total_count === 'number') {
+        setCommentCount(response.total_count);
+      } else {
+        setCommentCount((response.items || []).length);
+      }
+    } catch (error) {
+      console.error('Failed to load comments:', error);
+      setCommentsError('댓글을 불러오지 못했습니다.');
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, [scenario?.id, commentSort]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
 
   if (!scenario) {
     return (
@@ -128,7 +175,129 @@ export default function CharacterPage() {
     setIsLiked((prev) => !prev);
   };
 
+  const handleCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!scenario?.id) return;
+
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+
+    const trimmedComment = newComment.trim();
+    if (!trimmedComment) {
+      setCommentSubmitError('댓글을 입력해주세요.');
+      return;
+    }
+
+    try {
+      setSubmittingComment(true);
+      setCommentSubmitError('');
+      setCommentSubmitSuccess('');
+      const createdComment = await apiClient.createComment(scenario.id, { content: trimmedComment });
+      setComments((prev) => [createdComment, ...prev]);
+      setCommentCount((prev) => prev + 1);
+      setNewComment('');
+      setCommentSubmitSuccess('댓글이 등록되었습니다.');
+      setTimeout(() => setCommentSubmitSuccess(''), 2000);
+    } catch (error: any) {
+      console.error('Failed to submit comment:', error);
+      const message =
+        error?.response?.data?.detail ||
+        error?.message ||
+        '댓글 등록에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      setCommentSubmitError(message);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleScrollToComments = () => {
+    if (commentFormContainerRef.current) {
+      commentFormContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (commentSectionRef.current) {
+      commentSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    window.requestAnimationFrame(() => {
+      setTimeout(() => {
+        commentTextareaRef.current?.focus();
+      }, 250);
+    });
+  };
+
+  const handleCommentSortChange = (value: 'popular' | 'recent') => {
+    if (value === commentSort) return;
+    setCommentSort(value);
+  };
+
+  const handleToggleCommentLike = async (commentId: number) => {
+    if (!scenario?.id) return;
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+
+    setLikingCommentIds((prev) => {
+      const next = new Set(prev);
+      next.add(commentId);
+      return next;
+    });
+
+    try {
+      const result = await apiClient.toggleCommentLike(scenario.id, commentId);
+      setComments((prev) =>
+        prev.map((comment) => {
+          const currentId =
+            typeof comment.id === 'number'
+              ? comment.id
+              : Number(comment.comment_id);
+          if (currentId === commentId) {
+            return {
+              ...comment,
+              is_liked: result.liked,
+              like_count: result.like_count
+            };
+          }
+          return comment;
+        })
+      );
+    } catch (error) {
+      console.error('Failed to toggle comment like:', error);
+      alert('댓글 좋아요에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setLikingCommentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
+    }
+  };
+
   const likeCount = scenario.likes + (isLiked ? 1 : 0);
+
+  const formatCommentDate = (value?: string | null) => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return value;
+    }
+  };
+
+  const getCommentNumericId = (comment: Comment) => {
+    if (typeof comment.id === 'number') {
+      return comment.id;
+    }
+    const parsed = Number(comment.comment_id);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
 
   const stats = useMemo(
     () => [
@@ -137,13 +306,14 @@ export default function CharacterPage() {
         value: likeCount.toLocaleString('ko-KR'),
         icon: '❤️',
         highlightClass: 'text-rose-200 drop-shadow-[0_0_18px_rgba(244,63,94,0.45)]',
-        isInteractive: true
+        onClick: handleLike
       },
       {
         label: '댓글',
-        value: scenario.comments.toLocaleString('ko-KR'),
+        value: commentCount.toLocaleString('ko-KR'),
         icon: '💬',
-        highlightClass: 'text-sky-200 drop-shadow-[0_0_18px_rgba(125,211,252,0.4)]'
+        highlightClass: 'text-sky-200 drop-shadow-[0_0_18px_rgba(125,211,252,0.4)]',
+        onClick: handleScrollToComments
       },
       {
         label: '조회수',
@@ -152,11 +322,16 @@ export default function CharacterPage() {
         highlightClass: 'text-amber-200 drop-shadow-[0_0_20px_rgba(251,191,36,0.4)]'
       }
     ],
-    [scenario.comments, scenario.views, likeCount]
+    [commentCount, handleScrollToComments, likeCount, scenario.views]
   );
 
   const detailText = scenario.detailDescription || scenario.description;
- const detailShouldToggle = detailText.length > 260;
+  const detailShouldToggle = detailText.length > 260;
+
+  const commentSortOptions: { value: 'popular' | 'recent'; label: string }[] = [
+    { value: 'popular', label: '인기순' },
+    { value: 'recent', label: '최신순' }
+  ];
 
   return (
     <div className="min-h-screen bg-[#04010f] text-slate-100">
@@ -244,16 +419,16 @@ export default function CharacterPage() {
                       </>
                     );
 
-                    if ((stat as { isInteractive?: boolean }).isInteractive) {
+                    if (stat.onClick) {
                       return (
                         <button
                           type="button"
                           key={stat.label}
-                          onClick={handleLike}
+                          onClick={stat.onClick}
                           className={`relative overflow-hidden rounded-2xl px-4 py-5 flex flex-col items-start gap-2 text-left transition-transform duration-200 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-purple-500/40 ${SECONDARY_PANEL}`}
                         >
                           {content}
-                          {isLiked && (
+                          {stat.label === '좋아요' && isLiked && (
                             <span className="absolute top-3 right-3 text-[10px] uppercase tracking-[0.15em] text-rose-300">
                               Liked
                             </span>
@@ -408,6 +583,194 @@ export default function CharacterPage() {
               </div>
             </section>
           )}
+
+          <section
+            ref={commentSectionRef}
+            className={`rounded-[32px] p-8 space-y-6 ${TERTIARY_PANEL}`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-hero-mincho text-white">댓글</h2>
+                <p className="text-xs uppercase tracking-[0.15em] text-indigo-200/70 mt-1">
+                  {commentCount.toLocaleString('ko-KR')}개의 반응
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center rounded-full border border-white/10 bg-black/30 p-1">
+                  {commentSortOptions.map((option) => {
+                    const isActive = commentSort === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleCommentSortChange(option.value)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+                          isActive
+                            ? 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-[0_10px_25px_rgba(129,140,248,0.35)]'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                        aria-pressed={isActive}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={loadComments}
+                  disabled={commentsLoading}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {commentsLoading ? '불러오는 중...' : '새로고침'}
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0014-7V5M19 5a9 9 0 00-14 7v7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div ref={commentFormContainerRef} className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+              {!isLoggedIn && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  댓글을 남기려면 로그인이 필요합니다.
+                  <button
+                    type="button"
+                    onClick={openLoginModal}
+                    className="underline decoration-dotted underline-offset-4 text-indigo-200 hover:text-white transition-colors"
+                  >
+                    로그인하기
+                  </button>
+                </div>
+              )}
+              <form onSubmit={handleCommentSubmit} className="space-y-3">
+                <textarea
+                  ref={commentTextareaRef}
+                  value={newComment}
+                  onChange={(e) => {
+                    setNewComment(e.target.value);
+                    if (commentSubmitError) {
+                      setCommentSubmitError('');
+                    }
+                  }}
+                  placeholder={isLoggedIn ? '시나리오에 대해 한마디 남겨주세요.' : '로그인 후 댓글을 남길 수 있습니다.'}
+                  disabled={!isLoggedIn || submittingComment}
+                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/60 disabled:opacity-60"
+                  rows={4}
+                  maxLength={500}
+                />
+                {commentSubmitError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-200">
+                    {commentSubmitError}
+                  </div>
+                )}
+                {commentSubmitSuccess && (
+                  <div className="rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-2 text-sm text-green-200">
+                    {commentSubmitSuccess}
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">
+                    {newComment.trim().length}/500
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={!isLoggedIn || submittingComment || newComment.trim().length === 0}
+                    className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submittingComment ? '등록 중...' : '댓글 등록'}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="space-y-4">
+              {commentsError && (
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-200">
+                  {commentsError}
+                </div>
+              )}
+
+              {commentsLoading ? (
+                <div className="flex flex-col items-center gap-3 py-8 text-slate-300">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-transparent" />
+                  <p>댓글을 불러오는 중...</p>
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-5 py-8 text-center text-sm text-slate-300">
+                  아직 댓글이 없습니다. 첫 댓글을 남겨주세요!
+                </div>
+              ) : (
+                comments.map((comment) => {
+                  const commentId = getCommentNumericId(comment);
+                  const isLiking = typeof commentId === 'number' ? likingCommentIds.has(commentId) : false;
+                  const likeCountLabel =
+                    typeof comment.like_count === 'number'
+                      ? comment.like_count.toLocaleString('ko-KR')
+                      : '0';
+
+                  return (
+                    <div
+                      key={commentId ?? comment.comment_id ?? `${comment.user_id}-${comment.created_at}`}
+                      className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {comment.display_name || comment.username || '익명'}
+                          </p>
+                          <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                            {comment.username ? `@${comment.username}` : 'GUEST'}
+                          </p>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          {formatCommentDate(comment.created_at)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-200 leading-relaxed whitespace-pre-line">
+                        {comment.content}
+                      </p>
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={isLiking || typeof commentId !== 'number'}
+                          onClick={() => {
+                            if (typeof commentId === 'number') {
+                              handleToggleCommentLike(commentId);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            comment.is_liked
+                              ? 'border-pink-400/70 bg-pink-500/10 text-pink-200 shadow-[0_0_20px_rgba(236,72,153,0.35)]'
+                              : 'border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                          } ${isLiking ? 'opacity-60 cursor-wait' : ''}`}
+                          aria-pressed={!!comment.is_liked}
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            viewBox="0 0 24 24"
+                            fill={comment.is_liked ? 'currentColor' : 'none'}
+                            stroke="currentColor"
+                            strokeWidth={1.5}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 7.5 11.25 9 11.25s9-4.03 9-11.25z"
+                            />
+                          </svg>
+                          <span>{likeCountLabel}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
         </div>
       </main>
     </div>

@@ -643,6 +643,19 @@ class ApiClient {
   }
 
   /**
+   * Update current user profile (display name/email)
+   */
+  async updateUserProfile(profile: { display_name?: string | null; email?: string | null }): Promise<UserInfo> {
+    try {
+      const response = await authenticatedApiClient.put('/api/users/me', profile)
+      return response.data
+    } catch (error: any) {
+      console.error('Error updating user profile:', error)
+      throw new Error(error.response?.data?.detail || '프로필 업데이트에 실패했습니다.')
+    }
+  }
+
+  /**
    * Request password reset (no authentication required)
    */
   async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
@@ -1152,12 +1165,34 @@ class ApiClient {
     params?: { limit?: number; cursor?: string; sortBy?: 'recent' | 'popular' }
   ): Promise<CommentListResponse> {
     try {
+      const sortParam =
+        params?.sortBy === 'recent'
+          ? 'created_at'
+          : params?.sortBy === 'popular'
+            ? 'like_count'
+            : 'like_count'
+
       const queryParams: any = {
         limit: params?.limit || 50,
-        sort_by: params?.sortBy || 'recent'
+        sort_by: sortParam,
+        offset: params?.cursor ? Number(params.cursor) || 0 : 0
       }
-      if (params?.cursor) {
-        queryParams.cursor = params.cursor
+
+      const normalizeResponse = (data: any): CommentListResponse => {
+        if (data?.items && typeof data?.total_count === 'number') {
+          return data
+        }
+
+        return {
+          items: data?.comments || [],
+          total_count:
+            typeof data?.total === 'number'
+              ? data.total
+              : Array.isArray(data?.comments)
+                ? data.comments.length
+                : 0,
+          next_cursor: data?.next_cursor || null
+        }
       }
 
       // Try with auth first if user is logged in
@@ -1165,13 +1200,13 @@ class ApiClient {
         const response = await authenticatedApiClient.get(`/api/scenarios/${scenarioId}/comments`, {
           params: queryParams
         })
-        return response.data
+        return normalizeResponse(response.data)
       } catch (authError) {
         // Fallback to public API if not authenticated
         const response = await axios.get(`${this.baseUrl}/api/scenarios/${scenarioId}/comments`, {
           params: queryParams
         })
-        return response.data
+        return normalizeResponse(response.data)
       }
     } catch (error) {
       console.error(`Error getting comments for scenario ${scenarioId}:`, error)

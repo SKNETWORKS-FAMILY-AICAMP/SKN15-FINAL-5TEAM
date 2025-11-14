@@ -3,7 +3,7 @@ Scenarios Feature - Repository
 시나리오 댓글 및 좋아요 DB 접근 레이어
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, delete, update, case
+from sqlalchemy import select, func, and_, delete, update, case, literal
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 
@@ -95,7 +95,7 @@ class ScenarioRepository:
                     ScenarioComment,
                     User.username,
                     User.display_name,
-                    func.cast(False, type_=func.Boolean()).label("is_liked")
+                    literal(False).label("is_liked")
                 )
                 .join(User, ScenarioComment.user_id == User.user_id)
                 .where(
@@ -182,7 +182,7 @@ class ScenarioRepository:
                     ScenarioComment,
                     User.username,
                     User.display_name,
-                    func.cast(False, type_=func.Boolean()).label("is_liked")
+                    literal(False).label("is_liked")
                 )
                 .join(User, ScenarioComment.user_id == User.user_id)
                 .where(

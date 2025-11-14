@@ -28,6 +28,7 @@ interface AppContextType {
   setChatWindowSize: (size: ChatWindowSize) => void;
   updateBubbles: (count: number) => void;
   consumeBubbles: (amount: number, description?: string) => Promise<boolean>;
+  refreshCurrentUser: (name: string | null) => void;
   openSidebar: () => void;
   closeSidebar: () => void;
   toggleSidebar: () => void;
@@ -210,6 +211,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setCurrentUserId(null);
     setCurrentBubbles(0);
   };
+  const refreshCurrentUser = (name: string | null) => {
+    setCurrentUser(name);
+    setUserEmail(name || '');
+  };
   const updateBubbles = (count: number) => {
     setCurrentBubbles(count);
   };
@@ -289,6 +294,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         logout,
         updateBubbles,
         consumeBubbles,
+        refreshCurrentUser,
       }}
     >
       {children}
