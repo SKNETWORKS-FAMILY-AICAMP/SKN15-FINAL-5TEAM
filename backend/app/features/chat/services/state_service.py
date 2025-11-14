@@ -69,8 +69,7 @@ class StateService:
         state: Dict[str, Any],
         dialogues: list,
         next_stage: Optional[str] = None,
-        stage_complete: bool = False,
-        loop_mode: Optional[str] = None
+        stage_complete: bool = False
     ) -> Dict[str, Any]:
         """
         상태 업데이트
@@ -80,23 +79,16 @@ class StateService:
             dialogues: 생성된 대화 목록
             next_stage: 다음 스테이지 (있다면)
             stage_complete: 스테이지 완료 여부
-            loop_mode: 현재 스테이지의 loop_mode ("micro_beat", "none", 등)
 
         Returns:
             업데이트된 상태
         """
-        # turn_count는 항상 증가
+        # turn_count와 stage_turn 모두 항상 증가
         updated = {
             **state,
             "turn_count": state.get("turn_count", 0) + 1,
+            "stage_turn": state.get("stage_turn", 0) + 1,
         }
-
-        # stage_turn은 loop_mode가 "micro_beat"일 때는 증가하지 않음
-        # micro_beat는 같은 상황을 반복하므로 stage_turn을 유지
-        if loop_mode == "micro_beat":
-            updated["stage_turn"] = state.get("stage_turn", 0)  # 유지
-        else:
-            updated["stage_turn"] = state.get("stage_turn", 0) + 1  # 증가
 
         # 대화 이력 업데이트 (최근 20개만 유지)
         history = state.get("conversation_history", [])

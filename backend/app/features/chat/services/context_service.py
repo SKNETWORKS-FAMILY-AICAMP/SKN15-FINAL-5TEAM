@@ -137,9 +137,9 @@ class ContextService:
             children_ctx.setdefault("speaker_pool", [])
 
         # Context summary 및 최근 대화
-        children_ctx["context_summary"] = self.build_context_summary(state)
+        children_ctx["context_summary"] = self.build_context_summary(state) #150문자
         children_ctx["latest_user_input"] = state.get("user_input", "")
-        children_ctx["recent_dialogues"] = self.collect_recent_dialogues(state, current_stage_tag=stage_tag)
+        children_ctx["recent_dialogues"] = self.collect_recent_dialogues(state, current_stage_tag=stage_tag) # 6개
 
         # Character refs 및 scenario_id
         children_ctx.setdefault("character_refs", scenario.get("character_refs", {}))
@@ -229,7 +229,7 @@ class ContextService:
                 speaker = entry.get("speaker") or entry.get("role") or "unknown"
                 text = (entry.get("text") or entry.get("content") or "").strip()
                 if text:
-                    summary_lines.append(f"{speaker}: {text[:50]}...")
+                    summary_lines.append(f"{speaker}: {text[:150]}...")
 
         summary = "\n".join(summary_lines) if summary_lines else None
 
@@ -240,89 +240,40 @@ class ContextService:
 
     def collect_recent_dialogues(self, state: Dict[str, Any], current_stage_tag: Optional[str] = None) -> List[str]:
         """
-        최근 대화 수집 (이전 스테이지 요약 + 현재 스테이지 전체)
+        최근 대화 수집 (전체 히스토리에서 최근 6개만 전문 전달)
 
         전략:
-        - 이전 스테이지들: 각 대화를 50자로 자른 요약 형태
-        - 현재 스테이지: 전체 대화 포함
-        - LLM 호출 없이 즉시 처리 (< 1ms)
+        - 전체 message_history에서 최근 6개 대화만 선택
+        - 맥락 유지하면서 토큰 절약
+        - 반복 방지 (LLM이 최근 대화 보고 이미 한 말 인지)
 
         Args:
             state: 전체 state 객체
-            current_stage_tag: 현재 스테이지 태그
+            current_stage_tag: 현재 스테이지 태그 (사용 안 함, 호환성 유지)
 
         Returns:
-            포맷된 대화 리스트
+            포맷된 대화 리스트 (최근 6개)
         """
         recent_dialogues: List[str] = []
 
         message_history = state.get("message_history") or []
         logger.info("collect_recent_dialogues",
-                   f"🔍 message_history count = {len(message_history)}, current_stage_tag = {current_stage_tag}")
+                   f"🔍 message_history count = {len(message_history)}")
 
         if not isinstance(message_history, list) or not message_history:
             return recent_dialogues
 
-        # 시나리오 정보 가져오기
-        scenario = state.get("scenario_data") or state.get("scenario") or {}
+        # 최근 6개 대화만 선택
+        recent_messages = message_history[- 6:] if len(message_history) > 4 else message_history
 
-        # 이전 스테이지 태그들 찾기
-        previous_stage_tags = []
-        if current_stage_tag:
-            previous_stage_tags = self.get_all_previous_stage_tags(current_stage_tag, scenario)
-            logger.info("collect_recent_dialogues",
-                       f"🔍 Previous stages: {previous_stage_tags}")
+        logger.info("collect_recent_dialogues",
+                   f"🔍 Selected {len(recent_messages)} recent messages (from total {len(message_history)})")
 
-        # 메시지 분류
-        previous_stage_messages = []
-        current_stage_messages = []
-        prologue_messages = []
-
-        for entry in message_history:
+        # 포맷팅: 최근 대화 (전문)
+        for entry in recent_messages:
             if not isinstance(entry, dict):
                 continue
 
-            entry_stage_tag = entry.get("stage_tag")
-
-            # stage_tag가 없는 메시지 (prologue)
-            if not entry_stage_tag:
-                prologue_messages.append(entry)
-            # 이전 스테이지 메시지
-            elif entry_stage_tag in previous_stage_tags:
-                previous_stage_messages.append(entry)
-            # 현재 스테이지 메시지
-            elif entry_stage_tag == current_stage_tag:
-                current_stage_messages.append(entry)
-
-        logger.info("collect_recent_dialogues",
-                   f"🔍 Prologue: {len(prologue_messages)}, "
-                   f"Previous: {len(previous_stage_messages)}, "
-                   f"Current: {len(current_stage_messages)}")
-
-        # 포맷팅: 이전 장면 (50자 자름)
-        if previous_stage_messages or prologue_messages:
-            recent_dialogues.append("=== 이전 장면 ===")
-
-            # Prologue 포함 (첫 스테이지인 경우)
-            for entry in prologue_messages:
-                speaker = entry.get("speaker", "unknown")
-                text = (entry.get("text") or "").strip()
-                if text:
-                    truncated = text[:50] + "..." if len(text) > 50 else text
-                    recent_dialogues.append(f"{speaker}: {truncated}")
-
-            # 이전 스테이지 대화들
-            for entry in previous_stage_messages:
-                speaker = entry.get("speaker", "unknown")
-                text = (entry.get("text") or "").strip()
-                if text:
-                    truncated = text[:50] + "..." if len(text) > 50 else text
-                    recent_dialogues.append(f"{speaker}: {truncated}")
-
-            recent_dialogues.append("")  # 빈 줄로 구분
-
-        # 포맷팅: 현재 장면 (전체)
-        for entry in current_stage_messages:
             speaker = entry.get("speaker", "unknown")
             text = (entry.get("text") or "").strip()
             if text:

@@ -125,19 +125,16 @@ class ChildrenAgent:
     ) -> List[Dict[str, Any]]:
         """
         Beats 기반 대화 생성 (prompts.yaml 사용)
-        micro_beat 모드일 때는 사용자 반응형 프롬프트 사용.
         """
         beats = ctx.get("beats", [])
         speaker_pool = ctx.get("speaker_pool", [])
         scenario_id = ctx.get("scenario_id", "unknown")
-        loop_mode = ctx.get("loop_mode", "none")  # ✅ 추가
 
         if not beats:
             logger.warning("_generate_dialogues", "No beats provided")
             return []
 
         # 컨텍스트 정보 준비
-        # ✅ recent_dialogues는 ctx (children_ctx)에서 가져옴
         recent_dialogues = ctx.get("recent_dialogues", [])
         user_input = state.get("user_input", "")
         current_turn = state.get("turn_count", 0)
@@ -163,54 +160,27 @@ class ChildrenAgent:
         world_context = self._get_world_context(state)
 
         logger.info("_generate_dialogues", f"Generating dialogues for {len(beats)} beats",
-                    speaker_pool=speaker_pool, turn=current_turn, loop_mode=loop_mode,
+                    speaker_pool=speaker_pool, turn=current_turn,
                     world_context_length=len(world_context))
 
         try:
-            # ✅ loop_mode에 따라 프롬프트 분기
-            if loop_mode == "micro_beat":
-                # 🎯 사용자 반응형 프롬프트
-                prompt = prompt_service.get_dialogue_generation_prompt(
-                    beats_description=beats_description,
-                    user_input=user_input,
-                    recent_dialogues=recent_dialogues,
-                    speaker_pool=speaker_pool,
-                    world_context=world_context
-                )
+            # 대화 생성 프롬프트 (단일 모드)
+            prompt = prompt_service.get_dialogue_generation_prompt(
+                beats_description=beats_description,
+                speaker_pool=speaker_pool,
+                user_input=user_input,
+                recent_dialogues=recent_dialogues,
+                world_context=world_context
+            )
 
-                dialogues_messages = await self.llm_service.generate_with_prompt(
-                    prompt=prompt,
-                    temperature=0.8,
-                    max_tokens=400,  # 반응형은 짧게
-                )
-            else:
-                # 기존 장면 전체 생성 프롬프트
-                prompt = prompt_service.get_dialogue_generation_prompt(
-                    beats_description=beats_description,
-                    speaker_pool=speaker_pool,
-                    user_input=user_input,
-                    recent_dialogues=recent_dialogues,
-                    current_turn=current_turn,
-                    max_turns=len(beats) + 5,
-                    tone_profile=None,
-                    atmosphere=None,
-                    scene_setting=None,
-                    previous_scene_summary=None,
-                    previous_emotion_tone=None,
-                    spatial_continuity=None,
-                    character_states=None,
-                    transition_hint=None,
-                    world_context=world_context
-                )
-
-                dialogues_messages = await self.llm_service.generate_with_prompt(
-                    prompt=prompt,
-                    temperature=0.8,
-                    max_tokens=2000
-                )
+            dialogues_messages = await self.llm_service.generate_with_prompt(
+                prompt=prompt,
+                temperature=0.8,
+                max_tokens=800
+            )
 
             logger.info("_generate_dialogues",
-                        f"LLM returned {len(dialogues_messages) if dialogues_messages else 0} messages (mode={loop_mode})")
+                        f"LLM returned {len(dialogues_messages) if dialogues_messages else 0} messages")
 
         except Exception as e:
             logger.error("_generate_dialogues", f"LLM call failed: {e}", exc_info=True)
@@ -260,7 +230,7 @@ class ChildrenAgent:
                 continue
 
         logger.info("_generate_dialogues",
-                    f"Generated {len(dialogue_dicts)} dialogues from {len(beats)} beats (mode={loop_mode})")
+                    f"Generated {len(dialogue_dicts)} dialogues from {len(beats)} beats")
 
         return dialogue_dicts
 
