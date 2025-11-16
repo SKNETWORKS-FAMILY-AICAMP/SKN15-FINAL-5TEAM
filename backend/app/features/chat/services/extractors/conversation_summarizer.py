@@ -377,7 +377,8 @@ class ConversationSummarizer:
             return None
 
         try:
-            embedding = await self.embeddings_service.embed(text.strip())
+            # embeddings_service.embed()는 동기 함수이므로 await 제거
+            embedding = self.embeddings_service.embed(text.strip())
             return embedding
         except Exception as e:
             logger.error("generate_embedding", f"Embedding generation failed: {e}")

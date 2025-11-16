@@ -81,7 +81,8 @@ class PromptService:
         world_context: Optional[str] = None,
         long_term_memories: Optional[list] = None,
         conversation_summary: Optional[str] = None,  # ✅ 대화 요약 추가
-        user_name: Optional[str] = None
+        user_name: Optional[str] = None,
+        stage_turn: int = 0  # ✅ Stage 턴 추가
     ) -> str:
         """
         children.dialogue_generation 프롬프트 생성
@@ -129,13 +130,19 @@ class PromptService:
         logger.debug("get_dialogue_generation_prompt",
                     f"🔍 DEBUG: Formatted {len(long_term_memories or [])} long-term memories")
 
+        # ✅ 상황 블록 생성 (stage_turn에 따라 다름)
+        situation_block = self._create_situation_block(
+            stage_turn=stage_turn,
+            beats_description=beats_description,
+            recent_history=recent_history
+        )
+
         # 변수 치환을 위한 컨텍스트 준비
         context = {
-            "상황 요약": beats_description,
+            "상황 블록": situation_block,  # ✅ 조건부 상황 블록
             "speaker_pool": ", ".join(speaker_pool),
             "사용자 입력": user_input or "(없음)",
-            "최근 대화": recent_history or "(없음)",
-            "대화 요약": conversation_summary or "(없음)",  # ✅ 대화 요약 추가
+            "대화 요약": conversation_summary or "(없음)",
             "장기 기억": formatted_memories,
             "현재 턴": str(current_turn),
             "max_turns": str(max_turns),
@@ -207,6 +214,50 @@ class PromptService:
         result = "\n".join(lines) if lines else "(없음)"
         logger.debug("_format_long_term_memories", f"DEBUG: Final formatted result length = {len(result)}")
         return result
+
+    def _create_situation_block(
+        self,
+        stage_turn: int,
+        beats_description: str,
+        recent_history: str
+    ) -> str:
+        """
+        stage_turn 값에 따라 조건부 상황 블록 생성
+
+        Args:
+            stage_turn: 현재 Stage의 턴 (0이면 Stage 전환 직후)
+            beats_description: Beat 목표
+            recent_history: 최근 대화 히스토리
+
+        Returns:
+            포맷된 상황 블록
+        """
+        if stage_turn == 0:
+            # Stage 전환 직후: 새로운 상황 강조
+            return f"""🎬 **새로운 장면 시작 (중요!)**
+
+**📍 지금 막 다음 상황이 발생했습니다:**
+{beats_description}
+
+**⚠️ 주의:**
+- 위 상황이 **지금 막** 시작되었습니다
+- 캐릭터는 이 새로운 상황에 즉시 반응해야 합니다
+- 이전 대화는 자연스럽게 마무리하되, 새 상황이 최우선입니다
+
+**💬 참고: 최근 대화 (이전 장면)**
+{recent_history}
+(↑ 이전 장면의 대화입니다. 급격한 단절은 피하되, 새 상황을 우선 반영하세요)"""
+        else:
+            # Stage 진행 중: 사용자 입력과 대화 흐름 우선
+            return f"""**📍 현재 상황 (진행 중):**
+{beats_description}
+
+**💬 최근 대화:**
+{recent_history}
+
+**진행 가이드:**
+- 사용자 입력에 집중하여 자연스럽게 반응하세요
+- 현재 상황 목표를 염두에 두되, 대화 흐름을 우선하세요"""
 
     def _substitute_variables(self, template: str, context: Dict[str, str]) -> str:
         """

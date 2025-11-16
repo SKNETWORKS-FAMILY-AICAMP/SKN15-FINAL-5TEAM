@@ -1116,7 +1116,7 @@ class ChatUseCase:
     async def get_recent_dialogues(
         self,
         session_id: str,
-        limit: int = 10
+        limit: int = 500
     ) -> list[ChatMessage]:
         """최근 대화 조회 (유저 입력 + NPC 대화 통합) - API 응답용"""
         logger.info("get_recent_dialogues", "Fetching recent dialogues", session_id=session_id, limit=limit)
@@ -1124,7 +1124,7 @@ class ChatUseCase:
         # MessageHistoryService로 통합 메시지 로드
         message_history = await self.message_history_service.load_full_message_history(
             session_id=session_id,
-            limit=limit * 2
+            limit=limit
         )
 
         # 최근 N개만 선택

@@ -49,31 +49,30 @@ class ChatWorkflow:
         workflow.add_node("output_guardrail", self._output_guardrail_node)
 
         # 엣지 정의
-        workflow.set_entry_point("parent")
+        workflow.set_entry_point("input_guardrail")
 
-        # parent -> input_guardrail
-        workflow.add_edge("parent", "input_guardrail")
-
-        # input_guardrail -> router or dialogue
+        # input_guardrail -> router or END
         workflow.add_conditional_edges(
             "input_guardrail",
             self._should_route,
             {
                 "route": "router",
-                "dialogue": "dialogue",
                 "end": END
             }
         )
 
-        # router -> children or END (off_topic이면 END)
+        # router -> parent or END (off_topic이면 END)
         workflow.add_conditional_edges(
             "router",
             self._should_continue_to_dialogue,
             {
-                "dialogue": "children",
+                "continue": "parent",
                 "end": END
             }
         )
+
+        # parent -> children
+        workflow.add_edge("parent", "children")
 
         # children -> dialogue
         workflow.add_edge("children", "dialogue")
@@ -91,9 +90,10 @@ class ChatWorkflow:
             }
         )
 
-        # 그래프 컴파일 (메모리 체크포인트 사용)
-        memory = MemorySaver()
-        self.compiled_graph = workflow.compile(checkpointer=memory)
+        # 그래프 컴파일 (체크포인터 비활성화 - 성능 개선)
+        # memory = MemorySaver()
+        # self.compiled_graph = workflow.compile(checkpointer=memory)
+        self.compiled_graph = workflow.compile()
 
         logger.info("_build_graph", "LangGraph workflow compiled successfully")
 
@@ -112,7 +112,7 @@ class ChatWorkflow:
 
         return result
 
-    def _input_guardrail_node(self, state: GraphState) -> GraphState:
+    async def _input_guardrail_node(self, state: GraphState) -> GraphState:
         """입력 가드레일 노드"""
         logger.debug("_input_guardrail_node", "Executing input guardrail")
         state["agent_trace"].append("input_guardrail")
@@ -152,7 +152,7 @@ class ChatWorkflow:
 
         return result
 
-    def _output_guardrail_node(self, state: GraphState) -> GraphState:
+    async def _output_guardrail_node(self, state: GraphState) -> GraphState:
         """출력 가드레일 노드"""
         logger.debug("_output_guardrail_node", "Executing output guardrail")
         state["agent_trace"].append("output_guardrail")
@@ -171,9 +171,8 @@ class ChatWorkflow:
         라우팅 필요 여부 결정
 
         Returns:
-            "route" - 라우팅 필요
-            "dialogue" - 대화 생성으로 직행
-            "end" - 종료 (가드레일 차단 메시지 생성 완료)
+            "route" - Router로 진행
+            "end" - 종료 (가드레일 차단)
         """
         # 가드레일 실패 시 차단 메시지 생성 후 종료
         if not state.get("is_safe", True):
@@ -188,36 +187,41 @@ class ChatWorkflow:
 
             block_message = block_messages.get(violation_type, "까악— 까악— ⚠️ 입력이 차단되었습니다. 까악—")
 
-            # 차단 메시지를 dialogues에 추가
-            state["dialogues"] = [{
-                "speaker": "kasugai_crow",
-                "text": block_message,
-                "order": 0
-            }]
+            # 차단 메시지를 output에 추가
+            state["output"] = {
+                "dialogues": [{
+                    "speaker": "kasugai_crow",
+                    "text": block_message,
+                    "emotion": "neutral"
+                }],
+                "next_stage": state.get("current_stage", "intro"),
+                "stage_complete": False,
+                "affinity_delta": {},
+                "affinity_scores": state.get("affinity_scores", {}),
+            }
 
             logger.info("_should_route", f"Guardrail block message generated for {violation_type}")
             return "end"
 
         # 모든 입력은 Router를 거쳐 주제 분류 수행
-        # Router에서 on_topic/off_topic 판단 후 Fallback 또는 Dialogue로 진행
         return "route"
 
     def _should_continue_to_dialogue(self, state: GraphState) -> str:
         """
-        Router 이후 Dialogue로 진행할지 결정
+        Router 이후 Parent로 진행할지 결정
 
         Returns:
-            "dialogue" - Dialogue Agent 실행
+            "continue" - Parent Agent 실행
             "end" - 종료 (Fallback이 이미 응답 생성 완료)
         """
         # off_topic이면 Fallback이 이미 응답을 생성했으므로 종료
         if state.get("is_off_topic", False):
-            logger.info("_should_continue_to_dialogue", "Off-topic detected, skipping Dialogue (Fallback already handled)")
+            logger.info("_should_continue_to_dialogue", "Off-topic detected, ending workflow (Fallback already handled)")
             return "end"
 
-        # on_topic이면 Dialogue Agent로 진행
-        logger.info("_should_continue_to_dialogue", "On-topic, proceeding to Dialogue")
-        return "dialogue"
+        # on_topic이면 Parent Agent로 진행
+        logger.info("_should_continue_to_dialogue", "On-topic, proceeding to Parent")
+        return "continue"
 
     def _check_safety(self, state: GraphState) -> str:
         """

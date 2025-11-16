@@ -171,6 +171,10 @@ class ChildrenAgent:
                     world_context_length=len(world_context))
 
         try:
+            # stage_turn 가져오기 (Stage 전환 직후인지 확인)
+            stage_turn = state.get("stage_turn", 0)
+            logger.info("_generate_dialogues", f"Stage turn: {stage_turn} (0 = new stage)")
+
             # 대화 생성 프롬프트 (단일 모드)
             prompt = prompt_service.get_dialogue_generation_prompt(
                 beats_description=beats_description,
@@ -179,7 +183,8 @@ class ChildrenAgent:
                 recent_dialogues=recent_dialogues,
                 conversation_summary=conversation_summary,  # ✅ 대화 요약 추가
                 world_context=world_context,
-                user_name=user_name  # ✅ user_name 전달 (프롬프트에서 {{user}} 치환용)
+                user_name=user_name,  # ✅ user_name 전달
+                stage_turn=stage_turn  # ✅ stage_turn 전달
             )
 
             # 🔍 DEBUG: 프롬프트에 중괄호 패턴이 있는지 확인
