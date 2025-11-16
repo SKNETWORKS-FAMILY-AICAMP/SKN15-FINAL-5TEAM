@@ -546,7 +546,16 @@ class FallbackManager:
 
         - speaker_pool에서 선택 (akaza, narr, enmu 제외)
         - 후보 없으면 "narr" 사용
+        - 프롤로그 직후 (turn_count <= 1)에는 kasugai_crow 사용
         """
+        # ✅ 프롤로그 직후에는 까마귀만 사용
+        turn_count = state.get("turn_count", 0)
+        stage_turn = state.get("stage_turn", 0)
+
+        if turn_count <= 1 or stage_turn == 0:
+            logger.info("_select_speaker", f"🦅 Prologue phase (turn={turn_count}, stage_turn={stage_turn}), using kasugai_crow")
+            return "kasugai_crow"
+
         speaker_pool = stage_data.get("speaker_pool", [])
 
         # 🔍 디버깅 로그 추가

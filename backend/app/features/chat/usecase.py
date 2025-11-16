@@ -137,12 +137,19 @@ class ChatUseCase:
         Returns:
             GraphState
         """
+        # ✅ 시나리오 데이터 로드 (RouterAgent보다 먼저 실행되므로 여기서 로드 필요)
+        scenario_id = session_state.get("scenario_id", "")
+        scenario_data = None
+        if scenario_id:
+            scenario_data = self.scenario_service.load_scenario(scenario_id)
+            logger.info("_convert_to_graph_state", f"✅ Loaded scenario for state | scenario_id={scenario_id}")
+
         # TypedDict는 dict로 생성해야 함
         graph_state: GraphState = {
             # Session info
             "session_id": session_state.get("session_id", ""),
             "user_id": session_state.get("user_id", ""),
-            "scenario_id": session_state.get("scenario_id", ""),
+            "scenario_id": scenario_id,
             "user_name": user_name,
 
             # User input
@@ -155,7 +162,7 @@ class ChatUseCase:
             "stage_turn": session_state.get("stage_turn", 0),
 
             # Scenario data
-            "scenario": session_state.get("scenario"),
+            "scenario": scenario_data,  # ✅ 미리 로드한 시나리오 데이터 사용
             "stage_config": None,
 
             # Messages
