@@ -100,3 +100,5 @@ venv/
 
 # Personal documentation
 taemin_record/
+training_data/training_data_all_20251116_123553.csv
+training_data/training_data_all_20251116_123553.jsonl
