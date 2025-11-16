@@ -36,7 +36,7 @@ from .stage_handlers import (
     OpenNarrativeStageHandler,
 )
 from .children import ChildrenAgent
-from .dialogue import DialogueAgent
+from .nodes.dialogue import DialogueAgent
 
 logger = get_parent_logger("ParentAgent")
 
@@ -115,7 +115,16 @@ class ParentAgent:
 
         # Agents
         self.children_agent = children_agent or ChildrenAgent()
-        self.dialogue_agent = dialogue_agent or DialogueAgent()
+
+        # DialogueAgent는 enable_dialogue_validation이 True일 때만 생성
+        if enable_dialogue_validation:
+            if dialogue_agent is not None:
+                self.dialogue_agent = dialogue_agent
+            else:
+                from .dialogue import DialogueAgent
+                self.dialogue_agent = DialogueAgent()
+        else:
+            self.dialogue_agent = None
 
         # Options
         self.enable_dialogue_validation = enable_dialogue_validation
@@ -360,6 +369,11 @@ class ParentAgent:
         Returns:
             검증/수정된 대화 리스트
         """
+        # DialogueAgent가 없으면 검증 스킵
+        if self.dialogue_agent is None:
+            logger.debug("_validate_dialogues", "Dialogue validation disabled, skipping")
+            return dialogues
+
         validated_dialogues = []
 
         for dialogue in dialogues:

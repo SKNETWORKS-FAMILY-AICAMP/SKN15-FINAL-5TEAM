@@ -80,6 +80,7 @@ class PromptService:
         transition_hint: Optional[str] = None,
         world_context: Optional[str] = None,
         long_term_memories: Optional[list] = None,
+        conversation_summary: Optional[str] = None,  # ✅ 대화 요약 추가
         user_name: Optional[str] = None
     ) -> str:
         """
@@ -110,7 +111,13 @@ class PromptService:
 
         if not template:
             logger.warning("get_dialogue_generation_prompt", "dialogue_generation prompt not found in YAML")
-            return self._get_fallback_prompt(beats_description, speaker_pool, user_input)
+            return self._get_fallback_prompt(
+                beats_description,
+                speaker_pool,
+                user_input,
+                recent_dialogues,
+                conversation_summary
+            )
 
         # 최근 대화 포맷팅 ({{user}} 그대로 유지 - LLM이 학습)
         recent_history = self._format_recent_dialogues(recent_dialogues, user_name=None)
@@ -128,6 +135,7 @@ class PromptService:
             "speaker_pool": ", ".join(speaker_pool),
             "사용자 입력": user_input or "(없음)",
             "최근 대화": recent_history or "(없음)",
+            "대화 요약": conversation_summary or "(없음)",  # ✅ 대화 요약 추가
             "장기 기억": formatted_memories,
             "현재 턴": str(current_turn),
             "max_turns": str(max_turns),
@@ -218,9 +226,17 @@ class PromptService:
         self,
         beats_description: str,
         speaker_pool: list,
-        user_input: str
+        user_input: str,
+        recent_dialogues: list = None,
+        conversation_summary: str = None
     ) -> str:
         """YAML 로드 실패 시 fallback 프롬프트"""
+        # 최근 대화 포맷팅
+        recent_history = self._format_recent_dialogues(recent_dialogues or [], user_name=None)
+
+        # 대화 요약 포맷팅
+        summary_section = f"\n[대화 요약]\n{conversation_summary}\n" if conversation_summary else ""
+
         return f"""당신은 귀멸의 칼날 시나리오의 대사 작가입니다.
 
 [상황 요약]
@@ -228,6 +244,9 @@ class PromptService:
 
 [등장 캐릭터]
 {", ".join(speaker_pool)}
+{summary_section}
+[최근 대화]
+{recent_history}
 
 [사용자 입력]
 {user_input}
@@ -235,9 +254,10 @@ class PromptService:
 위 상황에 맞는 자연스러운 NPC 대화를 생성하세요.
 
 [중요 규칙]
-1. 플레이어의 대사는 생성하지 마세요 (NPC만)
-2. NPC가 플레이어를 언급할 때는 "{{user}}" 사용
-3. JSON 형식으로 응답: {{"dialogues": [{{"speaker": "캐릭터명", "text": "대사", "emotion": "감정"}}, ...]}}
+1. 최근 대화의 흐름을 이어가세요
+2. 플레이어의 대사는 생성하지 마세요 (NPC만)
+3. NPC가 플레이어를 언급할 때는 "{{user}}" 사용
+4. JSON 형식으로 응답: {{"dialogues": [{{"speaker": "캐릭터명", "text": "대사", "emotion": "감정"}}, ...]}}
 """
 
     def get_router_topic_classifier_prompt(

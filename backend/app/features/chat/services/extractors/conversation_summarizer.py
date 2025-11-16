@@ -20,8 +20,8 @@ settings = get_settings()
 logger = get_parent_logger("ConversationSummarizer")
 
 # 요약 설정
-SUMMARY_TRIGGER_DIALOGUE_COUNT = 5  # 5개 대화마다 요약 (turn 대신 dialogue 기준)
-KEEP_RECENT_TURNS = 5  # 최근 5턴은 전문 유지
+SUMMARY_TRIGGER_MESSAGE_COUNT = 10  # 10개 메시지마다 요약 (NPC+유저 대화 합산)
+KEEP_RECENT_MESSAGES = 8  # 최근 8개 메시지는 전문 유지 (약 2턴)
 
 
 class ConversationSummarizer:
@@ -46,50 +46,42 @@ class ConversationSummarizer:
 
     def should_create_summary(
         self,
-        current_dialogue_count: int,
-        last_summary_dialogue_count: int
+        total_messages: int,
+        last_summary_message_count: int
     ) -> bool:
         """
-        요약 생성 필요 여부 판단 (대화 개수 기준)
+        요약 생성 필요 여부 판단 (메시지 개수 기준)
 
         Args:
-            current_dialogue_count: 현재 총 대화 개수
-            last_summary_dialogue_count: 마지막 요약 시점 대화 개수
+            total_messages: 현재 총 메시지 개수
+            last_summary_message_count: 마지막 요약 시점 메시지 개수
 
         Returns:
             요약 생성 필요 여부
         """
-        return (current_dialogue_count - last_summary_dialogue_count) >= SUMMARY_TRIGGER_DIALOGUE_COUNT
+        summarize_until = max(0, total_messages - KEEP_RECENT_MESSAGES)
+        unsummarized_count = summarize_until - last_summary_message_count
+        return unsummarized_count >= SUMMARY_TRIGGER_MESSAGE_COUNT
 
-    def extract_conversations_to_summarize(
+    def extract_messages_to_summarize(
         self,
         message_history: List[Dict[str, Any]],
-        last_summary_turn_count: int,
-        current_turn_count: int
+        summarize_until: int
     ) -> List[Dict[str, Any]]:
         """
-        요약할 대화 추출 (오래된 대화만)
+        요약할 메시지 추출
 
         Args:
             message_history: 전체 메시지 히스토리
-            last_summary_turn_count: 마지막 요약 시점 턴 수
-            current_turn_count: 현재 턴 수
+            summarize_until: 요약할 메시지 인덱스 (전체 - 최근 8개)
 
         Returns:
-            요약할 대화 리스트
+            요약할 메시지 리스트
         """
-        summarize_until_turn = current_turn_count - KEEP_RECENT_TURNS
+        if summarize_until <= 0:
+            return []
 
-        conversations_to_summarize = []
-
-        for msg in message_history:
-            turn = msg.get("turn", 0)
-
-            # 이미 요약된 턴 제외, 최근 턴도 제외
-            if turn > last_summary_turn_count and turn <= summarize_until_turn:
-                conversations_to_summarize.append(msg)
-
-        return conversations_to_summarize
+        return message_history[:summarize_until]
 
     def format_conversations_for_summary(
         self,
@@ -162,7 +154,7 @@ class ConversationSummarizer:
 4. 게임 진행 상황 (미션, 목표 등)
 5. 친밀도나 게임 상태 변화
 
-요약은 200-300 단어 이내로 간결하게 작성하되, 스토리의 연속성을 유지할 수 있도록 중요한 정보는 모두 포함해주세요."""
+요약은 최대 200-300 단어 이내로 간결하게 작성하되, 스토리의 연속성을 유지할 수 있도록 중요한 정보는 모두 포함해주세요."""
 
         user_prompt_parts = []
 
@@ -245,82 +237,100 @@ class ConversationSummarizer:
         message_history: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        대화 요약 업데이트 (메인 함수) - 대화 개수 기준으로 트리거
+        대화 요약 업데이트 (메인 함수) - 10개 메시지마다 트리거
 
         Args:
             state: Session state
-            message_history: 메시지 히스토리
+            message_history: 메시지 히스토리 (턴 기반 포맷)
+                [{"turn": 1, "user_input": "...", "agent_responses": [...]}, ...]
 
         Returns:
-            {"summary": str, "summary_dialogue_count": int}
+            {"summary": str, "last_summary_message_count": int}
         """
-        # 대화 개수 기준으로 변경 (turn_count 대신 total_dialogue_count 사용)
-        current_dialogue_count = state.get("total_dialogue_count", 0)
-        last_summary_dialogue_count = state.get("summary_dialogue_count", 0)
+        # 턴 기반 message_history에서 실제 dialogue 개수 계산
+        total_dialogues = 0
+        for turn_data in message_history:
+            # user_input 1개 + agent_responses 개수
+            if turn_data.get("user_input"):
+                total_dialogues += 1
+            total_dialogues += len(turn_data.get("agent_responses", []))
+
+        total_messages = total_dialogues
+        last_summary_message_count = state.get("last_summary_message_count", 0)
         existing_summary = state.get("conversation_summary", "")
 
-        logger.debug("update_summary", f"Checking summary trigger: current={current_dialogue_count}, last={last_summary_dialogue_count}")
+        # 요약 범위 = 전체 - 최근 8개
+        summarize_until = max(0, total_messages - KEEP_RECENT_MESSAGES)
 
-        # 요약 필요 여부 확인 (대화 개수 기준)
-        if not self.should_create_summary(current_dialogue_count, last_summary_dialogue_count):
+        # 요약 안 된 메시지 개수
+        unsummarized_count = summarize_until - last_summary_message_count
+
+        logger.info("update_summary",
+                   f"📊 Summary check: total_messages={total_messages}, "
+                   f"last_summary_count={last_summary_message_count}, "
+                   f"summarize_until={summarize_until}, "
+                   f"unsummarized={unsummarized_count}, "
+                   f"trigger_threshold={SUMMARY_TRIGGER_MESSAGE_COUNT}")
+
+        # 10개 미만이면 요약 안 함
+        if unsummarized_count < SUMMARY_TRIGGER_MESSAGE_COUNT:
             return {
                 "summary": existing_summary,
-                "summary_dialogue_count": last_summary_dialogue_count
+                "last_summary_message_count": last_summary_message_count
             }
 
-        logger.info("update_summary", f"Generating summary at dialogue count {current_dialogue_count}")
+        logger.info("update_summary", f"Triggering summary: {unsummarized_count} new messages to summarize")
 
-        # 요약할 대화 추출 (전체 히스토리에서 요약되지 않은 부분만)
-        # message_history는 이미 시간순으로 정렬되어 있음
-        conversations_to_summarize = message_history  # 모든 메시지를 LLM에 전달 (LLM이 스스로 요약)
+        # 요약할 메시지 추출 (처음부터 summarize_until까지)
+        messages_to_summarize = self.extract_messages_to_summarize(
+            message_history,
+            summarize_until
+        )
 
-        if not conversations_to_summarize:
-            logger.warning("update_summary", "No conversations to summarize")
+        if not messages_to_summarize:
+            logger.warning("update_summary", "No messages to summarize")
             return {
-                "summary": existing_summary,
-                "summary_dialogue_count": last_summary_dialogue_count
+                "summary": "",
+                "last_summary_message_count": 0
             }
 
         # 시나리오 컨텍스트
         scenario_context = self.get_scenario_context(state)
 
-        # 요약 생성
+        # 전체 재요약 (existing_summary 무시, 원본에서 직접 요약)
         new_summary = await self.generate_summary(
-            conversations_to_summarize,
-            existing_summary,
-            scenario_context
+            messages_to_summarize,
+            existing_summary="",  # 전체 재요약
+            scenario_context=scenario_context
         )
 
-        logger.info("update_summary", "Summary generated",
-                   dialogue_count=current_dialogue_count)
+        logger.info("update_summary",
+                   f"Summary generated: {len(messages_to_summarize)} messages → {len(new_summary)} chars")
 
         return {
             "summary": new_summary,
-            "summary_dialogue_count": current_dialogue_count
+            "last_summary_message_count": summarize_until
         }
 
-    def get_recent_conversations(
+    def get_recent_messages(
         self,
         message_history: List[Dict[str, Any]],
-        keep_turns: int = KEEP_RECENT_TURNS
+        keep_count: int = KEEP_RECENT_MESSAGES
     ) -> List[Dict[str, Any]]:
         """
-        최근 대화만 추출
+        최근 메시지만 추출 (사용하지 않음, MessageHistoryService.select_recent_messages() 사용)
 
         Args:
             message_history: 전체 메시지 히스토리
-            keep_turns: 유지할 턴 수
+            keep_count: 유지할 메시지 개수
 
         Returns:
-            최근 대화 리스트
+            최근 메시지 리스트
         """
         if not message_history:
             return []
 
-        # 턴 번호 기준 정렬
-        sorted_history = sorted(message_history, key=lambda x: x.get("turn", 0), reverse=True)
-
-        return sorted_history[:keep_turns]
+        return message_history[-keep_count:] if len(message_history) > keep_count else message_history
 
     def format_context_with_summary(
         self,

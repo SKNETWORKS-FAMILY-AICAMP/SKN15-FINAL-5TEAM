@@ -43,7 +43,6 @@ class ContextService:
     Features:
     - build_children_context(): 핸들러 ctx에 공통 정보 추가
     - build_context_summary(): 최근 대화 요약
-    - collect_recent_dialogues(): 최근 대화 수집
     - generate_beats(): LLM 기반 동적 beats 생성
     - create_fallback_beats(): Fallback beats
 
@@ -137,9 +136,16 @@ class ContextService:
             children_ctx.setdefault("speaker_pool", [])
 
         # Context summary 및 최근 대화
-        children_ctx["context_summary"] = self.build_context_summary(state) #150문자
+        children_ctx["context_summary"] = self.build_context_summary(state)
         children_ctx["latest_user_input"] = state.get("user_input", "")
-        children_ctx["recent_dialogues"] = self.collect_recent_dialogues(state, current_stage_tag=stage_tag) # 6개
+
+        # 최근 8개 메시지 추출 (MessageHistoryService 직접 사용)
+        from .message_history_service import get_message_history_service
+        message_history_service = get_message_history_service()
+        children_ctx["recent_dialogues"] = message_history_service.select_recent_messages(
+            message_history=state.get("message_history", []),
+            keep_count=8
+        )
 
         # Long-term memories 추가 (장기기억)
         children_ctx["long_term_memories"] = state.get("long_term_memories", [])
@@ -240,52 +246,6 @@ class ContextService:
                     lines=len(summary_lines))
 
         return summary
-
-    def collect_recent_dialogues(self, state: Dict[str, Any], current_stage_tag: Optional[str] = None) -> List[str]:
-        """
-        최근 대화 수집 (전체 히스토리에서 최근 6개만 전문 전달)
-
-        전략:
-        - 전체 message_history에서 최근 6개 대화만 선택 -> 15로 수정. 맥락 이해를 못함 캐릭터들이
-        - 맥락 유지하면서 토큰 절약
-        - 반복 방지 (LLM이 최근 대화 보고 이미 한 말 인지)
-
-        Args:
-            state: 전체 state 객체
-            current_stage_tag: 현재 스테이지 태그 (사용 안 함, 호환성 유지)
-
-        Returns:
-            포맷된 대화 리스트 (최근 6개)
-        """
-        recent_dialogues: List[str] = []
-
-        message_history = state.get("message_history") or []
-        logger.info("collect_recent_dialogues",
-                   f"🔍 message_history count = {len(message_history)}")
-
-        if not isinstance(message_history, list) or not message_history:
-            return recent_dialogues
-
-        # 최근 6개 대화만 선택
-        recent_messages = message_history[-6:] if len(message_history) > 4 else message_history
-
-        logger.info("collect_recent_dialogues",
-                   f"🔍 Selected {len(recent_messages)} recent messages (from total {len(message_history)})")
-
-        # 포맷팅: 최근 대화 (전문)
-        for entry in recent_messages:
-            if not isinstance(entry, dict):
-                continue
-
-            speaker = entry.get("speaker", "unknown")
-            text = (entry.get("text") or "").strip()
-            if text:
-                recent_dialogues.append(f"{speaker}: {text}")
-
-        logger.info("collect_recent_dialogues",
-                   f"✅ Total dialogue lines: {len(recent_dialogues)}")
-
-        return recent_dialogues
 
     # ========== 2. Beats Generation ==========
 

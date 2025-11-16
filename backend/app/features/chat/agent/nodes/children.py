@@ -1,67 +1,79 @@
 """
-Children Agent - 대화 컨텍스트 구성 에이전트
+Children Agent Node - 대화 생성 (LangGraph 노드)
+
+역할:
+- 5단계: agent/children.py를 호출하여 실제 LLM 대화 생성
+- children_ctx 기반으로 대화 생성
 """
-from typing import Dict, Any, List
-from app.core.graph.graph_state import GraphState
+from typing import Dict, Any
+from ..graph_state import GraphState
+from app.core.logging import get_parent_logger as get_service_logger
+
+logger = get_service_logger("ChildrenNode")
 
 
 class ChildrenAgent:
-    """
-    Children Agent
+    """Children Agent Node - 대화 생성 (5단계)"""
 
-    역할:
-    - Parent Agent로부터 받은 컨텍스트 확장
-    - Dialogue Agent로 전달할 프롬프트 구성
-    """
+    def __init__(self):
+        """초기화 - agent/children.py는 lazy 로드"""
+        self._legacy_children = None
 
-    def run(self, state: GraphState) -> GraphState:
+    @property
+    def legacy_children(self):
+        """Lazy initialization of ChildrenAgent"""
+        if self._legacy_children is None:
+            from ..children import ChildrenAgent as LegacyChildren
+            self._legacy_children = LegacyChildren()
+            logger.info("legacy_children", "ChildrenAgent lazily initialized")
+        return self._legacy_children
+
+    async def run(self, state: GraphState) -> GraphState:
         """
-        Children Agent 실행
+        Children Agent 실행 (5단계)
 
-        Args:
-            state: GraphState
-
-        Returns:
-            업데이트된 GraphState
+        children_ctx를 기반으로 agent/children.py를 호출하여 LLM 대화 생성
         """
-        # Agent responses 초기화 (새로운 대화 생성 준비)
-        state["agent_responses"] = []
+        logger.info("run", "Children node started")
 
-        # Children context 가져오기
+        # children_ctx 확인
         children_ctx = state.get("children_ctx", {})
 
         if not children_ctx:
-            print("⚠️ No children_ctx found")
-            state["next_node"] = "END"
+            logger.warning("run", "No children_ctx found")
+            state["agent_responses"] = []
             return state
 
-        # Beats 확인
         beats = children_ctx.get("beats", [])
-        stage_turn = state.get("stage_turn", 0)
+        logger.info("run", "Generating dialogues", beats_count=len(beats))
 
-        # 현재 턴의 beat 가져오기 (있다면)
-        current_beat = None
-        if beats and stage_turn < len(beats):
-            current_beat = beats[stage_turn]
+        try:
+            # Dict[str, Any]로 변환 (agent/children.py는 일반 dict 사용)
+            dict_state = dict(state)
+            dict_state["children_ctx"] = children_ctx
 
-        # Dialogue Agent로 전달할 입력 구성
-        dialogue_input = {
-            "children_ctx": children_ctx,
-            "current_beat": current_beat,
-            "user_input": state.get("user_input", ""),
-            "user_name": state.get("user_name", "사용자"),
-            "speaker_pool": children_ctx.get("speaker_pool", []),
-            "stage_type": children_ctx.get("stage_type", "scene"),
-        }
+            # agent/children.py 호출 - 실제 LLM 대화 생성
+            updated_state = await self.legacy_children.run(dict_state)
 
-        # agent_inputs에 저장
-        if "agent_inputs" not in state:
-            state["agent_inputs"] = {}
-        state["agent_inputs"]["dialogue"] = dialogue_input
+            # agent_responses 가져오기
+            agent_responses = updated_state.get("agent_responses", [])
 
-        # 다음 노드: Dialogue Agent
-        state["next_node"] = "dialogue_agent"
+            logger.info("run", "Dialogues generated", count=len(agent_responses))
 
+            # GraphState 업데이트
+            state["agent_responses"] = agent_responses
+
+            # 기타 업데이트된 상태 반영
+            for key in ["has_more_dialogues"]:
+                if key in updated_state:
+                    state[key] = updated_state[key]
+
+        except Exception as e:
+            logger.error("run", f"Dialogue generation failed: {e}", exc_info=True)
+            state["agent_responses"] = []
+            state["error"] = f"Dialogue generation failed: {str(e)}"
+
+        logger.info("run", "Children node completed")
         return state
 
 

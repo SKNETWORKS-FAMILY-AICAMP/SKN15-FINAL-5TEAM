@@ -36,6 +36,7 @@ class GraphState(TypedDict):
 
     # 대화 히스토리 (누적)
     messages: Annotated[List[Dict[str, Any]], operator.add]
+    message_history: List[Dict[str, Any]]  # ✅ 최근 대화 히스토리 (통일된 이름)
 
     # 컨텍스트
     conversation_summary: Optional[str]
@@ -59,6 +60,12 @@ class GraphState(TypedDict):
     speaker: Optional[str]
     emotion: Optional[str]
 
+    # Children Context (Parent → Children 전달)
+    children_ctx: Optional[Dict[str, Any]]
+
+    # Agent Responses (Children → Dialogue 전달)
+    agent_responses: List[Dict[str, Any]]
+
     # Output (DialogueResult로 변환될 데이터)
     output: Optional[Dict[str, Any]]
 
@@ -69,6 +76,10 @@ class GraphState(TypedDict):
     # 가드레일 검증
     is_safe: bool
     guardrail_warnings: List[str]
+
+    # Fallback 관리
+    is_off_topic: bool  # Router의 off-topic 판정 결과
+    off_topic_count: int  # 누적 off-topic 카운트 (세션 저장용)
 
     # 에러 처리
     error: Optional[str]

@@ -17,7 +17,7 @@ from .repositories import (
     MemoryRepository,
 )
 from .agent.parent import ParentAgent  # Legacy ParentAgent (not LangGraph)
-from .services import AffinityService, MemoryService, MissionService, ScenarioService
+from .services import AffinityService, MemoryService, MissionService, ScenarioService, MessageHistoryService
 from .services.extractors.conversation_summarizer import ConversationSummarizer
 from .services.extractors.memory_extractor import MemoryExtractor
 from .models import DialogueTurn
@@ -75,6 +75,10 @@ class ChatUseCase:
         self.memory_service = MemoryService()
         self.mission_service = MissionService()
         self.scenario_service = ScenarioService()
+        self.message_history_service = MessageHistoryService(
+            dialogue_repository=self.dialogue_repository,
+            progression_repository=self.progression_repository
+        )
 
         # Conversation Summarizer (LLM 기반 요약)
         try:
@@ -133,54 +137,79 @@ class ChatUseCase:
         Returns:
             GraphState
         """
-        graph_state = GraphState(
+        # TypedDict는 dict로 생성해야 함
+        graph_state: GraphState = {
             # Session info
-            session_id=session_state.get("session_id", ""),
-            user_id=session_state.get("user_id", ""),
-            scenario_id=session_state.get("scenario_id", ""),
-            user_name=user_name,
+            "session_id": session_state.get("session_id", ""),
+            "user_id": session_state.get("user_id", ""),
+            "scenario_id": session_state.get("scenario_id", ""),
+            "user_name": user_name,
 
             # User input
-            user_input=user_message,
+            "user_input": user_message,
 
             # Scenario state
-            current_stage=session_state.get("current_stage"),
-            stage_tag=session_state.get("current_stage"),
-            turn_count=session_state.get("turn_count", 0),
-            stage_turn=session_state.get("stage_turn", 0),
+            "current_stage": session_state.get("current_stage", ""),
+            "stage_type": "",  # 필수 필드
+            "turn_count": session_state.get("turn_count", 0),
+            "stage_turn": session_state.get("stage_turn", 0),
 
-            # Scenario data (optional - will be loaded by agents)
-            scenario=session_state.get("scenario"),
+            # Scenario data
+            "scenario": session_state.get("scenario"),
+            "stage_config": None,
 
-            # Agent communication
-            agent_inputs={},
-            agent_responses=[],
-
-            # Workflow control
-            next_node=None,
+            # Messages
+            "messages": [],
+            "message_history": session_state.get("message_history", []),  # ✅ 최근 대화 히스토리
 
             # Context
-            children_ctx=None,
-            temp_data={},
+            "conversation_summary": session_state.get("conversation_summary"),
+            "user_memories": [],
+            "character_affinity": {},
 
-            # Game state
-            game=session_state.get("game", {}),
-            scene=session_state.get("scene", {}),
+            # Entities
+            "entities": [],
+            "entity_mentions": [],
+
+            # Routing
+            "next_stage": None,
+            "routing_reason": None,
+
+            # Mission
+            "mission_progress": None,
+            "mission_completed": False,
+
+            # AI response
+            "ai_response": None,
+            "speaker": None,
+            "emotion": None,
+
+            # Children Context & Agent Responses
+            "children_ctx": None,
+            "agent_responses": [],
 
             # Output
-            output={},
+            "output": {},
 
-            # Summary and memory
-            conversation_summary=session_state.get("conversation_summary"),
-            summary_turn_count=session_state.get("summary_turn_count", 0),
+            # Images
+            "image_url": None,
+            "thumbnail_url": None,
 
-            # Affinity
-            affinity_scores=session_state.get("affinity_scores", {}),
+            # Guardrail
+            "is_safe": True,
+            "guardrail_warnings": [],
 
-            # Ending
-            final_ending=session_state.get("final_ending"),
-            is_active=session_state.get("is_active", True)
-        )
+            # Fallback
+            "is_off_topic": False,
+            "off_topic_count": session_state.get("off_topic_count", 0),
+
+            # Error
+            "error": None,
+
+            # Metadata
+            "processing_time": 0.0,
+            "agent_trace": [],
+        }
 
         return graph_state
 
@@ -221,8 +250,13 @@ class ChatUseCase:
         for char, delta in affinity_delta.items():
             current_affinity[char] = current_affinity.get(char, 0) + delta
 
+        # current_stage 결정: stage_complete=True이면 next_stage 사용
+        stage_complete = graph_state.get("output", {}).get("stage_complete", False)
+        next_stage = graph_state.get("output", {}).get("next_stage")
+        current_stage_for_session = next_stage if (stage_complete and next_stage) else (graph_state.get("current_stage") or graph_state.get("stage_tag"))
+
         updated_state.update({
-            "current_stage": graph_state.get("current_stage") or graph_state.get("stage_tag"),
+            "current_stage": current_stage_for_session,
             "turn_count": graph_state.get("turn_count", 0),
             "stage_turn": graph_state.get("stage_turn", 0),
             "conversation_summary": graph_state.get("conversation_summary"),
@@ -232,6 +266,7 @@ class ChatUseCase:
             "is_active": graph_state.get("is_active", True),
             "game": graph_state.get("game", {}),
             "scene": graph_state.get("scene", {}),
+            "off_topic_count": graph_state.get("off_topic_count", 0),  # Fallback count 저장
         })
 
         # DialogueResult 생성
@@ -251,13 +286,7 @@ class ChatUseCase:
         state: Dict[str, Any],
         scenario_id: str
     ) -> Optional[str]:
-        """
-        현재 스테이지에 맞는 이미지 식별자를 조회
-
-        Args:
-            state: 최신 세션 상태
-            scenario_id: 기본 시나리오 ID (state에 없으면 사용)
-        """
+        """현재 스테이지에 맞는 이미지 식별자 조회"""
         scenario = state.get("scenario_id") or scenario_id
         stage_id = state.get("current_stage") or state.get("stage_tag")
         turn_count = state.get("turn_count", 0)
@@ -316,6 +345,551 @@ class ChatUseCase:
 
         return image_data.get("image_url")
 
+    async def _load_or_create_session(
+        self,
+        session_id: str,
+        user_id: str,
+        scenario_id: str,
+        user_name: str
+    ) -> Dict[str, Any]:
+        """세션 상태 로드 또는 생성"""
+        existing_session = await self.session_repository.get_session(session_id)
+
+        if existing_session:
+            # 기존 세션 상태 로드
+            logger.info("_load_or_create_session", "Loading existing session",
+                       session_id=session_id,
+                       current_stage=existing_session["state"].get("current_stage"),
+                       turn_count=existing_session["state"].get("turn_count"))
+            session_state = existing_session["state"]
+            # 세션 메타 정보 업데이트 (scenario_id 포함)
+            session_state["session_id"] = session_id
+            session_state["scenario_id"] = scenario_id  # scenario_id 명시적 보존
+            session_state["user_id"] = user_id
+            session_state["user_name"] = user_name or session_state.get("user_name", "여행자")
+
+            # 기존 세션이라도 DB에서 최신 친밀도를 다시 로드 (sessions 테이블에 저장되지 않으므로)
+            if user_id:
+                try:
+                    user_affinities = await self.affinity_repository.get_all_user_affinities(user_id)
+                    affinity_scores = {}
+                    for affinity in user_affinities:
+                        affinity_scores[affinity.character_name] = affinity.total_affinity_score
+                    session_state["affinity_scores"] = affinity_scores
+                    logger.info("_load_or_create_session", f"Loaded {len(affinity_scores)} affinity scores from DB for existing session",
+                               user_id=user_id, scores=affinity_scores)
+                except Exception as e:
+                    logger.error("_load_or_create_session", f"Failed to load affinity scores for existing session: {e}",
+                                user_id=user_id, exc_info=True)
+                    # 에러 시에도 빈 dict로 초기화 (기존 로직 유지)
+                    if "affinity_scores" not in session_state:
+                        session_state["affinity_scores"] = {}
+        else:
+            # 신규 세션 생성
+            logger.info("_load_or_create_session", "Creating new session", session_id=session_id)
+            # Get first stage from scenario
+            first_stage = self.scenario_service.get_first_stage_tag(scenario_id)
+
+            # 사용자의 기존 친밀도를 DB에서 불러오기
+            initial_affinity_scores = {}
+            if user_id:
+                try:
+                    user_affinities = await self.affinity_repository.get_all_user_affinities(user_id)
+                    for affinity in user_affinities:
+                        initial_affinity_scores[affinity.character_name] = affinity.total_affinity_score
+                    logger.info("_load_or_create_session", f"Loaded {len(initial_affinity_scores)} affinity scores from DB",
+                               user_id=user_id, scores=initial_affinity_scores)
+                except Exception as e:
+                    logger.error("_load_or_create_session", f"Failed to load affinity scores: {e}",
+                                user_id=user_id, exc_info=True)
+
+            session_state = {
+                "session_id": session_id,
+                "scenario_id": scenario_id,
+                "user_id": user_id,
+                "user_name": user_name,
+                "turn_count": 0,
+                "current_stage": first_stage,
+                "affinity_scores": initial_affinity_scores,
+            }
+
+            # 신규 세션을 먼저 DB에 저장 (dialogue FK 위반 방지)
+            logger.info("_load_or_create_session", "Saving new session to DB before dialogue insert")
+            await self.session_repository.save_session(
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                state=session_state
+            )
+
+        return session_state
+
+    async def _load_long_term_memories(
+        self,
+        session_state: Dict[str, Any],
+        user_id: str,
+        scenario_id: str
+    ) -> None:
+        """장기기억 로딩 - free-talk 시나리오만"""
+        logger.info("_load_long_term_memories", "DEBUG: About to check user_id for memory loading",
+                   user_id=user_id, user_id_type=type(user_id).__name__, user_id_bool=bool(user_id))
+
+        # 🔥 시나리오 모드에서는 장기기억을 사용하지 않음 (세계관 충돌 방지)
+        is_free_talk = scenario_id == "free-talk"
+
+        if user_id and is_free_talk:
+            try:
+                logger.info("_load_long_term_memories", "Loading long-term memories (free-talk mode only)",
+                           user_id=user_id, scenario_id=scenario_id)
+
+                # 사용자의 메모리 조회 (scenario_id는 문자열이므로 필터링 안함)
+                # source_session_id는 UUID 타입이고, scenario_id는 문자열이므로 호환 불가
+                memories = await self.memory_repository.get_user_memories(
+                    user_id=user_id,
+                    scenario_id=None,  # scenario_id 필터 제거 (타입 불일치)
+                    limit=20  # 최대 20개까지 로드
+                )
+
+                if memories:
+                    # 중요도 순으로 정렬
+                    memories_sorted = sorted(
+                        memories,
+                        key=lambda m: (m.importance or 0, m.created_at or datetime.min),  # importance_score -> importance
+                        reverse=True
+                    )
+
+                    # 상위 5개를 세션 상태에 추가
+                    session_state["long_term_memories"] = [
+                        {
+                            "memory_id": m.id,  # memory_id -> id
+                            "memory_key": m.memory_key,
+                            "content": m.memory_value,  # content -> memory_value
+                            "type": m.memory_type,
+                            "importance": m.importance,  # importance_score -> importance
+                            "created_at": m.created_at.isoformat() if m.created_at else None
+                        }
+                        for m in memories_sorted[:5]
+                    ]
+
+                    logger.info("_load_long_term_memories", f"Loaded {len(memories_sorted[:5])} long-term memories",
+                               user_id=user_id, scenario_id=scenario_id)
+
+                    # 접근 통계 업데이트 (상위 5개만)
+                    for memory in memories_sorted[:5]:
+                        try:
+                            await self.memory_repository.update_access_stats(memory.id)  # memory_id -> id
+                        except Exception as stats_err:
+                            logger.warning("_load_long_term_memories", f"Failed to update memory access stats: {stats_err}",
+                                         memory_id=memory.id)
+
+                else:
+                    logger.info("_load_long_term_memories", "No long-term memories found",
+                               user_id=user_id, scenario_id=scenario_id)
+
+            except Exception as mem_load_err:
+                logger.error("_load_long_term_memories", f"Failed to load long-term memories: {mem_load_err}",
+                            user_id=user_id, scenario_id=scenario_id, exc=mem_load_err)
+                # 메모리 로딩 실패해도 대화는 계속 진행
+        elif user_id and not is_free_talk:
+            logger.info("_load_long_term_memories", "Skipping long-term memories (scenario mode - preventing world-building conflicts)",
+                       user_id=user_id, scenario_id=scenario_id)
+
+        logger.info("_load_long_term_memories", "DEBUG: Finished memory loading section")
+
+    async def _check_and_return_prologue(
+        self,
+        session_state: Dict[str, Any],
+        session_id: str,
+        user_id: str,
+        scenario_id: str
+    ) -> Optional[DialogueResult]:
+        """Prologue 체크 및 반환 (turn_count=0일 때만)"""
+        if session_state["turn_count"] != 0:
+            return None
+
+        # DB에 이미 대화가 있는지 확인 (프롤로그가 이미 저장되었는지)
+        existing_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=1)
+
+        # DB에 대화가 있으면 prologue 스킵
+        if existing_dialogues:
+            return None
+
+        scenario = self.scenario_service.load_scenario(scenario_id)
+        prologue_messages = scenario.get("prologue_messages") if scenario else None
+
+        if not prologue_messages:
+            return None
+
+        logger.info("_check_and_return_prologue", "Returning hardcoded prologue messages",
+                   scenario_id=scenario_id, count=len(prologue_messages))
+
+        # 세션 상태 업데이트 (turn_count 증가, stage 유지)
+        session_state["turn_count"] += 1
+
+        # 세션 저장
+        await self.session_repository.save_session(
+            session_id=session_id,
+            user_id=user_id,
+            scenario_id=scenario_id,
+            state=session_state
+        )
+
+        # prologue_messages를 DialogueTurn 모델로 변환
+        dialogue_turns = []
+        for idx, msg in enumerate(prologue_messages):
+            dialogue_turn = DialogueTurn(
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                turn_number=session_state["turn_count"],
+                speaker=msg.get("speaker", "narr"),
+                content=msg.get("text", ""),
+                emotion=msg.get("emotion", "neutral"),
+                order_index=idx
+            )
+            dialogue_turns.append(dialogue_turn)
+
+        # 배치로 대화 저장 (prologue)
+        saved_turns = await self.dialogue_repository.save_dialogues_batch(dialogue_turns)
+
+        # DialogueResult 반환
+        result = DialogueResult(
+            session_id=session_id,
+            scenario_id=scenario_id,
+            current_stage=session_state["current_stage"],
+            turn_count=session_state["turn_count"],
+            dialogues=[
+                ChatMessage(
+                    speaker=turn.speaker,
+                    text=turn.content,
+                    emotion=turn.emotion
+                ) for turn in saved_turns
+            ],
+            speaker_pool=[],
+            next_stage=session_state["current_stage"],
+            images=[]
+        )
+
+        result.current_image = await self._resolve_current_image(session_state, scenario_id)
+        logger.info("_check_and_return_prologue", "Prologue returned successfully",
+                   session_id=session_id, turn_count=session_state["turn_count"])
+        return result
+
+    async def _save_dialogue_and_user_input(
+        self,
+        session_state: Dict[str, Any],
+        dialogue_result: DialogueResult,
+        session_id: str,
+        user_id: str,
+        scenario_id: str,
+        user_message: str
+    ) -> int:
+        """대화 및 사용자 입력 저장"""
+        turn_count = session_state.get("turn_count", 0) + 1
+
+        # turn_count를 updated_state에 반영
+        dialogue_result.updated_state["turn_count"] = turn_count
+
+        # DialogueTurn 모델로 변환
+        dialogue_models = []
+        for idx, dialogue in enumerate(dialogue_result.dialogues):
+            model = DialogueTurn(
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                turn_number=turn_count,
+                speaker=dialogue.speaker,
+                content=dialogue.text,
+                emotion=dialogue.emotion or "neutral",
+                emotion_intensity=dialogue.emotion_intensity if hasattr(dialogue, 'emotion_intensity') else None,
+                stage_tag=session_state.get("current_stage"),
+                order_index=idx,
+                created_at=datetime.utcnow()
+            )
+            dialogue_models.append(model)
+
+        logger.info("_save_dialogue_and_user_input", f"Saving {len(dialogue_models)} dialogues to DB")
+        await self.dialogue_repository.save_dialogues_batch(dialogue_models)
+
+        # 사용자 입력 저장
+        if user_message:
+            from ..chat.models import UserInput
+
+            user_input_model = UserInput(
+                session_id=session_id,
+                user_id=user_id,
+                turn_number=turn_count,
+                user_input=user_message,
+                timestamp=datetime.utcnow(),
+                created_at=datetime.utcnow()
+            )
+
+            self.db.add(user_input_model)
+            await self.db.flush()
+
+            logger.debug("_save_dialogue_and_user_input", f"User input saved for turn {turn_count}")
+
+        return turn_count
+
+    async def _process_summary_and_memories(
+        self,
+        dialogue_result: DialogueResult,
+        session_id: str,
+        user_id: str
+    ) -> None:
+        """대화 요약 생성 및 장기기억 추출"""
+        logger.info("_process_summary_and_memories",
+                   f"Called with user_id={user_id}, summarizer={self.summarizer is not None}")
+
+        if not self.summarizer or not user_id:
+            logger.warning("_process_summary_and_memories",
+                          f"Skipped: summarizer={self.summarizer is not None}, user_id={user_id}")
+            return
+
+        try:
+            # MessageHistoryService로 통합 메시지 로드
+            message_history_full = await self.message_history_service.load_full_message_history(
+                session_id=session_id,
+                limit=50
+            )
+
+            # Summarizer가 요구하는 포맷으로 변환
+            turn_data = {}
+            for msg in message_history_full:
+                turn = msg["turn"]
+                if turn not in turn_data:
+                    turn_data[turn] = {"user_input": "", "agent_responses": []}
+
+                if msg["speaker"] == "{{user}}":
+                    turn_data[turn]["user_input"] = msg.get("text", "")
+                else:
+                    turn_data[turn]["agent_responses"].append({
+                        "speaker": msg["speaker"],
+                        "text": msg.get("text", "")
+                    })
+
+            message_history = [
+                {"turn": turn, **data}
+                for turn, data in sorted(turn_data.items())
+            ]
+
+            # 요약 업데이트 체크 (10개 메시지마다)
+            summary_result = await self.summarizer.update_summary(
+                state=dialogue_result.updated_state,
+                message_history=message_history
+            )
+
+            # 새 요약이 생성되었으면 저장
+            if summary_result["summary"] != dialogue_result.updated_state.get("conversation_summary"):
+                dialogue_result.updated_state["conversation_summary"] = summary_result["summary"]
+                dialogue_result.updated_state["last_summary_message_count"] = summary_result["last_summary_message_count"]
+                logger.info("_process_summary_and_memories",
+                           f"Summary updated: {summary_result['last_summary_message_count']} messages summarized")
+
+                # 임베딩 생성
+                embedding = await self.summarizer.generate_embedding(summary_result["summary"])
+
+                # Memory로 저장
+                if embedding:
+                    await self.memory_repository.create_memory(
+                        user_id=user_id,
+                        content=summary_result["summary"],
+                        memory_type="episodic",
+                        embedding=embedding,
+                        scenario_id=None,
+                        importance_score=0.8
+                    )
+                    logger.info("_process_summary_and_memories", "Summary saved to memories",
+                               session_id=session_id, summary_length=len(summary_result["summary"]))
+
+                # 장기기억 추출
+                if self.memory_extractor and self.embeddings_service:
+                    try:
+                        logger.info("_process_summary_and_memories", "Extracting long-term memories from summary",
+                                   session_id=session_id)
+
+                        extracted_memories = await self.memory_extractor.extract_memories(
+                            conversation_summary=summary_result["summary"]
+                        )
+
+                        logger.info("_process_summary_and_memories",
+                                   f"Extracted {len(extracted_memories)} long-term memories",
+                                   session_id=session_id)
+
+                        # 추출된 메모리 저장
+                        saved_memories = []
+                        for memory in extracted_memories:
+                            try:
+                                memory_embedding = self.embeddings_service.embed(memory.memory_value)
+
+                                await self.memory_repository.create_memory(
+                                    user_id=user_id,
+                                    content=memory.memory_value,
+                                    memory_type=memory.memory_type,
+                                    embedding=memory_embedding,
+                                    scenario_id=None,
+                                    importance_score=memory.importance
+                                )
+
+                                logger.debug("_process_summary_and_memories", f"Saved memory: {memory.memory_key}",
+                                            type=memory.memory_type, importance=memory.importance)
+
+                                saved_memories.append(memory)
+
+                            except Exception as mem_err:
+                                logger.error("_process_summary_and_memories",
+                                           f"Failed to save individual memory: {mem_err}",
+                                           memory_key=memory.memory_key, exc=mem_err)
+
+                        logger.info("_process_summary_and_memories",
+                                   f"Successfully saved {len(saved_memories)} long-term memories",
+                                   session_id=session_id, user_id=user_id)
+
+                        # 메모리 저장 이벤트 생성
+                        if saved_memories:
+                            from .schemas import MemoryEvent
+                            character_name = dialogue_result.dialogues[-1].speaker if dialogue_result.dialogues else "AI"
+
+                            for memory in saved_memories:
+                                event = MemoryEvent(
+                                    event_type="saved",
+                                    character_name=character_name,
+                                    memory_type=memory.memory_type,
+                                    memory_content=memory.memory_value[:100],
+                                    importance=memory.importance,
+                                    count=None
+                                )
+                                dialogue_result.memory_events.append(event)
+
+                    except Exception as extract_err:
+                        logger.error("_process_summary_and_memories", f"Memory extraction failed: {extract_err}",
+                                   session_id=session_id, exc=extract_err)
+
+        except Exception as e:
+            logger.error("_process_summary_and_memories", f"Summary generation failed: {e}", exc=e)
+
+    async def _save_affinity_scores(
+        self,
+        dialogue_result: DialogueResult,
+        session_id: str,
+        user_id: str,
+        turn_count: int
+    ) -> None:
+        """친밀도 점수를 DB에 저장"""
+        if not user_id or not dialogue_result.affinity_scores:
+            return
+
+        try:
+            for character_name, score in dialogue_result.affinity_scores.items():
+                # 세션별 친밀도 변화 기록
+                await self.affinity_repository.save_affinity_record(
+                    session_id=session_id,
+                    turn_number=turn_count,
+                    character_name=character_name,
+                    affinity_score=score,
+                    change_amount=None
+                )
+
+                # 사용자별 글로벌 친밀도 업데이트
+                existing_affinity = await self.affinity_repository.get_user_character_affinity(
+                    user_id=user_id,
+                    character_name=character_name
+                )
+
+                if existing_affinity:
+                    delta = score - existing_affinity.total_affinity_score
+                    if delta != 0:
+                        await self.affinity_repository.upsert_user_character_affinity(
+                            user_id=user_id,
+                            character_name=character_name,
+                            score_delta=delta
+                        )
+                else:
+                    await self.affinity_repository.upsert_user_character_affinity(
+                        user_id=user_id,
+                        character_name=character_name,
+                        score_delta=score
+                    )
+
+            logger.info("_save_affinity_scores", "Affinity scores saved to DB",
+                       user_id=user_id, characters=list(dialogue_result.affinity_scores.keys()))
+        except Exception as e:
+            logger.error("_save_affinity_scores", f"Failed to save affinity scores: {e}",
+                        user_id=user_id, exc_info=True)
+
+    async def _update_user_progression(
+        self,
+        session_id: str,
+        user_id: str,
+        scenario_id: str,
+        user_message: str,
+        turn_count: int
+    ) -> None:
+        """사용자 진행도 업데이트"""
+        if not user_id:
+            return
+
+        try:
+            from uuid import UUID
+
+            # 1. 사용자 입력 저장
+            await self.progression_repository.save_user_input(
+                session_id=UUID(session_id),
+                turn_number=turn_count,
+                user_input=user_message
+            )
+
+            # 2. 메시지 카운트 증가
+            await self.progression_repository.increment_user_stat(
+                user_id=UUID(user_id),
+                stat_name="total_messages",
+                increment_by=1
+            )
+
+            # 3. 시나리오 진행도 업데이트
+            scenario_progress = await self.progression_repository.get_scenario_progress(
+                UUID(user_id), scenario_id
+            )
+            if scenario_progress:
+                await self.progression_repository.update_scenario_progress(
+                    user_id=UUID(user_id),
+                    scenario_id=scenario_id,
+                    progress_data={
+                        "total_messages": scenario_progress.total_messages + 1,
+                        "last_session_id": session_id,
+                        "has_started": True
+                    }
+                )
+            else:
+                await self.progression_repository.update_scenario_progress(
+                    user_id=UUID(user_id),
+                    scenario_id=scenario_id,
+                    progress_data={
+                        "has_started": True,
+                        "total_messages": 1,
+                        "last_session_id": session_id
+                    }
+                )
+
+            # 4. XP 지급
+            xp_result = await self.progression_repository.award_experience(
+                user_id=UUID(user_id),
+                xp_amount=5,
+                xp_type="message",
+                description=f"Message in {scenario_id}",
+                metadata={"message_length": len(user_message)}
+            )
+
+            logger.info("_update_user_progression", "Progression updated",
+                       user_id=user_id,
+                       xp_awarded=5,
+                       level_before=xp_result.get("level_before"),
+                       level_after=xp_result.get("level_after"),
+                       did_level_up=xp_result.get("did_level_up"))
+
+        except Exception as e:
+            logger.error("_update_user_progression", f"Progression update failed: {e}", exc=e)
+
     async def create_dialogue(
         self,
         user_id: str,
@@ -355,142 +929,21 @@ class ChatUseCase:
             # ============================================================
             # 1. 세션 상태 로드 (트랜잭션 내부)
             # ============================================================
-            existing_session = await self.session_repository.get_session(session_id)
-
-            if existing_session:
-                # 기존 세션 상태 로드
-                logger.info("create_dialogue", "Loading existing session",
-                           session_id=session_id,
-                           current_stage=existing_session["state"].get("current_stage"),
-                           turn_count=existing_session["state"].get("turn_count"))
-                session_state = existing_session["state"]
-                # 세션 메타 정보 업데이트 (scenario_id 포함)
-                session_state["session_id"] = session_id
-                session_state["scenario_id"] = scenario_id  # scenario_id 명시적 보존
-                session_state["user_id"] = user_id
-                session_state["user_name"] = user_name or session_state.get("user_name", "여행자")
-
-                # 기존 세션이라도 DB에서 최신 친밀도를 다시 로드 (sessions 테이블에 저장되지 않으므로)
-                if user_id:
-                    try:
-                        user_affinities = await self.affinity_repository.get_all_user_affinities(user_id)
-                        affinity_scores = {}
-                        for affinity in user_affinities:
-                            affinity_scores[affinity.character_name] = affinity.total_affinity_score
-                        session_state["affinity_scores"] = affinity_scores
-                        logger.info("create_dialogue", f"Loaded {len(affinity_scores)} affinity scores from DB for existing session",
-                                   user_id=user_id, scores=affinity_scores)
-                    except Exception as e:
-                        logger.error("create_dialogue", f"Failed to load affinity scores for existing session: {e}",
-                                    user_id=user_id, exc_info=True)
-                        # 에러 시에도 빈 dict로 초기화 (기존 로직 유지)
-                        if "affinity_scores" not in session_state:
-                            session_state["affinity_scores"] = {}
-            else:
-                # 신규 세션 생성
-                logger.info("create_dialogue", "Creating new session", session_id=session_id)
-                # Get first stage from scenario
-                first_stage = self.scenario_service.get_first_stage_tag(scenario_id)
-
-                # 사용자의 기존 친밀도를 DB에서 불러오기
-                initial_affinity_scores = {}
-                if user_id:
-                    try:
-                        user_affinities = await self.affinity_repository.get_all_user_affinities(user_id)
-                        for affinity in user_affinities:
-                            initial_affinity_scores[affinity.character_name] = affinity.total_affinity_score
-                        logger.info("create_dialogue", f"Loaded {len(initial_affinity_scores)} affinity scores from DB",
-                                   user_id=user_id, scores=initial_affinity_scores)
-                    except Exception as e:
-                        logger.error("create_dialogue", f"Failed to load affinity scores: {e}",
-                                    user_id=user_id, exc_info=True)
-
-                session_state = {
-                    "session_id": session_id,
-                    "scenario_id": scenario_id,
-                    "user_id": user_id,
-                    "user_name": user_name,
-                    "turn_count": 0,
-                    "current_stage": first_stage,
-                    "affinity_scores": initial_affinity_scores,
-                }
-
-                # 신규 세션을 먼저 DB에 저장 (dialogue FK 위반 방지)
-                logger.info("create_dialogue", "Saving new session to DB before dialogue insert")
-                await self.session_repository.save_session(
-                    session_id=session_id,
-                    user_id=user_id,
-                    scenario_id=scenario_id,
-                    state=session_state
-                )
+            session_state = await self._load_or_create_session(
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                user_name=user_name
+            )
 
             # ============================================================
             # 1.5 장기기억 로딩 (세션 초기화 또는 로드 후)
             # ============================================================
-            logger.info("create_dialogue", "DEBUG: About to check user_id for memory loading",
-                       user_id=user_id, user_id_type=type(user_id).__name__, user_id_bool=bool(user_id))
-
-            # 🔥 시나리오 모드에서는 장기기억을 사용하지 않음 (세계관 충돌 방지)
-            is_free_talk = scenario_id == "free-talk"
-
-            if user_id and is_free_talk:
-                try:
-                    logger.info("create_dialogue", "Loading long-term memories (free-talk mode only)",
-                               user_id=user_id, scenario_id=scenario_id)
-
-                    # 사용자의 메모리 조회 (scenario_id는 문자열이므로 필터링 안함)
-                    # source_session_id는 UUID 타입이고, scenario_id는 문자열이므로 호환 불가
-                    memories = await self.memory_repository.get_user_memories(
-                        user_id=user_id,
-                        scenario_id=None,  # scenario_id 필터 제거 (타입 불일치)
-                        limit=20  # 최대 20개까지 로드
-                    )
-
-                    if memories:
-                        # 중요도 순으로 정렬
-                        memories_sorted = sorted(
-                            memories,
-                            key=lambda m: (m.importance or 0, m.created_at or datetime.min),  # importance_score -> importance
-                            reverse=True
-                        )
-
-                        # 상위 5개를 세션 상태에 추가
-                        session_state["long_term_memories"] = [
-                            {
-                                "memory_id": m.id,  # memory_id -> id
-                                "memory_key": m.memory_key,
-                                "content": m.memory_value,  # content -> memory_value
-                                "type": m.memory_type,
-                                "importance": m.importance,  # importance_score -> importance
-                                "created_at": m.created_at.isoformat() if m.created_at else None
-                            }
-                            for m in memories_sorted[:5]
-                        ]
-
-                        logger.info("create_dialogue", f"Loaded {len(memories_sorted[:5])} long-term memories",
-                                   user_id=user_id, scenario_id=scenario_id)
-
-                        # 접근 통계 업데이트 (상위 5개만)
-                        for memory in memories_sorted[:5]:
-                            try:
-                                await self.memory_repository.update_access_stats(memory.id)  # memory_id -> id
-                            except Exception as stats_err:
-                                logger.warning("create_dialogue", f"Failed to update memory access stats: {stats_err}",
-                                             memory_id=memory.id)
-
-                    else:
-                        logger.info("create_dialogue", "No long-term memories found",
-                                   user_id=user_id, scenario_id=scenario_id)
-
-                except Exception as mem_load_err:
-                    logger.error("create_dialogue", f"Failed to load long-term memories: {mem_load_err}",
-                                user_id=user_id, scenario_id=scenario_id, exc=mem_load_err)
-                    # 메모리 로딩 실패해도 대화는 계속 진행
-            elif user_id and not is_free_talk:
-                logger.info("create_dialogue", "Skipping long-term memories (scenario mode - preventing world-building conflicts)",
-                           user_id=user_id, scenario_id=scenario_id)
-
-            logger.info("create_dialogue", "DEBUG: Finished memory loading section")
+            await self._load_long_term_memories(
+                session_state=session_state,
+                user_id=user_id,
+                scenario_id=scenario_id
+            )
 
             # ============================================================
             # 2. 정책: 일일 대화 제한 체크
@@ -505,73 +958,32 @@ class ChatUseCase:
             # ============================================================
             # 2.5 Prologue 체크: turn_count가 0이고 DB에 대화가 없으면 프롤로그 반환
             # ============================================================
-            if session_state["turn_count"] == 0:
-                # DB에 이미 대화가 있는지 확인 (프롤로그가 이미 저장되었는지)
-                existing_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=1)
-
-                # DB에 대화가 없을 때만 프롤로그 반환
-                if not existing_dialogues:
-                    scenario = self.scenario_service.load_scenario(scenario_id)
-                    prologue_messages = scenario.get("prologue_messages") if scenario else None
-
-                    if prologue_messages:
-                        logger.info("create_dialogue", "Returning hardcoded prologue messages",
-                                   scenario_id=scenario_id, count=len(prologue_messages))
-
-                        # 세션 상태 업데이트 (turn_count 증가, stage 유지)
-                        session_state["turn_count"] += 1
-
-                        # 세션 저장
-                        await self.session_repository.save_session(
-                            session_id=session_id,
-                            user_id=user_id,
-                            scenario_id=scenario_id,
-                            state=session_state
-                        )
-
-                        # prologue_messages를 DialogueTurn 모델로 변환
-                        dialogue_turns = []
-                        for idx, msg in enumerate(prologue_messages):
-                            dialogue_turn = DialogueTurn(
-                                session_id=session_id,
-                                user_id=user_id,
-                                scenario_id=scenario_id,
-                                turn_number=session_state["turn_count"],
-                                speaker=msg.get("speaker", "narr"),
-                                content=msg.get("text", ""),
-                                emotion=msg.get("emotion", "neutral"),
-                                order_index=idx
-                            )
-                            dialogue_turns.append(dialogue_turn)
-
-                        # 배치로 대화 저장 (prologue)
-                        saved_turns = await self.dialogue_repository.save_dialogues_batch(dialogue_turns)
-
-                        # DialogueResult 반환
-                        result = DialogueResult(
-                            session_id=session_id,
-                            scenario_id=scenario_id,
-                            current_stage=session_state["current_stage"],
-                            turn_count=session_state["turn_count"],
-                            dialogues=[
-                                ChatMessage(
-                                    speaker=turn.speaker,
-                                    text=turn.content,
-                                    emotion=turn.emotion
-                                ) for turn in saved_turns
-                            ],
-                            speaker_pool=[],
-                            next_stage=session_state["current_stage"],
-                            images=[]
-                        )
-
-                        result.current_image = await self._resolve_current_image(session_state, scenario_id)
-                        logger.info("create_dialogue", "Prologue returned successfully",
-                                   session_id=session_id, turn_count=session_state["turn_count"])
-                        return result
+            prologue_result = await self._check_and_return_prologue(
+                session_state=session_state,
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id
+            )
+            if prologue_result:
+                return prologue_result
 
             # ============================================================
-            # 3. Agent 파이프라인 실행 (LangGraph 또는 Legacy)
+            # 3. message_history 로드 (LangGraph/Legacy 공통)
+            # ============================================================
+            # ✅ MessageHistoryService를 사용하여 message_history 로드
+            message_history = await self.message_history_service.load_full_message_history(
+                session_id=session_id,
+                limit=50
+            )
+
+            # message_history를 session_state에 추가
+            session_state["message_history"] = message_history
+            logger.info("create_dialogue",
+                       f"Loaded {len(message_history)} messages for context",
+                       session_id=session_id)
+
+            # ============================================================
+            # 4. Agent 파이프라인 실행 (LangGraph 또는 Legacy)
             # ============================================================
             if self.use_langgraph and self.workflow:
                 # LangGraph 워크플로우 사용
@@ -608,65 +1020,7 @@ class ChatUseCase:
                 print_layer_debug("USECASE", "Chat", "create_dialogue", "→ Calling Legacy Parent Agent")
 
                 try:
-                    # ✅ ParentAgent 실행 전에 message_history 로드 (dialogues + user_inputs 통합)
-                    recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
-                    recent_user_inputs = await self.progression_repository.get_user_inputs(session_id, limit=50)
-
-                    # 대화와 유저 입력을 턴 번호 기준으로 통합
-                    message_history = []
-
-                    # 턴 번호별 stage_tag 매핑 (NPC 대화에서 추출)
-                    stage_tag_by_turn = {}
-                    for dlg in recent_dialogues:
-                        if dlg.stage_tag and dlg.turn_number not in stage_tag_by_turn:
-                            stage_tag_by_turn[dlg.turn_number] = dlg.stage_tag
-
-                    # 유저 입력을 턴 번호별로 매핑
-                    user_inputs_by_turn = {}
-                    for user_input in recent_user_inputs:
-                        user_inputs_by_turn[user_input.turn_number] = user_input.user_input
-
-                    # 턴 번호별로 정렬하기 위해 모든 메시지를 수집
-                    all_messages = []
-
-                    # NPC 대화 추가
-                    for dlg in recent_dialogues:
-                        all_messages.append({
-                            "speaker": dlg.speaker,
-                            "text": dlg.content,
-                            "emotion": dlg.emotion or "neutral",
-                            "turn": dlg.turn_number,
-                            "stage_tag": dlg.stage_tag,
-                            "order": dlg.turn_number * 100 + (dlg.order_index or 0) + 1  # 유저 입력 뒤에 배치
-                        })
-
-                    # 유저 입력 추가 (같은 턴의 NPC 대화에서 stage_tag 추론)
-                    for turn_num, user_text in user_inputs_by_turn.items():
-                        all_messages.append({
-                            "speaker": "{{user}}",  # ✅ 플레이스홀더 사용 (LLM 프롬프트용)
-                            "text": user_text,
-                            "emotion": "neutral",
-                            "turn": turn_num,
-                            "stage_tag": stage_tag_by_turn.get(turn_num),  # ✅ 같은 턴의 stage_tag 사용
-                            "order": turn_num * 100  # 해당 턴의 NPC 대화보다 먼저 배치
-                        })
-
-                    # 턴 번호와 order로 정렬
-                    all_messages.sort(key=lambda x: x["order"])
-
-                    # order 필드 제거하고 message_history에 추가
-                    for msg in all_messages:
-                        del msg["order"]
-                        message_history.append(msg)
-
-                    # message_history를 session_state에 추가
-                    session_state["message_history"] = message_history
-                    logger.info("create_dialogue",
-                               f"Loaded {len(message_history)} messages for context (dialogues={len(recent_dialogues)}, user_inputs={len(recent_user_inputs)})",
-                               session_id=session_id)
-
                     # ✅ CRITICAL FIX: scenario 데이터를 session_state에 추가
-                    # ContextService.collect_recent_dialogues()가 scenario를 state에서 찾음
                     scenario_data = self.scenario_service.load_scenario(scenario_id)
                     if scenario_data:
                         session_state["scenario_data"] = scenario_data
@@ -686,7 +1040,7 @@ class ChatUseCase:
                     raise
 
             # ============================================================
-            # 3-1. 현재 스테이지용 이미지 선택
+            # 5. 현재 스테이지용 이미지 선택
             # ============================================================
             resolved_image = await self._resolve_current_image(
                 dialogue_result.updated_state or session_state,
@@ -695,205 +1049,28 @@ class ChatUseCase:
             dialogue_result.current_image = resolved_image
 
             # ============================================================
-            # 3. 대화 저장
+            # 6. 대화 및 사용자 입력 저장
             # ============================================================
-            turn_count = session_state.get("turn_count", 0) + 1
-
-            # turn_count를 updated_state에 반영 (중요!)
-            dialogue_result.updated_state["turn_count"] = turn_count
-
-            # 총 대화 개수 증가 (AI 응답 개수만큼 증가 - 메모리 추출 트리거용)
-            total_dialogue_count = session_state.get("total_dialogue_count", 0) + len(dialogue_result.dialogues)
-            dialogue_result.updated_state["total_dialogue_count"] = total_dialogue_count
-            logger.info("create_dialogue", f"Total dialogue count updated: {total_dialogue_count}")
-
-            dialogue_models = []
-            for idx, dialogue in enumerate(dialogue_result.dialogues):
-                model = DialogueTurn(
-                    session_id=session_id,
-                    user_id=user_id,
-                    scenario_id=scenario_id,
-                    turn_number=turn_count,
-                    speaker=dialogue.speaker,
-                    content=dialogue.text,
-                    emotion=dialogue.emotion or "neutral",
-                    emotion_intensity=dialogue.emotion_intensity if hasattr(dialogue, 'emotion_intensity') else None,
-                    stage_tag=session_state.get("current_stage"),
-                    order_index=idx,
-                    created_at=datetime.utcnow()
-                )
-                dialogue_models.append(model)
-
-            logger.info("create_dialogue", f"Saving {len(dialogue_models)} dialogues to DB")
-            await self.dialogue_repository.save_dialogues_batch(dialogue_models)
+            turn_count = await self._save_dialogue_and_user_input(
+                session_state=session_state,
+                dialogue_result=dialogue_result,
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                user_message=user_message
+            )
 
             # ============================================================
-            # 3-2. 사용자 입력 저장 (메모리 추출을 위해)
+            # 7. 대화 요약 생성 및 Memory 저장
             # ============================================================
-            if user_message:  # user_input → user_message
-                from ..chat.models import UserInput
-
-                user_input_model = UserInput(
-                    session_id=session_id,
-                    user_id=user_id,
-                    turn_number=turn_count,
-                    user_input=user_message,  # user_input → user_message
-                    timestamp=datetime.utcnow(),
-                    created_at=datetime.utcnow()
-                )
-
-                self.db.add(user_input_model)
-                await self.db.flush()
-
-                logger.debug("create_dialogue", f"User input saved for turn {turn_count}")
+            await self._process_summary_and_memories(
+                dialogue_result=dialogue_result,
+                session_id=session_id,
+                user_id=user_id
+            )
 
             # ============================================================
-            # 4. 대화 요약 생성 및 Memory 저장
-            # ============================================================
-            if self.summarizer and user_id:
-                try:
-                    # 최근 대화 조회
-                    recent_dialogues = await self.dialogue_repository.get_recent_dialogues(session_id, limit=50)
-
-                    # 사용자 입력 조회
-                    from ..chat.models import UserInput
-                    from sqlalchemy import select
-
-                    user_inputs_query = select(UserInput).where(
-                        UserInput.session_id == session_id
-                    ).order_by(UserInput.turn_number)
-
-                    user_inputs_result = await self.db.execute(user_inputs_query)
-                    user_inputs_list = list(user_inputs_result.scalars().all())
-
-                    # turn_number → user_input 매핑
-                    user_inputs_map = {
-                        ui.turn_number: ui.user_input
-                        for ui in user_inputs_list
-                    }
-
-                    # 대화 히스토리 구성 (turn별로 그룹화)
-                    turn_dialogues = {}
-                    for dlg in recent_dialogues:
-                        if dlg.turn_number not in turn_dialogues:
-                            turn_dialogues[dlg.turn_number] = []
-                        turn_dialogues[dlg.turn_number].append({
-                            "speaker": dlg.speaker,
-                            "text": dlg.content
-                        })
-
-                    # message_history 구성
-                    message_history = []
-                    for turn_num in sorted(turn_dialogues.keys()):
-                        message_history.append({
-                            "turn": turn_num,
-                            "user_input": user_inputs_map.get(turn_num, ""),  # 실제 사용자 입력
-                            "agent_responses": turn_dialogues[turn_num]
-                        })
-
-                    # 요약 업데이트 체크
-                    summary_result = await self.summarizer.update_summary(
-                        state=dialogue_result.updated_state,
-                        message_history=message_history
-                    )
-
-                    # 새 요약이 생성되었으면 저장
-                    if summary_result["summary"] != dialogue_result.updated_state.get("conversation_summary"):
-                        dialogue_result.updated_state["conversation_summary"] = summary_result["summary"]
-                        dialogue_result.updated_state["summary_dialogue_count"] = summary_result["summary_dialogue_count"]
-                        logger.info("create_dialogue", f"Summary updated at dialogue count {summary_result['summary_dialogue_count']}")
-
-                        # 임베딩 생성
-                        embedding = await self.summarizer.generate_embedding(summary_result["summary"])
-
-                        # Memory로 저장
-                        if embedding:
-                            await self.memory_repository.create_memory(
-                                user_id=user_id,
-                                content=summary_result["summary"],
-                                memory_type="episodic",
-                                embedding=embedding,
-                                scenario_id=None,  # scenario_id는 string이므로 UUID 타입 필드에 매핑 불가
-                                importance_score=0.8  # 요약은 높은 중요도
-                            )
-                            logger.info("create_dialogue", "Summary saved to memories",
-                                       session_id=session_id, summary_length=len(summary_result["summary"]))
-
-                        # ============================================================
-                        # 4.5 장기기억 추출 (요약에서 중요한 정보 추출)
-                        # ============================================================
-                        if self.memory_extractor and self.embeddings_service:
-                            try:
-                                logger.info("create_dialogue", "Extracting long-term memories from summary",
-                                           session_id=session_id)
-
-                                # 요약에서 장기기억 추출 (relationship, preference, event, fact)
-                                extracted_memories = await self.memory_extractor.extract_memories(
-                                    conversation_summary=summary_result["summary"]
-                                )
-
-                                logger.info("create_dialogue", f"Extracted {len(extracted_memories)} long-term memories",
-                                           session_id=session_id)
-
-                                # 추출된 메모리 각각 저장 및 이벤트 생성
-                                saved_memories = []
-                                for memory in extracted_memories:
-                                    try:
-                                        # 임베딩 생성
-                                        memory_embedding = self.embeddings_service.embed(memory.memory_value)
-
-                                        # memory_type은 MemoryExtractor에서 반환한 값을 그대로 사용
-                                        # (relationship, preference, event, fact)
-                                        # DB 스키마는 이 값들을 모두 지원함
-
-                                        # 메모리 저장
-                                        await self.memory_repository.create_memory(
-                                            user_id=user_id,
-                                            content=memory.memory_value,
-                                            memory_type=memory.memory_type,  # 변환 없이 그대로 사용
-                                            embedding=memory_embedding,
-                                            scenario_id=None,  # scenario_id는 string이므로 UUID 타입 필드에 매핑 불가
-                                            importance_score=memory.importance
-                                        )
-
-                                        logger.debug("create_dialogue", f"Saved memory: {memory.memory_key}",
-                                                    type=memory.memory_type, importance=memory.importance)
-
-                                        saved_memories.append(memory)
-
-                                    except Exception as mem_err:
-                                        logger.error("create_dialogue", f"Failed to save individual memory: {mem_err}",
-                                                    memory_key=memory.memory_key, exc=mem_err)
-
-                                logger.info("create_dialogue", f"Successfully saved {len(extracted_memories)} long-term memories",
-                                           session_id=session_id, user_id=user_id)
-
-                                # 메모리 저장 이벤트 생성 (UI 표시용)
-                                if saved_memories:
-                                    from .schemas import MemoryEvent
-                                    # 대표 캐릭터 이름 가져오기 (마지막 dialogue의 speaker)
-                                    character_name = dialogue_result.dialogues[-1].speaker if dialogue_result.dialogues else "AI"
-
-                                    for memory in saved_memories:
-                                        event = MemoryEvent(
-                                            event_type="saved",
-                                            character_name=character_name,
-                                            memory_type=memory.memory_type,
-                                            memory_content=memory.memory_value[:100],  # 최대 100자
-                                            importance=memory.importance,
-                                            count=None
-                                        )
-                                        dialogue_result.memory_events.append(event)
-
-                            except Exception as extract_err:
-                                logger.error("create_dialogue", f"Memory extraction failed: {extract_err}",
-                                           session_id=session_id, exc=extract_err)
-
-                except Exception as e:
-                    logger.error("create_dialogue", f"Summary generation failed: {e}", exc=e)
-
-            # ============================================================
-            # 5. 세션 상태 저장
+            # 8. 세션 상태 저장
             # ============================================================
             try:
                 logger.info("create_dialogue", "Saving session state")
@@ -904,127 +1081,35 @@ class ChatUseCase:
                     state=dialogue_result.updated_state
                 )
             except Exception as session_save_err:
-                # 메모리는 이미 저장되었으므로, 세션 저장 실패는 경고만 출력
                 logger.warning("create_dialogue", f"Session save failed (memories already saved): {session_save_err}",
                              session_id=session_id)
 
             # ============================================================
-            # 5.5 친밀도를 user_character_affinity 테이블에 저장
+            # 9. 친밀도 저장
             # ============================================================
-            if user_id and dialogue_result.affinity_scores:
-                try:
-                    from uuid import UUID
-                    for character_name, score in dialogue_result.affinity_scores.items():
-                        # 세션별 친밀도 변화 기록
-                        await self.affinity_repository.save_affinity_record(
-                            session_id=session_id,
-                            turn_number=turn_count,
-                            character_name=character_name,
-                            affinity_score=score,
-                            change_amount=None  # 변화량은 나중에 계산 가능
-                        )
-
-                        # 사용자별 글로벌 친밀도 업데이트
-                        # 기존 점수 조회
-                        existing_affinity = await self.affinity_repository.get_user_character_affinity(
-                            user_id=user_id,
-                            character_name=character_name
-                        )
-
-                        if existing_affinity:
-                            # 차이만큼 업데이트 (delta 계산)
-                            delta = score - existing_affinity.total_affinity_score
-                            if delta != 0:
-                                await self.affinity_repository.upsert_user_character_affinity(
-                                    user_id=user_id,
-                                    character_name=character_name,
-                                    score_delta=delta
-                                )
-                        else:
-                            # 새로 생성 (현재 점수를 delta로 설정)
-                            await self.affinity_repository.upsert_user_character_affinity(
-                                user_id=user_id,
-                                character_name=character_name,
-                                score_delta=score
-                            )
-
-                    logger.info("create_dialogue", "Affinity scores saved to DB",
-                               user_id=user_id, characters=list(dialogue_result.affinity_scores.keys()))
-                except Exception as e:
-                    logger.error("create_dialogue", f"Failed to save affinity scores: {e}",
-                                user_id=user_id, exc_info=True)
+            await self._save_affinity_scores(
+                dialogue_result=dialogue_result,
+                session_id=session_id,
+                user_id=user_id,
+                turn_count=turn_count
+            )
 
             # ============================================================
-            # 6. 사용자 진행 (Progression) 업데이트
+            # 10. Progression 업데이트
             # ============================================================
-            if user_id:
-                try:
-                    from uuid import UUID
-
-                    # 1. 사용자 입력 저장
-                    await self.progression_repository.save_user_input(
-                        session_id=UUID(session_id),
-                        turn_number=turn_count,
-                        user_input=user_message
-                    )
-
-                    # 2. 메시지 카운트 증가
-                    await self.progression_repository.increment_user_stat(
-                        user_id=UUID(user_id),
-                        stat_name="total_messages",
-                        increment_by=1
-                    )
-
-                    # 3. 시나리오 진행도 업데이트
-                    scenario_progress = await self.progression_repository.get_scenario_progress(
-                        UUID(user_id), scenario_id
-                    )
-                    if scenario_progress:
-                        await self.progression_repository.update_scenario_progress(
-                            user_id=UUID(user_id),
-                            scenario_id=scenario_id,
-                            progress_data={
-                                "total_messages": scenario_progress.total_messages + 1,
-                                "last_session_id": session_id,
-                                "has_started": True
-                            }
-                        )
-                    else:
-                        # 새 시나리오 시작
-                        await self.progression_repository.update_scenario_progress(
-                            user_id=UUID(user_id),
-                            scenario_id=scenario_id,
-                            progress_data={
-                                "has_started": True,
-                                "total_messages": 1,
-                                "last_session_id": session_id
-                            }
-                        )
-
-                    # 4. XP 지급 (메시지당 5 XP)
-                    xp_result = await self.progression_repository.award_experience(
-                        user_id=UUID(user_id),
-                        xp_amount=5,
-                        xp_type="message",
-                        description=f"Message in {scenario_id}",
-                        metadata={"message_length": len(user_message)}
-                    )
-
-                    logger.info("create_dialogue", "Progression updated",
-                               user_id=user_id,
-                               xp_awarded=5,
-                               level_before=xp_result.get("level_before"),
-                               level_after=xp_result.get("level_after"),
-                               did_level_up=xp_result.get("did_level_up"))
-
-                except Exception as e:
-                    logger.error("create_dialogue", f"Progression update failed: {e}", exc=e)
+            await self._update_user_progression(
+                session_id=session_id,
+                user_id=user_id,
+                scenario_id=scenario_id,
+                user_message=user_message,
+                turn_count=turn_count
+            )
 
             # ============================================================
-            # 7. 결과 반환
+            # 11. 결과 반환
             # ============================================================
-            logger.info("create_dialogue", "Transaction committed", dialogues_saved=len(dialogue_models))
-            print_layer_debug("USECASE", "Chat", "create_dialogue", "✅ Completed", dialogues=len(dialogue_models))
+            logger.info("create_dialogue", "Transaction committed", dialogues_saved=len(dialogue_result.dialogues))
+            print_layer_debug("USECASE", "Chat", "create_dialogue", "✅ Completed", dialogues=len(dialogue_result.dialogues))
 
             return dialogue_result
 
@@ -1033,86 +1118,38 @@ class ChatUseCase:
         session_id: str,
         limit: int = 10
     ) -> list[ChatMessage]:
-        """
-        최근 대화 조회 (유저 입력 + NPC 대화 통합)
+        """최근 대화 조회 (유저 입력 + NPC 대화 통합) - API 응답용"""
+        logger.info("get_recent_dialogues", "Fetching recent dialogues", session_id=session_id, limit=limit)
 
-        Args:
-            session_id: 세션 ID
-            limit: 조회 개수
+        # MessageHistoryService로 통합 메시지 로드
+        message_history = await self.message_history_service.load_full_message_history(
+            session_id=session_id,
+            limit=limit * 2
+        )
 
-        Returns:
-            ChatMessage 리스트 (시간순 정렬, 유저 입력 포함)
-        """
-        logger.info("get_recent_dialogues", "Fetching recent dialogues with user inputs", session_id=session_id, limit=limit)
+        # 최근 N개만 선택
+        recent = message_history[-limit:] if len(message_history) > limit else message_history
 
-        # 1. NPC 대화 조회
-        dialogue_models = await self.dialogue_repository.get_recent_dialogues(session_id, limit=limit * 2)  # 넉넉하게 가져오기
-
-        # 2. 유저 입력 조회
-        user_inputs = await self.progression_repository.get_user_inputs(session_id, limit=limit * 2)
-
-        # 3. 유저 이름 가져오기 (session에서)
+        # 유저 이름 가져오기
         session = await self.session_repository.get_session(session_id)
         user_name = session.user_name if session else "User"
 
-        # 4. 통합 메시지 리스트 생성
-        all_messages = []
+        # ChatMessage DTO로 변환 + {{user}} 치환
+        messages = []
+        for msg in recent:
+            speaker = msg["speaker"].replace("{{user}}", user_name)
+            text = msg.get("text", "")
+            if text:
+                text = text.replace("{{user}}", user_name).replace("{user}", user_name)
 
-        # NPC 대화 추가 ({{user}} 치환 적용)
-        for d in dialogue_models:
-            # ✅ {{user}} → user_name 치환
-            content = d.content
-            if content:
-                content = content.replace("{{user}}", user_name)
-                content = content.replace("{user}", user_name)
+            messages.append(ChatMessage(
+                speaker=speaker,
+                text=text,
+                emotion=msg.get("emotion", "neutral"),
+                timestamp=None  # message_history에는 timestamp 없음
+            ))
 
-            all_messages.append({
-                "speaker": d.speaker,
-                "text": content,  # ✅ 치환된 content 사용
-                "emotion": d.emotion or "neutral",
-                "timestamp": d.created_at,
-                "turn": d.turn_number,
-                "order": d.turn_number * 1000 + (d.order_index or 0) + 1  # 유저 입력 뒤에 배치
-            })
-
-        # 유저 입력 추가
-        for user_input in user_inputs:
-            all_messages.append({
-                "speaker": user_name,
-                "text": user_input.user_input,
-                "emotion": "neutral",
-                "timestamp": user_input.timestamp,
-                "turn": user_input.turn_number,
-                "order": user_input.turn_number * 1000  # 해당 턴의 NPC 대화보다 먼저 배치
-            })
-
-        # 5. 시간순 정렬 (order 기준, 오름차순 = 오래된 것부터)
-        all_messages.sort(key=lambda x: x["order"])
-
-        # 6. limit 적용 (최근 N개만)
-        all_messages = all_messages[-limit:] if len(all_messages) > limit else all_messages
-
-        # 7. ChatMessage DTO로 변환
-        messages = [
-            ChatMessage(
-                speaker=msg["speaker"],
-                text=msg["text"],
-                emotion=msg["emotion"],
-                timestamp=msg["timestamp"].isoformat() if msg["timestamp"] else None
-            )
-            for msg in all_messages
-        ]
-
-        logger.info("get_recent_dialogues",
-                   f"Fetched {len(messages)} messages (dialogues={len(dialogue_models)}, user_inputs={len(user_inputs)})",
-                   session_id=session_id)
-
-        # 🔍 DEBUG: 첫 3개 메시지 출력
-        if messages:
-            logger.info("get_recent_dialogues", f"🔍 First 3 messages:")
-            for i, msg in enumerate(messages[:3]):
-                logger.info("get_recent_dialogues", f"  [{i}] {msg.speaker}: {msg.text[:50]}")
-
+        logger.info("get_recent_dialogues", f"Fetched {len(messages)} messages", session_id=session_id)
         return messages
 
     async def get_session_state(

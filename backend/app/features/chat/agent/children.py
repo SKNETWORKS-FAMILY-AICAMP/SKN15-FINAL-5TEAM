@@ -137,6 +137,7 @@ class ChildrenAgent:
         # 컨텍스트 정보 준비
         recent_dialogues = ctx.get("recent_dialogues", [])
         long_term_memories = ctx.get("long_term_memories", [])
+        conversation_summary = state.get("conversation_summary", "")  # ✅ 대화 요약 추가
         user_input = state.get("user_input", "")
         current_turn = state.get("turn_count", 0)
         user_name = state.get("user_name", "츠구코")
@@ -176,6 +177,7 @@ class ChildrenAgent:
                 speaker_pool=speaker_pool,
                 user_input=user_input,
                 recent_dialogues=recent_dialogues,
+                conversation_summary=conversation_summary,  # ✅ 대화 요약 추가
                 world_context=world_context,
                 user_name=user_name  # ✅ user_name 전달 (프롬프트에서 {{user}} 치환용)
             )
@@ -192,9 +194,9 @@ class ChildrenAgent:
 
             # 🔍 DEBUG: 프롬프트 일부 출력
             logger.info("_generate_dialogues",
-                       f"🔍 Prompt preview (first 500 chars): {prompt[:500]}")
+                       f"🔍 Prompt preview (first 500 chars): {prompt}")
             logger.info("_generate_dialogues",
-                       f"🔍 Prompt preview (last 500 chars): {prompt[-500:]}")
+                       f"🔍 Prompt preview (last 500 chars): {prompt}")
 
             dialogues_messages = await self.llm_service.generate_with_prompt(
                 prompt=prompt,
@@ -233,6 +235,23 @@ class ChildrenAgent:
                     logger.warning("_generate_dialogues",
                                    f"Unexpected message type at index {i}: {type(msg)}, value: {msg}")
                     continue
+
+                # ✅ 따옴표 안의 대사만 추출 (speaker가 narr이 아닌 경우에만)
+                if dialogue_dict["speaker"] != "narr":
+                    import re
+                    original_text_before_clean = dialogue_dict["text"]
+                    # "대사"라고 ~다 패턴에서 대사만 추출
+                    match = re.search(r'"([^"]+)"', dialogue_dict["text"])
+                    if not match:
+                        # 작은따옴표 시도
+                        match = re.search(r"'([^']+)'", dialogue_dict["text"])
+
+                    if match:
+                        extracted_text = match.group(1)
+                        if extracted_text != original_text_before_clean:
+                            dialogue_dict["text"] = extracted_text
+                            logger.info("_generate_dialogues",
+                                        f"🧹 Extracted dialogue from quotes | {original_text_before_clean} → {extracted_text}")
 
                 # ✅ 역치환: 사용자 이름 → {{user}} 플레이스홀더로 변환 (DB 저장용)
                 if user_name in dialogue_dict["text"]:

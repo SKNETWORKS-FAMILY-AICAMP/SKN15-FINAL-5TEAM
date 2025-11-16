@@ -97,8 +97,11 @@ class StateService:
 
         # 스테이지 전환 처리
         if next_stage:
+            current_stage = state.get("current_stage")
             updated["current_stage"] = next_stage
-            updated["stage_turn"] = 0  # 스테이지 턴 리셋
+            # 실제로 스테이지가 변경될 때만 stage_turn 리셋
+            if next_stage != current_stage:
+                updated["stage_turn"] = 0
 
         # 스테이지 완료 플래그
         if stage_complete:

@@ -13,6 +13,7 @@ from .mission_service import MissionService, MAX_ATTEMPTS, VALID_TARGETS, CHARAC
 from .context_service import ContextService
 from .progression_service import ProgressionService, get_progression_service
 from .image_mapping_service import ImageMappingService
+from .message_history_service import MessageHistoryService, get_message_history_service
 
 # Extractors
 from .extractors import (
@@ -45,6 +46,8 @@ __all__ = [
     "ProgressionService",
     "get_progression_service",
     "ImageMappingService",
+    "MessageHistoryService",
+    "get_message_history_service",
     # Extractors
     "EntityExtractor",
     "Entity",

@@ -1,24 +1,61 @@
 """
-Parent Agent - 세션 검증 및 컨텍스트 준비
+Parent Agent Node - 세션 검증 및 컨텍스트 준비 (LangGraph 노드)
+
+역할:
+- 1~4단계: State 준비, 시나리오 로드, 스테이지 결정, StageHandler 실행
+- children_ctx 생성하여 다음 노드로 전달
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from ..graph_state import GraphState
 from app.core.logging import get_parent_logger as get_service_logger
 from app.features.chat.services import ScenarioService, StateService
 
-logger = get_service_logger("ParentAgent")
+from ..stage_handlers import (
+    MissionStageHandler,
+    SceneStageHandler,
+    RouterStageHandler,
+    FreeIntentStageHandler,
+    OpenNarrativeStageHandler,
+)
+
+logger = get_service_logger("ParentNode")
 
 
 class ParentAgent:
-    """Parent Agent - 전체 워크플로우 조율"""
+    """Parent Agent Node - 오케스트레이션 (1~4단계)"""
 
-    def __init__(self, scenario_service: ScenarioService = None, state_service: StateService = None):
+    def __init__(
+        self,
+        scenario_service: Optional[ScenarioService] = None,
+        state_service: Optional[StateService] = None,
+        mission_handler: Optional[MissionStageHandler] = None,
+        scene_handler: Optional[SceneStageHandler] = None,
+        router_handler: Optional[RouterStageHandler] = None,
+        free_intent_handler: Optional[FreeIntentStageHandler] = None,
+        open_narrative_handler: Optional[OpenNarrativeStageHandler] = None,
+    ):
         self.scenario_service = scenario_service or ScenarioService()
         self.state_service = state_service or StateService()
 
-    def execute(self, state: GraphState) -> GraphState:
-        """Parent Agent 실행"""
-        logger.info("execute", "Parent agent started")
+        # StageHandlers
+        self.handlers = {
+            "mission": mission_handler or MissionStageHandler(),
+            "scene": scene_handler or SceneStageHandler(),
+            "router": router_handler or RouterStageHandler(),
+            "free_intent": free_intent_handler or FreeIntentStageHandler(),
+            "open_narrative": open_narrative_handler or OpenNarrativeStageHandler(),
+        }
+
+    async def execute(self, state: GraphState) -> GraphState:
+        """
+        Parent Agent 실행 (1~4단계)
+
+        1. State 준비
+        2. 시나리오 로드
+        3. 스테이지 결정
+        4. StageHandler 실행 → children_ctx 생성
+        """
+        logger.info("execute", "Parent node started")
 
         # 세션 검증
         required = ["session_id", "user_id", "scenario_id", "user_input"]
@@ -28,8 +65,28 @@ class ParentAgent:
                 return state
 
         scenario_id = state["scenario_id"]
+        user_input = state.get("user_input", "")
 
-        # 시나리오 로드
+        # 1. State 준비
+        session_state = {
+            "session_id": state.get("session_id"),
+            "user_id": state.get("user_id"),
+            "scenario_id": scenario_id,
+            "user_name": state.get("user_name", "User"),
+            "current_stage": state.get("current_stage"),
+            "turn_count": state.get("turn_count", 0),
+            "stage_turn": state.get("stage_turn", 0),
+            "affinity_scores": state.get("affinity_scores", {}),
+            "conversation_summary": state.get("conversation_summary", ""),
+        }
+
+        prepared_state = self.state_service.prepare_state(session_state, scenario_id, user_input)
+
+        # GraphState 업데이트
+        for key, value in prepared_state.items():
+            state[key] = value
+
+        # 2. 시나리오 로드
         scenario = self.scenario_service.load_scenario(scenario_id)
         if not scenario:
             logger.error("execute", "Scenario not found", scenario_id=scenario_id)
@@ -39,22 +96,124 @@ class ParentAgent:
         state["scenario"] = scenario
         logger.info("execute", "Scenario loaded", scenario_id=scenario_id)
 
-        # 기본값 설정
-        if "turn_count" not in state:
-            state["turn_count"] = 0
+        # 3. 현재 스테이지 결정
+        current_stage_tag = self._resolve_current_stage(state, scenario)
+        stage_def = self._get_stage_definition(scenario, current_stage_tag)
 
-        # 현재 스테이지 결정
-        if "current_stage" not in state:
-            # 시나리오에서 첫 번째 스테이지 가져오기
-            stages = scenario.get("stages", [])
-            if stages:
-                first_stage = stages[0]
-                state["current_stage"] = first_stage.get("tag", "TRAIN_PRELUDE")
-                state["stage_type"] = first_stage.get("type", "scene")
-                logger.info("execute", f"Set initial stage: {state['current_stage']} (type: {state['stage_type']})")
-            else:
-                state["current_stage"] = "TRAIN_PRELUDE"
-                state["stage_type"] = "scene"
-                logger.warning("execute", "No stages found, using default")
+        # Mountable 시나리오 (stages가 없는 경우) 처리
+        if not stage_def and scenario.get("mountable", False):
+            logger.info("execute", "Mountable scenario without stages - using freeform", scenario_id=scenario_id)
+            stage_def = {
+                "tag": current_stage_tag,
+                "type": "freeform",
+                "description": scenario.get("description", "Free conversation"),
+                "character_refs": scenario.get("character_refs", {})
+            }
 
+        if not stage_def:
+            logger.error("execute", "Stage not found", stage_tag=current_stage_tag)
+            state["error"] = f"Stage '{current_stage_tag}' not found"
+            return state
+
+        state["current_stage"] = current_stage_tag
+        state["stage_type"] = stage_def.get("type", "scene")
+
+        logger.info("execute", f"Current stage: {current_stage_tag} (type: {stage_def.get('type', 'scene')})")
+
+        # 4. StageHandler 선택 및 실행 → children_ctx 생성
+        try:
+            stage_result = await self._execute_stage_handler(state, stage_def, scenario)
+            children_ctx = stage_result.children_ctx
+
+            logger.info("execute", "StageHandler executed",
+                       stage_type=children_ctx.get("stage_type"),
+                       beats_count=len(children_ctx.get("beats", [])))
+
+            # children_ctx를 state에 저장
+            state["children_ctx"] = children_ctx
+
+            # stage_result 정보도 저장 (dialogue 노드에서 사용)
+            state["stage_complete"] = stage_result.stage_complete
+            state["next_stage"] = stage_result.next_stage
+
+            logger.info("execute", "Stage transition info set",
+                       stage_complete=stage_result.stage_complete,
+                       next_stage=stage_result.next_stage,
+                       current_stage=current_stage_tag)
+
+        except Exception as e:
+            logger.error("execute", f"StageHandler failed: {e}", exc_info=True)
+            state["error"] = f"StageHandler failed: {str(e)}"
+            return state
+
+        logger.info("execute", "Parent node completed")
         return state
+
+    def _resolve_current_stage(self, state: Dict[str, Any], scenario: Dict[str, Any]) -> str:
+        """현재 스테이지 결정"""
+        # 1. state에서 current_stage 확인
+        current_stage = state.get("current_stage")
+        if current_stage:
+            return current_stage
+
+        # 2. 시나리오의 첫 스테이지 사용
+        stages = scenario.get("stages", [])
+        if stages:
+            first_stage = stages[0]
+            if isinstance(first_stage, dict):
+                return first_stage.get("tag", "intro")
+            return str(first_stage)
+
+        # 3. 기본값
+        return "intro"
+
+    def _get_stage_definition(
+        self,
+        scenario: Dict[str, Any],
+        stage_tag: str
+    ) -> Optional[Dict[str, Any]]:
+        """스테이지 정의 가져오기"""
+        stages = scenario.get("stages", [])
+        for stage in stages:
+            if isinstance(stage, dict) and stage.get("tag") == stage_tag:
+                # beats_i18n이 있으면 i18n에서 beats를 로드
+                if "beats_i18n" in stage and "beats" not in stage:
+                    beats_key = stage["beats_i18n"]
+                    scenario_id = scenario.get("scenario_id", "unknown")
+                    beats = self.scenario_service.get_beats_for_stage(scenario_id, stage_tag.lower())
+                    if beats:
+                        stage = dict(stage)  # 원본 수정 방지
+                        stage["beats"] = beats
+                        logger.debug("_get_stage_definition",
+                                   f"Loaded {len(beats)} beats from i18n key: {beats_key}")
+                    else:
+                        logger.warning("_get_stage_definition",
+                                     f"No beats found for i18n key: {beats_key}")
+                return stage
+
+        return None
+
+    async def _execute_stage_handler(
+        self,
+        state: Dict[str, Any],
+        stage: Dict[str, Any],
+        scenario: Dict[str, Any]
+    ):
+        """StageHandler 실행"""
+        stage_type = stage.get("type", "scene").lower()
+        # Freeform을 open_narrative로 매핑 (mountable 시나리오용)
+        if stage_type == "freeform":
+            stage_type = "open_narrative"
+        handler = self.handlers.get(stage_type, self.handlers["scene"])
+
+        logger.debug("_execute_stage_handler", f"Using handler: {stage_type}")
+
+        # Handler 실행 (async/sync 모두 지원)
+        if hasattr(handler.handle, "__call__"):
+            result = handler.handle(state, stage, scenario)
+            # async handler인 경우
+            if hasattr(result, "__await__"):
+                result = await result
+            return result
+        else:
+            raise ValueError(f"Handler {stage_type} has no handle() method")

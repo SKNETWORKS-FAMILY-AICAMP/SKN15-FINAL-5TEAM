@@ -8,6 +8,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from .graph_state import GraphState
 from .nodes.parent import ParentAgent
+from .nodes.children import ChildrenAgent
 from .nodes.dialogue import DialogueAgent
 from .nodes.router import RouterAgent
 from .guards.guardrail import GuardrailAgent
@@ -43,6 +44,7 @@ class ChatWorkflow:
         workflow.add_node("parent", self._parent_node)
         workflow.add_node("input_guardrail", self._input_guardrail_node)
         workflow.add_node("router", self._router_node)
+        workflow.add_node("children", self._children_node)
         workflow.add_node("dialogue", self._dialogue_node)
         workflow.add_node("output_guardrail", self._output_guardrail_node)
 
@@ -63,8 +65,18 @@ class ChatWorkflow:
             }
         )
 
-        # router -> dialogue
-        workflow.add_edge("router", "dialogue")
+        # router -> children or END (off_topic이면 END)
+        workflow.add_conditional_edges(
+            "router",
+            self._should_continue_to_dialogue,
+            {
+                "dialogue": "children",
+                "end": END
+            }
+        )
+
+        # children -> dialogue
+        workflow.add_edge("children", "dialogue")
 
         # dialogue -> output_guardrail
         workflow.add_edge("dialogue", "output_guardrail")
@@ -89,13 +101,14 @@ class ChatWorkflow:
     # 노드 구현
     # ========================================
 
-    def _parent_node(self, state: GraphState) -> GraphState:
+    async def _parent_node(self, state: GraphState) -> GraphState:
         """Parent Agent 노드"""
         logger.debug("_parent_node", "Executing parent agent")
         state["agent_trace"].append("parent")
 
         agent = ParentAgent()
-        result = agent.execute(state)
+        # ParentAgent.execute()는 async 함수이므로 await 필요
+        result = await agent.execute(state)
 
         return result
 
@@ -109,13 +122,23 @@ class ChatWorkflow:
 
         return result
 
-    def _router_node(self, state: GraphState) -> GraphState:
+    async def _router_node(self, state: GraphState) -> GraphState:
         """Router Agent 노드"""
         logger.debug("_router_node", "Executing router agent")
         state["agent_trace"].append("router")
 
         agent = RouterAgent()
-        result = agent.route(state)
+        result = await agent.route(state)
+
+        return result
+
+    async def _children_node(self, state: GraphState) -> GraphState:
+        """Children Agent 노드"""
+        logger.debug("_children_node", "Executing children agent")
+        state["agent_trace"].append("children")
+
+        agent = ChildrenAgent()
+        result = await agent.run(state)
 
         return result
 
@@ -150,17 +173,50 @@ class ChatWorkflow:
         Returns:
             "route" - 라우팅 필요
             "dialogue" - 대화 생성으로 직행
-            "end" - 종료 (가드레일 실패)
+            "end" - 종료 (가드레일 차단 메시지 생성 완료)
         """
-        # 가드레일 실패 시 종료
+        # 가드레일 실패 시 차단 메시지 생성 후 종료
         if not state.get("is_safe", True):
+            logger.warning("_should_route", f"Guardrail blocked input: {state.get('violation_type')}")
+
+            # 차단 메시지 생성
+            violation_type = state.get("violation_type", "unknown")
+            block_messages = {
+                "forbidden": "까악— 까악— ⚠️ 금지된 주제입니다. 까악—",
+                "meta_talk": "까악— 까악— ⚠️ 게임 밖 이야기는 할 수 없습니다. 까악—",
+            }
+
+            block_message = block_messages.get(violation_type, "까악— 까악— ⚠️ 입력이 차단되었습니다. 까악—")
+
+            # 차단 메시지를 dialogues에 추가
+            state["dialogues"] = [{
+                "speaker": "kasugai_crow",
+                "text": block_message,
+                "order": 0
+            }]
+
+            logger.info("_should_route", f"Guardrail block message generated for {violation_type}")
             return "end"
 
-        # router 타입 스테이지인 경우 라우팅
-        if state.get("stage_type") == "router":
-            return "route"
+        # 모든 입력은 Router를 거쳐 주제 분류 수행
+        # Router에서 on_topic/off_topic 판단 후 Fallback 또는 Dialogue로 진행
+        return "route"
 
-        # 그 외는 대화 생성
+    def _should_continue_to_dialogue(self, state: GraphState) -> str:
+        """
+        Router 이후 Dialogue로 진행할지 결정
+
+        Returns:
+            "dialogue" - Dialogue Agent 실행
+            "end" - 종료 (Fallback이 이미 응답 생성 완료)
+        """
+        # off_topic이면 Fallback이 이미 응답을 생성했으므로 종료
+        if state.get("is_off_topic", False):
+            logger.info("_should_continue_to_dialogue", "Off-topic detected, skipping Dialogue (Fallback already handled)")
+            return "end"
+
+        # on_topic이면 Dialogue Agent로 진행
+        logger.info("_should_continue_to_dialogue", "On-topic, proceeding to Dialogue")
         return "dialogue"
 
     def _check_safety(self, state: GraphState) -> str:
@@ -209,6 +265,14 @@ class ChatWorkflow:
             input_state["guardrail_warnings"] = []
         if "mission_completed" not in input_state:
             input_state["mission_completed"] = False
+        if "is_off_topic" not in input_state:
+            input_state["is_off_topic"] = False
+        if "off_topic_count" not in input_state:
+            input_state["off_topic_count"] = 0
+        if "children_ctx" not in input_state:
+            input_state["children_ctx"] = None
+        if "agent_responses" not in input_state:
+            input_state["agent_responses"] = []
 
         # 실행
         result = await self.compiled_graph.ainvoke(input_state, config)
@@ -244,6 +308,14 @@ class ChatWorkflow:
             input_state["guardrail_warnings"] = []
         if "mission_completed" not in input_state:
             input_state["mission_completed"] = False
+        if "is_off_topic" not in input_state:
+            input_state["is_off_topic"] = False
+        if "off_topic_count" not in input_state:
+            input_state["off_topic_count"] = 0
+        if "children_ctx" not in input_state:
+            input_state["children_ctx"] = None
+        if "agent_responses" not in input_state:
+            input_state["agent_responses"] = []
 
         # 스트리밍
         async for chunk in self.compiled_graph.astream(input_state, config):

@@ -12,20 +12,20 @@ Architecture:
 from .graph_state import GraphState, AgentDecision
 from .workflow import ChatWorkflow, get_workflow
 
-from .nodes.parent import ParentAgent
+from .parent import ParentAgent
 from .nodes.dialogue import DialogueAgent
 from .nodes.router import RouterAgent
-from .nodes.children import ChildrenAgent
+from .children import ChildrenAgent
 
 from .guards.guardrail import GuardrailAgent
 from .guards.should_route import should_route, check_safety
 
-from .handlers import (
-    SceneHandler,
-    MissionHandler,
+from .stage_handlers import (
+    SceneStageHandler,
+    MissionStageHandler,
     RouterStageHandler,
-    FreeIntentHandler,
-    OpenNarrativeHandler,
+    FreeIntentStageHandler,
+    OpenNarrativeStageHandler,
 )
 
 __all__ = [
@@ -44,10 +44,10 @@ __all__ = [
     "GuardrailAgent",
     "should_route",
     "check_safety",
-    # Handlers
-    "SceneHandler",
-    "MissionHandler",
+    # Stage Handlers
+    "SceneStageHandler",
+    "MissionStageHandler",
     "RouterStageHandler",
-    "FreeIntentHandler",
-    "OpenNarrativeHandler",
+    "FreeIntentStageHandler",
+    "OpenNarrativeStageHandler",
 ]

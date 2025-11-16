@@ -4,6 +4,7 @@
 .env.development
 .env.production
 .env.*.local
+docker-compose.yml
 
 # Log files
 *.log
