@@ -832,12 +832,12 @@ class ChatUseCase:
         try:
             from uuid import UUID
 
-            # 1. 사용자 입력 저장
-            await self.progression_repository.save_user_input(
-                session_id=UUID(session_id),
-                turn_number=turn_count,
-                user_input=user_message
-            )
+            # 1. 사용자 입력 저장 (✅ 중복 제거: _save_dialogue_and_user_input에서 이미 저장됨)
+            # await self.progression_repository.save_user_input(
+            #     session_id=UUID(session_id),
+            #     turn_number=turn_count,
+            #     user_input=user_message
+            # )
 
             # 2. 메시지 카운트 증가
             await self.progression_repository.increment_user_stat(
@@ -1136,15 +1136,25 @@ class ChatUseCase:
 
         # ChatMessage DTO로 변환 + {{user}} 치환
         messages = []
-        for msg in recent:
+        for idx, msg in enumerate(recent):
+            # ✅ {{user}} placeholder로 유저 메시지 판별
+            is_user_message = msg["speaker"] == "{{user}}"
+
             speaker = msg["speaker"].replace("{{user}}", user_name)
             text = msg.get("text", "")
             if text:
                 text = text.replace("{{user}}", user_name).replace("{user}", user_name)
 
+            # 🔍 디버깅: 처음 5개 메시지 로그
+            if idx < 5:
+                logger.info("get_recent_dialogues",
+                           f"[{idx}] original_speaker={msg['speaker']}, is_user={is_user_message}, "
+                           f"final_speaker={speaker}, text={text[:30]}")
+
             messages.append(ChatMessage(
                 speaker=speaker,
                 text=text,
+                is_user=is_user_message,  # ✅ 명시적으로 is_user 설정
                 emotion=msg.get("emotion", "neutral"),
                 timestamp=None  # message_history에는 timestamp 없음
             ))

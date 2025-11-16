@@ -146,14 +146,14 @@ class PromptService:
             "장기 기억": formatted_memories,
             "현재 턴": str(current_turn),
             "max_turns": str(max_turns),
-            "tone_profile": tone_profile or "(제공되지 않음)",
-            "atmosphere": atmosphere or "2 (보통)",
-            "장면 설정": scene_setting or "(제공되지 않음)",
-            "이전 장면 요약": previous_scene_summary or "(제공되지 않음)",
-            "이전 감정 톤": previous_emotion_tone or "(제공되지 않음)",
-            "공간 연속성": spatial_continuity or "(제공되지 않음)",
-            "캐릭터 상태": character_states or "(제공되지 않음)",
-            "전환 힌트": transition_hint or "(제공되지 않음)",
+            "tone_profile": tone_profile or "(제공되지 않음)", # 넘어가는 건지 의심
+            "atmosphere": atmosphere or "2 (보통)", # 넘어가는 건지 의심
+            "장면 설정": scene_setting or "(제공되지 않음)",  # 넘어가는 건지 의심
+            "이전 장면 요약": previous_scene_summary or "(제공되지 않음)", 
+            "이전 감정 톤": previous_emotion_tone or "(제공되지 않음)", # 넘어가는 건지 의심 & 굳이 ? 싶기도함
+            "공간 연속성": spatial_continuity or "(제공되지 않음)", # # 넘어가는 건지 의심 & 굳이?
+            "캐릭터 상태": character_states or "(제공되지 않음)", # 넘어가는 건지 의심 & 굳이?
+            "전환 힌트": transition_hint or "(제공되지 않음)", # 넘어가는 건지 의심 & 굳이?
             "세계관": world_context or "(제공되지 않음)",
         }
 

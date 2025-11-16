@@ -385,6 +385,7 @@ class SessionUseCase:
                 "order_index": d.order_index or 0,
                 "created_at": d.created_at.isoformat() if d.created_at else "",
                 "timestamp": d.created_at,
+                "is_user": False,  # ✅ NPC 메시지
                 "order": d.turn_number * 1000 + (d.order_index or 0) + 1
             })
 
@@ -400,6 +401,7 @@ class SessionUseCase:
                 "order_index": 0,
                 "created_at": user_input.timestamp.isoformat() if user_input.timestamp else "",
                 "timestamp": user_input.timestamp,
+                "is_user": True,  # ✅ 유저 메시지
                 "order": user_input.turn_number * 1000  # 유저 입력은 턴의 시작
             })
 

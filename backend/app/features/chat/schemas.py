@@ -39,6 +39,7 @@ class ChatMessage(BaseModel):
     """
     speaker: str = Field(..., description="Character name (e.g., 'tanjiro', 'nezuko')")
     text: str = Field(..., description="Dialogue text")  # ✅ text로 통일
+    is_user: bool = Field(False, description="Whether this message is from the user")  # ✅ 유저 메시지 명시
     emotion: Optional[str] = Field("neutral", description="Emotion (e.g., 'happy', 'sad')")
     timestamp: Optional[str] = Field(None, description="ISO timestamp")
     fx: Optional[str] = Field(None, description="Sound effect")

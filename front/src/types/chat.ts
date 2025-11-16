@@ -35,7 +35,9 @@ export interface ChatResponse {
 export interface Dialogue {
   speaker: string;
   text: string;
+  is_user?: boolean;  // ✅ 백엔드에서 명시적으로 전달하는 필드
   emotion?: string;
+  timestamp?: string;
 }
 
 export interface AffinityScore {

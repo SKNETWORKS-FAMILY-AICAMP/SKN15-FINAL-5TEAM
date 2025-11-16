@@ -152,14 +152,14 @@ export default function ChatInterface({
             const systemSpeakers = new Set(['narr', 'system']);
 
             const historyMessages: Message[] = dialogues.map((d, idx) => {
-              // speaker가 현재 사용자 이름과 일치하면 유저 메시지
-              const isUserMessage = d.speaker === userName;
+              // ✅ 백엔드에서 is_user 필드를 명시적으로 전달하므로 그대로 사용
+              const isUserMessage = d.is_user || false;
               const isSystemMsg = systemSpeakers.has(d.speaker);
 
               return {
                 id: messageIdCounter.current++,
                 text: d.text,
-                isUser: isUserMessage,  // speaker가 사용자 이름과 일치하는지 확인
+                isUser: isUserMessage,  // ✅ 백엔드의 is_user 필드 사용
                 timestamp: d.timestamp ? new Date(d.timestamp) : new Date(),
                 characterId: d.speaker,
                 isSystemMessage: isSystemMsg

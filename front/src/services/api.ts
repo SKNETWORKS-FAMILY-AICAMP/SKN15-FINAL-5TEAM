@@ -639,6 +639,7 @@ class ApiClient {
       return response.data.dialogues.map((d: any) => ({
         speaker: d.speaker,
         text: d.content,
+        is_user: d.is_user,  // ✅ 백엔드의 is_user 필드 매핑
         emotion: d.emotion,
         emotion_intensity: d.emotion_intensity,
         timestamp: d.created_at
