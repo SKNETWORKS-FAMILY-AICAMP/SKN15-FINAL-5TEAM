@@ -120,12 +120,17 @@ class ContextService:
 
         children_ctx.setdefault("stage_type", stage_type_value)
 
-        # Beats 및 speaker_pool
+        # Beats, speaker_pool, context
         if stage:
             if not children_ctx.get("beats"):
                 children_ctx["beats"] = stage.get("beats", [])
             if not children_ctx.get("speaker_pool"):
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
+
+            # ✅ stage context 추가 (beats 없을 때 LLM 자율 생성용)
+            stage_context = stage.get("context", "")
+            if stage_context:
+                children_ctx["stage_context"] = stage_context
 
             objective = stage.get("objective")
             if objective:

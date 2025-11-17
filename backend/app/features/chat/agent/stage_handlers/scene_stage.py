@@ -64,9 +64,10 @@ class SceneStageHandler:
         max_turns = stage.get("max_turns", 3)
 
         if len(beats) == 0:
-            # Beats 없음 (fallback 필요)
+            # Beats 없음 → LLM 자율 생성 모드 (context 기반)
+            # context에 상세한 설명이 있으면 LLM이 자연스러운 대화 생성
             beats_for_children = []
-            logger.warning("handle", "No beats available", stage_tag=stage_tag)
+            logger.info("handle", "No beats - using LLM autonomous generation mode", stage_tag=stage_tag)
         elif len(beats) == 1:
             # 단일 beat → 반복 전달 (유저 상호작용 모드)
             beats_for_children = beats

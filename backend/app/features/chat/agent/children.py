@@ -129,10 +129,7 @@ class ChildrenAgent:
         beats = ctx.get("beats", [])
         speaker_pool = ctx.get("speaker_pool", [])
         scenario_id = ctx.get("scenario_id", "unknown")
-
-        if not beats:
-            logger.warning("_generate_dialogues", "No beats provided")
-            return []
+        stage_context = ctx.get("stage_context", "")  # ✅ stage context 추가
 
         # 컨텍스트 정보 준비
         recent_dialogues = ctx.get("recent_dialogues", [])
@@ -150,18 +147,24 @@ class ChildrenAgent:
             logger.info("_generate_dialogues", f"🔍 DEBUG: Last dialogue = {recent_dialogues[-1]}")
 
         # Beat goal 정리 ({{user}} → user_name 치환)
-        beat_descriptions = []
-        for beat in beats:
-            if isinstance(beat, dict):
-                desc = beat.get("goal") or beat.get("description") or beat.get("text") or str(beat)
-                # ✅ {{user}} 치환 (프롬프트용)
-                desc = desc.replace("{{user}}", user_name)
-                beat_descriptions.append(desc)
-            elif isinstance(beat, str):
-                # ✅ {{user}} 치환 (프롬프트용)
-                desc = beat.replace("{{user}}", user_name)
-                beat_descriptions.append(desc)
-        beats_description = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
+        if not beats:
+            # Beats 없음 → stage context 사용 (LLM 자율 생성 모드)
+            logger.info("_generate_dialogues", "No beats - using stage context for autonomous generation")
+            beats_description = stage_context.replace("{{user}}", user_name) if stage_context else "현재 상황에 맞게 자연스러운 대화를 생성하세요."
+        else:
+            # Beats 있음 → beats goal 사용
+            beat_descriptions = []
+            for beat in beats:
+                if isinstance(beat, dict):
+                    desc = beat.get("goal") or beat.get("description") or beat.get("text") or str(beat)
+                    # ✅ {{user}} 치환 (프롬프트용)
+                    desc = desc.replace("{{user}}", user_name)
+                    beat_descriptions.append(desc)
+                elif isinstance(beat, str):
+                    # ✅ {{user}} 치환 (프롬프트용)
+                    desc = beat.replace("{{user}}", user_name)
+                    beat_descriptions.append(desc)
+            beats_description = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
 
         # ✅ World context 로드
         world_context = self._get_world_context(state)

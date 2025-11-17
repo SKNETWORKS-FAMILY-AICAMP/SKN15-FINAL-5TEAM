@@ -180,7 +180,9 @@ class ParentAgent:
                 if "beats_i18n" in stage and "beats" not in stage:
                     beats_key = stage["beats_i18n"]
                     scenario_id = scenario.get("scenario_id", "unknown")
-                    beats = self.scenario_service.get_beats_for_stage(scenario_id, stage_tag.lower())
+                    # beats_key에서 "beats_" 접두사 제거하여 stage_id 추출
+                    stage_id = beats_key.replace("beats_", "") if beats_key.startswith("beats_") else beats_key
+                    beats = self.scenario_service.get_beats_for_stage(scenario_id, stage_id)
                     if beats:
                         stage = dict(stage)  # 원본 수정 방지
                         stage["beats"] = beats
