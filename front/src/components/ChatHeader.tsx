@@ -57,6 +57,7 @@ export default function ChatHeader({
       <div className="flex items-center space-x-3">
         {/* 햄버거 메뉴 버튼 */}
         <button
+          data-tour-target="chat-menu-button"
           onClick={onToggleSidebar}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
           aria-label="대화 목록 열기"
@@ -134,6 +135,7 @@ export default function ChatHeader({
         {/* 설정 버튼 (톱니바퀴 아이콘) */}
         {onOpenSettings && (
           <button
+            data-tour-target="chat-settings-button"
             onClick={onOpenSettings}
             className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
             aria-label="설정 열기"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MemoryEvent } from '@/services/api';
 
 interface MemoryUpdateLogProps {
@@ -7,6 +7,20 @@ interface MemoryUpdateLogProps {
 
 export default function MemoryUpdateLog({ events }: MemoryUpdateLogProps) {
   const [isHovered, setIsHovered] = useState(false);
+
+  // 전역 이벤트로도 열 수 있게 지원 (햄버거 메뉴에서 호출)
+  useEffect(() => {
+    const handleOpen = () => setIsHovered(true);
+    window.addEventListener('open-memory-log', handleOpen);
+    return () => window.removeEventListener('open-memory-log', handleOpen);
+  }, []);
+
+  // 자동 닫힘 타이머 (수동 열림 시 몇 초 후 닫힘)
+  useEffect(() => {
+    if (!isHovered) return;
+    const timer = setTimeout(() => setIsHovered(false), 4500);
+    return () => clearTimeout(timer);
+  }, [isHovered]);
 
   const getEventIcon = (eventType: string) => {
     if (eventType === 'saved') {
@@ -51,51 +65,40 @@ export default function MemoryUpdateLog({ events }: MemoryUpdateLogProps) {
     return 'text-gray-600 bg-gray-100';
   };
 
-  return (
-    <div
-      className="fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Hover trigger tab */}
-      <div
-        className={`
-          bg-gradient-to-r from-purple-600 to-pink-600 text-white
-          py-8 px-3 rounded-r-lg shadow-lg cursor-pointer
-          transition-all duration-300 ease-in-out
-          ${isHovered ? 'translate-x-0' : 'translate-x-0 hover:translate-x-1'}
-        `}
-      >
-        <div className="flex flex-col items-center gap-2">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <div className="text-xs font-semibold whitespace-nowrap transform -rotate-90 origin-center">
-            기억 로그
-          </div>
-          <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold">
-            {events.length}
-          </div>
-        </div>
-      </div>
+  if (!isHovered) {
+    return <div className="fixed left-0 top-1/2 -translate-y-1/2 z-40 pointer-events-none" />;
+  }
 
-      {/* Sliding panel */}
+  return (
+    <div className="fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center pointer-events-auto">
+      {/* Sliding panel ONLY (기존 왼쪽 탭 제거) */}
       <div
-        className={`
+        className="
           bg-white/95 backdrop-blur-sm shadow-2xl rounded-r-2xl
           overflow-hidden transition-all duration-300 ease-in-out
-          ${isHovered ? 'w-96 opacity-100' : 'w-0 opacity-0'}
-        `}
+          w-96 opacity-100
+        "
       >
         <div className="p-6 max-h-[80vh] overflow-y-auto">
           {/* Header */}
-          <div className="mb-4 pb-3 border-b border-gray-200">
-            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              🧠 기억 업데이트 로그
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              AI 캐릭터의 기억 저장 및 회상 기록
-            </p>
+          <div className="mb-4 pb-3 border-b border-gray-200 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                🧠 기억 업데이트 로그
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                AI 캐릭터의 기억 저장 및 회상 기록
+              </p>
+            </div>
+            <button
+              onClick={() => setIsHovered(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="기억 로그 닫기"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Events list */}

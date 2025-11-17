@@ -1,32 +1,44 @@
-import { useState } from 'react';
+import { CSSProperties, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 interface TutorialOverlayProps {
   onComplete: () => void;
 }
 
-const steps = [
+type Placement = 'top' | 'bottom' | 'left' | 'right';
+
+interface Step {
+  title: string;
+  description: string;
+  targetSelector: string;
+  placement: Placement;
+}
+
+const steps: Step[] = [
   {
     title: '대화 목록',
     description: '이 버튼을 눌러 이전 대화 기록을 보거나 새로운 대화를 시작할 수 있습니다.',
-    position: 'top-4 left-4',
-    arrow: 'top-full left-4'
+    targetSelector: '[data-tour-target="chat-menu-button"]',
+    placement: 'right'
   },
   {
     title: '설정 메뉴',
     description: '여기서 테마(다크/라이트)와 글씨 크기를 조절할 수 있습니다.',
-    position: 'top-4 right-4',
-    arrow: 'top-full right-4'
+    targetSelector: '[data-tour-target="chat-settings-button"]',
+    placement: 'left'
   },
   {
     title: '채팅 입력창',
     description: '이제 직접 참여해보세요!',
-    position: 'bottom-20 left-1/2 -translate-x-1/2',
-    arrow: 'bottom-full left-1/2 -translate-x-1/2'
+    targetSelector: '[data-tour-target="chat-input"]',
+    placement: 'top'
   }
 ];
 
 export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
   const [step, setStep] = useState(0);
+  const [cardPosition, setCardPosition] = useState<CSSProperties>({});
+  const [arrowPosition, setArrowPosition] = useState<CSSProperties>({});
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const handleNext = () => {
     if (step < steps.length - 1) {
@@ -36,12 +48,76 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
     }
   };
 
+  const updatePosition = useCallback(() => {
+    const current = steps[step];
+    const cardEl = cardRef.current;
+    const targetEl = document.querySelector(current.targetSelector) as HTMLElement | null;
+
+    if (!cardEl) return;
+
+    const cardRect = cardEl.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const padding = 12;
+    const offset = 10;
+
+    // 기본값: 화면 중앙
+    let top = (viewportHeight - cardRect.height) / 2;
+    let left = (viewportWidth - cardRect.width) / 2;
+    let arrow: CSSProperties = { top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(45deg)' };
+
+    if (targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      switch (current.placement) {
+        case 'bottom':
+          top = rect.bottom + offset;
+          left = rect.left + rect.width / 2 - cardRect.width / 2;
+          arrow = { top: -8, left: '50%', transform: 'translateX(-50%) rotate(45deg)' };
+          break;
+        case 'top':
+          top = rect.top - cardRect.height - offset;
+          left = rect.left + rect.width / 2 - cardRect.width / 2;
+          arrow = { bottom: -8, left: '50%', transform: 'translateX(-50%) rotate(45deg)' };
+          break;
+        case 'left':
+          top = rect.top + rect.height / 2 - cardRect.height / 2;
+          left = rect.left - cardRect.width - offset;
+          arrow = { right: -8, top: '50%', transform: 'translateY(-50%) rotate(45deg)' };
+          break;
+        case 'right':
+          top = rect.top + rect.height / 2 - cardRect.height / 2;
+          left = rect.right + offset;
+          arrow = { left: -8, top: '50%', transform: 'translateY(-50%) rotate(45deg)' };
+          break;
+      }
+    }
+
+    const clampedTop = Math.min(Math.max(top, padding), viewportHeight - cardRect.height - padding);
+    const clampedLeft = Math.min(Math.max(left, padding), viewportWidth - cardRect.width - padding);
+
+    setCardPosition({ top: `${clampedTop}px`, left: `${clampedLeft}px` });
+    setArrowPosition(arrow);
+  }, [step]);
+
+  useLayoutEffect(() => {
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    return () => window.removeEventListener('resize', updatePosition);
+  }, [updatePosition]);
+
   const currentStep = steps[step];
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000]">
-      <div className={`absolute p-6 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-xs w-full transition-all duration-300 ${currentStep.position}`}>
-        <div className={`absolute w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45 ${currentStep.arrow}`}></div>
+      <div
+        ref={cardRef}
+        style={cardPosition}
+        className="absolute p-6 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-xs w-full transition-all duration-300"
+      >
+        <div
+          className="absolute w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45"
+          style={arrowPosition}
+        ></div>
         <h3 className="text-lg font-bold text-purple-600 dark:text-purple-400 mb-2">{currentStep.title}</h3>
         <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">{currentStep.description}</p>
         <div className="flex justify-between items-center">

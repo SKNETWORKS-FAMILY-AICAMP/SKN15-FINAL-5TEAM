@@ -9,6 +9,7 @@ import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
 import { normalizeScenarioId } from '@/utils/scenario';
+import { selectBestBackgroundByDialogue } from '@/utils/backgroundSelector';
 import { getScenarioCharacters, filterExcludedCharacters } from '@/config/scenarioCharacters';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
@@ -265,7 +266,7 @@ export default function ChatInterface({
     setInvitedCharacters(sortedParticipants);
   };
 
-  // 백엔드 응답에서 받은 current_image를 처리하여 배경 변경 (페이드 효과 포함)
+  // 백엔드 응답 또는 추론된 identifier로 배경 변경 (페이드 효과 포함)
   const extractFileName = (value: string) => {
     if (!value) return '';
     const cleaned = value.replace(/^["']|["']$/g, '');
@@ -860,10 +861,11 @@ export default function ChatInterface({
       // 메모리 이벤트 처리 (토스트 알림 표시)
       handleMemoryEvents(response.memory_events);
 
-      // 배경 이미지 변경 (current_image 사용)
-      if (response.current_image) {
-        console.log(`🖼️ [Auto-request] Changing background to: ${response.current_image}`);
-        handleBackgroundChange(response.current_image);
+      // 배경 이미지 변경 (대사 기반 추론만 사용)
+      const autoBg = selectBestBackgroundByDialogue(backendScenarioId, response.dialogues, response.current_stage);
+      if (autoBg) {
+        console.log(`🖼️ [Auto-request] Dialogue-based background: ${autoBg}`);
+        handleBackgroundChange(autoBg);
       }
 
       // 참여 중인 캐릭터 업데이트 (has_more가 true면 누적, false면 새로고침)
@@ -963,11 +965,12 @@ export default function ChatInterface({
         // 메모리 이벤트 처리 (토스트 알림 표시)
         handleMemoryEvents(response.memory_events);
 
-        // 배경 이미지 변경 (current_image 사용)
-        if (response.current_image) {
-          console.log(`🖼️ [Initial session] Changing background to: ${response.current_image}`);
-          handleBackgroundChange(response.current_image);
-        }
+      // 배경 이미지 변경 (대사 기반 추론만 사용)
+      const initialBg = selectBestBackgroundByDialogue(backendScenarioId, response.dialogues, response.current_stage);
+      if (initialBg) {
+        console.log(`🖼️ [Initial session] Dialogue-based background: ${initialBg}`);
+        handleBackgroundChange(initialBg);
+      }
 
         // 참여 중인 캐릭터 업데이트 (초기 세션이므로 누적 없이 새로 설정)
         updateInvitedCharacters(response.dialogues, false);
@@ -1374,10 +1377,11 @@ export default function ChatInterface({
       // 메모리 이벤트 처리 (토스트 알림 표시)
       handleMemoryEvents(response.memory_events);
 
-      // 배경 이미지 변경 (current_image 사용)
-      if (response.current_image) {
-        console.log(`🖼️ [User message] Changing background to: ${response.current_image}`);
-        handleBackgroundChange(response.current_image);
+      // 배경 이미지 변경 (대사 기반 추론만 사용)
+      const userBg = selectBestBackgroundByDialogue(backendScenarioId, response.dialogues, response.current_stage);
+      if (userBg) {
+        console.log(`🖼️ [User message] Dialogue-based background: ${userBg}`);
+        handleBackgroundChange(userBg);
       }
 
       // 참여 중인 캐릭터 업데이트 (사용자 메시지 응답이므로 누적 없이 새로 설정)
@@ -2066,6 +2070,7 @@ export default function ChatInterface({
             <div className="flex-1 relative">
               <input
                 type="text"
+                data-tour-target="chat-input"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => {
