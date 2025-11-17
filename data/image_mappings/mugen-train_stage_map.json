@@ -12,9 +12,9 @@
       "file_name": "렌고쿠_식사.png"
     },
     "HEROES_ARRIVE": {
-      "background_id": "tanjiro_arrival",
+      "background_id": "탄지로_등장.png",
       "index": "22",
-      "file_name": "탄지로_등장.jpg"
+      "file_name": "탄지로_등장.png"
     },
     "USER_INTRODUCTION": {
       "background_id": "derailed_train",
@@ -22,34 +22,34 @@
       "file_name": "탄지로_기본.png"
     },
     "MISSION_BRIEFING": {
-      "background_id": "rengoku_standing",
+      "background_id": "탄지로_속삭임.png",
       "index": "2",
-      "file_name": "렌고쿠_기본.png"
+      "file_name": "탄지로_속삭임.png"
     },
     "ENMU_APPEAR": {
-      "background_id": "everyone_asleep",
-      "index": "24",
-      "file_name": "잠든_모두.jpg"
+      "background_id": "엔무_등장.png",
+      "index": "10",
+      "file_name": "엔무_등장.png"
     },
     "USER_DREAM_MEMORY": {
-      "background_id": "zenitsu_sleeping",
+      "background_id": "유저_좌절.png",
       "index": "11",
-      "file_name": "젠이츠_숙면.png"
+      "file_name": "유저_좌절.png"
     },
     "DREAM_TEST": {
-      "background_id": "thunderclap_and_flash",
+      "background_id": "유저_렌고쿠.png",
       "index": "12",
-      "file_name": "젠이츠_각성.png"
+      "file_name": "유저_렌고쿠.png"
     },
     "DREAM_QUESTION": {
-      "background_id": "thunderclap_and_flash",
+      "background_id": "유저_렌고쿠.png",
       "index": "12",
-      "file_name": "젠이츠_각성.png"
+      "file_name": "유저_렌고쿠.png"
     },
     "DREAM_ESCAPE_SUCCESS": {
-      "background_id": "cooperation_towards_dawn",
+      "background_id": "유저_렌고쿠.png",
       "index": "15",
-      "file_name": "동료_합류.png"
+      "file_name": "유저_렌고쿠.png"
     },
     "DREAM_ESCAPE_FAIL": {
       "background_id": "remaining_flame",
@@ -57,14 +57,14 @@
       "file_name": "배드_엔딩.png"
     },
     "AWAKEN": {
-      "background_id": "derailed_train",
+      "background_id": "엔무_등장.png",
       "index": "1",
-      "file_name": "탄지로_기본.png"
+      "file_name": "엔무_등장.png"
     },
     "ENMU_REAL_BATTLE": {
-      "background_id": "flame_vs_fighting_spirit",
-      "index": "6",
-      "file_name": "렌고쿠_전투2.png"
+      "background_id": "렌고쿠_섬멸.mp4",
+      "index": "25",
+      "file_name": "렌고쿠_섬멸.mp4"
     },
     "UpperMoons3_appeared": {
       "background_id": "akaza_arrival",

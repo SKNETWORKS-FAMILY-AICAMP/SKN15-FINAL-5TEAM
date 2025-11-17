@@ -9,6 +9,7 @@ import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
 import { normalizeScenarioId } from '@/utils/scenario';
+import { getScenarioCharacters, filterExcludedCharacters } from '@/config/scenarioCharacters';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -126,6 +127,22 @@ export default function ChatInterface({
     playTypingStartSound,
     unlockAudio
   } = useSoundEffects();
+
+  // 친밀도 패널에 표시할 캐릭터 목록 (시나리오 캐릭터_refs 기반, 악역 제외)
+  const affinityCharacterIds = useMemo(() => {
+    const baseCharacters = getScenarioCharacters(backendScenarioId);
+    const candidates = [
+      ...baseCharacters,
+      ...Object.keys(affinityScores || {}),
+      ...invitedCharacters
+    ].filter(Boolean);
+
+    const filtered = filterExcludedCharacters(candidates);
+    if (filtered.length > 0) {
+      return filtered;
+    }
+    return baseCharacters;
+  }, [backendScenarioId, affinityScores, invitedCharacters]);
 
   // 배경 이미지 프리로드 (성능 최적화)
   useEffect(() => {
@@ -1787,14 +1804,14 @@ export default function ChatInterface({
         {/* 컷신 배경 이미지 */}
         {renderBackgroundVisual()}
 
-        {/* 왼쪽 아래: 친밀도 패널 */}
-        <div className="absolute bottom-4 left-4 right-44 z-10">
-          <AffinityPanel affinityScores={affinityScores} />
-        </div>
-
-        {/* 오른쪽 아래: 버블 카운터 */}
-        <div className="absolute bottom-4 right-4 z-10">
-          <BubbleCounter compact />
+        {/* 하단 패널: 친밀도 + 버블 간 겹치지 않도록 flex 배치 */}
+        <div className="absolute bottom-4 left-4 right-4 z-10 flex items-end gap-3">
+          <div className="flex-1 min-w-0">
+            <AffinityPanel affinityScores={affinityScores} characterIds={affinityCharacterIds} />
+          </div>
+          <div className="flex-shrink-0">
+            <BubbleCounter compact />
+          </div>
         </div>
       </div>
 

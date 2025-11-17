@@ -11,7 +11,7 @@ export interface BackgroundImage {
   fileName: string;
   name: string;
   description: string;
-  tags?: string[];
+ tags?: string[];
 }
 
 export interface ScenarioBackgrounds {
@@ -21,11 +21,14 @@ export interface ScenarioBackgrounds {
   backgrounds: BackgroundImage[];
 }
 
+const normalizeScenarioId = (id: string) => id.replace(/_/g, '-').toLowerCase();
+const toFolderId = (id: string) => id.replace(/-/g, '_');
+
 /**
  * 무한열차 시나리오 배경 이미지 설정
  */
 export const mugenTrainBackgrounds: ScenarioBackgrounds = {
-  scenarioId: 'mugen_train',
+  scenarioId: 'mugen-train',
   scenarioName: '무한열차',
   defaultBackground: 'derailed_train',
   backgrounds: [
@@ -38,12 +41,12 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
       tags: ['train', 'disaster', 'desperate', 'tanjiro']
     },
     {
-      id: 'rengoku_standing',
+      id: 'tanjiro_whisper',
       index: 2,
-      fileName: '렌고쿠_기본.png',
-      name: '염주, 렌고쿠 쿄쥬로',
-      description: '열차가 탈선 됐지만 당황하지 않고 굳건히 서 있는 렌고쿠의 모습',
-      tags: ['rengoku', 'hashira', 'strong', 'flame']
+      fileName: '탄지로_속삭임.png',
+      name: '탄지로의 속삭임',
+      description: '탄지로가 조용히 속삭이며 안내하는 장면',
+      tags: ['tanjiro', 'whisper', 'calm', 'guide']
     },
     {
       id: 'akaza_arrival',
@@ -110,20 +113,20 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
       tags: ['battle', 'rengoku', 'akaza', 'intense', 'duel', 'climax']
     },
     {
-      id: 'zenitsu_sleeping',
+      id: 'user_despair',
       index: 11,
-      fileName: '젠이츠_숙면.png',
-      name: '고요한 열차, 잠든 번개',
-      description: '젠이츠가 파괴된 열차 안에서 잠들어 있는 모습',
-      tags: ['zenitsu', 'sleeping', 'train', 'calm']
+      fileName: '유저_좌절.png',
+      name: '절망의 꿈',
+      description: '{user}의 꿈속에서 좌절과 불안을 느끼는 장면',
+      tags: ['dream', 'fear', 'user', 'memory']
     },
     {
-      id: 'thunderclap_and_flash',
+      id: 'user_with_rengoku',
       index: 12,
-      fileName: '젠이츠_각성.png',
-      name: '벽력일섬',
-      description: '젠이츠를 설득하는데 성공했을 때 투지가 생긴 젠이츠',
-      tags: ['zenitsu', 'thunder_breathing', 'motivated', 'lightning']
+      fileName: '유저_렌고쿠.png',
+      name: '렌고쿠와의 다짐',
+      description: '{user}의 꿈에서 렌고쿠와 마주하며 각오를 다지는 장면',
+      tags: ['dream', 'rengoku', 'resolve', 'user']
     },
     {
       id: 'pierced_abdomen',
@@ -142,12 +145,12 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
       tags: ['rengoku', 'aftermath', 'tragic', 'emotional', 'sword', 'haori']
     },
     {
-      id: 'cooperation_towards_dawn',
+      id: 'user_with_rengoku_repeat',
       index: 15,
-      fileName: '동료_합류.png',
-      name: '새벽을 향한 공조',
-      description: '이노스케와 젠이츠가 함께 전장을 달리는 모습',
-      tags: ['inosuke', 'zenitsu', 'cooperation', 'running', 'dawn']
+      fileName: '유저_렌고쿠.png',
+      name: '렌고쿠와의 다짐(반복)',
+      description: '{user}의 꿈에서 렌고쿠와 각오를 다지는 장면이 반복된다',
+      tags: ['dream', 'rengoku', 'resolve', 'user']
     },
     {
       id: 'three_united',
@@ -200,7 +203,7 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
     {
       id: 'tanjiro_arrival',
       index: 22,
-      fileName: '탄지로_등장.jpg',
+      fileName: '탄지로_등장.png',
       name: '귀살대의 합류',
       description: '탄지로, 젠이츠, 이노스케가 객차 문을 열고 등장해 렌고쿠와 처음 마주하는 순간',
       tags: ['tanjiro', 'zenitsu', 'inosuke', 'arrival', 'train', 'team']
@@ -247,7 +250,11 @@ export const allScenarioBackgrounds: ScenarioBackgrounds[] = [
  * 시나리오 ID로 배경 이미지 설정을 가져옵니다
  */
 export function getScenarioBackgrounds(scenarioId: string): ScenarioBackgrounds | undefined {
-  return allScenarioBackgrounds.find(scenario => scenario.scenarioId === scenarioId);
+  const normalized = normalizeScenarioId(scenarioId);
+  return allScenarioBackgrounds.find(scenario => {
+    const candidate = normalizeScenarioId(scenario.scenarioId);
+    return candidate === normalized;
+  });
 }
 
 /**
@@ -264,7 +271,9 @@ export function getBackgroundById(scenarioId: string, backgroundId: string): Bac
  */
 export function getBackgroundImagePath(scenarioId: string, fileName: string): string {
   const cdnUrl = import.meta.env.VITE_CDN_URL || '/images';
-  return `${cdnUrl}/backgrounds/${scenarioId}/${fileName}`;
+  // 로컬 폴더는 underscore 네이밍 사용(mugen_train) -> 시나리오 ID에서 하이픈을 언더스코어로 변환
+  const folderId = toFolderId(scenarioId);
+  return `${cdnUrl}/backgrounds/${folderId}/${fileName}`;
 }
 
 /**

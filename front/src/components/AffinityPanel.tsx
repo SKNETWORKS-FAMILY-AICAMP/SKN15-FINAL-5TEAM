@@ -2,6 +2,7 @@ import React from 'react';
 
 interface AffinityPanelProps {
   affinityScores: Record<string, number>;
+  characterIds?: string[]; // 동적 캐릭터 목록
 }
 
 interface CharacterInfo {
@@ -13,32 +14,67 @@ interface CharacterInfo {
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
-const CHARACTERS: CharacterInfo[] = [
-  {
+const CHARACTER_META: Record<string, CharacterInfo> = {
+  tanjiro: {
     id: 'tanjiro',
     name: '탄지로',
     profileImage: `${CDN_URL}/프로필_탄지로.png`,
     color: 'from-green-500 to-green-600'
   },
-  {
+  inosuke: {
     id: 'inosuke',
     name: '이노스케',
     profileImage: `${CDN_URL}/프로필_이노스케.png`,
     color: 'from-blue-500 to-blue-600'
   },
-  {
+  zenitsu: {
     id: 'zenitsu',
     name: '젠이츠',
     profileImage: `${CDN_URL}/프로필_젠이츠.png`,
     color: 'from-yellow-500 to-yellow-600'
   },
-  {
+  rengoku: {
     id: 'rengoku',
     name: '렌고쿠',
     profileImage: `${CDN_URL}/프로필_렌고쿠.png`,
     color: 'from-red-500 to-red-600'
+  },
+  nezuko: {
+    id: 'nezuko',
+    name: '네즈코',
+    profileImage: `${CDN_URL}/프로필_네즈코.png`,
+    color: 'from-pink-500 to-pink-600'
+  },
+  giyu: {
+    id: 'giyu',
+    name: '기유',
+    profileImage: `${CDN_URL}/프로필_기유.png`,
+    color: 'from-cyan-500 to-cyan-600'
+  },
+  shinobu: {
+    id: 'shinobu',
+    name: '시노부',
+    profileImage: `${CDN_URL}/프로필_시노부.png`,
+    color: 'from-violet-500 to-violet-600'
   }
-];
+};
+
+const DEFAULT_ORDER = ['tanjiro', 'nezuko', 'zenitsu', 'inosuke', 'rengoku'];
+
+function toCharacterList(ids?: string[]): CharacterInfo[] {
+  const base = ids && ids.length > 0 ? ids : DEFAULT_ORDER;
+  return base.map((rawId) => {
+    const id = rawId?.toLowerCase?.() ?? rawId;
+    if (CHARACTER_META[id]) return CHARACTER_META[id];
+    // fallback: 기본 프로필/색상
+    return {
+      id,
+      name: id,
+      profileImage: `${CDN_URL}/프로필_탄지로.png`,
+      color: 'from-purple-500 to-purple-600'
+    };
+  });
+}
 
 const MAX_AFFINITY = 1000;
 const LEVEL_THRESHOLD = 200; // 200점마다 1레벨
@@ -58,9 +94,9 @@ function getLevelProgress(score: number): number {
   return Math.min(progress, 100);
 }
 
-export default function AffinityPanel({ affinityScores }: AffinityPanelProps) {
-  // 모든 캐릭터 표시 (친밀도가 없으면 0으로 표시)
-  // 항상 패널을 표시하고, 친밀도가 없는 캐릭터는 0으로 시작
+export default function AffinityPanel({ affinityScores, characterIds }: AffinityPanelProps) {
+  const charactersToShow = toCharacterList(characterIds);
+
   return (
     <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg p-2.5 border border-purple-200/50">
       {/* 헤더 */}
@@ -71,7 +107,7 @@ export default function AffinityPanel({ affinityScores }: AffinityPanelProps) {
 
       {/* 캐릭터별 프로그레스 바 - 가로 배치 */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-        {CHARACTERS.map((character) => {
+        {charactersToShow.map((character) => {
           const score = affinityScores[character.id] || 0;
           const level = calculateLevel(score);
           const progress = (score / MAX_AFFINITY) * 100;
