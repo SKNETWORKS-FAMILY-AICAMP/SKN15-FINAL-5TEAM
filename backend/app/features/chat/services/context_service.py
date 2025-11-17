@@ -144,16 +144,28 @@ class ContextService:
         children_ctx["context_summary"] = self.build_context_summary(state)
         children_ctx["latest_user_input"] = state.get("user_input", "")
 
-        # 최근 8개 메시지 추출 (MessageHistoryService 직접 사용)
+        # 최근 8~10개 메시지 추출 (MessageHistoryService 직접 사용)
         from .message_history_service import get_message_history_service
         message_history_service = get_message_history_service()
         children_ctx["recent_dialogues"] = message_history_service.select_recent_messages(
             message_history=state.get("message_history", []),
-            keep_count=8
+            keep_count=10  # v2: 8~10개
         )
 
-        # Long-term memories 추가 (장기기억)
-        children_ctx["long_term_memories"] = state.get("long_term_memories", [])
+        # v2: User Profile (항상)
+        children_ctx["user_profile"] = state.get("user_profile", "")
+
+        # v2: STM (항상)
+        children_ctx["stm_summary"] = state.get("stm_summary", "")
+
+        # v2: Long-term memories (자유대화만) 또는 Scenario Buffer (시나리오만)
+        scenario_id = scenario.get("scenario_id", "unknown")
+        if scenario_id == "free-talk":
+            children_ctx["long_term_memories"] = state.get("long_term_memories", [])
+            children_ctx["scenario_buffer"] = None
+        else:
+            children_ctx["long_term_memories"] = []
+            children_ctx["scenario_buffer"] = state.get("scenario_buffer", "")
 
         # Character refs 및 scenario_id
         children_ctx.setdefault("character_refs", scenario.get("character_refs", {}))

@@ -127,6 +127,27 @@ def get_repository_logger(feature: str) -> LayerLogger:
     return LayerLogger("REPOSITORY", feature)
 
 
+def get_logger(name: str) -> LayerLogger:
+    """
+    범용 로거 (기존 코드 호환성)
+
+    Args:
+        name: 로거 이름 (보통 __name__)
+
+    Returns:
+        LayerLogger 인스턴스
+    """
+    # name이 모듈 경로인 경우 (예: app.features.chat.middleware.mode_guard)
+    # 마지막 부분을 feature로 사용
+    parts = name.split('.')
+    if len(parts) > 1:
+        feature = parts[-1]
+    else:
+        feature = name
+
+    return LayerLogger("GENERAL", feature)
+
+
 # ============================================================
 # 성능 측정 데코레이터
 # ============================================================

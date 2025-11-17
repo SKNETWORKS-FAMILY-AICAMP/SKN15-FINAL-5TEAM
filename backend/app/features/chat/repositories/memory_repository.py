@@ -37,7 +37,11 @@ class MemoryRepository:
         memory_type: str,
         embedding: Optional[List[float]] = None,
         scenario_id: Optional[str] = None,
-        importance_score: Optional[float] = None
+        importance_score: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+        confidence: Optional[float] = None,
+        source_session_id: Optional[str] = None,
+        related_entity_ids: Optional[List[int]] = None
     ) -> UserMemory:
         """
         기억 생성
@@ -47,12 +51,24 @@ class MemoryRepository:
             content: 기억 내용 (memory_value로 저장됨)
             memory_type: 기억 유형 (fact, event, relationship, preference)
             embedding: 임베딩 벡터 (1536차원)
-            scenario_id: 시나리오 ID (source_session_id로 저장)
+            scenario_id: 시나리오 ID (v2: free-talk 전용)
             importance_score: 중요도 점수 (0.0 ~ 1.0, importance로 저장)
+            tags: 태그 리스트 (검색 및 분류용)
+            confidence: 신뢰도 (0.0 ~ 1.0)
+            source_session_id: 출처 세션 ID (추적용)
+            related_entity_ids: 관련 엔티티 ID 리스트
 
         Returns:
             생성된 UserMemory
+
+        Raises:
+            ValueError: 시나리오 모드에서 LTM 생성 시도 시
         """
+        # v2: ModeGuard - free-talk 전용 체크
+        from ..middleware.mode_guard import ModeGuard
+        if scenario_id != "free-talk":
+            ModeGuard.ensure_no_ltm_in_scenario(scenario_id or "unknown", "create")
+
         # memory_key 생성 (memory_type, 타임스탬프, UUID 기반 - 고유성 보장)
         import uuid
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -65,8 +81,12 @@ class MemoryRepository:
             memory_value=content,  # content -> memory_value
             memory_type=memory_type,
             embedding=embedding,
-            source_session_id=scenario_id,  # scenario_id를 source_session_id로 매핑
+            scenario_id=scenario_id or "free-talk",  # v2: scenario_id 컬럼 사용
+            source_session_id=source_session_id,  # 세션 ID 저장
             importance=importance_score or 0.5,  # importance_score -> importance
+            tags=tags or [],  # tags 추가
+            confidence=confidence,  # confidence 추가
+            related_entity_ids=related_entity_ids or [],  # 엔티티 ID 추가
             access_count=0,
             is_active=True,
             created_at=datetime.utcnow(),
@@ -77,7 +97,7 @@ class MemoryRepository:
         await self.db.flush()
 
         logger.info("create_memory", f"Memory created: {memory.id}",
-                   user_id=user_id, type=memory_type, key=memory_key)
+                   user_id=user_id, type=memory_type, key=memory_key, scenario=scenario_id)
 
         return memory
 
@@ -222,6 +242,57 @@ class MemoryRepository:
 
             logger.debug("update_access_stats", f"Access count updated: {memory.access_count}",
                         memory_id=memory_id)
+
+    async def set_expiration(
+        self,
+        memory_id: int,
+        days: int
+    ) -> bool:
+        """
+        메모리 만료 시간 설정
+
+        Args:
+            memory_id: 기억 ID
+            days: 만료까지 일수
+
+        Returns:
+            설정 성공 여부
+        """
+        from datetime import timedelta
+
+        memory = await self.get_memory(memory_id)
+        if not memory:
+            logger.warning("set_expiration", f"Memory not found: {memory_id}")
+            return False
+
+        memory.expires_at = datetime.utcnow() + timedelta(days=days)
+        await self.db.flush()
+
+        logger.info("set_expiration", f"Expiration set for memory {memory_id}: {days} days")
+        return True
+
+    async def deactivate_expired_memories(self) -> int:
+        """
+        만료된 메모리를 비활성화
+
+        Returns:
+            비활성화된 메모리 개수
+        """
+        from sqlalchemy import update
+
+        result = await self.db.execute(
+            update(UserMemory)
+            .where(UserMemory.expires_at <= datetime.utcnow())
+            .where(UserMemory.is_active == True)
+            .values(is_active=False, updated_at=datetime.utcnow())
+        )
+        await self.db.flush()
+
+        count = result.rowcount
+        if count > 0:
+            logger.info("deactivate_expired_memories", f"Deactivated {count} expired memories")
+
+        return count
 
     async def delete_memory(self, memory_id: int) -> bool:
         """
