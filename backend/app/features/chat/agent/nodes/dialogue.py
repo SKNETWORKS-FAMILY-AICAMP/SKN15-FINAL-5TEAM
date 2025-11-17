@@ -89,6 +89,10 @@ class DialogueAgent:
 
             # 11. State 업데이트
             dict_state = dict(state)  # GraphState → dict 변환
+            logger.info("generate_dialogue", "🔍 Before update_state",
+                       turn_count=dict_state.get("turn_count"),
+                       stage_turn=dict_state.get("stage_turn"))
+
             updated_state = self.state_service.update_state(
                 dict_state,
                 dialogues=[self._dialogue_to_dict(msg) for msg in dialogues],
@@ -96,9 +100,17 @@ class DialogueAgent:
                 stage_complete=stage_complete
             )
 
+            logger.info("generate_dialogue", "🔍 After update_state",
+                       turn_count=updated_state.get("turn_count"),
+                       stage_turn=updated_state.get("stage_turn"))
+
             # GraphState에 반영
             for key, value in updated_state.items():
                 state[key] = value
+
+            logger.info("generate_dialogue", "🔍 After GraphState update",
+                       turn_count=state.get("turn_count"),
+                       stage_turn=state.get("stage_turn"))
 
             # 12. output 생성 (DialogueResult 형식)
             state["output"] = {

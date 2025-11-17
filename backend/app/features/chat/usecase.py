@@ -262,6 +262,10 @@ class ChatUseCase:
         next_stage = graph_state.get("output", {}).get("next_stage")
         current_stage_for_session = next_stage if (stage_complete and next_stage) else (graph_state.get("current_stage") or graph_state.get("stage_tag"))
 
+        logger.info("_convert_from_graph_state", "🔍 Converting from GraphState",
+                   turn_count_from_graph=graph_state.get("turn_count"),
+                   stage_turn_from_graph=graph_state.get("stage_turn"))
+
         updated_state.update({
             "current_stage": current_stage_for_session,
             "turn_count": graph_state.get("turn_count", 0),
@@ -275,6 +279,10 @@ class ChatUseCase:
             "scene": graph_state.get("scene", {}),
             "off_topic_count": graph_state.get("off_topic_count", 0),  # Fallback count 저장
         })
+
+        logger.info("_convert_from_graph_state", "🔍 Updated state created",
+                   turn_count=updated_state.get("turn_count"),
+                   stage_turn=updated_state.get("stage_turn"))
 
         # DialogueResult 생성
         result = DialogueResult(
@@ -416,6 +424,7 @@ class ChatUseCase:
                 "user_id": user_id,
                 "user_name": user_name,
                 "turn_count": 0,
+                "stage_turn": 0,  # 초기화 추가
                 "current_stage": first_stage,
                 "affinity_scores": initial_affinity_scores,
             }
@@ -1080,13 +1089,18 @@ class ChatUseCase:
             # 8. 세션 상태 저장
             # ============================================================
             try:
-                logger.info("create_dialogue", "Saving session state")
+                logger.info("create_dialogue", "🔍 Before saving session to DB",
+                           turn_count=dialogue_result.updated_state.get("turn_count"),
+                           stage_turn=dialogue_result.updated_state.get("stage_turn"))
+
                 await self.session_repository.save_session(
                     session_id=session_id,
                     user_id=user_id,
                     scenario_id=scenario_id,
                     state=dialogue_result.updated_state
                 )
+
+                logger.info("create_dialogue", "🔍 Session saved to DB")
             except Exception as session_save_err:
                 logger.warning("create_dialogue", f"Session save failed (memories already saved): {session_save_err}",
                              session_id=session_id)
