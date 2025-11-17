@@ -138,24 +138,22 @@ export default function LoginModal() {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok && data.access_token) {
         // 회원가입 성공 시 자동 로그인
-        if (data.access_token && data.refresh_token) {
-          const tokens: TokenData = {
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-            token_type: data.token_type || 'bearer',
-          };
-          setTokens(tokens);
+        const tokens: TokenData = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          token_type: data.token_type || 'bearer',
+        };
+        setTokens(tokens);
 
-          const userData: UserData = {
-            user_id: data.user_id,
-            username: data.username,
-            display_name: data.display_name,
-            email: data.email,
-          };
-          setUserData(userData);
-        }
+        const userData: UserData = {
+          user_id: data.user_id,
+          username: data.username,
+          display_name: data.display_name,
+          email: data.email || `${username}@kimechat.com`,
+        };
+        setUserData(userData);
 
         login(email || `${username}@kimechat.com`);
         closeLoginModal();
@@ -168,7 +166,7 @@ export default function LoginModal() {
         setDisplayName('');
         setError('');
       } else {
-        setError(data.message || '회원가입 중 오류가 발생했습니다.');
+        setError(data.detail || data.message || '회원가입 중 오류가 발생했습니다.');
       }
     } catch (err) {
       console.error('회원가입 오류:', err);
