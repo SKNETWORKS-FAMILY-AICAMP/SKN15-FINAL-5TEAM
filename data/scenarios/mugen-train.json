@@ -140,8 +140,8 @@
         "narr"
       ],
       "atmosphere": 3,
-      "min_turns": 3,
-      "max_turns": 5,
+      "min_turns": 2,
+      "max_turns": 3,
       "next": "ENMU_APPEAR"
     },
     {
@@ -155,14 +155,14 @@
         "enmu"
       ],
       "atmosphere": 0,
-      "min_turns": 2,
-      "max_turns": 3,
+      "min_turns": 1,
+      "max_turns": 2,
       "next": "USER_DREAM_MEMORY"
     },
     {
       "tag": "USER_DREAM_MEMORY",
       "type": "scene",
-      "context": "잠에 빠져든다.꿈속 {user}의 고향 마을. 붉은 불길이 집들을 집어삼키고 있다. 마을 사람들('살려주세요!', '엄마!', '혈귀다!')의 비명이 사방에서 들려온다. 혈귀의 그림자가 골목을 누빈다. 그때, 렌고쿠가 나타나 혈귀를 단칼에 베어버린다. '이제 괜찮다!' 렌고쿠의 따뜻한 미소와 불꽃 같은 눈빛. {user}는 그 순간 살아야 할 이유를 찾았다. 렌고쿠가 {user}를 거둬들인다.",
+      "context": "잠에 빠져든다. 꿈속에서 과거를 본다. {user}의 고향 마을. 붉은 불길이 집들을 집어삼키고 있다. 마을 사람들('살려주세요!', '엄마!', '혈귀다!')의 비명이 사방에서 들려온다. 혈귀의 그림자가 골목을 누빈다. 그때, 과거의 렌고쿠가 나타나 혈귀를 단칼에 베어버린다. 렌고쿠: '이제 괜찮다!' 렌고쿠의 따뜻한 미소와 불꽃 같은 눈빛. {user}는 그 순간 살아야 할 이유를 찾았다. 렌고쿠가 {user}를 제자로 거둬들인다. (⚠️ 이것은 꿈 속에서의 과거 회상입니다.)",
       "speaker_pool": [
         "narr",
         "rengoku"
@@ -187,23 +187,21 @@
     },
     {
       "tag": "DREAM_QUESTION",
-      "type": "free_intent",
-      "default_next": "DREAM_ESCAPE_FAIL",
-      "context": "렌고쿠의 질문에 답해야 한다. 올바른 답은 '약한 사람들을 지키는 것'이다.",
+      "type": "scene",
+      "context": "꿈속 수련장. 렌고쿠가 {user}를 진지하게 바라보며 마지막 질문을 한다: '검사는 무엇을 위해 강해져야 한다고 생각하나?' {user}의 대답을 기다린다. 렌고쿠는 {user}의 답변을 듣고 반응한다. (올바른 답은 '약한 사람들을 지키기 위해서'이다)",
       "speaker_pool": [
         "rengoku",
         "narr"
       ],
       "atmosphere": 0,
-      "intent_mapping": {
-        "answer_protect_weak": "DREAM_ESCAPE_SUCCESS",
-        "answer_other": "DREAM_ESCAPE_FAIL"
-      }
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "DREAM_ESCAPE_SUCCESS"
     },
     {
       "tag": "DREAM_ESCAPE_SUCCESS",
       "type": "scene",
-      "context": "{user}가 깨달음을 얻는다. 렌고쿠: '좋다! 네가 그 답을 찾았구나!' 렌고쿠의 모습이 흐려지기 시작한다. '이제 깨어날 시간이다. 현실로 돌아가거라!' 꿈이 깨지며 {user}가 현실로 돌아온다.",
+      "context": "렌고쿠가 {user}의 답변을 듣고 깊게 고개를 끄덕인다. '네 마음을 확인했다.' 렌고쿠의 모습이 서서히 흐려지기 시작한다. '이제 깨어날 시간이다. 현실로 돌아가거라!' 꿈이 깨지며 {user}가 현실로 돌아온다.",
       "speaker_pool": [
         "rengoku",
         "narr"
@@ -214,22 +212,9 @@
       "next": "AWAKEN"
     },
     {
-      "tag": "DREAM_ESCAPE_FAIL",
-      "type": "scene",
-      "context": "렌고쿠가 고개를 젓는다. '아직 부족하구나. 다시 생각해보거라.' {user}는 여전히 꿈속에 갇혀 있다. 다시 한번 기회가 주어진다.",
-      "speaker_pool": [
-        "rengoku",
-        "narr"
-      ],
-      "atmosphere": 0,
-      "min_turns": 1,
-      "max_turns": 3,
-      "next": "DREAM_QUESTION"
-    },
-    {
       "tag": "AWAKEN",
       "type": "scene",
-      "context": "{user}가 깨어난다. 객차 안은 여전히 어둡다. 승객들이 모두 잠들어 있다. 탄지로가 {user}를 발견하고 '깨어났구나!'라며 안도한다. 렌고쿠: '잘 견뎠다. 이제 엔무를 막아야 한다.' 탄지로가 상황을 설명한다: 엔무가 열차와 융합했고, 목을 찾아야 한다.",
+      "context": "{user}가 깨어난다. 객차 안은 여전히 어둡다. 승객들이 모두 잠들어 있다. 탄지로가 {user}를 발견하고 '깨어났구나!'라며 안도한다. 렌고쿠: '잘 견뎠다. 이제 이 열차에 숨어있는 오니를 막아야 한다.' 탄지로가 상황을 설명한다: 오니가 열차와 융합했고, 목을 찾아야 한다.",
       "speaker_pool": [
         "narr",
         "tanjiro",
@@ -243,12 +228,27 @@
     {
       "tag": "ENMU_REAL_BATTLE",
       "type": "scene",
-      "context": "엔무가 열차 전체와 융합해 공격해온다. 객차 벽에서 촉수가 튀어나온다. {user}, 탄지로, 이노스케는 조종칸으로 향한다. 탄지로: '엔무의 목은 기관실 어딘가에 있을 거야! 찾아야 해!' 렌고쿠는 뒤에 남아 승객들을 지킨다. 젠이츠는 승객들을 깨우는 역할.",
+      "context": "엔무가 열차 전체와 융합해 공격해온다. 사방에서 촉수가 튀어나온다. 엔무는 분노하며 공격하고, 탄지로는 {user}에게 엔무의 목 위치를 묻는다. {user}, 탄지로, 이노스케는 기관실로 향한다. 격렬한 전투가 벌어진다.",
       "speaker_pool": [
         "tanjiro",
         "inosuke",
         "rengoku",
         "nezuko",
+        "enmu",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 4,
+      "next": "ENMU_DEFEAT"
+    },
+    {
+      "tag": "ENMU_DEFEAT",
+      "type": "scene",
+      "context": "기관실에 도착한다. 엔무의 목이 보인다. 탄지로는 {user}에게 지금이 기회라고 외친다. 엔무의 목이 베어진다. 엔무는 마지막으로 한마디를 남긴다. 엔무: '이럴 수가... 내 꿈이...' 엔무가 쓰러지며 열차가 요동친다. 승객들이 깨어나기 시작한다.",
+      "speaker_pool": [
+        "tanjiro",
+        "inosuke",
         "enmu",
         "narr"
       ],
@@ -271,7 +271,7 @@
       "atmosphere": 0,
       "min_turns": 2,
       "max_turns": 5,
-      "context": "엔무를 쓰러뜨렸다. 하지만 기쁨도 잠시, 열차가 탈선한다. 승객들을 모두 대피시킨다. 그때, 강렬한 살기가 느껴진다. 아카자(상현 삼)가 나타난다. 렌고쿠: '상현이다! 모두 물러서라!' 렌고쿠가 아카자와 대치한다. 아카자: '강한 자여, 혈귀가 되어라!' 렌고쿠: '거절한다!' 격렬한 전투가 시작된다."
+      "context": "엔무를 쓰러뜨렸다. 하지만 기쁨도 잠시, 열차가 탈선한다. 승객들을 모두 대피시킨다. 그때, 강렬한 살기가 느껴진다. 아카자(상현 삼)가 나타난다. 렌고쿠는 모두를 뒤로 물리고 아카자와 대치한다. 아카자는 렌고쿠에게 혈귀가 되라고 제안한다. 렌고쿠는 단호히 거절한다. 격렬한 전투가 시작된다."
     },
     {
       "tag": "ROUTE_CHOICE",
