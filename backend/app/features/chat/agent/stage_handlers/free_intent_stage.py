@@ -155,7 +155,7 @@ class FreeIntentStageHandler:
             response = await self.llm_client.call_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.3,
+                temperature=0.1,  # 일관성을 위해 낮춤
                 max_tokens=300
             )
 
@@ -243,12 +243,16 @@ class FreeIntentStageHandler:
             "- 정확한 키워드 매칭이 아니라 문맥과 의미를 이해하세요",
             "- 확신이 없으면 confidence를 낮게 설정하세요",
             "",
-            "우선순위 규칙:",
-            "- **연애 관련 표현(좋아하다, 고백, 데이트, 썸, 짝사랑)이 있으면 concern_love 우선**",
-            "- **친구, 사람들, 어울림, 대인관계 표현이 있으면 concern_relationship 우선**",
-            "- **진로, 취업, 직장, 커리어 표현이 있으면 concern_career 우선**",
-            "- **자신감, 자존감, 용기 등 단독으로 나오면 concern_confidence 우선**",
-            "- **스트레스, 힘들다, 무기력 등 일반적 표현은 concern_stress 우선**"
+            "우선순위 규칙 (반드시 따르세요):",
+            "1. **연애/로맨스 키워드(좋아하다, 고백, 데이트, 썸, 짝사랑, 애인, 이성) 포함 시 → concern_love 최우선**",
+            "   - '좋아하는 사람', '고백하다', '연애' 등이 있으면 무조건 concern_love",
+            "   - 용기/자신감이 함께 나와도 연애 맥락이면 concern_love",
+            "2. **친구/대인관계 키워드(친구, 사람들, 어울림, 외로움, 소외) 포함 시 → concern_relationship",
+            "   - 단, 연애 키워드와 함께 나오면 concern_love 우선",
+            "3. **진로/직업 키워드(진로, 취업, 직장, 커리어, 적성) 포함 시 → concern_career",
+            "4. **자신감 키워드(자신감, 자존감, 용기)가 단독으로 나올 때만 → concern_confidence",
+            "   - 다른 구체적 맥락(연애, 친구, 진로)이 있으면 그쪽으로 분류",
+            "5. **일반적 감정(힘들다, 스트레스, 무기력, 우울)만 있으면 → concern_stress"
         ])
 
         return "\n".join(prompt_parts)
