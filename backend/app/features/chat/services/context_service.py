@@ -294,7 +294,18 @@ class ContextService:
 
         # 사용자 프롬프트 구성
         # Beats 생성 시에는 최근 6개 대화를 참고 (맥락 유지)
-        recent_history = "\n".join(recent_dialogues[-6:]) if recent_dialogues else "(대화 없음)"
+        if recent_dialogues:
+            formatted_dialogues = []
+            for d in recent_dialogues[-6:]:
+                if isinstance(d, dict):
+                    speaker = d.get("speaker", "unknown")
+                    text = d.get("text", "")
+                    formatted_dialogues.append(f"{speaker}: {text}")
+                else:
+                    formatted_dialogues.append(str(d))
+            recent_history = "\n".join(formatted_dialogues)
+        else:
+            recent_history = "(대화 없음)"
 
         user_prompt = f"""이전 대화:
 {recent_history}
