@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 
 from app.core.logging import get_parent_logger
 from app.features.chat.services import ContextService
+from app.features.chat.services.message_history_service import MessageHistoryService
 from app.core.llm import LLMClient
 
 from . import StageResult
@@ -31,6 +32,7 @@ class FreeIntentStageHandler:
             context_service: ContextService 인스턴스
         """
         self.context_service = context_service or ContextService()
+        self.message_history_service = MessageHistoryService()
         self.llm_client = LLMClient()
 
         logger.info("__init__", "FreeIntentStageHandler initialized")
@@ -54,10 +56,31 @@ class FreeIntentStageHandler:
         """
         stage_tag = stage.get("tag", "free_intent")
         speaker_pool = stage.get("speaker_pool", [])
+        stage_turn = state.get("stage_turn", 0)
         user_input = state.get("user_input", "")
 
+        # stage_turn == 0인 경우, 이전 턴의 user_input을 사용
+        # (스테이지가 방금 시작되었으므로 현재 입력은 다음 스테이지를 위한 것)
+        if stage_turn == 0:
+            session_id = state.get("session_id")
+            if session_id:
+                try:
+                    messages = await self.message_history_service.load_full_message_history(session_id)
+                    # 마지막 user_input 찾기
+                    user_inputs = [msg for msg in messages if msg.get("type") == "user"]
+                    if user_inputs:
+                        last_user_input = user_inputs[-1].get("text", "")
+                        if last_user_input and last_user_input != user_input:
+                            logger.info("handle", f"Using previous user_input for intent classification (stage_turn=0)",
+                                       current_input=user_input[:30],
+                                       previous_input=last_user_input[:30])
+                            user_input = last_user_input
+                except Exception as e:
+                    logger.warning("handle", f"Failed to load message history: {e}")
+
         logger.debug("handle", "Handling free intent stage",
-                    stage_tag=stage_tag)
+                    stage_tag=stage_tag,
+                    user_input_preview=user_input[:30])
 
         # 1. LLM 기반 Intent 분류 (intent_mapping이 있는 경우)
         next_stage = None
@@ -101,9 +124,14 @@ class FreeIntentStageHandler:
                    beats_count=len(beats),
                    next_stage=next_stage)
 
+        # max_turns가 0이면 즉시 완료 (대화 생성 없이 바로 라우팅)
+        stage_turn = state.get("stage_turn", 0)
+        max_turns = stage.get("max_turns")
+        immediate_routing = (max_turns == 0 and stage_turn == 0)
+
         return StageResult(
             children_ctx=children_ctx,
-            stage_complete=True if next_stage else False,
+            stage_complete=immediate_routing or (True if next_stage else False),
             next_stage=next_stage
         )
 
@@ -128,6 +156,57 @@ class FreeIntentStageHandler:
         """
         if not user_input or not intent_mapping:
             return None
+
+        # 키워드 기반 사전 분류 (critical cases)
+        # 부분 매칭을 위해 키워드를 더 짧게 수정
+
+        # 연애 관련 키워드 체크
+        love_keywords = ["좋아하", "고백", "짝사랑", "썸", "데이트", "연애", "사랑", "호감"]
+        if any(keyword in user_input for keyword in love_keywords):
+            if "concern_love" in intent_mapping:
+                logger.info("_classify_intent", f"Pre-classified as concern_love (keyword: matched)")
+                return intent_mapping["concern_love"]
+
+        # 친구/외로움 관련 키워드 체크
+        relationship_keywords = ["친구가 없", "친구 사귀", "외로", "소외", "어울리"]
+        if any(keyword in user_input for keyword in relationship_keywords):
+            if "concern_relationship" in intent_mapping:
+                logger.info("_classify_intent", f"Pre-classified as concern_relationship (keyword: matched)")
+                return intent_mapping["concern_relationship"]
+
+        # 진로 관련 키워드 체크
+        career_keywords = ["진로", "취업", "직장", "커리어", "적성"]
+        if any(keyword in user_input for keyword in career_keywords):
+            if "concern_career" in intent_mapping:
+                logger.info("_classify_intent", f"Pre-classified as concern_career (keyword: matched)")
+                return intent_mapping["concern_career"]
+
+        # 자신감 관련 키워드 체크 (단, 다른 맥락이 없을 때만)
+        confidence_keywords = ["자신감", "자존감", "당당"]
+        if any(keyword in user_input for keyword in confidence_keywords):
+            # 연애, 친구, 진로 키워드가 없을 때만 자신감으로 분류
+            has_other_context = (
+                any(kw in user_input for kw in love_keywords) or
+                any(kw in user_input for kw in relationship_keywords) or
+                any(kw in user_input for kw in career_keywords)
+            )
+            if not has_other_context and "concern_confidence" in intent_mapping:
+                logger.info("_classify_intent", f"Pre-classified as concern_confidence (keyword: matched)")
+                return intent_mapping["concern_confidence"]
+
+        # 스트레스 관련 키워드 체크 (가장 일반적이므로 마지막에)
+        stress_keywords = ["힘들", "무거", "스트레스", "우울", "무기력"]
+        if any(keyword in user_input for keyword in stress_keywords):
+            # 다른 구체적인 키워드가 없을 때만 스트레스로 분류
+            has_specific_context = (
+                any(kw in user_input for kw in love_keywords) or
+                any(kw in user_input for kw in relationship_keywords) or
+                any(kw in user_input for kw in career_keywords) or
+                any(kw in user_input for kw in confidence_keywords)
+            )
+            if not has_specific_context and "concern_stress" in intent_mapping:
+                logger.info("_classify_intent", f"Pre-classified as concern_stress (keyword: matched)")
+                return intent_mapping["concern_stress"]
 
         # metadata에서 intent_examples 가져오기
         metadata = scenario.get("metadata", {})
@@ -155,7 +234,7 @@ class FreeIntentStageHandler:
             response = await self.llm_client.call_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=0.1,  # 일관성을 위해 낮춤
+                temperature=0.3,  # 너무 낮으면 과적합 위험
                 max_tokens=300
             )
 
@@ -168,7 +247,7 @@ class FreeIntentStageHandler:
                        reasoning=reasoning[:100])
 
             # Confidence threshold 체크
-            CONFIDENCE_THRESHOLD = 0.7
+            CONFIDENCE_THRESHOLD = 0.5  # 0.7에서 낮춤
             if confidence < CONFIDENCE_THRESHOLD:
                 logger.warning("_classify_intent",
                              f"Low confidence ({confidence:.2f} < {CONFIDENCE_THRESHOLD}), using default_next",
@@ -243,16 +322,12 @@ class FreeIntentStageHandler:
             "- 정확한 키워드 매칭이 아니라 문맥과 의미를 이해하세요",
             "- 확신이 없으면 confidence를 낮게 설정하세요",
             "",
-            "우선순위 규칙 (반드시 따르세요):",
-            "1. **연애/로맨스 키워드(좋아하다, 고백, 데이트, 썸, 짝사랑, 애인, 이성) 포함 시 → concern_love 최우선**",
-            "   - '좋아하는 사람', '고백하다', '연애' 등이 있으면 무조건 concern_love",
-            "   - 용기/자신감이 함께 나와도 연애 맥락이면 concern_love",
-            "2. **친구/대인관계 키워드(친구, 사람들, 어울림, 외로움, 소외) 포함 시 → concern_relationship",
-            "   - 단, 연애 키워드와 함께 나오면 concern_love 우선",
-            "3. **진로/직업 키워드(진로, 취업, 직장, 커리어, 적성) 포함 시 → concern_career",
-            "4. **자신감 키워드(자신감, 자존감, 용기)가 단독으로 나올 때만 → concern_confidence",
-            "   - 다른 구체적 맥락(연애, 친구, 진로)이 있으면 그쪽으로 분류",
-            "5. **일반적 감정(힘들다, 스트레스, 무기력, 우울)만 있으면 → concern_stress"
+            "우선순위:",
+            "- 연애 관련 표현(좋아하다, 고백, 썸 등)이 있으면 concern_love 우선",
+            "- 친구/대인관계 표현이 있으면 concern_relationship",
+            "- 진로/직업 표현이 있으면 concern_career",
+            "- 자신감/자존감이 주제면 concern_confidence",
+            "- 일반적인 힘듦/스트레스면 concern_stress"
         ])
 
         return "\n".join(prompt_parts)

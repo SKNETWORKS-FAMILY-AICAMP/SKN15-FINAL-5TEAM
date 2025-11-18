@@ -307,12 +307,8 @@
     },
     {
       "tag": "CONCERN_CHECK",
-      "type": "free_intent",
+      "type": "router",
       "default_next": "GENERAL_COUNSELING",
-      "context": "{user}가 자신의 고민을 이야기하기 시작한다. 탄지로가 고민의 종류를 파악한다.",
-      "beats_i18n": "beats_concern_type_check",
-      "speaker_pool": ["tanjiro", "narr"],
-      "atmosphere": 2,
       "intent_mapping": {
         "concern_love": "LOVE_COUNSELING",
         "concern_career": "CAREER_COUNSELING",

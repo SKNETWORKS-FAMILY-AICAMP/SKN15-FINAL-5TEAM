@@ -102,6 +102,9 @@ class StateService:
             # 실제로 스테이지가 변경될 때만 stage_turn 리셋
             if next_stage != current_stage:
                 updated["stage_turn"] = 0
+                # 스테이지 전환 시 현재 user_input을 cached_user_input으로 저장
+                # (다음 스테이지에서 routing을 위해 사용)
+                updated["cached_user_input"] = state.get("user_input", "")
 
         # 스테이지 완료 플래그
         if stage_complete:
