@@ -1,1426 +1,734 @@
 {
   "scenario_id": "mugen_train",
   "description": "무한열차 시나리오 배경 이미지 메타데이터",
-  "total_images": 63,
+  "total_images": 35,
   "images": [
     {
       "index": "1",
       "id": "탄지로_기본.png",
       "name": "탄지로 기본",
-      "description": "탄지로가 기본 자세로 서 있는 모습",
+      "description": "탄지로의 기본 이미지",
+      "fileName": "탄지로_기본.png",
       "tags": [
         "탄지로",
         "기본",
-        "탄지로가",
-        "자세로",
-        "있는",
-        "모습",
-        "검지"
+        "검사",
+        "주인공"
       ],
       "keywords": [
         "탄지로",
         "기본",
-        "탄지로가",
-        "자세로",
-        "있는",
-        "모습",
-        "검지"
-      ],
-      "fileName": "탄지로_기본.png"
+        "검사",
+        "주인공"
+      ]
     },
     {
       "index": "2",
       "id": "탄지로_속삭임.png",
       "name": "탄지로의 속삭임",
-      "description": "탄지로가 가까이서 조용히 속삭이는 장면",
+      "description": "젠이츠가 탄지로에게 속삭이는 모습",
+      "fileName": "탄지로_속삭임.png",
       "tags": [
-        "탄지로의",
-        "속삭임",
-        "탄지로가",
-        "가까이서",
-        "조용히",
-        "속삭이는",
-        "장면",
         "탄지로",
-        "조용",
-        "말걸기"
+        "젠이츠",
+        "속삭임",
+        "열차",
+        "대화"
       ],
       "keywords": [
-        "탄지로의",
-        "속삭임",
-        "탄지로가",
-        "가까이서",
-        "조용히",
-        "속삭이는",
-        "장면",
         "탄지로",
-        "조용",
-        "말걸기"
-      ],
-      "fileName": "탄지로_속삭임.png"
+        "젠이츠",
+        "속삭임",
+        "열차",
+        "대화"
+      ]
     },
     {
       "index": "3",
       "id": "아카자_기본.png",
       "name": "아카자 기본",
       "description": "아카자가 모습을 드러내며 서 있는 장면",
+      "fileName": "아카자_기본.png",
       "tags": [
         "아카자",
-        "기본",
-        "아카자가",
-        "모습을",
-        "드러내며",
-        "있는",
-        "장면"
+        "상현",
+        "등장",
+        "혈귀",
+        "맞대면"
       ],
       "keywords": [
         "아카자",
-        "기본",
-        "아카자가",
-        "모습을",
-        "드러내며",
-        "있는",
-        "장면"
-      ],
-      "fileName": "아카자_기본.png"
+        "상현",
+        "등장",
+        "혈귀",
+        "맞대면"
+      ]
     },
     {
       "index": "4",
       "id": "렌고쿠_전투1.png",
       "name": "렌고쿠 전투 1",
-      "description": "렌고쿠가 전투 자세로 맞서는 순간",
+      "description": "렌고쿠가 아카자에게 전투 자세로 맞서는 순간",
+      "fileName": "렌고쿠_전투1.png",
       "tags": [
         "렌고쿠",
-        "전투",
-        "렌고쿠가",
-        "자세로",
-        "맞서는",
-        "순간",
-        "전투1"
+        "아카자",
+        "전투자세",
+        "불꽃",
+        "긴장"
       ],
       "keywords": [
         "렌고쿠",
-        "전투",
-        "렌고쿠가",
-        "자세로",
-        "맞서는",
-        "순간",
-        "전투1"
-      ],
-      "fileName": "렌고쿠_전투1.png"
+        "아카자",
+        "전투자세",
+        "불꽃",
+        "긴장"
+      ]
     },
     {
       "index": "5",
       "id": "아카자_술식.mp4",
       "name": "아카자 술식 전개",
       "description": "아카자가 혈귀술을 펼치는 영상",
+      "fileName": "아카자_술식.mp4",
       "tags": [
         "아카자",
-        "술식",
-        "전개",
-        "아카자가",
-        "혈귀술을",
-        "펼치는",
+        "혈귀술",
+        "술식전개",
+        "전투",
         "영상"
       ],
       "keywords": [
         "아카자",
-        "술식",
-        "전개",
-        "아카자가",
-        "혈귀술을",
-        "펼치는",
+        "혈귀술",
+        "술식전개",
+        "전투",
         "영상"
-      ],
-      "fileName": "아카자_술식.mp4"
+      ]
     },
     {
       "index": "6",
       "id": "렌고쿠_전투2.png",
       "name": "렌고쿠 전투 2",
-      "description": "렌고쿠가 불꽃으로 격돌하는 장면",
+      "description": "렌고쿠가 아카자에게 조금 더 강력한 불꽃으로 격돌하는 장면",
+      "fileName": "렌고쿠_전투2.png",
       "tags": [
         "렌고쿠",
-        "전투",
-        "렌고쿠가",
-        "불꽃으로",
-        "격돌하는",
-        "장면",
-        "전투2"
+        "아카자",
+        "격돌",
+        "불꽃",
+        "치열"
       ],
       "keywords": [
         "렌고쿠",
-        "전투",
-        "렌고쿠가",
-        "불꽃으로",
-        "격돌하는",
-        "장면",
-        "전투2"
-      ],
-      "fileName": "렌고쿠_전투2.png"
+        "아카자",
+        "격돌",
+        "불꽃",
+        "치열"
+      ]
     },
     {
       "index": "7",
       "id": "렌고쿠_발악.jpg",
       "name": "렌고쿠 분투",
-      "description": "렌고쿠가 절규하며 싸우는 순간",
+      "description": "렌고쿠가 아카자랑 마지막 힘까지 짜내며 싸우는 순간",
+      "fileName": "렌고쿠_발악.jpg",
       "tags": [
         "렌고쿠",
         "분투",
-        "렌고쿠가",
-        "절규하며",
-        "싸우는",
-        "순간",
-        "발악"
+        "막판힘",
+        "결전",
+        "필사"
       ],
       "keywords": [
         "렌고쿠",
         "분투",
-        "렌고쿠가",
-        "절규하며",
-        "싸우는",
-        "순간",
-        "발악"
-      ],
-      "fileName": "렌고쿠_발악.jpg"
+        "막판힘",
+        "결전",
+        "필사"
+      ]
     },
     {
       "index": "8",
       "id": "이노스케_기본.png",
       "name": "이노스케 기본",
-      "description": "이노스케가 기본 자세로 서 있는 모습",
+      "description": "이노스케의 기본 이미지",
+      "fileName": "이노스케_기본.png",
       "tags": [
         "이노스케",
         "기본",
-        "이노스케가",
-        "자세로",
-        "있는",
-        "모습",
-        "멧돼지"
+        "멧돼지",
+        "쌍검",
+        "야성"
       ],
       "keywords": [
         "이노스케",
         "기본",
-        "이노스케가",
-        "자세로",
-        "있는",
-        "모습",
-        "멧돼지"
-      ],
-      "fileName": "이노스케_기본.png"
+        "멧돼지",
+        "쌍검",
+        "야성"
+      ]
     },
     {
       "index": "9",
       "id": "이노스케_흥분.png",
       "name": "이노스케 흥분",
-      "description": "흥분한 이노스케가 포효하는 모습",
+      "description": "흥분한 이노스케가 돌진하는 모습",
+      "fileName": "이노스케_흥분.png",
       "tags": [
         "이노스케",
         "흥분",
-        "흥분한",
-        "이노스케가",
-        "포효하는",
-        "모습"
+        "돌진",
+        "격노",
+        "전투"
       ],
       "keywords": [
         "이노스케",
         "흥분",
-        "흥분한",
-        "이노스케가",
-        "포효하는",
-        "모습"
-      ],
-      "fileName": "이노스케_흥분.png"
+        "돌진",
+        "격노",
+        "전투"
+      ]
     },
     {
       "index": "10",
       "id": "엔무_등장.png",
       "name": "엔무 등장",
       "description": "엔무가 모습을 드러내는 장면",
+      "fileName": "엔무_등장.png",
       "tags": [
         "엔무",
+        "하현",
         "등장",
-        "엔무가",
-        "모습을",
-        "드러내는",
-        "장면"
+        "최면",
+        "열차"
       ],
       "keywords": [
         "엔무",
+        "하현",
         "등장",
-        "엔무가",
-        "모습을",
-        "드러내는",
-        "장면"
+        "최면",
+        "열차"
+      ]
+    },
+    {
+      "index": "38",
+      "id": "엔무_패배.png",
+      "name": "엔무 패배",
+      "description": "엔무를 쓰러뜨리고 열차가 요동치는 순간",
+      "fileName": "엔무_패배.png",
+      "tags": [
+        "엔무",
+        "패배",
+        "전투",
+        "열차"
       ],
-      "fileName": "엔무_등장.png"
+      "keywords": [
+        "엔무",
+        "패배",
+        "전투",
+        "열차"
+      ]
     },
     {
       "index": "11",
       "id": "유저_좌절.png",
       "name": "절망의 꿈",
-      "description": "사용자가 꿈속에서 좌절하는 모습",
+      "description": "유저가 꿈 속에서 좌절하는 모습",
+      "fileName": "유저_좌절.png",
       "tags": [
-        "절망의",
-        "사용자가",
-        "꿈속에서",
-        "좌절하는",
-        "모습",
-        "유저",
-        "좌절"
+        "플레이어",
+        "꿈",
+        "좌절",
+        "악몽",
+        "절망"
       ],
       "keywords": [
-        "절망의",
-        "사용자가",
-        "꿈속에서",
-        "좌절하는",
-        "모습",
-        "유저",
-        "좌절"
-      ],
-      "fileName": "유저_좌절.png"
+        "플레이어",
+        "꿈",
+        "좌절",
+        "악몽",
+        "절망"
+      ]
     },
     {
       "index": "12",
       "id": "유저_렌고쿠.png",
       "name": "렌고쿠와의 다짐",
-      "description": "사용자가 꿈속에서 렌고쿠와 각오를 다지는 장면",
+      "description": "유저가 꿈 속에서 렌고쿠와 각오를 다지는 장면",
+      "fileName": "유저_렌고쿠.png",
       "tags": [
-        "렌고쿠와의",
+        "플레이어",
+        "렌고쿠",
+        "꿈",
         "다짐",
-        "사용자가",
-        "꿈속에서",
-        "렌고쿠와",
-        "각오를",
-        "다지는",
-        "장면",
-        "유저",
-        "렌고쿠"
+        "각오"
       ],
       "keywords": [
-        "렌고쿠와의",
+        "플레이어",
+        "렌고쿠",
+        "꿈",
         "다짐",
-        "사용자가",
-        "꿈속에서",
-        "렌고쿠와",
-        "각오를",
-        "다지는",
-        "장면",
-        "유저",
-        "렌고쿠"
-      ],
-      "fileName": "유저_렌고쿠.png"
+        "각오"
+      ]
     },
     {
       "index": "13",
       "id": "렌고쿠_패배.png",
       "name": "렌고쿠 패배",
       "description": "렌고쿠가 치명상을 입은 장면",
+      "fileName": "렌고쿠_패배.png",
       "tags": [
         "렌고쿠",
         "패배",
-        "렌고쿠가",
-        "치명상을",
-        "입은",
-        "장면"
+        "부상",
+        "치명상",
+        "쓰러짐"
       ],
       "keywords": [
         "렌고쿠",
         "패배",
-        "렌고쿠가",
-        "치명상을",
-        "입은",
-        "장면"
-      ],
-      "fileName": "렌고쿠_패배.png"
+        "부상",
+        "치명상",
+        "쓰러짐"
+      ]
     },
     {
       "index": "14",
       "id": "배드_엔딩.png",
       "name": "배드 엔딩",
-      "description": "패배 후 남겨진 불꽃",
+      "description": "패배 후 렌고쿠는 죽고 남겨진 불꽃",
+      "fileName": "배드_엔딩.png",
       "tags": [
-        "배드",
-        "엔딩",
+        "배드엔딩",
+        "렌고쿠",
+        "불꽃",
         "패배",
-        "남겨진",
-        "불꽃"
+        "여명"
       ],
       "keywords": [
-        "배드",
-        "엔딩",
+        "배드엔딩",
+        "렌고쿠",
+        "불꽃",
         "패배",
-        "남겨진",
-        "불꽃"
-      ],
-      "fileName": "배드_엔딩.png"
-    },
-    {
-      "index": "15",
-      "id": "유저_렌고쿠.png",
-      "name": "렌고쿠와의 다짐(반복)",
-      "description": "사용자가 꿈속에서 렌고쿠와 각오를 다지는 장면",
-      "tags": [
-        "렌고쿠와의",
-        "다짐",
-        "반복",
-        "사용자가",
-        "꿈속에서",
-        "렌고쿠와",
-        "각오를",
-        "다지는",
-        "장면",
-        "유저",
-        "렌고쿠"
-      ],
-      "keywords": [
-        "렌고쿠와의",
-        "다짐",
-        "반복",
-        "사용자가",
-        "꿈속에서",
-        "렌고쿠와",
-        "각오를",
-        "다지는",
-        "장면",
-        "유저",
-        "렌고쿠"
-      ],
-      "fileName": "유저_렌고쿠.png"
+        "여명"
+      ]
     },
     {
       "index": "16",
       "id": "동료_지원.png",
       "name": "동료 지원",
-      "description": "탄지로와 동료들이 함께 싸우는 모습",
+      "description": "렌고쿠를 도우러 탄지로와 젠이츠, 이노스케가 합류하는 모습",
+      "fileName": "동료_지원.png",
       "tags": [
-        "동료",
+        "탄지로",
+        "젠이츠",
+        "이노스케",
         "지원",
-        "탄지로와",
-        "동료들이",
-        "함께",
-        "싸우는",
-        "모습"
+        "합류"
       ],
       "keywords": [
-        "동료",
+        "탄지로",
+        "젠이츠",
+        "이노스케",
         "지원",
-        "탄지로와",
-        "동료들이",
-        "함께",
-        "싸우는",
-        "모습"
-      ],
-      "fileName": "동료_지원.png"
+        "합류"
+      ]
     },
     {
       "index": "17",
       "id": "렌고쿠_각성.mp4",
       "name": "렌고쿠 각성",
-      "description": "렌고쿠가 각성하는 영상",
+      "description": "렌고쿠가 각성하여 아카자에게 연옥을 사용하는 영상",
+      "fileName": "렌고쿠_각성.mp4",
       "tags": [
         "렌고쿠",
         "각성",
-        "렌고쿠가",
-        "각성하는",
+        "연옥",
+        "아카자",
         "영상"
       ],
       "keywords": [
         "렌고쿠",
         "각성",
-        "렌고쿠가",
-        "각성하는",
+        "연옥",
+        "아카자",
         "영상"
-      ],
-      "fileName": "렌고쿠_각성.mp4"
+      ]
     },
     {
       "index": "18",
       "id": "배드_엔딩_2.png",
       "name": "배드 엔딩 2",
-      "description": "눈물의 여명이 비치는 배드엔딩",
+      "description": "렌고쿠는 죽고 눈물의 여명이 비치는 배드엔딩",
+      "fileName": "배드_엔딩_2.png",
       "tags": [
-        "배드",
-        "엔딩",
-        "눈물의",
-        "여명이",
-        "비치는",
         "배드엔딩",
-        "2"
+        "눈물",
+        "여명",
+        "슬픔",
+        "렌고쿠"
       ],
       "keywords": [
-        "배드",
-        "엔딩",
-        "눈물의",
-        "여명이",
-        "비치는",
         "배드엔딩",
-        "2"
-      ],
-      "fileName": "배드_엔딩_2.png"
+        "눈물",
+        "여명",
+        "슬픔",
+        "렌고쿠"
+      ]
     },
     {
       "index": "19",
       "id": "렌고쿠_유언.jpg",
       "name": "렌고쿠 유언",
       "description": "렌고쿠가 마지막 말을 전하는 장면",
+      "fileName": "렌고쿠_유언.jpg",
       "tags": [
         "렌고쿠",
         "유언",
-        "렌고쿠가",
-        "마지막",
-        "말을",
-        "전하는",
-        "장면"
+        "마지막말",
+        "죽음",
+        "감동"
       ],
       "keywords": [
         "렌고쿠",
         "유언",
-        "렌고쿠가",
-        "마지막",
-        "말을",
-        "전하는",
-        "장면"
-      ],
-      "fileName": "렌고쿠_유언.jpg"
+        "마지막말",
+        "죽음",
+        "감동"
+      ]
     },
     {
       "index": "20",
       "id": "히든엔딩1.png",
       "name": "히든 엔딩 1",
       "description": "숨겨진 결말 1",
+      "fileName": "히든엔딩1.png",
       "tags": [
-        "히든",
-        "엔딩",
-        "숨겨진",
+        "히든엔딩",
+        "비밀",
         "결말",
-        "히든엔딩1"
+        "추가엔딩"
       ],
       "keywords": [
-        "히든",
-        "엔딩",
-        "숨겨진",
+        "히든엔딩",
+        "비밀",
         "결말",
-        "히든엔딩1"
-      ],
-      "fileName": "히든엔딩1.png"
+        "추가엔딩"
+      ]
     },
     {
       "index": "21",
       "id": "히든엔딩2.png",
       "name": "히든 엔딩 2",
       "description": "숨겨진 결말 2",
+      "fileName": "히든엔딩2.png",
       "tags": [
-        "히든",
-        "엔딩",
-        "숨겨진",
-        "결말",
-        "히든엔딩2"
+        "히든엔딩",
+        "비밀",
+        "대안결말",
+        "추가엔딩"
       ],
       "keywords": [
-        "히든",
-        "엔딩",
-        "숨겨진",
-        "결말",
-        "히든엔딩2"
-      ],
-      "fileName": "히든엔딩2.png"
+        "히든엔딩",
+        "비밀",
+        "대안결말",
+        "추가엔딩"
+      ]
     },
     {
       "index": "22",
       "id": "탄지로_등장.png",
       "name": "탄지로 등장",
-      "description": "탄지로가 객차 문을 열고 등장하는 장면",
+      "description": "탄지로와 젠이츠,이노스케가 객차 문을 열고 등장하는 장면",
+      "fileName": "탄지로_등장.png",
       "tags": [
         "탄지로",
+        "젠이츠",
+        "이노스케",
         "등장",
-        "탄지로가",
-        "객차",
-        "문을",
-        "열고",
-        "등장하는",
-        "장면"
+        "객차"
       ],
       "keywords": [
         "탄지로",
+        "젠이츠",
+        "이노스케",
         "등장",
-        "탄지로가",
-        "객차",
-        "문을",
-        "열고",
-        "등장하는",
-        "장면"
-      ],
-      "fileName": "탄지로_등장.png"
+        "객차"
+      ]
     },
     {
       "index": "23",
       "id": "렌고쿠_식사.png",
       "name": "렌고쿠 식사",
-      "description": "렌고쿠가 도시락을 먹으며 웃는 장면",
+      "description": "렌고쿠가 열차 안에서 도시락을 먹으며 웃는 장면",
+      "fileName": "렌고쿠_식사.png",
       "tags": [
         "렌고쿠",
         "식사",
-        "렌고쿠가",
-        "도시락을",
-        "먹으며",
-        "웃는",
-        "장면",
-        "우마이",
-        "맛있어",
         "도시락",
-        "밥"
+        "미소",
+        "열차"
       ],
       "keywords": [
         "렌고쿠",
         "식사",
-        "렌고쿠가",
-        "도시락을",
-        "먹으며",
-        "웃는",
-        "장면",
-        "우마이",
-        "맛있어",
         "도시락",
-        "밥"
-      ],
-      "fileName": "렌고쿠_식사.png"
+        "미소",
+        "열차"
+      ]
     },
     {
       "index": "24",
       "id": "잠든_모두.jpg",
       "name": "잠든 모두",
       "description": "최면에 걸려 모두 잠든 모습",
+      "fileName": "잠든_모두.jpg",
       "tags": [
-        "잠든",
-        "모두",
-        "최면에",
-        "걸려",
-        "모습"
+        "최면",
+        "수면",
+        "열차",
+        "동료",
+        "꿈"
       ],
       "keywords": [
-        "잠든",
-        "모두",
-        "최면에",
-        "걸려",
-        "모습"
-      ],
-      "fileName": "잠든_모두.jpg"
+        "최면",
+        "수면",
+        "열차",
+        "동료",
+        "꿈"
+      ]
     },
     {
       "index": "25",
       "id": "렌고쿠_섬멸.mp4",
       "name": "렌고쿠 섬멸",
-      "description": "렌고쿠가 적을 섬멸하는 영상",
+      "description": "꿈에서 깬 렌고쿠가 적을 섬멸하는 영상",
+      "fileName": "렌고쿠_섬멸.mp4",
       "tags": [
         "렌고쿠",
         "섬멸",
-        "렌고쿠가",
-        "적을",
-        "섬멸하는",
+        "전투",
+        "각성",
         "영상"
       ],
       "keywords": [
         "렌고쿠",
         "섬멸",
-        "렌고쿠가",
-        "적을",
-        "섬멸하는",
+        "전투",
+        "각성",
         "영상"
-      ],
-      "fileName": "렌고쿠_섬멸.mp4"
+      ]
     },
     {
       "index": "26",
       "id": "동료_합류.png",
       "name": "동료 합류",
-      "description": "동료들이 함께 전장에 합류하는 모습",
+      "description": "탄지로, 젠이츠, 이노스케가 합류를 결정하는 모습",
+      "fileName": "동료_합류.png",
       "tags": [
-        "동료",
+        "탄지로",
+        "젠이츠",
+        "이노스케",
         "합류",
-        "동료들이",
-        "함께",
-        "전장에",
-        "합류하는",
-        "모습"
+        "결심"
       ],
       "keywords": [
-        "동료",
+        "탄지로",
+        "젠이츠",
+        "이노스케",
         "합류",
-        "동료들이",
-        "함께",
-        "전장에",
-        "합류하는",
-        "모습"
-      ],
-      "fileName": "동료_합류.png"
+        "결심"
+      ]
     },
     {
       "index": "27",
       "id": "렌고쿠_기본.png",
       "name": "렌고쿠 기본",
-      "description": "렌고쿠가 당당히 서 있는 기본 자세",
+      "description": "렌고쿠의 기본 이미지",
+      "fileName": "렌고쿠_기본.png",
       "tags": [
         "렌고쿠",
         "기본",
-        "렌고쿠가",
-        "당당히",
-        "있는",
-        "자세",
-        "당당",
-        "미소"
+        "불의주",
+        "미소",
+        "검사"
       ],
       "keywords": [
         "렌고쿠",
         "기본",
-        "렌고쿠가",
-        "당당히",
-        "있는",
-        "자세",
-        "당당",
-        "미소"
-      ],
-      "fileName": "렌고쿠_기본.png"
-    },
-    {
-      "index": "28",
-      "id": "렌고쿠_기본.jpg",
-      "name": "렌고쿠 기본(일러스트)",
-      "description": "렌고쿠가 서 있는 일러스트 컷",
-      "tags": [
-        "렌고쿠",
-        "기본",
-        "일러스트",
-        "렌고쿠가",
-        "있는"
-      ],
-      "keywords": [
-        "렌고쿠",
-        "기본",
-        "일러스트",
-        "렌고쿠가",
-        "있는"
-      ],
-      "fileName": "렌고쿠_기본.jpg"
+        "불의주",
+        "미소",
+        "검사"
+      ]
     },
     {
       "index": "29",
       "id": "렌고쿠_결의.png",
       "name": "렌고쿠 결의",
       "description": "렌고쿠가 결의를 다지는 모습",
+      "fileName": "렌고쿠_결의.png",
       "tags": [
         "렌고쿠",
         "결의",
-        "렌고쿠가",
-        "결의를",
-        "다지는",
-        "모습"
+        "불꽃",
+        "각오",
+        "시선"
       ],
       "keywords": [
         "렌고쿠",
         "결의",
-        "렌고쿠가",
-        "결의를",
-        "다지는",
-        "모습"
-      ],
-      "fileName": "렌고쿠_결의.png"
-    },
-    {
-      "index": "30",
-      "id": "탄지로_속삭임.jpg",
-      "name": "탄지로 속삭임(일러스트)",
-      "description": "탄지로가 속삭이는 일러스트 컷",
-      "tags": [
-        "탄지로",
-        "속삭임",
-        "일러스트",
-        "탄지로가",
-        "속삭이는"
-      ],
-      "keywords": [
-        "탄지로",
-        "속삭임",
-        "일러스트",
-        "탄지로가",
-        "속삭이는"
-      ],
-      "fileName": "탄지로_속삭임.jpg"
+        "불꽃",
+        "각오",
+        "시선"
+      ]
     },
     {
       "index": "31",
       "id": "탄지로_탈출.png",
       "name": "탄지로 탈출",
-      "description": "탄지로가 열차에서 탈출하며 돌진하는 장면",
+      "description": "엔무와의 전투 후 탄지로가 무한열차에서 탈출하는 장면",
+      "fileName": "탄지로_탈출.png",
       "tags": [
         "탄지로",
         "탈출",
-        "탄지로가",
-        "열차에서",
-        "탈출하며",
-        "돌진하는",
-        "장면"
+        "열차",
+        "전투후",
+        "탈선"
       ],
       "keywords": [
         "탄지로",
         "탈출",
-        "탄지로가",
-        "열차에서",
-        "탈출하며",
-        "돌진하는",
-        "장면"
-      ],
-      "fileName": "탄지로_탈출.png"
+        "열차",
+        "전투후",
+        "탈선"
+      ]
     },
     {
       "index": "32",
       "id": "젠이츠_각성.png",
       "name": "젠이츠 각성",
       "description": "젠이츠가 번개와 함께 각성하는 장면",
+      "fileName": "젠이츠_각성.png",
       "tags": [
         "젠이츠",
         "각성",
-        "젠이츠가",
-        "번개와",
-        "함께",
-        "각성하는",
-        "장면",
         "번개",
-        "벽력"
+        "일격",
+        "집중"
       ],
       "keywords": [
         "젠이츠",
         "각성",
-        "젠이츠가",
-        "번개와",
-        "함께",
-        "각성하는",
-        "장면",
         "번개",
-        "벽력"
-      ],
-      "fileName": "젠이츠_각성.png"
+        "일격",
+        "집중"
+      ]
     },
     {
       "index": "33",
       "id": "젠이츠_기본.png",
       "name": "젠이츠 기본",
-      "description": "젠이츠가 기본 자세로 서 있는 모습",
+      "description": "젠이츠의 기본 이미지",
+      "fileName": "젠이츠_기본.png",
       "tags": [
         "젠이츠",
         "기본",
-        "젠이츠가",
-        "자세로",
-        "있는",
-        "모습"
+        "겁쟁이",
+        "검사",
+        "노란머리"
       ],
       "keywords": [
         "젠이츠",
         "기본",
-        "젠이츠가",
-        "자세로",
-        "있는",
-        "모습"
-      ],
-      "fileName": "젠이츠_기본.png"
+        "겁쟁이",
+        "검사",
+        "노란머리"
+      ]
     },
     {
       "index": "34",
       "id": "젠이츠_숙면.png",
       "name": "젠이츠 숙면",
       "description": "젠이츠가 곤히 잠든 모습",
+      "fileName": "젠이츠_숙면.png",
       "tags": [
         "젠이츠",
         "숙면",
-        "젠이츠가",
-        "곤히",
-        "잠든",
-        "모습",
-        "잠",
-        "수면"
+        "수면",
+        "최면",
+        "안정"
       ],
       "keywords": [
         "젠이츠",
         "숙면",
-        "젠이츠가",
-        "곤히",
-        "잠든",
-        "모습",
-        "잠",
-        "수면"
-      ],
-      "fileName": "젠이츠_숙면.png"
+        "수면",
+        "최면",
+        "안정"
+      ]
     },
     {
       "index": "35",
       "id": "네즈코_기본.png",
       "name": "네즈코 기본",
-      "description": "네즈코가 상자에서 나온 기본 모습",
+      "description": "네즈코의 기본 이미지",
+      "fileName": "네즈코_기본.png",
       "tags": [
         "네즈코",
         "기본",
-        "네즈코가",
-        "상자에서",
-        "나온",
-        "모습"
+        "상자",
+        "대나무",
+        "귀여움"
       ],
       "keywords": [
         "네즈코",
         "기본",
-        "네즈코가",
-        "상자에서",
-        "나온",
-        "모습"
-      ],
-      "fileName": "네즈코_기본.png"
+        "상자",
+        "대나무",
+        "귀여움"
+      ]
     },
     {
       "index": "36",
       "id": "기유_기본.png",
       "name": "기유 기본",
-      "description": "기유가 차분히 서 있는 모습",
+      "description": "기유의 기본 이미지",
+      "fileName": "기유_기본.png",
       "tags": [
         "기유",
         "기본",
-        "기유가",
-        "차분히",
-        "있는",
-        "모습"
+        "물의호흡",
+        "침착",
+        "하주"
       ],
       "keywords": [
         "기유",
         "기본",
-        "기유가",
-        "차분히",
-        "있는",
-        "모습"
-      ],
-      "fileName": "기유_기본.png"
+        "물의호흡",
+        "침착",
+        "하주"
+      ]
     },
     {
       "index": "37",
       "id": "시노부_기본.png",
       "name": "시노부 기본",
-      "description": "시노부가 미소를 머금은 기본 모습",
+      "description": "시노부의 기본 이미지",
+      "fileName": "시노부_기본.png",
       "tags": [
         "시노부",
         "기본",
-        "시노부가",
-        "미소를",
-        "머금은",
-        "모습"
+        "벌레호흡",
+        "미소",
+        "충주"
       ],
       "keywords": [
         "시노부",
         "기본",
-        "시노부가",
-        "미소를",
-        "머금은",
-        "모습"
-      ],
-      "fileName": "시노부_기본.png"
-    },
-    {
-      "index": "38",
-      "id": "remaining_flame.png",
-      "name": "Remaining Flame",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "remaining",
-        "flame"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "remaining",
-        "flame"
-      ],
-      "fileName": "remaining_flame.png"
-    },
-    {
-      "index": "39",
-      "id": "three_united.png",
-      "name": "Three United",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "three",
-        "united"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "three",
-        "united"
-      ],
-      "fileName": "three_united.png"
-    },
-    {
-      "index": "40",
-      "id": "akaza_arrival.png",
-      "name": "Akaza Arrival",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "akaza",
-        "arrival"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "akaza",
-        "arrival"
-      ],
-      "fileName": "akaza_arrival.png"
-    },
-    {
-      "index": "41",
-      "id": "dawn_and_tears.png",
-      "name": "Dawn And Tears",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "dawn",
-        "and",
-        "tears"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "dawn",
-        "and",
-        "tears"
-      ],
-      "fileName": "dawn_and_tears.png"
-    },
-    {
-      "index": "42",
-      "id": "pierced_abdomen.png",
-      "name": "Pierced Abdomen",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "pierced",
-        "abdomen"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "pierced",
-        "abdomen"
-      ],
-      "fileName": "pierced_abdomen.png"
-    },
-    {
-      "index": "43",
-      "id": "set_heart_ablaze.png",
-      "name": "Set Heart Ablaze",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "set",
-        "heart",
-        "ablaze"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "set",
-        "heart",
-        "ablaze"
-      ],
-      "fileName": "set_heart_ablaze.png"
-    },
-    {
-      "index": "44",
-      "id": "derailed_train.png",
-      "name": "Derailed Train",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "derailed",
-        "train"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "derailed",
-        "train"
-      ],
-      "fileName": "derailed_train.png"
-    },
-    {
-      "index": "45",
-      "id": "compass_battle.png",
-      "name": "Compass Battle",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "compass",
-        "battle"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "compass",
-        "battle"
-      ],
-      "fileName": "compass_battle.png"
-    },
-    {
-      "index": "46",
-      "id": "hidden_ending.png",
-      "name": "Hidden Ending",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "hidden",
-        "ending"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "hidden",
-        "ending"
-      ],
-      "fileName": "hidden_ending.png"
-    },
-    {
-      "index": "47",
-      "id": "compass_technique.png",
-      "name": "Compass Technique",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "compass",
-        "technique"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "compass",
-        "technique"
-      ],
-      "fileName": "compass_technique.png"
-    },
-    {
-      "index": "48",
-      "id": "rengoku_bento.png",
-      "name": "Rengoku Bento",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "rengoku",
-        "bento"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "rengoku",
-        "bento"
-      ],
-      "fileName": "rengoku_bento.png"
-    },
-    {
-      "index": "49",
-      "id": "inosuke_sharpening.png",
-      "name": "Inosuke Sharpening",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "inosuke",
-        "sharpening"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "inosuke",
-        "sharpening"
-      ],
-      "fileName": "inosuke_sharpening.png"
-    },
-    {
-      "index": "50",
-      "id": "fulfill_duty.png",
-      "name": "Fulfill Duty",
-      "description": "(추가 설명 필요)",
-      "tags": [
-        "추가",
-        "설명",
-        "필요",
-        "fulfill",
-        "duty"
-      ],
-      "keywords": [
-        "추가",
-        "설명",
-        "필요",
-        "fulfill",
-        "duty"
-      ],
-      "fileName": "fulfill_duty.png"
-    },
-    {
-      "index": "51",
-      "id": "akaza_arrival",
-      "name": "Akaza Arrival",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "akaza",
-        "arrival"
-      ],
-      "keywords": [
-        "매칭용",
-        "akaza",
-        "arrival"
-      ],
-      "fileName": "akaza_arrival"
-    },
-    {
-      "index": "52",
-      "id": "compass_battle",
-      "name": "Compass Battle",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "compass",
-        "battle"
-      ],
-      "keywords": [
-        "매칭용",
-        "compass",
-        "battle"
-      ],
-      "fileName": "compass_battle"
-    },
-    {
-      "index": "53",
-      "id": "compass_technique",
-      "name": "Compass Technique",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "compass",
-        "technique"
-      ],
-      "keywords": [
-        "매칭용",
-        "compass",
-        "technique"
-      ],
-      "fileName": "compass_technique"
-    },
-    {
-      "index": "54",
-      "id": "dawn_and_tears",
-      "name": "Dawn And Tears",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "dawn",
-        "and",
-        "tears"
-      ],
-      "keywords": [
-        "매칭용",
-        "dawn",
-        "and",
-        "tears"
-      ],
-      "fileName": "dawn_and_tears"
-    },
-    {
-      "index": "55",
-      "id": "derailed_train",
-      "name": "Derailed Train",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "derailed",
-        "train"
-      ],
-      "keywords": [
-        "매칭용",
-        "derailed",
-        "train"
-      ],
-      "fileName": "derailed_train"
-    },
-    {
-      "index": "56",
-      "id": "fulfill_duty",
-      "name": "Fulfill Duty",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "fulfill",
-        "duty"
-      ],
-      "keywords": [
-        "매칭용",
-        "fulfill",
-        "duty"
-      ],
-      "fileName": "fulfill_duty"
-    },
-    {
-      "index": "57",
-      "id": "hidden_ending",
-      "name": "Hidden Ending",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "hidden",
-        "ending"
-      ],
-      "keywords": [
-        "매칭용",
-        "hidden",
-        "ending"
-      ],
-      "fileName": "hidden_ending"
-    },
-    {
-      "index": "58",
-      "id": "inosuke_sharpening",
-      "name": "Inosuke Sharpening",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "inosuke",
-        "sharpening"
-      ],
-      "keywords": [
-        "매칭용",
-        "inosuke",
-        "sharpening"
-      ],
-      "fileName": "inosuke_sharpening"
-    },
-    {
-      "index": "59",
-      "id": "pierced_abdomen",
-      "name": "Pierced Abdomen",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "pierced",
-        "abdomen"
-      ],
-      "keywords": [
-        "매칭용",
-        "pierced",
-        "abdomen"
-      ],
-      "fileName": "pierced_abdomen"
-    },
-    {
-      "index": "60",
-      "id": "remaining_flame",
-      "name": "Remaining Flame",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "remaining",
-        "flame"
-      ],
-      "keywords": [
-        "매칭용",
-        "remaining",
-        "flame"
-      ],
-      "fileName": "remaining_flame"
-    },
-    {
-      "index": "61",
-      "id": "rengoku_bento",
-      "name": "Rengoku Bento",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "rengoku",
-        "bento"
-      ],
-      "keywords": [
-        "매칭용",
-        "rengoku",
-        "bento"
-      ],
-      "fileName": "rengoku_bento"
-    },
-    {
-      "index": "62",
-      "id": "set_heart_ablaze",
-      "name": "Set Heart Ablaze",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "set",
-        "heart",
-        "ablaze"
-      ],
-      "keywords": [
-        "매칭용",
-        "set",
-        "heart",
-        "ablaze"
-      ],
-      "fileName": "set_heart_ablaze"
-    },
-    {
-      "index": "63",
-      "id": "three_united",
-      "name": "Three United",
-      "description": "(매칭용 placeholder)",
-      "tags": [
-        "매칭용",
-        "three",
-        "united"
-      ],
-      "keywords": [
-        "매칭용",
-        "three",
-        "united"
-      ],
-      "fileName": "three_united"
+        "벌레호흡",
+        "미소",
+        "충주"
+      ]
     }
   ]
 }

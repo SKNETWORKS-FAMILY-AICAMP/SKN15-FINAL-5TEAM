@@ -40,19 +40,14 @@ done
 
 echo ""
 
-# 2. Alembic 마이그레이션 자동 실행 (DISABLED - using SQL init scripts instead)
-echo "📦 Skipping Alembic migrations..."
-echo "   - Using PostgreSQL init scripts (database/postgres/init/*.sql)"
-echo "   - Alembic is disabled to prevent duplicate table creation"
-echo ""
-
-# Alembic 마이그레이션 실행 (주석 처리)
-# if alembic upgrade head; then
-#     echo "✅ Database migrations completed successfully"
-# else
-#     echo "⚠️  Migration failed, but continuing to start server..."
-#     echo "   (Server will start, but some features may not work)"
-# fi
+# 2. Alembic 마이그레이션 자동 실행
+echo "🚀 Running database migrations..."
+if alembic upgrade head; then
+    echo "✅ Database migrations completed successfully"
+else
+    echo "❌ Migration failed, stopping server startup."
+    exit 1
+fi
 
 echo ""
 

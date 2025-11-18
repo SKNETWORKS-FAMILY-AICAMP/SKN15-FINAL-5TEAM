@@ -16,11 +16,6 @@
       "index": "22",
       "file_name": "탄지로_등장.png"
     },
-    "USER_INTRODUCTION": {
-      "background_id": "derailed_train",
-      "index": "1",
-      "file_name": "탄지로_기본.png"
-    },
     "MISSION_BRIEFING": {
       "background_id": "탄지로_속삭임.png",
       "index": "2",
@@ -65,6 +60,11 @@
       "background_id": "렌고쿠_섬멸.mp4",
       "index": "25",
       "file_name": "렌고쿠_섬멸.mp4"
+    },
+    "ENMU_DEFEAT": {
+      "background_id": "엔무_패배.png",
+      "index": "38",
+      "file_name": "엔무_패배.png"
     },
     "UpperMoons3_appeared": {
       "background_id": "akaza_arrival",

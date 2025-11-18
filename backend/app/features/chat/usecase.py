@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import os
+import json
+import re
+from pathlib import Path
+from functools import lru_cache
 
 from .repositories import (
     DialogueRepository,
@@ -37,6 +41,174 @@ from app.features.progression.repository import ProgressionRepository
 from app.core.llm.client import LLMClient
 from app.core.embeddings import EmbeddingsService
 from app.features.images.local_mapping_loader import get_stage_image_identifier
+# ----------------------------------------
+# Background metadata helpers (keyword-based)
+# ----------------------------------------
+
+DEFAULT_FIRST_TURN_BACKGROUND = "무한열차.png"
+
+SPEAKER_BASIC_IMAGES = {
+    "tanjiro": "탄지로_기본.png",
+    "rengoku": "렌고쿠_기본.png",
+    "zenitsu": "젠이츠_기본.png",
+    "inosuke": "이노스케_기본.png",
+    "nezuko": "네즈코_기본.png",
+    "giyu": "기유_기본.png",
+    "shinobu": "시노부_기본.png",
+}
+
+@lru_cache(maxsize=8)
+def _load_background_metadata(scenario_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Load background metadata JSON (shared with frontend) for keyword matching.
+
+    Looks for <scenario>_images.json under data/image_mappings (supports -/_ variants).
+    """
+    if not scenario_id:
+        return None
+
+    candidates = set([scenario_id, scenario_id.replace('-', '_'), scenario_id.replace('_', '-')])
+    base_dirs = []
+    current = Path(__file__).resolve()
+    for parent in list(current.parents)[:5]:
+        base_dirs.append(parent.parent / "data" / "image_mappings")
+        base_dirs.append(parent / "data" / "image_mappings")
+
+    for name in candidates:
+        filename = f"{name}_images.json"
+        for base in base_dirs:
+            path = (base / filename).resolve()
+            if path.exists():
+                try:
+                    with path.open("r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    continue
+    return None
+
+
+def _tokenize(text: str) -> List[str]:
+    if not text:
+        return []
+
+    # 조사가 붙은 단어, 불용어를 제거해 매칭 정확도를 높임
+    stop_words = {
+        "그리고", "그러나", "하지만", "그래서", "또한", "혹은", "그러면", "그럼", "아니면",
+        "이", "그", "저", "거", "것", "뭐", "어디", "누가", "누구", "왜", "어떻게",
+        "정말", "진짜", "음", "어", "아", "야", "자", "좀", "만약", "만일"
+    }
+
+    def _normalize_token(tok: str) -> str:
+        tok = tok.strip().lower()
+        if not tok:
+            return ""
+
+        # 조사/격 조사 제거 (간단한 후행 패턴)
+        tok = re.sub(
+            r"(에서|으로부터|으로써|으로서|으로|에게서|에게|께서|께|한테서|한테|까지|부터|처럼|만큼|보다|와|과|랑|하고|은|는|이|가|을|를)$",
+            "",
+            tok
+        )
+        # 동사/형용사 어미 단순 스테밍
+        tok = re.sub(r"(했다|하였다|한다|한|하는|하며|하던|하여|해서|해요|해)$", "하", tok)
+        tok = re.sub(r"(였다|였다면|였던|였다가|였으나|였지만)$", "이", tok)
+
+        return tok.strip("_-")
+
+    raw_tokens = [tok for tok in re.split(r"[^0-9A-Za-z가-힣_]+", text.lower()) if tok]
+    normalized = []
+    for tok in raw_tokens:
+        base = _normalize_token(tok)
+        if not base or len(base) <= 1 or base in stop_words:
+            continue
+        normalized.append(base)
+
+    return normalized
+
+
+def _select_background_by_keywords(scenario_id: str, dialogues: List[ChatMessage]) -> Optional[str]:
+    """
+    Lightweight keyword matcher: score backgrounds by overlap with dialogue tokens.
+    Returns fileName or id for frontend consumption.
+    """
+    meta = _load_background_metadata(scenario_id)
+    if not meta:
+        return None
+
+    images = meta.get("images") or []
+    if not images:
+        return None
+
+    # Collect dialogue tokens (text/content fields)
+    combined_tokens: set[str] = set()
+    for d in dialogues or []:
+        payload = d.dict() if hasattr(d, "dict") else d
+        for field in ("text", "content"):
+            combined_tokens.update(_tokenize(str(payload.get(field, "") or "")))
+
+    if not combined_tokens:
+        return None
+
+    best = None
+    best_score = -1
+
+    for bg in images:
+        score = 0
+        tags = bg.get("tags") or []
+        keywords = bg.get("keywords") or []
+        name_tokens = _tokenize(bg.get("name", ""))
+        desc_tokens = _tokenize(bg.get("description", ""))
+
+        for tok in tags:
+            if tok.lower() in combined_tokens:
+                score += 3
+        for tok in keywords:
+            if tok.lower() in combined_tokens:
+                score += 2
+        for tok in name_tokens + desc_tokens:
+            if tok in combined_tokens:
+                score += 1
+
+        if score > best_score:
+            best_score = score
+            best = bg
+
+    if not best or best_score <= 0:
+        return None
+
+    return best.get("id") or best.get("fileName") or best.get("file_name")
+
+
+def _fallback_image_by_top_speaker(dialogues: List[ChatMessage]) -> Optional[str]:
+    """
+    대화 중 가장 많이 말한 화자의 기본 이미지를 fallback으로 반환.
+    User 메시지는 제외하고, speaker 문자열 포함 매칭도 허용.
+    """
+    if not dialogues:
+        return None
+
+    counts: Dict[str, int] = {}
+    for d in dialogues:
+        payload = d.dict() if hasattr(d, "dict") else d
+        if payload.get("is_user"):
+            continue
+        speaker = str(payload.get("speaker") or "").lower()
+        if not speaker:
+            continue
+        counts[speaker] = counts.get(speaker, 0) + 1
+
+    if not counts:
+        return None
+
+    top_speaker = max(counts.items(), key=lambda kv: kv[1])[0]
+    if top_speaker in SPEAKER_BASIC_IMAGES:
+        return SPEAKER_BASIC_IMAGES[top_speaker]
+
+    for key, value in SPEAKER_BASIC_IMAGES.items():
+        if key in top_speaker:
+            return value
+
+    return None
 
 # LangGraph imports (optional - only used if USE_LANGGRAPH=true)
 try:
@@ -367,12 +539,18 @@ class ChatUseCase:
 
         # 프론트엔드가 이해할 수 있는 고유 ID 우선 반환
         identifier_keys = [
-            "frontend_index",
-            "frontend_id",
             "background_id",
-            "index",
-            "image_index",
+            "frontend_id",
+            "frontend_name",
+            "frontend_slug",
+            "file_name",
+            "fileName",
+            "image_key",
+            "image_id",
             "current_image",
+            "image_index",
+            "index",
+            "frontend_index",
         ]
         for key in identifier_keys:
             value = metadata.get(key)
@@ -667,7 +845,8 @@ class ChatUseCase:
             images=[]
         )
 
-        result.current_image = await self._resolve_current_image(session_state, scenario_id)
+        # 1턴 프로로그는 항상 기본 컷 사용
+        result.current_image = DEFAULT_FIRST_TURN_BACKGROUND
         logger.info("_check_and_return_prologue", "Prologue returned successfully",
                    session_id=session_id, turn_count=session_state["turn_count"])
         return result
@@ -1289,10 +1468,26 @@ class ChatUseCase:
             # ============================================================
             # 5. 현재 스테이지용 이미지 선택
             # ============================================================
-            resolved_image = await self._resolve_current_image(
-                dialogue_result.updated_state or session_state,
-                scenario_id=scenario_id
-            )
+            predicted_turn = (session_state.get("turn_count", 0) or 0) + 1
+
+            if predicted_turn == 1:
+                resolved_image = DEFAULT_FIRST_TURN_BACKGROUND
+            else:
+                dialogue_based_image = _select_background_by_keywords(
+                    scenario_id,
+                    dialogue_result.dialogues or []
+                )
+                resolved_image = dialogue_based_image or await self._resolve_current_image(
+                    dialogue_result.updated_state or session_state,
+                    scenario_id=scenario_id
+                )
+
+                # 추가 fallback: 가장 많이 말한 화자의 기본 이미지
+                if not resolved_image:
+                    speaker_fallback = _fallback_image_by_top_speaker(dialogue_result.dialogues or [])
+                    if speaker_fallback:
+                        resolved_image = speaker_fallback
+
             dialogue_result.current_image = resolved_image
 
             # ============================================================
