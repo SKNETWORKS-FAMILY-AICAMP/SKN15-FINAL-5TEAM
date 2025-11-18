@@ -126,10 +126,48 @@ def _tokenize(text: str) -> List[str]:
     return normalized
 
 
-def _select_background_by_keywords(scenario_id: str, dialogues: List[ChatMessage]) -> Optional[str]:
+@lru_cache(maxsize=8)
+def _get_image_description_embeddings(scenario_id: str) -> Dict[str, List[float]]:
     """
-    Lightweight keyword matcher: score backgrounds by overlap with dialogue tokens.
-    Returns fileName or id for frontend consumption.
+    Load image metadata and generate embeddings for their descriptions.
+    The result is cached to avoid re-computation.
+    """
+    logger.info("_get_image_description_embeddings", f"Cache miss. Generating embeddings for {scenario_id}")
+    meta = _load_background_metadata(scenario_id)
+    if not meta or not (images := meta.get("images")):
+        return {}
+
+    # Prepare texts for batch embedding
+    image_ids = []
+    texts_to_embed = []
+    for img in images:
+        # Use a combination of name, description, and tags for richer context
+        desc = img.get("description", "")
+        name = img.get("name", "")
+        tags = ", ".join(img.get("tags", []))
+        combined_text = f"{name}: {desc} (Tags: {tags})"
+        
+        image_id = img.get("id") or img.get("fileName")
+        if image_id and combined_text:
+            image_ids.append(image_id)
+            texts_to_embed.append(combined_text)
+
+    if not texts_to_embed:
+        return {}
+
+    # Generate embeddings in a batch
+    try:
+        embeddings_service = EmbeddingsService()
+        embeddings = embeddings_service.embed_batch(texts_to_embed)
+        return dict(zip(image_ids, embeddings))
+    except Exception as e:
+        logger.error("_get_image_description_embeddings", f"Failed to generate embeddings: {e}")
+        return {}
+
+
+def _select_background_by_keywords(scenario_id: str, dialogues: List[ChatMessage]) -> Optional[tuple[str, int]]:
+    """
+    Lightweight keyword matcher. Returns (image_id, score) tuple.
     """
     meta = _load_background_metadata(scenario_id)
     if not meta:
@@ -155,16 +193,12 @@ def _select_background_by_keywords(scenario_id: str, dialogues: List[ChatMessage
     for bg in images:
         score = 0
         tags = bg.get("tags") or []
-        keywords = bg.get("keywords") or []
         name_tokens = _tokenize(bg.get("name", ""))
         desc_tokens = _tokenize(bg.get("description", ""))
 
         for tok in tags:
             if tok.lower() in combined_tokens:
-                score += 3
-        for tok in keywords:
-            if tok.lower() in combined_tokens:
-                score += 2
+                score += 3  # Tags are most important
         for tok in name_tokens + desc_tokens:
             if tok in combined_tokens:
                 score += 1
@@ -176,7 +210,8 @@ def _select_background_by_keywords(scenario_id: str, dialogues: List[ChatMessage
     if not best or best_score <= 0:
         return None
 
-    return best.get("id") or best.get("fileName") or best.get("file_name")
+    image_id = best.get("id") or best.get("fileName") or best.get("file_name")
+    return image_id, best_score
 
 
 def _fallback_image_by_top_speaker(dialogues: List[ChatMessage]) -> Optional[str]:
@@ -1466,27 +1501,80 @@ class ChatUseCase:
                     raise
 
             # ============================================================
-            # 5. 현재 스테이지용 이미지 선택
+            # 5. 현재 스테이지용 이미지 선택 (하이브리드 방식)
             # ============================================================
             predicted_turn = (session_state.get("turn_count", 0) or 0) + 1
+            resolved_image = None
 
             if predicted_turn == 1:
                 resolved_image = DEFAULT_FIRST_TURN_BACKGROUND
             else:
-                dialogue_based_image = _select_background_by_keywords(
+                # 1단계: 키워드 검색
+                keyword_match = _select_background_by_keywords(
                     scenario_id,
                     dialogue_result.dialogues or []
                 )
-                resolved_image = dialogue_based_image or await self._resolve_current_image(
-                    dialogue_result.updated_state or session_state,
-                    scenario_id=scenario_id
-                )
 
-                # 추가 fallback: 가장 많이 말한 화자의 기본 이미지
+                if keyword_match and keyword_match[1] >= 9:
+                    # 점수가 9점 이상이면 키워드 매칭 결과 사용
+                    resolved_image = keyword_match[0]
+                    logger.info("create_dialogue", f"Image selected by keyword score >= 9: {resolved_image}")
+                else:
+                    # 2단계: 임베딩 검색 (키워드 점수가 낮거나 없을 경우)
+                    if keyword_match:
+                        logger.info("create_dialogue", f"Keyword score {keyword_match[1]} < 9. Falling back to embedding search.")
+                    else:
+                        logger.info("create_dialogue", "No keyword match. Falling back to embedding search.")
+
+                    if self.embeddings_service:
+                        try:
+                            # 비교 대상: 이전 턴의 전체 대화 (사용자 입력 + AI 응답)
+                            dialogue_text = ""
+                            previous_turn_number = session_state.get("turn_count", 0)
+
+                            if previous_turn_number > 0:
+                                # message_history는 이미 로드되어 있음
+                                turn_messages = [
+                                    msg.get("text", "")
+                                    for msg in message_history
+                                    if msg.get("turn") == previous_turn_number
+                                ]
+                                if turn_messages:
+                                    dialogue_text = "\n".join(turn_messages)
+                                    logger.info("create_dialogue", f"Using full context from turn {previous_turn_number} for embedding search.")
+
+                            # Fallback to last dialogue if history is unavailable
+                            if not dialogue_text and dialogue_result.dialogues:
+                                last_dialogue = dialogue_result.dialogues[-1]
+                                dialogue_text = last_dialogue.text
+                                logger.info("create_dialogue", "Fell back to last dialogue text for embedding search.")
+
+                            if dialogue_text:
+                                # 대화 내용 임베딩
+                                query_embedding = self.embeddings_service.embed(dialogue_text)
+                                
+                                # 이미지 설명 임베딩 (캐시됨)
+                                candidate_embeddings = _get_image_description_embeddings(scenario_id)
+
+                                if query_embedding and candidate_embeddings:
+                                    # 가장 유사한 이미지 찾기
+                                    similar_images = self.embeddings_service.find_most_similar(
+                                        query_embedding,
+                                        candidate_embeddings,
+                                        top_k=1
+                                    )
+                                    if similar_images:
+                                        resolved_image = similar_images[0][0]
+                                        logger.info("create_dialogue", f"Image selected by embedding search: {resolved_image} (Score: {similar_images[0][1]:.2f})")
+                        except Exception as e:
+                            logger.error("create_dialogue", f"Embedding search for image failed: {e}")
+
+                # 최종 폴백: 동적 선택 실패 시, 가장 많이 말한 화자의 기본 이미지 사용
                 if not resolved_image:
                     speaker_fallback = _fallback_image_by_top_speaker(dialogue_result.dialogues or [])
                     if speaker_fallback:
                         resolved_image = speaker_fallback
+                        logger.info("create_dialogue", f"Image selected by speaker fallback: {resolved_image}")
 
             dialogue_result.current_image = resolved_image
 

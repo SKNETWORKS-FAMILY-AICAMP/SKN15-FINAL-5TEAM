@@ -78,9 +78,13 @@ class DialogueAgent:
             # await self._extract_memories(state, user_input, agent_responses)
 
             # 10. 스테이지 진행 관리
-            stage_complete = state.get("stage_complete", False)
-            next_stage = state.get("next_stage")
+            # Parent 노드에서 설정된 stage_complete가 중간 단계에서 누락되는 경우가 있어,
+            # next_stage가 현재 스테이지와 다르면 완료로 간주하여 복구한다.
             current_stage = state.get("current_stage", "intro")
+            next_stage = state.get("next_stage")
+            stage_complete = state.get("stage_complete", False)
+            if not stage_complete and next_stage and next_stage != current_stage:
+                stage_complete = True
 
             logger.info("generate_dialogue", "Stage transition info from state",
                        stage_complete=stage_complete,

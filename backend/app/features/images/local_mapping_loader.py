@@ -80,22 +80,8 @@ def get_stage_image_identifier(scenario_id: str, stage_id: str) -> Optional[str]
         return None
 
     stage_map = mapping.get("stage_map", {})
-    entry = stage_map.get(stage_id) or mapping.get("default_background")
-    if not entry:
-        return None
-
-    if isinstance(entry, str):
-        return entry
-
-    for key in ("frontend_id", "background_id", "id", "image_key"):
-        value = entry.get(key)
-        if value:
-            return str(value)
-
-    if entry.get("index") is not None:
-        return str(entry["index"])
-
-    if entry.get("image_url"):
-        return entry["image_url"]
-
-    return None
+    
+    # stage_id로 이미지 ID를 찾고, 없으면 기본 배경 ID를 사용
+    image_id = stage_map.get(stage_id) or mapping.get("default_background_id")
+    
+    return image_id

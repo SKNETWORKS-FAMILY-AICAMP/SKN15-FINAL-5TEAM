@@ -5,6 +5,7 @@ import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
 import MemoryUpdateLog from './MemoryUpdateLog';
 import { sendChatMessage, ChatResponse, MemoryEvent } from '@/services/api';
+import { addConversation } from '@/utils/storageUtils';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
@@ -128,6 +129,11 @@ export default function ChatInterface({
     unlockAudio
   } = useSoundEffects();
 
+  // 친밀도 패널에 표시할 허용 캐릭터 화이트리스트 (주연급만)
+  const AFFINITY_WHITELIST = useMemo(() => new Set<string>([
+    'tanjiro', 'rengoku', 'zenitsu', 'inosuke', 'nezuko', 'giyu', 'shinobu'
+  ]), []);
+
   // 친밀도 패널에 표시할 캐릭터 목록 (시나리오 캐릭터_refs 기반, 악역 제외)
   const affinityCharacterIds = useMemo(() => {
     const baseCharacters = getScenarioCharacters(backendScenarioId);
@@ -135,14 +141,17 @@ export default function ChatInterface({
       ...baseCharacters,
       ...Object.keys(affinityScores || {}),
       ...invitedCharacters
-    ].filter(Boolean);
+    ]
+      .filter(Boolean)
+      .map(id => id.toLowerCase())
+      .filter(id => AFFINITY_WHITELIST.has(id));
 
     const filtered = filterExcludedCharacters(candidates);
     if (filtered.length > 0) {
       return filtered;
     }
     return baseCharacters;
-  }, [backendScenarioId, affinityScores, invitedCharacters]);
+  }, [backendScenarioId, affinityScores, invitedCharacters, AFFINITY_WHITELIST]);
 
   // 배경 이미지 프리로드 (성능 최적화)
   useEffect(() => {
@@ -1349,6 +1358,16 @@ export default function ChatInterface({
     // Send to backend
     setIsLoading(true);
     setBackendError(null);
+
+    // 로컬 히스토리에 대화 저장 (세션/캐릭터가 있을 때)
+    if (sessionId && characterId) {
+      addConversation({
+        sessionId,
+        characterId,
+        title: text,       // 첫 메시지를 제목으로 사용
+        lastMessage: text
+      });
+    }
 
     try {
       const response: ChatResponse = await sendChatMessage(
