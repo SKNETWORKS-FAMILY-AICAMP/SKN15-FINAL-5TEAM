@@ -1519,8 +1519,21 @@ class ChatUseCase:
                     # 점수가 9점 이상이면 키워드 매칭 결과 사용
                     resolved_image = keyword_match[0]
                     logger.info("create_dialogue", f"Image selected by keyword score >= 9: {resolved_image}")
-                else:
-                    # 2단계: 임베딩 검색 (키워드 점수가 낮거나 없을 경우)
+
+                # 2단계: 스테이지 매핑 (키워드 미적용 시)
+                if not resolved_image:
+                    try:
+                        resolved_image = await self._resolve_current_image(
+                            state=dialogue_result.updated_state,
+                            scenario_id=scenario_id
+                        )
+                        if resolved_image:
+                            logger.info("create_dialogue", f"Image selected by stage mapping: {resolved_image}")
+                    except Exception as e:
+                        logger.error("create_dialogue", f"Stage mapping lookup failed: {e}")
+
+                if not resolved_image:
+                    # 3단계: 임베딩 검색
                     if keyword_match:
                         logger.info("create_dialogue", f"Keyword score {keyword_match[1]} < 9. Falling back to embedding search.")
                     else:
