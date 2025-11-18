@@ -172,6 +172,8 @@ class PromptService:
         중요: {{user}} 플레이스홀더를 그대로 유지합니다.
         LLM이 {{user}} 패턴을 학습하고 동일한 형식으로 생성하도록 합니다.
 
+        ✅ NEW: speaker가 "user"이면 "{user}"로 변환하여 LLM이 인식하도록 함
+
         Args:
             dialogues: 대화 목록
             user_name: 사용하지 않음 (하위 호환성 유지)
@@ -184,10 +186,18 @@ class PromptService:
             if isinstance(d, dict):
                 speaker = d.get("speaker", "Unknown")
                 text = d.get("text", "")
-                # ✅ {{user}} 플레이스홀더 그대로 유지
+
+                # ✅ user speaker를 {user}로 변환 (LLM 인식 가능하도록)
+                if speaker.lower() == "user":
+                    speaker = "{user}"
+
                 lines.append(f"{speaker}: {text}")
             elif hasattr(d, "speaker") and hasattr(d, "text"):
-                lines.append(f"{d.speaker}: {d.text}")
+                speaker = d.speaker
+                # ✅ user speaker를 {user}로 변환
+                if speaker.lower() == "user":
+                    speaker = "{user}"
+                lines.append(f"{speaker}: {d.text}")
 
         return "\n".join(lines) if lines else "(없음)"
 
@@ -246,7 +256,7 @@ class PromptService:
 
 **💬 참고: 최근 대화 (이전 장면)**
 {recent_history}
-(↑ 이전 장면의 대화입니다. 급격한 단절은 피하되, 새 상황을 우선 반영하세요)"""
+(↑ 이전 장면의 대화입니다. 급격한 단절은 피하면서, 새 상황을 반영하세요)"""
         else:
             # Stage 진행 중: 사용자 입력과 대화 흐름 우선
             return f"""**📍 현재 상황 (진행 중):**
@@ -257,7 +267,7 @@ class PromptService:
 
 **진행 가이드:**
 - 사용자 입력에 집중하여 자연스럽게 반응하세요
-- 현재 상황 목표를 염두에 두되, 대화 흐름을 우선하세요"""
+- 현재 상황 목표를 염두에 두면서, 대화 흐름을 우선하세요"""
 
     def _substitute_variables(self, template: str, context: Dict[str, str]) -> str:
         """

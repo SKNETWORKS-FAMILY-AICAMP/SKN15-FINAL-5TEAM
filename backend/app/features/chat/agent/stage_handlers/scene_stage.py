@@ -49,13 +49,24 @@ class SceneStageHandler:
         """
         stage_tag = stage.get("tag", "scene")
         beats = stage.get("beats", [])
-        speaker_pool = stage.get("speaker_pool", [])
+        speaker_pool = list(stage.get("speaker_pool", []))  # Copy to avoid mutation
         stage_turn = state.get("stage_turn", 0)
+
+        # Dynamic speaker stages 처리
+        dynamic_config = stage.get("dynamic_speaker_stages", {})
+        if dynamic_config.get("allies_recruited"):
+            # allies_recruited에 있는 캐릭터들을 speaker_pool에 추가
+            allies = state.get("allies_recruited", [])
+            for ally in allies:
+                if ally not in speaker_pool:
+                    speaker_pool.append(ally)
+                    logger.info("handle", f"Added ally '{ally}' to speaker_pool dynamically")
 
         logger.debug("handle", "Handling scene stage",
                     stage_tag=stage_tag,
                     beats_count=len(beats),
-                    stage_turn=stage_turn)
+                    stage_turn=stage_turn,
+                    speaker_pool=speaker_pool)
 
         # Beats 전달 방식: beats 개수로 자동 판단
         # - beats 1개: 반복 (사용자 상호작용 모드)

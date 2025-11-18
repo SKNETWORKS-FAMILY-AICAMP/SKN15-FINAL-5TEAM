@@ -13,11 +13,14 @@ Combines 3 services:
 2. MissionFeedbackService - 피드백 생성
 3. MissionRecordService - DB 저장 (Repository 사용)
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
 from app.core.config import get_settings
 from app.core.llm.client import LLMClient
 from app.core.logging import get_parent_logger
+
+if TYPE_CHECKING:
+    from app.features.chat.services import ScenarioService
 
 settings = get_settings()
 logger = get_parent_logger("MissionService")
@@ -96,15 +99,18 @@ class MissionService:
     def __init__(
         self,
         llm_client: Optional[LLMClient] = None,
-        enable_llm: bool = True
+        enable_llm: bool = True,
+        scenario_service: Optional["ScenarioService"] = None
     ):
         """
         Args:
             llm_client: LLM 클라이언트
             enable_llm: LLM 사용 여부
+            scenario_service: ScenarioService 인스턴스
         """
         self.llm_client = llm_client or LLMClient()
         self.enable_llm = enable_llm
+        self.scenario_service = scenario_service
 
         logger.info("__init__", "MissionService initialized",
                    enable_llm=enable_llm)
@@ -130,21 +136,21 @@ class MissionService:
         """
         temp_data = state.setdefault("temp_data", {})
         locked_target = temp_data.get("locked_mission_target")
-        detected_target = self._detect_mission_target(user_input)
 
-        # 이미 활성화된 미션이 있으면 해당 타겟 사용
+        # 이미 활성화된 미션이 있으면 해당 타겟 사용 (우선순위 1)
         if mission_state.get("active") and mission_state.get("target") in VALID_TARGETS:
             target = mission_state["target"]
             temp_data["locked_mission_target"] = target
             state["mission_target"] = target
             return target
 
-        # locked_target이 있으면 사용
+        # locked_target이 있으면 사용 (우선순위 2)
         if locked_target in VALID_TARGETS:
             mission_state["target"] = locked_target
             return locked_target
 
-        # 사용자가 명시적으로 타겟을 지정했으면 사용
+        # 사용자가 명시적으로 타겟을 지정했으면 사용 (우선순위 3)
+        detected_target = self._detect_mission_target(state, user_input)
         if detected_target in VALID_TARGETS:
             temp_data["locked_mission_target"] = detected_target
             state["mission_target"] = detected_target
@@ -152,33 +158,38 @@ class MissionService:
             logger.info("determine_mission_target", f"Detected target: {detected_target}")
             return detected_target
 
-        # 자동 타겟 선택
-        allies = state.get("allies_recruited", [])
-        attempts = state.get("recruit_attempts", {})
-
-        for candidate in VALID_TARGETS:
-            if candidate not in allies and attempts.get(candidate, 0) < MAX_ATTEMPTS:
-                temp_data["locked_mission_target"] = candidate
-                state["mission_target"] = candidate
-                mission_state["target"] = candidate
-                logger.info("determine_mission_target", f"Auto-selected target: {candidate}")
-                return candidate
-
+        # 자동 선택 제거 - 타겟을 찾지 못하면 None 반환
         return None
 
-    def _detect_mission_target(self, text: str) -> Optional[str]:
-        """사용자 입력에서 타겟 캐릭터 감지"""
+    def _detect_mission_target(self, state: Dict[str, Any], text: str) -> Optional[str]:
+        """
+        사용자 입력에서 타겟 캐릭터 감지
+
+        Args:
+            state: 전체 state 객체 (scenario_data 포함)
+            text: 사용자 입력
+
+        Returns:
+            타겟 캐릭터 ID 또는 None
+        """
         text_lower = text.lower()
 
-        keywords = {
-            "inosuke": ["이노스케", "inosuke", "pig"],
-            "zenitsu": ["젠이츠", "zenitsu", "thunder"],
-        }
+        # scenario_data에서 targets 가져오기 (metadata.mission.targets)
+        scenario = state.get("scenario_data") or state.get("scenario") or {}
+        metadata = scenario.get("metadata", {})
+        mission = metadata.get("mission", {})
+        targets = mission.get("targets", {})
 
-        for target, words in keywords.items():
-            for word in words:
-                if word in text_lower:
-                    return target
+        # targets.{target_id}.keywords 사용
+        for target_id, target_config in targets.items():
+            if not isinstance(target_config, dict):
+                continue
+
+            keywords = target_config.get("keywords", [])
+            for keyword in keywords:
+                if keyword.lower() in text_lower:
+                    logger.info("_detect_mission_target", f"Keyword matched: '{keyword}' -> {target_id}")
+                    return target_id
 
         return None
 
@@ -335,8 +346,8 @@ class MissionService:
 
         sys_entry = {
             "text": sys_text,
-            "goal": sys_text,
-            "speaker": "system",
+            "goal": f"시스템 알림: {sys_text}",
+            "speaker": "narr",  # system → narr로 변경하여 실제 출력되도록
             "fx": fx,
         }
 
@@ -345,9 +356,9 @@ class MissionService:
         # 최대 시도 소진 시 추가 메시지
         if not success and remaining == 0:
             exhaustion = {
-                "speaker": "system",
+                "speaker": "narr",  # system → narr로 변경
                 "text": "⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다.",
-                "goal": "⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다.",
+                "goal": "시스템 알림: ⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다.",
             }
             dialogues.append(exhaustion)
             logger.warning("build_feedback_beats", "Mission attempts exhausted",

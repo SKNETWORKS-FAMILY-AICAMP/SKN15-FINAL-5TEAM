@@ -953,14 +953,14 @@ class ChatUseCase:
             )
 
             # ============================================================
-            # 2. 정책: 일일 대화 제한 체크
+            # 2. 정책: 일일 대화 제한 체크 (비활성화)
             # ============================================================
-            today_count = await self.dialogue_repository.count_today(user_id)
-            logger.debug("create_dialogue", f"Today's dialogue count: {today_count}", user_id=user_id, count=today_count)
+            # today_count = await self.dialogue_repository.count_today(user_id)
+            # logger.debug("create_dialogue", f"Today's dialogue count: {today_count}", user_id=user_id, count=today_count)
 
-            if today_count >= MAX_DAILY_CHATS:
-                logger.warning("create_dialogue", "Daily limit exceeded", user_id=user_id, count=today_count, limit=MAX_DAILY_CHATS)
-                raise DailyLimitExceededException(MAX_DAILY_CHATS)
+            # if today_count >= MAX_DAILY_CHATS:
+            #     logger.warning("create_dialogue", "Daily limit exceeded", user_id=user_id, count=today_count, limit=MAX_DAILY_CHATS)
+            #     raise DailyLimitExceededException(MAX_DAILY_CHATS)
 
             # ============================================================
             # 2.5 Prologue 체크: turn_count가 0이고 DB에 대화가 없으면 프롤로그 반환
