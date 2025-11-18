@@ -57,30 +57,34 @@ class RouterStageHandler:
             session_id = state.get("session_id")
             if session_id:
                 try:
-                    from app.features.chat.services.message_history_service import MessageHistoryService
-                    from app.features.chat.repositories import DialogueRepository, ProgressionRepository
+                    from app.features.chat.repositories import DialogueRepository
                     from app.core.db.session import get_db
 
-                    # DB 세션 가져오기
+                    # DB 세션을 context manager로 관리 (자동 close)
                     db = next(get_db())
-                    dialogue_repo = DialogueRepository(db)
-                    progression_repo = ProgressionRepository(db)
+                    try:
+                        dialogue_repo = DialogueRepository(db)
 
-                    message_service = MessageHistoryService(
-                        dialogue_repository=dialogue_repo,
-                        progression_repository=progression_repo
-                    )
-                    messages = await message_service.load_full_message_history(session_id)
+                        # 최적화: 마지막 user 메시지만 직접 조회 (전체 히스토리 로드 불필요)
+                        from sqlalchemy import desc
+                        from app.features.chat.models import Dialogue
 
-                    # 마지막 user 메시지 찾기
-                    user_messages = [msg for msg in messages if msg.get("type") == "user"]
-                    if user_messages:
-                        last_user_input = user_messages[-1].get("text", "")
-                        if last_user_input and last_user_input != user_input:
-                            logger.info("handle", "Using last user message from history for routing",
-                                       current_input=user_input[:30] if user_input else "empty",
-                                       previous_input=last_user_input[:30])
-                            user_input = last_user_input
+                        last_user_dialogue = db.query(Dialogue).filter(
+                            Dialogue.session_id == session_id,
+                            Dialogue.speaker == "user"
+                        ).order_by(desc(Dialogue.created_at)).first()
+
+                        if last_user_dialogue:
+                            last_user_input = last_user_dialogue.content
+                            if last_user_input and last_user_input != user_input:
+                                logger.info("handle", "Using last user message from history for routing",
+                                           current_input=user_input[:30] if user_input else "empty",
+                                           previous_input=last_user_input[:30])
+                                user_input = last_user_input
+                    finally:
+                        # DB 세션 명시적 종료
+                        db.close()
+
                 except Exception as e:
                     logger.warning("handle", f"Failed to load message history: {e}")
 
