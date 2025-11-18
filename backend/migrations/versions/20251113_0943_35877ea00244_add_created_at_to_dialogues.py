@@ -21,11 +21,11 @@ def upgrade() -> None:
     Add created_at column to conversation.dialogues table
     """
     # Add created_at column
-    op.add_column(
-        'dialogues',
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=True, server_default=sa.func.now()),
-        schema='conversation'
-    )
+    # op.add_column(
+    #     'dialogues',
+    #     sa.Column('created_at', sa.DateTime(timezone=True), nullable=True, server_default=sa.func.now()),
+    #     schema='conversation'
+    # )
 
     # Copy timestamp to created_at for existing rows
     op.execute("""

@@ -21,11 +21,11 @@ def upgrade() -> None:
     Add user_id and created_at columns to conversation.user_inputs table
     """
     # Add user_id column (nullable first for existing data)
-    op.add_column(
-        'user_inputs',
-        sa.Column('user_id', sa.UUID(), nullable=True),
-        schema='conversation'
-    )
+    # op.add_column(
+    #     'user_inputs',
+    #     sa.Column('user_id', sa.UUID(), nullable=True),
+    #     schema='conversation'
+    # )
 
     # Update user_id from sessions table for existing user_inputs
     op.execute("""
@@ -36,11 +36,11 @@ def upgrade() -> None:
     """)
 
     # Add created_at column
-    op.add_column(
-        'user_inputs',
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=True, server_default=sa.func.now()),
-        schema='conversation'
-    )
+    # op.add_column(
+    #     'user_inputs',
+    #     sa.Column('created_at', sa.DateTime(timezone=True), nullable=True, server_default=sa.func.now()),
+    #     schema='conversation'
+    # )
 
     # Copy timestamp to created_at for existing rows
     op.execute("""
@@ -58,16 +58,16 @@ def upgrade() -> None:
     )
 
     # Add foreign key constraint for user_id
-    op.create_foreign_key(
-        'user_inputs_user_id_fkey',
-        'user_inputs',
-        'users',
-        ['user_id'],
-        ['user_id'],
-        source_schema='conversation',
-        referent_schema='auth',
-        ondelete='SET NULL'
-    )
+    # op.create_foreign_key(
+    #     'user_inputs_user_id_fkey',
+    #     'user_inputs',
+    #     'users',
+    #     ['user_id'],
+    #     ['user_id'],
+    #     source_schema='conversation',
+    #     referent_schema='auth',
+    #     ondelete='SET NULL'
+    # )
 
 
 def downgrade() -> None:
