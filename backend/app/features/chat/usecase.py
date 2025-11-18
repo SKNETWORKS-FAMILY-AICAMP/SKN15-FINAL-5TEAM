@@ -16,10 +16,18 @@ from .repositories import (
     EntityRepository,
     MemoryRepository,
 )
+# v2 Memory System Repositories
+from .repositories.user_profile_repository import UserProfileRepository
+from .repositories.stm_repository import STMRepository
+from .repositories.scenario_buffer_repository import ScenarioBufferRepository
 from .agent.parent import ParentAgent  # Legacy ParentAgent (not LangGraph)
 from .services import AffinityService, MemoryService, MissionService, ScenarioService, MessageHistoryService
 from .services.extractors.conversation_summarizer import ConversationSummarizer
 from .services.extractors.memory_extractor import MemoryExtractor
+# v2 Memory System Services
+from .services.stm_manager import STMManager
+from .services.scenario_buffer_manager import ScenarioBufferManager
+from .services.extractors.hierarchical_summarizer import HierarchicalSummarizer
 from .models import DialogueTurn
 from .schemas import DialogueResult, ChatMessage
 from app.core.logging import get_usecase_logger, print_layer_debug
@@ -104,6 +112,29 @@ class ChatUseCase:
         except Exception as e:
             logger.warning("__init__", f"Failed to initialize EmbeddingsService: {e}")
             self.embeddings_service = None
+
+        # v2 Memory System - Repositories
+        self.user_profile_repository = UserProfileRepository(db)
+        self.stm_repository = STMRepository(db)
+        self.scenario_buffer_repository = ScenarioBufferRepository(db)
+        logger.info("__init__", "v2 Memory Repositories initialized")
+
+        # v2 Memory System - Services
+        try:
+            self.hierarchical_summarizer = HierarchicalSummarizer()
+            self.stm_manager = STMManager(
+                stm_repository=self.stm_repository,
+                hierarchical_summarizer=self.hierarchical_summarizer
+            )
+            self.scenario_buffer_manager = ScenarioBufferManager(
+                scenario_buffer_repository=self.scenario_buffer_repository
+            )
+            logger.info("__init__", "v2 Memory Services initialized (STMManager, ScenarioBufferManager, HierarchicalSummarizer)")
+        except Exception as e:
+            logger.warning("__init__", f"Failed to initialize v2 Memory Services: {e}", exc_info=True)
+            self.stm_manager = None
+            self.scenario_buffer_manager = None
+            self.hierarchical_summarizer = None
 
         # LangGraph 워크플로우 (feature flag)
         self.use_langgraph = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
@@ -262,6 +293,10 @@ class ChatUseCase:
         next_stage = graph_state.get("output", {}).get("next_stage")
         current_stage_for_session = next_stage if (stage_complete and next_stage) else (graph_state.get("current_stage") or graph_state.get("stage_tag"))
 
+        logger.info("_convert_from_graph_state", "🔍 Converting from GraphState",
+                   turn_count_from_graph=graph_state.get("turn_count"),
+                   stage_turn_from_graph=graph_state.get("stage_turn"))
+
         updated_state.update({
             "current_stage": current_stage_for_session,
             "turn_count": graph_state.get("turn_count", 0),
@@ -275,6 +310,10 @@ class ChatUseCase:
             "scene": graph_state.get("scene", {}),
             "off_topic_count": graph_state.get("off_topic_count", 0),  # Fallback count 저장
         })
+
+        logger.info("_convert_from_graph_state", "🔍 Updated state created",
+                   turn_count=updated_state.get("turn_count"),
+                   stage_turn=updated_state.get("stage_turn"))
 
         # DialogueResult 생성
         result = DialogueResult(
@@ -416,6 +455,7 @@ class ChatUseCase:
                 "user_id": user_id,
                 "user_name": user_name,
                 "turn_count": 0,
+                "stage_turn": 0,  # 초기화 추가
                 "current_stage": first_stage,
                 "affinity_scores": initial_affinity_scores,
             }
@@ -431,75 +471,125 @@ class ChatUseCase:
 
         return session_state
 
-    async def _load_long_term_memories(
+    async def _load_memories(
         self,
         session_state: Dict[str, Any],
         user_id: str,
-        scenario_id: str
+        scenario_id: str,
+        session_id: str
     ) -> None:
-        """장기기억 로딩 - free-talk 시나리오만"""
-        logger.info("_load_long_term_memories", "DEBUG: About to check user_id for memory loading",
-                   user_id=user_id, user_id_type=type(user_id).__name__, user_id_bool=bool(user_id))
+        """메모리 로딩 - v2 (STM + LTM/Scenario Buffer + User Profile)"""
+        from .middleware.mode_guard import ModeGuard
 
-        # 🔥 시나리오 모드에서는 장기기억을 사용하지 않음 (세계관 충돌 방지)
-        is_free_talk = scenario_id == "free-talk"
+        is_freechat = ModeGuard.is_freechat(scenario_id)
 
-        if user_id and is_free_talk:
+        logger.info("_load_memories", "Loading memories (v2)",
+                   user_id=user_id, scenario_id=scenario_id, session_id=session_id, is_freechat=is_freechat)
+
+        # 1. User Profile 로딩 (항상)
+        if hasattr(self, 'user_profile_repository') and self.user_profile_repository:
             try:
-                logger.info("_load_long_term_memories", "Loading long-term memories (free-talk mode only)",
-                           user_id=user_id, scenario_id=scenario_id)
+                profile_text = await self.user_profile_repository.get_profile_for_prompt(user_id)
+                session_state["user_profile"] = profile_text
+                logger.info("_load_memories", "Loaded user profile")
+            except Exception as e:
+                logger.warning("_load_memories", f"Failed to load user profile: {e}")
+                session_state["user_profile"] = ""
 
-                # 사용자의 메모리 조회 (scenario_id는 문자열이므로 필터링 안함)
-                # source_session_id는 UUID 타입이고, scenario_id는 문자열이므로 호환 불가
-                memories = await self.memory_repository.get_user_memories(
-                    user_id=user_id,
-                    scenario_id=None,  # scenario_id 필터 제거 (타입 불일치)
-                    limit=20  # 최대 20개까지 로드
-                )
+        # 2. STM 로딩 (항상)
+        if hasattr(self, 'stm_manager') and self.stm_manager:
+            try:
+                stm_text = await self.stm_manager.get_stm_for_prompt(user_id, scenario_id, session_id)
+                if stm_text:
+                    session_state["stm_summary"] = stm_text
+                    logger.info("_load_memories", "Loaded STM")
+            except Exception as e:
+                logger.warning("_load_memories", f"Failed to load STM: {e}")
 
-                if memories:
-                    # 중요도 순으로 정렬
-                    memories_sorted = sorted(
-                        memories,
-                        key=lambda m: (m.importance or 0, m.created_at or datetime.min),  # importance_score -> importance
-                        reverse=True
-                    )
-
-                    # 상위 5개를 세션 상태에 추가
-                    session_state["long_term_memories"] = [
-                        {
-                            "memory_id": m.id,  # memory_id -> id
-                            "memory_key": m.memory_key,
-                            "content": m.memory_value,  # content -> memory_value
-                            "type": m.memory_type,
-                            "importance": m.importance,  # importance_score -> importance
-                            "created_at": m.created_at.isoformat() if m.created_at else None
-                        }
-                        for m in memories_sorted[:5]
-                    ]
-
-                    logger.info("_load_long_term_memories", f"Loaded {len(memories_sorted[:5])} long-term memories",
-                               user_id=user_id, scenario_id=scenario_id)
-
-                    # 접근 통계 업데이트 (상위 5개만)
-                    for memory in memories_sorted[:5]:
+        # 3-A. LTM 로딩 (자유대화만) - 하이브리드 검색
+        if is_freechat and user_id:
+            try:
+                if self.memory_repository and hasattr(self, 'embeddings_service') and self.embeddings_service:
+                    # 사용자 입력 임베딩 생성
+                    user_input = session_state.get("user_input", "")
+                    if user_input:
                         try:
-                            await self.memory_repository.update_access_stats(memory.id)  # memory_id -> id
-                        except Exception as stats_err:
-                            logger.warning("_load_long_term_memories", f"Failed to update memory access stats: {stats_err}",
-                                         memory_id=memory.id)
+                            user_input_embedding = self.embeddings_service.embed(user_input)
 
-                else:
-                    logger.info("_load_long_term_memories", "No long-term memories found",
-                               user_id=user_id, scenario_id=scenario_id)
+                            # 유사도 검색
+                            similar_memories = await self.memory_repository.search_similar_memories(
+                                query_embedding=user_input_embedding,
+                                user_id=user_id,
+                                scenario_id="free-talk",
+                                limit=10,
+                                similarity_threshold=0.6
+                            )
 
-            except Exception as mem_load_err:
-                logger.error("_load_long_term_memories", f"Failed to load long-term memories: {mem_load_err}",
-                            user_id=user_id, scenario_id=scenario_id, exc=mem_load_err)
-                # 메모리 로딩 실패해도 대화는 계속 진행
-        elif user_id and not is_free_talk:
-            logger.info("_load_long_term_memories", "Skipping long-term memories (scenario mode - preventing world-building conflicts)",
-                       user_id=user_id, scenario_id=scenario_id)
+                            if similar_memories:
+                                # 하이브리드 스코어링
+                                for memory in similar_memories:
+                                    memory["hybrid_score"] = (
+                                        memory.get("similarity", 0) * 0.6 +
+                                        memory.get("importance_score", memory.get("importance", 0.5)) * 0.4
+                                    )
+
+                                # 동적 개수 조정
+                                recent_message_count = len(session_state.get("message_history", []))
+                                if recent_message_count < 5:
+                                    limit = 3
+                                elif recent_message_count < 20:
+                                    limit = 5
+                                else:
+                                    limit = 7
+
+                                # 상위 N개 선택
+                                top_memories = sorted(
+                                    similar_memories,
+                                    key=lambda m: m.get("hybrid_score", 0),
+                                    reverse=True
+                                )[:limit]
+
+                                session_state["long_term_memories"] = top_memories
+                                logger.info("_load_memories", f"Loaded {len(top_memories)} LTM (hybrid search)")
+                        except Exception as embed_err:
+                            logger.warning("_load_memories", f"Embedding search failed, fallback to importance: {embed_err}")
+                            # Fallback: 중요도만 사용
+                            memories = await self.memory_repository.get_user_memories(
+                                user_id=user_id,
+                                scenario_id="free-talk",
+                                limit=20
+                            )
+                            if memories:
+                                memories_sorted = sorted(
+                                    memories,
+                                    key=lambda m: (m.importance or 0, m.created_at or datetime.min),
+                                    reverse=True
+                                )
+                                session_state["long_term_memories"] = [
+                                    {
+                                        "memory_id": m.id,
+                                        "memory_key": m.memory_key,
+                                        "content": m.memory_value,
+                                        "type": m.memory_type,
+                                        "importance": m.importance,
+                                        "created_at": m.created_at.isoformat() if m.created_at else None
+                                    }
+                                    for m in memories_sorted[:5]
+                                ]
+                                logger.info("_load_memories", f"Loaded {len(memories_sorted[:5])} LTM (importance only)")
+            except Exception as mem_err:
+                logger.error("_load_memories", f"Failed to load LTM: {mem_err}")
+
+        # 3-B. Scenario Buffer 로딩 (시나리오만)
+        elif not is_freechat and user_id:
+            if hasattr(self, 'scenario_buffer_manager') and self.scenario_buffer_manager:
+                try:
+                    buffer_text = await self.scenario_buffer_manager.get_buffer_for_prompt(user_id, scenario_id)
+                    if buffer_text:
+                        session_state["scenario_buffer"] = buffer_text
+                        logger.info("_load_memories", "Loaded Scenario Buffer")
+                except Exception as e:
+                    logger.warning("_load_memories", f"Failed to load Scenario Buffer: {e}")
 
         logger.info("_load_long_term_memories", "DEBUG: Finished memory loading section")
 
@@ -772,6 +862,155 @@ class ChatUseCase:
                         logger.error("_process_summary_and_memories", f"Memory extraction failed: {extract_err}",
                                    session_id=session_id, exc=extract_err)
 
+            # v2: STM 업데이트 (5턴마다 요약 트리거)
+            if hasattr(self, 'stm_manager') and self.stm_manager:
+                try:
+                    scenario_id = dialogue_result.updated_state.get("scenario_id", "free-talk")
+
+                    # STM 업데이트 전에 현재 chunk 개수 확인
+                    stm_before = None
+                    if hasattr(self, 'stm_repository') and self.stm_repository:
+                        stm_before = await self.stm_repository.get_stm(user_id, scenario_id, session_id)
+
+                    chunk_count_before = len(stm_before.chunk_summaries) if stm_before and stm_before.chunk_summaries else 0
+
+                    await self.stm_manager.update_stm(
+                        user_id=user_id,
+                        scenario_id=scenario_id,
+                        session_id=session_id,
+                        new_turn_data={
+                            "user_input": dialogue_result.updated_state.get("user_input", ""),
+                            "agent_responses": [
+                                {"speaker": d.speaker, "text": d.text}
+                                for d in dialogue_result.dialogues
+                            ]
+                        },
+                        message_history=message_history
+                    )
+                    logger.info("_process_summary_and_memories", "STM updated (v2)")
+
+                    # v2: 새 chunk가 생성되었으면 LTM 추출 (free-talk 전용)
+                    if scenario_id == "free-talk":
+                        stm_after = await self.stm_repository.get_stm(user_id, scenario_id, session_id)
+                        chunk_count_after = len(stm_after.chunk_summaries) if stm_after and stm_after.chunk_summaries else 0
+
+                        # 새 chunk가 추가되었고, MemoryExtractor와 embeddings_service가 있으면 LTM 추출
+                        if chunk_count_after > chunk_count_before and self.memory_extractor and self.embeddings_service:
+                            try:
+                                latest_chunk = stm_after.chunk_summaries[-1]
+                                chunk_summary = latest_chunk.get("summary", "")
+
+                                if chunk_summary and len(chunk_summary) > 50:
+                                    logger.info("_process_summary_and_memories",
+                                               f"Extracting LTM from new chunk (v2): {latest_chunk.get('turn_range')}",
+                                               session_id=session_id)
+
+                                    extracted_memories = await self.memory_extractor.extract_memories(
+                                        conversation_summary=chunk_summary
+                                    )
+
+                                    logger.info("_process_summary_and_memories",
+                                               f"Extracted {len(extracted_memories)} memories from chunk (v2)",
+                                               session_id=session_id)
+
+                                    # 추출된 메모리 저장
+                                    saved_count = 0
+                                    for memory in extracted_memories:
+                                        try:
+                                            memory_embedding = self.embeddings_service.embed(memory.memory_value)
+
+                                            # Entity 이름을 entity_id로 변환
+                                            entity_ids = []
+                                            if memory.related_entities and self.entity_repository:
+                                                for entity_name in memory.related_entities:
+                                                    try:
+                                                        # 먼저 기존 엔티티 검색
+                                                        entity = await self.entity_repository.get_entity_by_name(entity_name)
+                                                        if entity:
+                                                            entity_ids.append(entity.entity_id)
+                                                        else:
+                                                            # 없으면 새로 생성 (character 타입으로 가정)
+                                                            new_entity = await self.entity_repository.create_entity(
+                                                                entity_type="character",
+                                                                entity_name=entity_name,
+                                                                canonical_name=entity_name.lower()
+                                                            )
+                                                            entity_ids.append(new_entity.entity_id)
+                                                            logger.debug("_process_summary_and_memories",
+                                                                        f"Created new entity: {entity_name}")
+                                                    except Exception as entity_err:
+                                                        logger.warning("_process_summary_and_memories",
+                                                                      f"Failed to process entity {entity_name}: {entity_err}")
+
+                                            await self.memory_repository.create_memory(
+                                                user_id=user_id,
+                                                content=memory.memory_value,
+                                                memory_type=memory.memory_type,
+                                                embedding=memory_embedding,
+                                                scenario_id="free-talk",
+                                                importance_score=memory.importance,
+                                                tags=memory.tags,
+                                                confidence=memory.confidence,
+                                                source_session_id=session_id,
+                                                related_entity_ids=entity_ids  # 엔티티 ID 추가
+                                            )
+
+                                            saved_count += 1
+                                            logger.debug("_process_summary_and_memories",
+                                                        f"Saved LTM (v2): {memory.memory_key}",
+                                                        type=memory.memory_type, importance=memory.importance,
+                                                        tags=memory.tags, entities=len(entity_ids))
+
+                                        except Exception as mem_err:
+                                            logger.error("_process_summary_and_memories",
+                                                       f"Failed to save memory (v2): {mem_err}",
+                                                       memory_key=memory.memory_key, exc_info=True)
+
+                                    logger.info("_process_summary_and_memories",
+                                               f"Saved {saved_count}/{len(extracted_memories)} LTM (v2)",
+                                               session_id=session_id)
+
+                            except Exception as ltm_err:
+                                logger.error("_process_summary_and_memories",
+                                           f"LTM extraction from chunk failed (v2): {ltm_err}",
+                                           exc_info=True)
+
+                    # v2: Scenario Buffer 업데이트 (시나리오 모드 전용)
+                    elif scenario_id != "free-talk":
+                        if hasattr(self, 'scenario_buffer_manager') and self.scenario_buffer_manager:
+                            try:
+                                # STM chunk summary를 scenario buffer summary로 사용
+                                stm_after = await self.stm_repository.get_stm(user_id, scenario_id, session_id)
+                                if stm_after and stm_after.chunk_summaries:
+                                    # 모든 chunk를 하나의 buffer summary로 통합
+                                    buffer_summary = "\n\n".join([
+                                        f"[{chunk.get('turn_range')}턴] {chunk.get('summary')}"
+                                        for chunk in stm_after.chunk_summaries
+                                    ])
+
+                                    # Progress data 추출 (현재 stage, turn count 등)
+                                    progress_data = {
+                                        "current_stage": dialogue_result.updated_state.get("current_stage"),
+                                        "stage_turn": dialogue_result.updated_state.get("stage_turn", 0),
+                                        "total_turns": len(message_history)
+                                    }
+
+                                    await self.scenario_buffer_manager.update_buffer(
+                                        user_id=user_id,
+                                        scenario_id=scenario_id,
+                                        buffer_summary=buffer_summary,
+                                        progress_data=progress_data
+                                    )
+                                    logger.info("_process_summary_and_memories",
+                                               f"Scenario Buffer updated for {scenario_id}")
+                            except Exception as buffer_err:
+                                logger.error("_process_summary_and_memories",
+                                           f"Scenario Buffer update failed: {buffer_err}",
+                                           exc_info=True)
+
+                except Exception as stm_err:
+                    logger.error("_process_summary_and_memories", f"STM update failed: {stm_err}", exc_info=True)
+
         except Exception as e:
             logger.error("_process_summary_and_memories", f"Summary generation failed: {e}", exc=e)
 
@@ -944,12 +1183,13 @@ class ChatUseCase:
             )
 
             # ============================================================
-            # 1.5 장기기억 로딩 (세션 초기화 또는 로드 후)
+            # 1.5 메모리 로딩 (v2: STM + LTM/Scenario Buffer + User Profile)
             # ============================================================
-            await self._load_long_term_memories(
+            await self._load_memories(
                 session_state=session_state,
                 user_id=user_id,
-                scenario_id=scenario_id
+                scenario_id=scenario_id,
+                session_id=session_id
             )
 
             # ============================================================
@@ -1080,13 +1320,18 @@ class ChatUseCase:
             # 8. 세션 상태 저장
             # ============================================================
             try:
-                logger.info("create_dialogue", "Saving session state")
+                logger.info("create_dialogue", "🔍 Before saving session to DB",
+                           turn_count=dialogue_result.updated_state.get("turn_count"),
+                           stage_turn=dialogue_result.updated_state.get("stage_turn"))
+
                 await self.session_repository.save_session(
                     session_id=session_id,
                     user_id=user_id,
                     scenario_id=scenario_id,
                     state=dialogue_result.updated_state
                 )
+
+                logger.info("create_dialogue", "🔍 Session saved to DB")
             except Exception as session_save_err:
                 logger.warning("create_dialogue", f"Session save failed (memories already saved): {session_save_err}",
                              session_id=session_id)

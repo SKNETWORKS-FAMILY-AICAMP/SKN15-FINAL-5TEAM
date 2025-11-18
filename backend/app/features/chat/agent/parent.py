@@ -305,8 +305,12 @@ class ParentAgent:
                 # beats_i18n이 있으면 i18n에서 beats를 로드
                 if "beats_i18n" in stage and "beats" not in stage:
                     beats_key = stage["beats_i18n"]
-                    scenario_id = scenario.get("scenario_id", "unknown")
-                    beats = self.scenario_service.get_beats_for_stage(scenario_id, stage_tag.lower())
+
+                    # i18n 섹션에서 직접 beats 가져오기
+                    i18n = scenario.get("i18n", {})
+                    lang_data = i18n.get("ko", {})  # 기본 언어: 한국어
+                    beats = lang_data.get(beats_key)
+
                     if beats:
                         stage = dict(stage)  # 원본 수정 방지
                         stage["beats"] = beats

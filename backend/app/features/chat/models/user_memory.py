@@ -44,6 +44,9 @@ class UserMemory(Base):
     # Embeddings
     embedding = Column(Vector(1536), nullable=True)
 
+    # Scenario Tracking (v2: LTM은 free-talk 전용)
+    scenario_id = Column(String(100), nullable=False, default='free-talk', comment="시나리오 ID (LTM은 free-talk만)")
+
     # Session Tracking
     source_session_id = Column(UUID(as_uuid=True), nullable=True)
     related_session_ids = Column(ARRAY(UUID(as_uuid=True)), nullable=True)

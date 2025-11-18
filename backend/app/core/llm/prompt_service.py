@@ -82,7 +82,10 @@ class PromptService:
         long_term_memories: Optional[list] = None,
         conversation_summary: Optional[str] = None,  # ✅ 대화 요약 추가
         user_name: Optional[str] = None,
-        stage_turn: int = 0  # ✅ Stage 턴 추가
+        stage_turn: int = 0,  # ✅ Stage 턴 추가
+        user_profile: Optional[str] = None,  # v2: User Profile
+        stm_summary: Optional[str] = None,  # v2: STM
+        scenario_buffer: Optional[str] = None  # v2: Scenario Buffer
     ) -> str:
         """
         children.dialogue_generation 프롬프트 생성
@@ -137,24 +140,44 @@ class PromptService:
             recent_history=recent_history
         )
 
-        # 변수 치환을 위한 컨텍스트 준비
+        # v2: User Profile 포맷팅
+        profile_block = f"[사용자 프로필]\n{user_profile}" if user_profile else ""
+
+        # v2: STM 포맷팅
+        stm_block = f"[세션 맥락 (STM)]\n{stm_summary}" if stm_summary else ""
+
+        # v2: Scenario Buffer 포맷팅
+        buffer_block = f"[시나리오 진행 상황]\n{scenario_buffer}" if scenario_buffer else ""
+
+        # v2: 메모리 블록 (LTM 또는 Scenario Buffer)
+        memory_block = ""
+        if long_term_memories:
+            memory_block = f"[장기 기억 (LTM)]\n{formatted_memories}"
+        elif scenario_buffer:
+            memory_block = buffer_block
+
+        # 변수 치환을 위한 컨텍스트 준비 (v2 순서)
         context = {
-            "상황 블록": situation_block,  # ✅ 조건부 상황 블록
+            "세계관": world_context or "(제공되지 않음)",
+            "사용자 프로필": profile_block,  # v2
+            "최근 대화": recent_history,  # v2: 순서 변경
+            "세션 맥락": stm_block,  # v2
+            "메모리 블록": memory_block,  # v2: LTM 또는 Scenario Buffer
+            "상황 블록": situation_block,
             "speaker_pool": ", ".join(speaker_pool),
             "사용자 입력": user_input or "(없음)",
-            "대화 요약": conversation_summary or "(없음)",
-            "장기 기억": formatted_memories,
+            "대화 요약": conversation_summary or "(없음)",  # deprecated
+            "장기 기억": formatted_memories,  # deprecated (메모리 블록으로 통합)
             "현재 턴": str(current_turn),
             "max_turns": str(max_turns),
-            "tone_profile": tone_profile or "(제공되지 않음)", # 넘어가는 건지 의심
-            "atmosphere": atmosphere or "2 (보통)", # 넘어가는 건지 의심
-            "장면 설정": scene_setting or "(제공되지 않음)",  # 넘어가는 건지 의심
-            "이전 장면 요약": previous_scene_summary or "(제공되지 않음)", 
-            "이전 감정 톤": previous_emotion_tone or "(제공되지 않음)", # 넘어가는 건지 의심 & 굳이 ? 싶기도함
-            "공간 연속성": spatial_continuity or "(제공되지 않음)", # # 넘어가는 건지 의심 & 굳이?
-            "캐릭터 상태": character_states or "(제공되지 않음)", # 넘어가는 건지 의심 & 굳이?
-            "전환 힌트": transition_hint or "(제공되지 않음)", # 넘어가는 건지 의심 & 굳이?
-            "세계관": world_context or "(제공되지 않음)",
+            "tone_profile": tone_profile or "(제공되지 않음)",
+            "atmosphere": atmosphere or "2 (보통)",
+            "장면 설정": scene_setting or "(제공되지 않음)",
+            "이전 장면 요약": previous_scene_summary or "(제공되지 않음)",
+            "이전 감정 톤": previous_emotion_tone or "(제공되지 않음)",
+            "공간 연속성": spatial_continuity or "(제공되지 않음)",
+            "캐릭터 상태": character_states or "(제공되지 않음)",
+            "전환 힌트": transition_hint or "(제공되지 않음)",
         }
 
         # 템플릿 변수 치환

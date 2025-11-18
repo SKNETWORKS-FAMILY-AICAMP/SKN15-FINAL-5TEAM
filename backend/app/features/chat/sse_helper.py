@@ -16,7 +16,8 @@ async def sse_generator(
     has_more: bool,
     current_image: str = None,
     output: dict = None,
-    memory_events: list = None
+    memory_events: list = None,
+    stage_turn: int = 0
 ) -> AsyncGenerator[str, None]:
     """
     SSE 형식으로 채팅 응답 스트리밍
@@ -31,7 +32,10 @@ async def sse_generator(
         "type": "metadata",
         "session_id": session_id,
         "has_more": has_more,
-        "current_image": current_image
+        "current_image": current_image,
+        "turn_count": turn_count,
+        "stage_turn": stage_turn,
+        "current_stage": current_stage
     }
     yield f"data: {json.dumps(metadata)}\n\n"
 
@@ -57,6 +61,7 @@ async def sse_generator(
     done_data = {
         "type": "done",
         "turn_count": turn_count,
+        "stage_turn": stage_turn,
         "current_stage": current_stage,
         "affinity_scores": affinity_scores or {},
         "is_ended": is_ended,

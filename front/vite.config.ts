@@ -12,7 +12,15 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    host: '0.0.0.0',
+    host: true,
+    strictPort: true,
+    hmr: {
+      clientPort: 80,
+    },
+    watch: {
+      usePolling: true,
+    },
+    proxy: {},
   },
   build: {
     outDir: 'dist',

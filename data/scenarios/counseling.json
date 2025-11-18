@@ -307,13 +307,12 @@
     },
     {
       "tag": "CONCERN_CHECK",
-      "type": "router",
+      "type": "free_intent",
+      "default_next": "GENERAL_COUNSELING",
       "context": "{user}가 자신의 고민을 이야기하기 시작한다. 탄지로가 고민의 종류를 파악한다.",
       "beats_i18n": "beats_concern_type_check",
       "speaker_pool": ["tanjiro", "narr"],
       "atmosphere": 2,
-      "min_turns": 1,
-      "max_turns": 2,
       "intent_mapping": {
         "concern_love": "LOVE_COUNSELING",
         "concern_career": "CAREER_COUNSELING",
@@ -379,12 +378,11 @@
     },
     {
       "tag": "ACTIVITY_CHOICE",
-      "type": "router",
+      "type": "free_intent",
+      "default_next": "GROUP_GATHERING",
       "context": "상담원이 {user}에게 힐링 활동을 제안한다.",
       "speaker_pool": ["active_counselor"],
       "atmosphere": 2,
-      "min_turns": 1,
-      "max_turns": 1,
       "intent_mapping": {
         "activity_walk": "ACTIVITY_WALK",
         "activity_meditation": "ACTIVITY_MEDITATION",
@@ -487,5 +485,146 @@
     "감사 노트 작성",
     "음악 듣기",
     "그림이나 만들기 활동"
-  ]
+  ],
+  "intents": {
+    "CONCERN_CHECK": {
+      "description": "사용자의 고민 주제 파악",
+      "options": {
+        "concern_love": "연애/사랑 관련 고민",
+        "concern_career": "진로/직업 관련 고민",
+        "concern_relationship": "대인관계 고민",
+        "concern_confidence": "자신감/자존감 고민",
+        "concern_stress": "스트레스/번아웃 고민"
+      }
+    },
+    "ACTIVITY_CHOICE": {
+      "description": "휴식 활동 선택",
+      "options": {
+        "activity_walk": "산책하기",
+        "activity_meditation": "명상하기",
+        "activity_cooking": "요리하기",
+        "activity_skip": "활동 건너뛰기"
+      }
+    }
+  },
+  "router": {
+    "intent_examples": {
+      "concern_love": [
+        "연애 때문에 고민이에요",
+        "좋아하는 사람이 생겼어요",
+        "썸타는 사람이 있어요",
+        "고백하고 싶은데 용기가 안나요",
+        "좋아하는 사람이 생겼는데 고백할 용기가 안나요",
+        "호감 가는 사람에게 다가가기 어려워요",
+        "짝사랑 중이에요",
+        "연애 감정을 어떻게 전달해야 할까요",
+        "사랑하는 사람과 갈등이 있어요",
+        "데이트 조언이 필요해요",
+        "애인이랑 헤어졌어요",
+        "좋아하는 사람이 제 마음을 몰라요",
+        "연애를 해본 적이 없어요",
+        "이성 친구를 사귀고 싶어요",
+        "마음을 고백하고 싶어요",
+        "연애 상담이 필요해요"
+      ],
+      "concern_career": [
+        "진로를 어떻게 정해야 할지 모르겠어요",
+        "취업이 걱정돼요",
+        "직장에서 힘들어요",
+        "커리어 고민이 있어요",
+        "미래가 불안해요",
+        "적성을 모르겠어요",
+        "하고 싶은 일을 찾고 싶어요",
+        "직장을 그만두고 싶어요",
+        "일이 적성에 안 맞는 것 같아요",
+        "앞으로 뭘 해야 할지 막막해요"
+      ],
+      "concern_relationship": [
+        "친구 관계가 힘들어요",
+        "사람들과 어울리기 어려워요",
+        "대인관계 스트레스가 심해요",
+        "소통이 안돼요",
+        "사람들이 무서워요",
+        "친구가 없어요",
+        "친구가 없어서 외로워요",
+        "친구 사귀는 게 어려워요",
+        "사람들과 잘 지내고 싶어요",
+        "친구를 사귀고 싶은데 방법을 모르겠어요",
+        "사람들과 갈등이 많아요",
+        "인간관계가 피곤해요",
+        "외로워요",
+        "소외감을 느껴요",
+        "사람들이 저를 싫어하는 것 같아요",
+        "무리에 끼지 못하겠어요"
+      ],
+      "concern_confidence": [
+        "자신감이 없어요",
+        "자존감이 낮아요",
+        "용기를 내고 싶어요",
+        "사람들 앞에서 떨려요",
+        "항상 소극적이에요",
+        "나 자신이 싫어요",
+        "자신있게 행동하고 싶어요",
+        "당당하고 싶어요",
+        "나를 사랑하고 싶어요",
+        "스스로를 믿을 수가 없어요"
+      ],
+      "concern_stress": [
+        "스트레스 받아요",
+        "너무 피곤해요",
+        "힘들어요",
+        "지쳐요",
+        "번아웃이 왔어요",
+        "우울해요",
+        "불안해요",
+        "마음이 무거워요",
+        "기분이 안좋아요",
+        "에너지가 없어요",
+        "모든 게 귀찮아요",
+        "아무것도 하기 싫어요",
+        "멘탈이 무너졌어요",
+        "감정 기복이 심해요"
+      ],
+      "activity_walk": [
+        "산책하고 싶어요",
+        "걷고 싶어요",
+        "밖에 나가고 싶어요",
+        "공원 가고 싶어요",
+        "신선한 공기를 마시고 싶어요",
+        "바깥 활동하고 싶어요",
+        "자연 속을 걷고 싶어요",
+        "햇볕 쬐고 싶어요"
+      ],
+      "activity_meditation": [
+        "명상하고 싶어요",
+        "조용히 쉬고 싶어요",
+        "평화로운 시간이 필요해요",
+        "마음을 가라앉히고 싶어요",
+        "고요한 시간을 갖고 싶어요",
+        "차분하게 있고 싶어요",
+        "호흡에 집중하고 싶어요"
+      ],
+      "activity_cooking": [
+        "요리하고 싶어요",
+        "음식 만들고 싶어요",
+        "쿠키 굽고 싶어요",
+        "먹을거 만들고 싶어요",
+        "케이크 만들고 싶어요",
+        "같이 요리해요",
+        "뭔가 만들어보고 싶어요"
+      ],
+      "activity_skip": [
+        "괜찮아요",
+        "필요없어요",
+        "다음에 할게요",
+        "넘어갈게요",
+        "안할래요",
+        "됐어요",
+        "그냥 이야기만 할래요",
+        "활동은 안할게요"
+      ]
+    },
+    "embedding_threshold": 0.7,
+    "fallback_threshold": 0.28
+  }
 }
