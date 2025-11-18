@@ -286,6 +286,45 @@
     animation: scrollUnfurl 0.55s ease-out forwards;
     transform-origin: top center;
   }
+
+  /* TMI 로딩 오버레이용 커스텀 애니메이션 */
+  @keyframes kenBurnsSoft {
+    0% { transform: scale(1) translateY(0); }
+    100% { transform: scale(1.06) translateY(-4px); }
+  }
+
+  .ken-burns-soft {
+    animation: kenBurnsSoft 12s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+
+  @keyframes tmiTextReveal {
+    0% { opacity: 0; transform: translateY(10px); }
+    45% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .tmi-text-reveal {
+    animation: tmiTextReveal 0.9s ease-out;
+  }
+
+  @keyframes progressShimmer {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+
+  .progress-shimmer {
+    background-size: 200% 100%;
+    animation: progressShimmer 1.6s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ken-burns-soft,
+    .tmi-text-reveal,
+    .progress-shimmer {
+      animation: none;
+    }
+  }
 }
 
 @layer components {

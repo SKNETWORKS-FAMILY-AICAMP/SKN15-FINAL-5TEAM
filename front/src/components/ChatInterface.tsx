@@ -11,6 +11,7 @@ import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useApp } from '@/contexts/AppContext';
 import { normalizeScenarioId } from '@/utils/scenario';
 import { getScenarioCharacters, filterExcludedCharacters } from '@/config/scenarioCharacters';
+import TmiLoadingOverlay from './TmiLoadingOverlay';
 
 const CDN_URL = import.meta.env.VITE_CDN_URL || '/images';
 
@@ -97,6 +98,11 @@ export default function ChatInterface({
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null); // 현재 타이핑 interval
   const pendingMessagesRef = useRef<Message[]>([]); // Skip 시 즉시 표시할 남은 메시지들
   const shouldSkip = useRef(false); // Skip 플래그
+
+  const shouldShowTmiOverlay = useMemo(
+    () => (isLoading || isAutoRequesting) && !isTyping && !isEnded,
+    [isAutoRequesting, isEnded, isLoading, isTyping]
+  );
 
   // 가장 최근 메시지 ID 계산 (모든 메시지 포함 - 시스템/나레이션/사용자/AI 모두)
   // 단, 첫 메시지는 확대하지 않음 (겹침 방지)
@@ -1818,6 +1824,10 @@ export default function ChatInterface({
 
   return (
     <div className="w-full h-full flex flex-col md:flex-row bg-gray-100">
+      <TmiLoadingOverlay
+        isVisible={shouldShowTmiOverlay}
+        assetBaseUrl={CDN_URL}
+      />
       {/* 왼쪽: 컷신 이미지 영역 (50%) */}
       <div className="relative w-full md:w-1/2 h-[40vh] md:h-full overflow-hidden">
         {/* 컷신 배경 이미지 */}
