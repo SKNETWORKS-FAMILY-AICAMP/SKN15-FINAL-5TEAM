@@ -1,9 +1,9 @@
 {
   "scenario_id": "mugen-train",
   "default_background": {
-    "background_id": "derailed_train",
-    "index": "1",
-    "file_name": "탄지로_기본.png"
+    "background_id": "무한열차.png",
+    "index": "0",
+    "file_name": "무한열차.png"
   },
   "stage_map": {
     "TRAIN_PRELUDE": {
