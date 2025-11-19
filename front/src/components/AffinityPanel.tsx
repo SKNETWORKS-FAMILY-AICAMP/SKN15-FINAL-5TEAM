@@ -98,7 +98,10 @@ export default function AffinityPanel({ affinityScores, characterIds }: Affinity
   const charactersToShow = toCharacterList(characterIds);
 
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg p-2.5 border border-purple-200/50">
+    <div
+      data-tour-target="affinity-panel"
+      className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg p-2.5 border border-purple-200/50"
+    >
       {/* 헤더 */}
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-purple-600">💜</span>

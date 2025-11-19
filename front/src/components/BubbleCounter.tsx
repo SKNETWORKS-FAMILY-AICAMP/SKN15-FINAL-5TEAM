@@ -48,7 +48,10 @@ export default function BubbleCounter({ showEmergencyRefill = true, compact = fa
   // Compact 모드 (헤더용)
   if (compact) {
     return (
-      <div className="relative bg-purple-50 backdrop-blur-sm rounded-2xl p-3 shadow-sm border border-purple-200">
+      <div
+        data-tour-target="bubble-counter"
+        className="relative bg-purple-50 backdrop-blur-sm rounded-2xl p-3 shadow-sm border border-purple-200"
+      >
         <div className="flex items-center gap-2">
           <span className="text-2xl">🫧</span>
           <div className="flex flex-col">

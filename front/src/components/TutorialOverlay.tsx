@@ -22,9 +22,27 @@ const steps: Step[] = [
   },
   {
     title: '설정 메뉴',
-    description: '여기서 테마(다크/라이트)와 글씨 크기를 조절할 수 있습니다.',
+    description: '여기서 테마(다크/라이트)와 글씨 크기를 조절, 다국어 설정을 할 수 있습니다.',
     targetSelector: '[data-tour-target="chat-settings-button"]',
     placement: 'left'
+  },
+  {
+    title: '내 계정',
+    description: 'My account 버튼을 눌러 계정 정보와 크레딧을 확인할 수 있습니다.',
+    targetSelector: '[data-tour-target="my-account-button"]',
+    placement: 'left'
+  },
+  {
+    title: '친밀도',
+    description: '각 캐릭터와의 친밀도를 확인할 수 있습니다. 대화를 통해 친밀도를 높여보세요!',
+    targetSelector: '[data-tour-target="affinity-panel"]',
+    placement: 'top'
+  },
+  {
+    title: '버블 크레딧',
+    description: '버블이 0이 되면 채팅을 할 수 없습니다. 버블을 충전하여 대화를 계속하세요!',
+    targetSelector: '[data-tour-target="bubble-counter"]',
+    placement: 'top'
   },
   {
     title: '채팅 입력창',
@@ -45,6 +63,12 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
       setStep(step + 1);
     } else {
       onComplete();
+    }
+  };
+
+  const handlePrevious = () => {
+    if (step > 0) {
+      setStep(step - 1);
     }
   };
 
@@ -124,12 +148,22 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {step + 1} / {steps.length}
           </div>
-          <button 
-            onClick={handleNext}
-            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold"
-          >
-            {step < steps.length - 1 ? '다음 →' : '시작하기'}
-          </button>
+          <div className="flex gap-2">
+            {step > 0 && (
+              <button
+                onClick={handlePrevious}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-semibold"
+              >
+                ← 이전
+              </button>
+            )}
+            <button
+              onClick={handleNext}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold"
+            >
+              {step < steps.length - 1 ? '다음 →' : '시작하기'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
