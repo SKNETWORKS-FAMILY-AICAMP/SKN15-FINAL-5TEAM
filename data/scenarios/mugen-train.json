@@ -34,14 +34,141 @@
   },
   "stages": [
     {
+      "tag": "TRAIN_PRELUDE",
+      "type": "scene",
+      "context": "무한열차가 움직이기 시작한다. 렌고쿠는 자리에 앉아 도시락을 꺼내 한입 베어 물며 '우마이!'를 연발한다. {user}는 스승 옆자리에 앉아 조용히 열차 밖 풍경을 바라보다가, 렌고쿠의 밝은 표정을 본다.",
+      "beats": [
+        {
+          "goal": "무한열차가 움직이기 시작한다. {user}와 렌고쿠가 나란히 앉는다. 렌고쿠는 도시락을 먹으며 '우마이!'를 연발하고, {user}는 미소를 짓는다."
+        }
+      ],
+      "speaker_pool": ["rengoku", "narr"],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "HEROES_ARRIVE"
+    },
+    {
+      "tag": "HEROES_ARRIVE",
+      "type": "scene",
+      "context": "객차 문이 갑자기 열리고 낯선 검사 세 명이 들어온다. 렌고쿠와 {user}가 고개를 돌려 그들을 바라본다. 아직 {user}는 그들이 누구인지 모른다.",
+      "beats": [
+        {
+          "goal": "객차 문이 열리며 낯선 검사 세 명이 들어온다. 렌고쿠가 그들을 보고 반응한다."
+        }
+      ],
+      "speaker_pool": ["rengoku", "narr"],
+      "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 1,
+      "next": "MISSION_BRIEFING"
+    },
+    {
+      "tag": "MISSION_BRIEFING",
+      "type": "scene",
+      "context": "탄지로 일행(탄지로, 젠이츠, 이노스케)이 렌고쿠 님을 찾아 인사한다. 서로 자기소개를 나누며 분위기가 무르익는다. 렌고쿠는 무한열차 실종 사건(40명 이상 실종)에 대해 설명한다. 탄지로가 히노카미 카구라에 대해 묻자, 렌고쿠는 불의 호흡과 관련이 있을 것 같다고 추측한다. 렌고쿠는 {user}를 가리키며 '이 아이는 나의 츠구코(계자)이자, 불의 뜻을 이어받을 {user}다'라고 자랑스럽게 소개한다. 탄지로 일행이 {user}에게 인사하고 관심을 보인다. 이노스케는 {user}에게 도전적으로 나오고, 젠이츠는 겁을 먹는다.",
+      "speaker_pool": ["rengoku", "tanjiro", "zenitsu", "inosuke", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "ENMU_APPEAR"
+    },
+    {
+      "tag": "ENMU_APPEAR",
+      "type": "scene",
+      "context": "차장이 검표를 하러 들어온다. 승객들에게 표를 확인한다. 차장이 떠나자 객차 안이 이상하게 조용해진다. 불이 서서히 꺼지며 승객들이 하나둘 잠들기 시작한다. {user}의 눈꺼풀이 무거워지며 꿈속으로 빠져든다. (⚠️ 아직 엔무의 정체나 능력을 알리지 말 것. 단지 '이상한 분위기'만 묘사)",
+      "speaker_pool": ["narr", "zenitsu", "inosuke", "enmu"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "USER_DREAM_MEMORY"
+    },
+    {
+      "tag": "USER_DREAM_MEMORY",
+      "type": "scene",
+      "context": "[장면 전환] {user}가 잠에 빠져든다. 꿈속에서 과거를 본다. {user}의 고향 마을. 붉은 불길이 집들을 집어삼키고 있다. 마을 사람들('살려주세요!', '엄마!', '혈귀다!')의 비명이 사방에서 들려온다. 혈귀의 그림자가 골목을 누빈다. 그때, 과거의 렌고쿠가 나타나 혈귀를 단칼에 베어버린다. 렌고쿠: '이제 괜찮다!' 렌고쿠의 따뜻한 미소와 불꽃 같은 눈빛. {user}는 그 순간 살아야 할 이유를 찾았다. 렌고쿠와 {user}가 처음 만난 순간이다. 렌고쿠가 {user}를 츠구코로 거둬들인다. (⚠️ 지금의 장면은 '꿈속 과거 시점'입니다.)",
+      "speaker_pool": ["narr", "rengoku"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 3,
+      "next": "DREAM_TEST"
+    },
+    {
+      "tag": "DREAM_TEST",
+      "type": "scene",
+      "context": "[장면 전환] 꿈이 바뀐다. 수련장. 렌고쿠가 {user}를 마주보고 서 있다. 렌고쿠: '내 마지막 가르침이다. 잘 듣거라. 검사는 무엇을 위해 강해져야 한다고 생각하나?' {user}의 대답을 기다린다.",
+      "speaker_pool": ["rengoku", "narr"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 3,
+      "next": "DREAM_QUESTION"
+    },
+    {
+      "tag": "DREAM_QUESTION",
+      "type": "scene",
+      "context": "꿈속 수련장. 렌고쿠가 {user}를 진지하게 바라보며 마지막 질문을 한다: '검사는 무엇을 위해 강해져야 한다고 생각하나?' {user}의 대답을 기다린다. 렌고쿠는 {user}의 답변을 듣고 반응한다.",
+      "speaker_pool": ["rengoku", "narr"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "DREAM_ESCAPE_SUCCESS"
+    },
+    {
+      "tag": "DREAM_ESCAPE_SUCCESS",
+      "type": "scene",
+      "context": "렌고쿠가 {user}의 답변을 듣고 깊게 고개를 끄덕인다. '네 마음을 확인했다.' 렌고쿠의 모습이 서서히 흐려지기 시작한다. '이제 깨어날 시간이다. 현실로 돌아가거라!' 꿈이 깨지며 {user}가 현실로 돌아온다.",
+      "speaker_pool": ["rengoku", "narr"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 1,
+      "next": "AWAKEN"
+    },
+    {
+      "tag": "AWAKEN",
+      "type": "scene",
+      "context": "[장면 전환] {user}가 깨어난다. 객차 안은 여전히 어둡다. 승객들이 모두 잠들어 있다. 탄지로가 {user}를 발견하고 '깨어났구나!'라며 안도한다. 렌고쿠: '잘 견뎠다. 이제 이 열차에 숨어있는 오니를 막아야 한다.' 탄지로가 상황을 설명한다: 오니 때문에 우리가 꿈에 빠져들었고, 현재는 오니가 열차와 융합했고, 오니의 목을 찾아야 한다.",
+      "speaker_pool": ["narr", "tanjiro", "rengoku"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 3,
+      "next": "ENMU_REAL_BATTLE"
+    },
+    {
+      "tag": "ENMU_REAL_BATTLE",
+      "type": "scene",
+      "context": "엔무가 열차 전체와 융합해 공격해온다. 사방에서 촉수가 튀어나온다. 엔무는 분노하며 공격하고, 탄지로는 {user}에게 엔무의 목 위치를 묻는다. {user}, 탄지로, 이노스케는 {user}가 말한 곳으로 향한다. 격렬한 전투가 벌어진다. 젠이츠는 아직 잠들어있고, 렌고쿠는 승객들을 지키고있다.",
+      "speaker_pool": ["tanjiro", "inosuke", "rengoku", "enmu", "narr"],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "ENMU_DEFEAT"
+    },
+    {
+      "tag": "ENMU_DEFEAT",
+      "type": "scene",
+      "context": "엔무의 목을 찾았다. 탄지로는 {user}에게 지금이 기회라고 호흡을 쓰라고 외친다. 엔무의 목을 벤다. 엔무는 마지막으로 한마디를 남긴다. 엔무가 쓰러지며 열차가 요동친다. 승객들이 깨어나기 시작한다.",
+      "speaker_pool": ["tanjiro", "inosuke", "enmu", "narr"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "UpperMoons3_appeared"
+    },
+    {
+      "tag": "UpperMoons3_appeared",
+      "type": "scene",
+      "next": "ROUTE_CHOICE",
+      "speaker_pool": ["rengoku", "tanjiro", "akaza", "narr"],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 3,
+      "context": "[장면 전환] 엔무를 쓰러뜨렸다. 하지만 기쁨도 잠시, 열차가 탈선한다. 승객들을 모두 대피시킨다. 그때, 강렬한 살기가 느껴진다. 갑자기 상현 삼의 오니(아카자)가 나타난다. 렌고쿠는 모두를 뒤로 물리고 아카자와 대치한다. 아카자는 렌고쿠의 강함에 흥미를 느껴 혈귀가 되라고 제안한다. 렌고쿠는 단호히 거절한다. 격렬한 전투가 시작된다."
+    },
+    {
       "tag": "ROUTE_CHOICE",
       "type": "free_intent",
       "max_turns": 0,
       "default_next": "RECRUIT",
-      "speaker_pool": [
-        "tanjiro",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "narr"],
       "atmosphere": 0,
       "intent_mapping": {
         "choose_allies_path": "RECRUIT",
@@ -53,10 +180,7 @@
       "tag": "INTERVENE",
       "type": "scene",
       "next": "RECKLESS_SACRIFICE",
-      "speaker_pool": [
-        "tanjiro",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "narr"],
       "atmosphere": 0,
       "min_turns": 1,
       "max_turns": 2,
@@ -67,10 +191,7 @@
       "type": "mission",
       "next": "RETURN_TO_FRONT",
       "context": "아카자와 렌고쿠가 싸우는 동안, 탄지로와 {user}가 동료들을 찾기로 결정했다. 탄지로가 코를 킁킁거리며 냄새를 맡는다.\n\n⚠️ 중요: 탄지로는 **반드시 {user}에게 질문**을 해야 합니다:\n- '냄새가 두 군데서 나! 열차 앞쪽 기관실 쪽에서 짐승의 냄새가... 이노스케일 거야! 그리고 뒤쪽 칸에서는 번개 냄새가 나. 젠이츠가 틀림없어!'\n- '누구를 먼저 찾을까? 앞쪽 기관실의 이노스케? 아니면 뒤쪽 칸의 젠이츠?'\n\n🚫 절대 금지:\n- 탄지로가 스스로 결정하거나 선택하는 것\n- 탄지로가 '가자', '찾으러 가자' 등의 행동 대사를 하는 것\n- {user}의 선택 없이 진행하는 것\n\n✅ 필수:\n- 탄지로는 **질문으로 끝나야** 합니다\n- {user}가 선택할 때까지 대기",
-      "speaker_pool": [
-        "tanjiro",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "narr"],
       "atmosphere": 0,
       "objective": "이노스케와 젠이츠를 설득해 렌고쿠를 지원하도록 하라"
     },
@@ -78,12 +199,7 @@
       "tag": "RECKLESS_SACRIFICE",
       "type": "scene",
       "next": "END_BAD",
-      "speaker_pool": [
-        "tanjiro",
-        "rengoku",
-        "akaza",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
       "atmosphere": 0,
       "min_turns": 1,
       "max_turns": 2,
@@ -93,12 +209,7 @@
       "tag": "RETURN_TO_FRONT",
       "type": "scene",
       "next": "END_ROUTER",
-      "speaker_pool": [
-        "tanjiro",
-        "rengoku",
-        "akaza",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
       "dynamic_speaker_stages": {
         "allies_recruited": true
       },
@@ -114,12 +225,7 @@
         "HIDDEN": "END_HIDDEN",
         "BASIC": "END_BASIC"
       },
-      "speaker_pool": [
-        "tanjiro",
-        "rengoku",
-        "akaza",
-        "narr"
-      ]
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"]
     },
     {
       "tag": "END_HIDDEN",
@@ -140,12 +246,7 @@
       "tag": "END_BASIC",
       "type": "scene",
       "context": "렌고쿠와 아카자의 격렬한 사투가 계속된다.렌고쿠가 염의 호흡 오의로 아카자의 급소를 붙잡는다. 하지만 치명상을 입는다. 동이 트기 시작한다. 아카자가 팔을 뜯어내며 필사적으로 도망친다(여기서 퇴장해야함). 렌고쿠의 왼팔이 찢겨나간다. 렌고쿠가 무릎을 꿇는다. 치명적인 상처지만, 렌고쿠는 미소 짓는다. 자신의 의무를 다했다는 안도감. 탄지로와 {user}가 곁에 있다. 렌고쿠가 마지막 말을 남긴다. 천천히 눈을 감는다. 슬픔과 존경이 뒤섞인 이별의 순간.(⚠️엔딩입니다. 극적으로 자연스럽게 마무리하세요)",
-      "speaker_pool": [
-        "tanjiro",
-        "rengoku",
-        "akaza",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
       "min_turns": 1,
       "max_turns": 3
     },
@@ -153,28 +254,15 @@
       "tag": "END_BAD",
       "type": "scene",
       "context": "앞서 {user}가 무모하게 돌진했던 순간. 아카자의 공격이 {user}를 향했다. 렌고쿠가 {user}를 감싸안고 대신 공격을 받았다. 렌고쿠의 가슴이 관통당했다. 치명상이다. 동이 트고 아카자가 도망친다. 하지만 렌고쿠의 상처는 너무 깊다. {user}와 탄지로가 렌고쿠를 부축한다. 렌고쿠는 {user}를 위로하려 한다. 자책하지 말라고. 기둥의 의무라고 마지막 말을 전한다. 렌고쿠의 손에서 힘이 빠진다. {user}의 눈앞에서 렌고쿠가 쓰러진다. 깊은 죄책감과 상실감. (⚠️엔딩입니다. 극적으로 자연스럽게 마무리하세요)",
-      "speaker_pool": [
-        "tanjiro",
-        "rengoku",
-        "akaza",
-        "narr"
-      ],
+      "speaker_pool": ["tanjiro", "rengoku", "akaza", "narr"],
       "min_turns": 1,
       "max_turns": 3
     }
   ],
   "metadata": {
     "default_stage": "TRAIN_PRELUDE",
-    "auto_advance_tags": [
-      "AWAKEN",
-      "UpperMoons3_appeared",
-      "RETURN_TO_FRONT"
-    ],
-    "dynamic_speaker_stages": [
-      "RETURN_TO_FRONT",
-      "END_HIDDEN",
-      "END_BASIC"
-    ],
+    "auto_advance_tags": ["AWAKEN", "UpperMoons3_appeared", "RETURN_TO_FRONT"],
+    "dynamic_speaker_stages": ["RETURN_TO_FRONT", "END_HIDDEN", "END_BASIC"],
     "return_stage": {
       "stage_tag": "RETURN_TO_FRONT",
       "prefetch_queue_key": "mission_success_queue",
@@ -226,28 +314,14 @@
       },
       "success_queue_key": "mission_success_queue",
       "heuristic_keywords": {
-        "zenitsu": [
-          "네즈코",
-          "사랑",
-          "지켜",
-          "위험"
-        ],
-        "inosuke": [
-          "겁쟁",
-          "약하",
-          "싸우",
-          "도전",
-          "멧돼"
-        ]
+        "zenitsu": ["네즈코", "사랑", "지켜", "위험"],
+        "inosuke": ["겁쟁", "약하", "싸우", "도전", "멧돼"]
       }
     },
     "ending": {
       "router_tag": "END_ROUTER",
       "hidden_condition": {
-        "required_order": [
-          "inosuke",
-          "zenitsu"
-        ],
+        "required_order": ["inosuke", "zenitsu"],
         "max_attempts": 3
       }
     },
@@ -255,16 +329,8 @@
       "scenario_key": "mugen_train"
     },
     "fallback": {
-      "exclude_speakers": [
-        "akaza",
-        "narr",
-        "inosuke",
-        "zenitsu",
-        "rengoku"
-      ],
-      "fallback_speakers": [
-        "tanjiro"
-      ]
+      "exclude_speakers": ["akaza", "narr", "inosuke", "zenitsu", "rengoku"],
+      "fallback_speakers": ["tanjiro"]
     },
     "router": {
       "intent_stage": "ROUTE_CHOICE",
