@@ -497,7 +497,22 @@ export const idolBandBackgrounds: ScenarioBackgrounds = {
   ]
 };
 
-export const allScenarioBackgrounds: ScenarioBackgrounds[] = [mugenTrainBackgrounds, idolBandBackgrounds];
+export const endingAftermathBackgrounds: ScenarioBackgrounds = {
+  scenarioId: 'ending-aftermath',
+  scenarioName: '엔딩 그 이후',
+  defaultBackground: '엔딩이후.png',
+  backgrounds: [
+    {
+      id: "엔딩이후.png",
+      index: 0,
+      fileName: "엔딩이후.png",
+      name: "엔딩 이후 기본 배경",
+      description: "평화로운 마을의 일상"
+    }
+  ]
+};
+
+export const allScenarioBackgrounds: ScenarioBackgrounds[] = [mugenTrainBackgrounds, idolBandBackgrounds, endingAftermathBackgrounds];
 
 export function getScenarioBackgrounds(scenarioId: string): ScenarioBackgrounds | undefined {
   const normalized = normalizeScenarioId(scenarioId);
