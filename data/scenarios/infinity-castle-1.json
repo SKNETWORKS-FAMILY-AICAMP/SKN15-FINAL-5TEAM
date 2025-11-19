@@ -1,0 +1,284 @@
+{
+  "scenario_id": "infinity-castle-1",
+  "title": "🏯 무한성 상편",
+  "description": "나키메의 혈귀술로 무한성에 강제 소환된 귀살대. 일반 대원으로서 주들을 지원하며 상현들과의 최종 결전을 치른다.",
+  "version": "1.0",
+  "mountable": true,
+  "is_active": true,
+  "world_id": "infinity-castle-1",
+  "image_url": "/images/scenarios/무한성.webp",
+  "thumbnail_url": "/images/scenarios/무한성.webp",
+  "tags": ["#무한성", "#최종결전", "#상현", "#액션"],
+  "card_size": "large",
+  "display_order": 7,
+  "difficulty": "hard",
+  "prologue_messages": [
+    {
+      "speaker": "narr",
+      "text": "갑작스럽게 땅이 갈라지고, 세계가 뒤집힌다. 귀살대 전원이 강제로 끌려들어간 곳은...",
+      "emotion": "tense"
+    },
+    {
+      "speaker": "narr",
+      "text": "무한성 — 상현 4 나키메의 혈귀술로 만들어진, 끊임없이 변형되는 거대한 미로.",
+      "emotion": "ominous"
+    },
+    {
+      "speaker": "tanjiro",
+      "text": "이게 무슨...! 모두들 흩어졌어!",
+      "emotion": "shocked"
+    },
+    {
+      "speaker": "narr",
+      "text": "{{user}}는 일반 대원으로서 무한성에 낙하했다. 주들을 지원하고, 하현급 도깨비들을 처리하며, 최종 결전에서 살아남아야 한다.",
+      "emotion": "determined"
+    }
+  ],
+  "character_refs": {
+    "tanjiro": "backend/data/characters/tanjiro.json",
+    "giyu": "backend/data/characters/giyu.json",
+    "zenitsu": "backend/data/characters/zenitsu.json",
+    "shinobu": "backend/data/characters/shinobu.json",
+    "akaza": "backend/data/characters/akaza.json",
+    "douma": "backend/data/characters/douma.json",
+    "kaigaku": "backend/data/characters/kaigaku.json"
+  },
+  "stages": [
+    {
+      "tag": "forced_fall",
+      "type": "scene",
+      "title": "무한성 강제 낙하",
+      "context": "나키메의 혈귀술이 발동한다. 귀살대 전원이 무한성으로 강제 소환된다. {{user}}는 일반 대원으로서 낙하하며, 주변이 빠르게 변형되는 것을 목격한다. 벽이 움직이고, 공간이 뒤틀리며, 동료들이 사방으로 흩어진다.",
+      "beats": [
+        {
+          "goal": "나키메의 혈귀술로 무한성에 강제 소환됨. {{user}}와 대원들이 낙하하며 흩어진다."
+        }
+      ],
+      "speaker_pool": ["narr", "tanjiro"],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "scattered_corps"
+    },
+    {
+      "tag": "scattered_corps",
+      "type": "scene",
+      "title": "흩어진 귀살대",
+      "context": "{{user}}가 낙하 지점에서 정신을 차린다. 주변에 몇몇 일반 대원들이 보인다. 멀리서 주들의 목소리가 들린다. 무한성은 계속 변형되고 있어 길을 찾기 어렵다. 갑자기 하현급 힘을 가진 잡 도깨비들이 나타나 공격해온다.",
+      "beats": [
+        {
+          "goal": "{{user}}가 정신을 차리고 주변 상황을 파악함. 하현급 도깨비들이 나타남."
+        }
+      ],
+      "speaker_pool": ["narr", "tanjiro"],
+      "atmosphere": 1,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "lower_demons_battle"
+    },
+    {
+      "tag": "lower_demons_battle",
+      "type": "scene",
+      "title": "하현급 도깨비 소탕",
+      "context": "{{user}}와 일반 대원들이 협력하여 하현급 도깨비들을 처리한다. 도깨비들은 끊임없이 몰려온다. 멀리서 주들이 상현과 싸우는 소리가 들린다. {{user}}는 주들의 체력을 온존시키기 위해 잡 도깨비를 최대한 막아야 한다는 것을 깨닫는다.",
+      "beats": [
+        {
+          "goal": "{{user}}가 하현급 도깨비들을 처리하며 주들을 지원해야 함을 깨달음."
+        }
+      ],
+      "speaker_pool": ["narr", "tanjiro"],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "battlefield_router"
+    },
+    {
+      "tag": "battlefield_router",
+      "type": "router",
+      "title": "전장 선택",
+      "context": "무한성 곳곳에서 주들과 상현의 전투가 벌어지고 있다.\n\n{{user}}는 일반 대원으로서 어느 전장으로 달려가 지원할지 선택할 수 있다:\n\n**1. 기유/탄지로 vs 아카자 (상현 3)**\n- 무한열차에서 렌고쿠를 죽인 원수\n- 탄지로와 기유가 함께 맞서고 있음\n- 격렬한 육탄전이 벌어지는 중\n\n**2. 젠이츠 vs 카이가쿠 (상현 6)**\n- 젠이츠의 선배이자 배신자\n- 번개의 호흡 사용자끼리의 대결\n- 젠이츠가 홀로 싸우고 있음\n\n**3. 시노부 vs 도우마 (상현 2)**\n- 시노부의 언니 카나에를 죽인 원수\n- 독을 사용하는 시노부의 최후 전투\n- 위험한 상황, 지원이 절실함\n\n어느 전장으로 향할 것인가? 자연스럽게 선택을 표현하세요.\n(예: \"탄지로를 도우러 가겠어요\", \"렌고쿠 씨의 원수를 갚고 싶어요\", \"젠이츠가 걱정돼요\" 등)",
+      "routes": {
+        "giyu_tanjiro_route": "기유|탄지로|아카자|상현3|상현 3|렌고쿠|원수|복수",
+        "zenitsu_route": "젠이츠|카이가쿠|상현6|상현 6|번개|뇌의호흡|선배|배신|배신자",
+        "shinobu_route": "시노부|도우마|상현2|상현 2|나비|독|언니|카나에"
+      },
+      "default_route": "giyu_tanjiro_route",
+      "fallback_prompt": "어느 전장으로 향하고 싶으신가요? 기유/탄지로, 젠이츠, 시노부 중 하나를 선택해주세요."
+    },
+    {
+      "tag": "giyu_tanjiro_route",
+      "type": "scene",
+      "title": "기유/탄지로 vs 아카자 1",
+      "context": "{{user}}가 전장에 도착한다. 기유와 탄지로가 아카자와 격렬하게 싸우고 있다. 아카자는 여전히 강력하다. 탄지로가 '렌고쿠 씨!'라고 외치며 공격한다. {{user}}는 주변에서 몰려오는 잡 도깨비들을 처리하며 두 사람의 전투를 지원한다.",
+      "beats": [
+        {
+          "goal": "{{user}}가 기유/탄지로 전장에 도착. 아카자와의 전투를 목격하며 잡 도깨비 처리."
+        }
+      ],
+      "speaker_pool": ["tanjiro", "giyu", "akaza", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "giyu_tanjiro_climax"
+    },
+    {
+      "tag": "giyu_tanjiro_climax",
+      "type": "scene",
+      "title": "렌고쿠의 복수",
+      "context": "전투가 절정에 이른다. 아카자가 강력한 공격을 퍼붓는다. 기유가 부상을 입고, 탄지로가 히노카미 카구라를 펼친다. {{user}}는 결정적 순간에 아카자의 시야를 방해하거나 부상자를 후송하는 등 중요한 역할을 한다. 탄지로와 기유의 합동 공격으로 아카자에게 치명타를 입힌다.",
+      "beats": [
+        {
+          "goal": "전투 절정. {{user}}의 지원으로 탄지로와 기유가 아카자에게 타격을 입힘."
+        }
+      ],
+      "speaker_pool": ["tanjiro", "giyu", "akaza", "narr"],
+      "atmosphere": 4,
+      "min_turns": 2,
+      "max_turns": 4,
+      "next": "akaza_end"
+    },
+    {
+      "tag": "akaza_end",
+      "type": "scene",
+      "title": "아카자의 최후",
+      "context": "아카자가 쓰러진다. 탄지로가 '렌고쿠 씨...'라고 중얼거린다. 아카자는 소멸하기 전 과거를 회상하며 눈물을 흘린다. {{user}}와 탄지로, 기유가 잠시 숨을 고른다. 무한성은 여전히 요동친다. 다른 전장에서도 전투가 계속되고 있다.",
+      "beats": [
+        {
+          "goal": "아카자 패배. 탄지로와 {{user}}가 렌고쿠를 추모함. 전투 종료."
+        }
+      ],
+      "speaker_pool": ["tanjiro", "giyu", "narr"],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "all_routes_converge"
+    },
+    {
+      "tag": "zenitsu_route",
+      "type": "scene",
+      "title": "젠이츠 vs 카이가쿠 1",
+      "context": "{{user}}가 전장에 도착한다. 젠이츠가 카이가쿠와 대치하고 있다. 카이가쿠는 배신자이자 젠이츠의 선배다. 카이가쿠가 조롱하며 '너 같은 겁쟁이가 뭘 할 수 있겠어?'라고 말한다. 젠이츠는 눈을 뜨고 있다 — 각성한 상태다. {{user}}는 주변 잡 도깨비들을 처리하며 젠이츠를 지원한다.",
+      "beats": [
+        {
+          "goal": "{{user}}가 젠이츠/카이가쿠 전장 도착. 각성한 젠이츠를 목격하며 지원."
+        }
+      ],
+      "speaker_pool": ["zenitsu", "kaigaku", "narr"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "zenitsu_climax"
+    },
+    {
+      "tag": "zenitsu_climax",
+      "type": "scene",
+      "title": "번개의 호흡 칠의 형",
+      "context": "젠이츠가 뇌의 호흡 칠의 형 '호뢰신(火雷神)'을 펼친다 — 자신이 창조한 기술이다. 번개가 무한성을 가른다. 카이가쿠가 당황하며 공격하지만, 젠이츠의 검이 더 빠르다. {{user}}는 젠이츠가 집중할 수 있도록 주변을 정리한다.",
+      "beats": [
+        {
+          "goal": "젠이츠가 칠의 형을 펼침. {{user}}의 지원으로 카이가쿠에게 타격."
+        }
+      ],
+      "speaker_pool": ["zenitsu", "kaigaku", "narr"],
+      "atmosphere": 4,
+      "min_turns": 2,
+      "max_turns": 4,
+      "next": "kaigaku_end"
+    },
+    {
+      "tag": "kaigaku_end",
+      "type": "scene",
+      "title": "카이가쿠의 패배",
+      "context": "카이가쿠가 쓰러진다. 젠이츠는 눈물을 흘리며 '선배... 왜 그랬어요...'라고 중얼거린다. {{user}}가 젠이츠의 어깨에 손을 올린다. 카이가쿠가 소멸하며 마지막으로 '...미안하다'고 속삭인다. 젠이츠가 고개를 숙인다.",
+      "beats": [
+        {
+          "goal": "카이가쿠 패배. 젠이츠의 슬픔과 성장. {{user}}가 위로함."
+        }
+      ],
+      "speaker_pool": ["zenitsu", "narr"],
+      "atmosphere": 1,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "all_routes_converge"
+    },
+    {
+      "tag": "shinobu_route",
+      "type": "scene",
+      "title": "시노부 vs 도우마 1",
+      "context": "{{user}}가 전장에 도착한다. 시노부가 도우마와 싸우고 있다. 도우마는 웃으며 '네 언니도 맛있었어'라고 조롱한다. 시노부의 얼굴이 차갑게 굳는다. {{user}}는 시노부가 위험하다는 것을 직감한다 — 도우마는 상현 2로, 극도로 강력하다. {{user}}는 잡 도깨비들을 처리하며 시노부를 지원한다.",
+      "beats": [
+        {
+          "goal": "{{user}}가 시노부/도우마 전장 도착. 시노부의 위험한 상황을 목격하며 지원."
+        }
+      ],
+      "speaker_pool": ["shinobu", "douma", "narr"],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "shinobu_sacrifice"
+    },
+    {
+      "tag": "shinobu_sacrifice",
+      "type": "scene",
+      "title": "시노부의 각오",
+      "context": "시노부가 도우마에게 돌진한다. 독이 묻은 검으로 공격하지만, 도우마는 재생한다. 시노부가 점점 밀린다. {{user}}가 '시노부 님!'이라고 외치며 방해 공격을 시도하지만, 도우마가 시노부를 붙잡는다. 시노부가 미소 지으며 '괜찮아요. 이건 제 각오니까'라고 말한다. {{user}}는 무력감을 느끼며 다른 지원을 찾아 나선다.",
+      "beats": [
+        {
+          "goal": "시노부가 위기에 처함. {{user}}가 도우려 하지만 역부족. 지원 요청 필요."
+        }
+      ],
+      "speaker_pool": ["shinobu", "douma", "narr"],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 4,
+      "next": "douma_reinforcement"
+    },
+    {
+      "tag": "douma_reinforcement",
+      "type": "scene",
+      "title": "지원 도착",
+      "context": "{{user}}의 외침에 다른 주들이 도착한다 (카나오, 이노스케 등). 시노부가 이미 치명상을 입었지만, 도우마의 몸속에 막대한 양의 독이 축적되어 있다 — 시노부의 계획이었다. 카나오와 이노스케가 약해진 도우마를 공격한다. {{user}}는 부상당한 시노부를 후송하며 그녀의 마지막 미소를 본다.",
+      "beats": [
+        {
+          "goal": "지원군 도착. 시노부의 희생으로 도우마 약화. {{user}}가 시노부를 후송함."
+        }
+      ],
+      "speaker_pool": ["shinobu", "douma", "narr"],
+      "atmosphere": 1,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "all_routes_converge"
+    },
+    {
+      "tag": "all_routes_converge",
+      "type": "scene",
+      "title": "전장들의 결과",
+      "context": "{{user}}가 지원한 전장에서의 전투가 끝났다. 숨을 고르며 주변을 둘러보는데, 무한성 곳곳에서 다른 소식이 들려온다.\n\n귀살대원들이 외친다:\n\n'기유 님과 탄지로가 아카자를 쓰러뜨렸습니다!'\n'젠이츠가 카이가쿠를 물리쳤어요!'\n'시노부 님이... 희생하셨지만, 도우마를 약화시켰고 카나오와 이노스케가 격파했습니다!'\n\n상현들이 모두 쓰러졌다. {{user}}는 안도의 한숨을 쉰다. 하지만 무한성은 여전히 요동치고 있다.",
+      "beats": [
+        {
+          "goal": "모든 전장의 결과 확인. 상현 격파 완료. 잠시 안도."
+        }
+      ],
+      "speaker_pool": ["narr", "tanjiro"],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "to_be_continued"
+    },
+    {
+      "tag": "to_be_continued",
+      "type": "scene",
+      "title": "무한성 상편 완료",
+      "context": "상현들은 모두 쓰러졌다. {{user}}와 귀살대는 잠시 숨을 고른다.\n\n탄지로가 말한다: '아직... 끝나지 않았어요. 무잔이 어딘가에 있어요.'\n\n무한성 깊은 곳에서 불길한 기운이 느껴진다. 도깨비의 시조, 키부츠지 무잔이 기다리고 있다.\n\n최후의 전투가 다가온다...\n\n(무한성 하편에서 계속)",
+      "beats": [
+        {
+          "goal": "상편 완료. 무잔전 예고. 시나리오 종료."
+        }
+      ],
+      "speaker_pool": ["narr", "tanjiro"],
+      "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 2
+    }
+  ]
+}

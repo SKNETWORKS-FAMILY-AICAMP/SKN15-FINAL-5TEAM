@@ -512,7 +512,37 @@ export const endingAftermathBackgrounds: ScenarioBackgrounds = {
   ]
 };
 
-export const allScenarioBackgrounds: ScenarioBackgrounds[] = [mugenTrainBackgrounds, idolBandBackgrounds, endingAftermathBackgrounds];
+export const infinityCastle1Backgrounds: ScenarioBackgrounds = {
+  scenarioId: 'infinity-castle-1',
+  scenarioName: '무한성 상편',
+  defaultBackground: '무한성.webp',
+  backgrounds: [
+    {
+      id: "무한성.webp",
+      index: 0,
+      fileName: "무한성.webp",
+      name: "무한성 기본 배경",
+      description: "끊임없이 변형되는 무한성"
+    }
+  ]
+};
+
+export const convenienceStoreTanjiroBackgrounds: ScenarioBackgrounds = {
+  scenarioId: 'convenience-store-tanjiro',
+  scenarioName: '편의점 탄지로',
+  defaultBackground: '편의점탄지로.png',
+  backgrounds: [
+    {
+      id: "편의점탄지로.png",
+      index: 0,
+      fileName: "편의점탄지로.png",
+      name: "편의점 탄지로 기본 배경",
+      description: "탄지로와의 카카오톡 대화"
+    }
+  ]
+};
+
+export const allScenarioBackgrounds: ScenarioBackgrounds[] = [mugenTrainBackgrounds, idolBandBackgrounds, endingAftermathBackgrounds, infinityCastle1Backgrounds, convenienceStoreTanjiroBackgrounds];
 
 export function getScenarioBackgrounds(scenarioId: string): ScenarioBackgrounds | undefined {
   const normalized = normalizeScenarioId(scenarioId);
