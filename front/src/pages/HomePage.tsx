@@ -25,6 +25,7 @@ interface CharacterCard {
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState('Home');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'story' | 'freeform'>('all');
   const [likedCards, setLikedCards] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [characters, setCharacters] = useState<CharacterCard[]>([]);
@@ -139,7 +140,23 @@ export default function HomePage() {
     }
   };
 
+  // 시나리오 분류 함수
+  const getScenarioCategory = (scenarioId: string): 'story' | 'freeform' => {
+    // 스토리형: 무한성, 무한열차
+    const storyScenarios = ['infinity-castle-1', 'mugen-train'];
+    // 자유대화형: 나머지 모두
+    return storyScenarios.includes(scenarioId) ? 'story' : 'freeform';
+  };
+
   const filteredCharacters = characters.filter(character => {
+    // 1. 탭 필터링
+    if (activeTab === 'Category' && categoryFilter !== 'all') {
+      // Category 탭에서 특정 카테고리 선택 시 필터링
+      const characterCategory = getScenarioCategory(character.id);
+      if (characterCategory !== categoryFilter) return false;
+    }
+
+    // 2. 검색어 필터링
     if (!searchQuery.trim()) return true;
 
     const query = searchQuery.toLowerCase().trim();
@@ -163,7 +180,38 @@ export default function HomePage() {
     return titleMatch || descriptionMatch || tagMatch || idMatch || keywordMatch;
   });
 
+  // 탭에 따라 정렬
+  const displayedCharacters = (() => {
+    if (activeTab === 'Ranking') {
+      // Ranking 탭: 좋아요 수 기준 내림차순 정렬
+      return [...filteredCharacters].sort((a, b) => b.likes - a.likes);
+    } else if (activeTab === 'Category') {
+      // Category 탭: 카테고리별로 그룹화하여 정렬 (스토리형 먼저, 자유대화형 나중)
+      return [...filteredCharacters].sort((a, b) => {
+        const categoryA = getScenarioCategory(a.id);
+        const categoryB = getScenarioCategory(b.id);
+        if (categoryA === categoryB) return 0;
+        return categoryA === 'story' ? -1 : 1;
+      });
+    } else {
+      // Home 탭: 기본 순서 (JSON 파일 순서)
+      return filteredCharacters;
+    }
+  })();
+
   const tabs = ['Home', 'Ranking', 'Category'];
+
+  // 탭 변경 핸들러
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    if (tab !== 'Category') {
+      setCategoryFilter('all'); // Category 탭이 아니면 필터 리셋
+    }
+  };
+
+  // 카테고리별 시나리오 개수 계산
+  const storyCount = characters.filter(c => getScenarioCategory(c.id) === 'story').length;
+  const freeformCount = characters.filter(c => getScenarioCategory(c.id) === 'freeform').length;
 
   return (
     <div className="min-h-screen bg-hero text-theme-primary">
@@ -181,8 +229,9 @@ export default function HomePage() {
         style={{
           backgroundImage: `url('${CDN_URL}/홈배경.jpg')`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          height: 'calc(100vh - 64px)'
+          backgroundPosition: 'center top',
+          backgroundAttachment: 'fixed',
+          minHeight: 'calc(100vh - 64px)'
         }}
       >
         {/* 배경 오버레이 */}
@@ -200,7 +249,7 @@ export default function HomePage() {
               {tabs.map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => handleTabChange(tab)}
                   className={`relative text-lg font-inter font-medium px-4 py-1 transition-all duration-300 rounded-full border ${
                     activeTab === tab
                       ? 'bg-theme-surface-strong text-theme-primary border-theme-card shadow-theme'
@@ -244,6 +293,8 @@ export default function HomePage() {
             </div>
           </div>
 
+
+
           {/* 메인 제목 */}
           <div className="text-center flex-shrink-0">
             <div className="flex items-center justify-center space-x-4 mb-2">
@@ -262,10 +313,55 @@ export default function HomePage() {
               </h1>
             </div>
 
+            {/* 카테고리 필터 버튼 (Category 탭일 때만 표시) */}
+            {activeTab === 'Category' && !searchQuery && (
+              <div className="flex items-center justify-start gap-6 mt-4 mb-2 ml-8">
+                <button
+                  onClick={() => setCategoryFilter('all')}
+                  className={`relative text-base lg:text-lg font-bold pb-2 transition-all duration-300 ${
+                    categoryFilter === 'all'
+                      ? 'text-theme-primary'
+                      : 'text-theme-secondary hover:text-theme-primary'
+                  }`}
+                >
+                  전체
+                  {categoryFilter === 'all' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setCategoryFilter('story')}
+                  className={`relative text-base lg:text-lg font-bold pb-2 transition-all duration-300 ${
+                    categoryFilter === 'story'
+                      ? 'text-theme-primary'
+                      : 'text-theme-secondary hover:text-theme-primary'
+                  }`}
+                >
+                  스토리형
+                  {categoryFilter === 'story' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setCategoryFilter('freeform')}
+                  className={`relative text-base lg:text-lg font-bold pb-2 transition-all duration-300 ${
+                    categoryFilter === 'freeform'
+                      ? 'text-theme-primary'
+                      : 'text-theme-secondary hover:text-theme-primary'
+                  }`}
+                >
+                  자유대화형
+                  {categoryFilter === 'freeform' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500" />
+                  )}
+                </button>
+              </div>
+            )}
+
             {searchQuery && (
               <div className="mt-2 text-sm text-theme-secondary bg-white/80 px-4 py-2 rounded-full inline-block">
                 <span className="font-medium text-theme-primary">"{searchQuery}"</span> 검색 결과:
-                <span className="font-bold text-[#6c5ce7] ml-1">{filteredCharacters.length}개</span>
+                <span className="font-bold text-[#6c5ce7] ml-1">{displayedCharacters.length}개</span>
               </div>
             )}
           </div>
@@ -293,10 +389,296 @@ export default function HomePage() {
                   </button>
                 </div>
               </div>
-            ) : searchQuery && filteredCharacters.length > 0 && filteredCharacters.length <= 3 ? (
+            ) : activeTab === 'Ranking' ? (
+              <div className="w-full px-4 pb-32">
+                {/* Top 3 - 카드 형식 */}
+                <div className="max-w-6xl mx-auto mb-8">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* 2등 */}
+                    {displayedCharacters[1] && (
+                      <Link key={displayedCharacters[1].id} to={displayedCharacters[1].link}>
+                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl">
+                          {/* 랭킹 배지 */}
+                          <div className="absolute top-3 left-3 z-20">
+                            <div className="relative flex items-center justify-center w-14 h-14">
+                              <div className="absolute inset-0 rounded-full blur-md bg-gray-400" />
+                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-xl border-2 bg-gradient-to-br from-gray-200 to-gray-500 text-gray-900 border-gray-100">
+                                2
+                              </div>
+                              <div className="absolute -top-1 -right-1 text-xl">🥈</div>
+                            </div>
+                          </div>
+
+                          {/* 이미지 */}
+                          <div className="relative h-56 overflow-hidden bg-black/40">
+                            <img
+                              src={displayedCharacters[1].image}
+                              alt={displayedCharacters[1].title}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            />
+                          </div>
+
+                          {/* 정보 */}
+                          <div className="p-5">
+                            <h3 className="font-black mb-2 truncate text-xl text-gray-300">
+                              {displayedCharacters[1].title}
+                            </h3>
+                            <p className="text-sm text-theme-secondary mb-4 line-clamp-2">
+                              {displayedCharacters[1].description}
+                            </p>
+
+                            {/* 태그 */}
+                            <div className="flex flex-wrap gap-1.5 mb-4">
+                              {displayedCharacters[1].tags.slice(0, 3).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="text-xs chip-theme px-2 py-1 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* 통계 */}
+                            <div className="flex items-center justify-between pt-3 border-t border-theme-card">
+                              <div className="flex items-center gap-3 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="font-bold text-theme-primary">{displayedCharacters[1].likes.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                  </svg>
+                                  <span className="text-theme-secondary">{displayedCharacters[1].comments.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  <span className="text-theme-secondary">{displayedCharacters[1].views.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    )}
+
+                    {/* 1등 - 가운데 */}
+                    {displayedCharacters[0] && (
+                      <Link key={displayedCharacters[0].id} to={displayedCharacters[0].link}>
+                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl">
+                          {/* 랭킹 배지 */}
+                          <div className="absolute top-3 left-3 z-20">
+                            <div className="relative flex items-center justify-center w-14 h-14 animate-pulse">
+                              <div className="absolute inset-0 rounded-full blur-md bg-yellow-400" />
+                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-xl border-2 bg-gradient-to-br from-yellow-300 to-yellow-600 text-gray-900 border-yellow-200">
+                                1
+                              </div>
+                              <div className="absolute -top-1 -right-1 text-2xl">👑</div>
+                            </div>
+                          </div>
+
+                          {/* 이미지 */}
+                          <div className="relative h-56 overflow-hidden bg-black/40">
+                            <img
+                              src={displayedCharacters[0].image}
+                              alt={displayedCharacters[0].title}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            />
+                          </div>
+
+                          {/* 정보 */}
+                          <div className="p-5">
+                            <h3 className="font-black mb-2 truncate text-2xl text-yellow-400">
+                              {displayedCharacters[0].title}
+                            </h3>
+                            <p className="text-sm text-theme-secondary mb-4 line-clamp-2">
+                              {displayedCharacters[0].description}
+                            </p>
+
+                            {/* 태그 */}
+                            <div className="flex flex-wrap gap-1.5 mb-4">
+                              {displayedCharacters[0].tags.slice(0, 3).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="text-xs chip-theme px-2 py-1 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* 통계 */}
+                            <div className="flex items-center justify-between pt-3 border-t border-theme-card">
+                              <div className="flex items-center gap-3 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="font-bold text-theme-primary">{displayedCharacters[0].likes.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                  </svg>
+                                  <span className="text-theme-secondary">{displayedCharacters[0].comments.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  <span className="text-theme-secondary">{displayedCharacters[0].views.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    )}
+
+                    {/* 3등 */}
+                    {displayedCharacters[2] && (
+                      <Link key={displayedCharacters[2].id} to={displayedCharacters[2].link}>
+                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl">
+                          {/* 랭킹 배지 */}
+                          <div className="absolute top-3 left-3 z-20">
+                            <div className="relative flex items-center justify-center w-14 h-14">
+                              <div className="absolute inset-0 rounded-full blur-md bg-orange-400" />
+                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-xl border-2 bg-gradient-to-br from-orange-300 to-orange-600 text-gray-900 border-orange-200">
+                                3
+                              </div>
+                              <div className="absolute -top-1 -right-1 text-xl">🥉</div>
+                            </div>
+                          </div>
+
+                          {/* 이미지 */}
+                          <div className="relative h-56 overflow-hidden bg-black/40">
+                            <img
+                              src={displayedCharacters[2].image}
+                              alt={displayedCharacters[2].title}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            />
+                          </div>
+
+                          {/* 정보 */}
+                          <div className="p-5">
+                            <h3 className="font-black mb-2 truncate text-xl text-orange-400">
+                              {displayedCharacters[2].title}
+                            </h3>
+                            <p className="text-sm text-theme-secondary mb-4 line-clamp-2">
+                              {displayedCharacters[2].description}
+                            </p>
+
+                            {/* 태그 */}
+                            <div className="flex flex-wrap gap-1.5 mb-4">
+                              {displayedCharacters[2].tags.slice(0, 3).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="text-xs chip-theme px-2 py-1 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* 통계 */}
+                            <div className="flex items-center justify-between pt-3 border-t border-theme-card">
+                              <div className="flex items-center gap-3 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="font-bold text-theme-primary">{displayedCharacters[2].likes.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                  </svg>
+                                  <span className="text-theme-secondary">{displayedCharacters[2].comments.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <svg className="w-4 h-4 text-theme-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  <span className="text-theme-secondary">{displayedCharacters[2].views.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4위 이하 - 목록형 */}
+                {displayedCharacters.length > 3 && (
+                  <div className="max-w-5xl mx-auto">
+                    <div className="space-y-4">
+                      {displayedCharacters.slice(3).map((character, index) => (
+                        <Link key={character.id} to={character.link}>
+                          <div className="group relative rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.01] shadow-lg">
+                            {/* 메인 */}
+                            <div className="relative bg-white/90 backdrop-blur-sm border-2 border-purple-200/50 hover:border-purple-400 transition-all duration-300 p-4 flex items-center gap-4">
+                              {/* 랭킹 번호 */}
+                              <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center">
+                                <span className="font-black text-xl text-white">{index + 4}</span>
+                              </div>
+
+                              {/* 이미지 */}
+                              <div className="flex-shrink-0 relative w-20 h-20">
+                                <div className="absolute inset-0 rounded-lg bg-purple-500 blur-md opacity-30" />
+                                <div className="relative rounded-lg overflow-hidden border border-white/10">
+                                  <img
+                                    src={character.image}
+                                    alt={character.title}
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* 정보 */}
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-gray-800 truncate mb-1">
+                                  {character.title}
+                                </h4>
+                                <p className="text-xs text-gray-600 line-clamp-1">
+                                  {character.description}
+                                </p>
+                              </div>
+
+                              {/* 통계 */}
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm">❤️</span>
+                                  <span className="font-semibold text-red-500 text-sm">{character.likes.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm">💬</span>
+                                  <span className="font-medium text-blue-500 text-sm">{character.comments.toLocaleString()}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm">👁️</span>
+                                  <span className="font-medium text-green-500 text-sm">{character.views.toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              {/* 화살표 */}
+                              <div className="flex-shrink-0 text-gray-400 group-hover:text-purple-500 group-hover:translate-x-1 transition-all duration-300">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : searchQuery && displayedCharacters.length > 0 && displayedCharacters.length <= 3 ? (
               <div className="w-full flex justify-center">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-4xl">
-                  {filteredCharacters.map((character) => (
+                  {displayedCharacters.map((character) => (
                     <SearchResultCard
                       key={character.id}
                       character={character}
@@ -309,15 +691,16 @@ export default function HomePage() {
               </div>
             ) : (
               <CharacterCarousel
-                characters={filteredCharacters}
+                characters={displayedCharacters}
                 likedCards={likedCards}
                 onLike={handleLike}
+                showRanking={false}
               />
             )}
           </div>
 
           {/* 검색 결과 없음 */}
-          {searchQuery && filteredCharacters.length === 0 && (
+          {searchQuery && displayedCharacters.length === 0 && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <div className="text-6xl mb-4">🔍</div>

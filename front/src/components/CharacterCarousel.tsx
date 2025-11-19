@@ -18,38 +18,36 @@ interface CharacterCarouselProps {
   characters: CharacterCard[];
   likedCards: Set<string>;
   onLike: (cardId: string) => void;
+  showRanking?: boolean;
 }
 
 const MAX_CENTER_SCALE = 1.15;
 const MIN_SIDE_SCALE = 0.85;
 
-export default function CharacterCarousel({ characters, likedCards, onLike }: CharacterCarouselProps) {
+export default function CharacterCarousel({ characters, likedCards, onLike, showRanking = false }: CharacterCarouselProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [currentIndex, setCurrentIndex] = useState(characters.length); // 복제된 카드들 고려
+  const [currentIndex, setCurrentIndex] = useState(0); // 첫 번째 카드부터 시작
   const [containerWidth, setContainerWidth] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
-  // 무한 순환을 위한 복제된 카드 배열 생성
-  const duplicatedCharacters = useMemo(() => ([
-    ...characters, // 앞쪽 복제
-    ...characters, // 원본
-    ...characters  // 뒤쪽 복제
-  ]), [characters]);
+  // 복제 없이 원본 배열만 사용
+  const duplicatedCharacters = useMemo(() => characters, [characters]);
 
-  // 반응형 설정
+  // 반응형 설정 - 모든 경우에 3개씩 표시 (큰 카드)
   const getVisibleCards = useCallback(() => {
     if (containerWidth < 480) return 1; // 작은 모바일 (480px 미만)
     if (containerWidth < 768) return 1; // 모바일 (480px-767px)
-    if (containerWidth < 1024) return 3; // 태블릿 (768px-1023px)
-    if (containerWidth < 1280) return 5; // 작은 데스크톱 (1024px-1279px)
-    return 5; // 큰 데스크톱 (1280px 이상)
-  }, [containerWidth]);
+    if (containerWidth < 1024) return Math.min(3, characters.length); // 태블릿 (768px-1023px)
+    // 데스크톱: 항상 3개 표시 (큰 카드 유지)
+    return 3;
+  }, [containerWidth, characters.length]);
 
   const visibleCards = getVisibleCards();
   const slotWidth = visibleCards > 0 ? containerWidth / visibleCards : containerWidth;
   const cardSpacing = slotWidth || 0;
-  const cardWidth = cardSpacing * 0.8; // 최대 스케일 적용 시에도 프레임 내에 유지
+  // 모든 경우에 90% 크기로 표시 (크고 시원한 느낌)
+  const cardWidth = cardSpacing * 0.9;
 
   // 컨테이너 크기 감지
   useEffect(() => {
@@ -64,21 +62,21 @@ export default function CharacterCarousel({ characters, likedCards, onLike }: Ch
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // 길이가 변하면 중앙 인덱스 재정렬
+  // 길이가 변하면 인덱스 재설정
   useEffect(() => {
     if (characters.length === 0) {
       setCurrentIndex(0);
       return;
     }
-    setCurrentIndex(characters.length);
-  }, [characters.length, visibleCards]);
+    // 캐릭터가 변경되면 처음으로 리셋
+    setCurrentIndex(0);
+  }, [characters.length]);
 
   // 동적 중앙 카드 계산 - 항상 화면 중앙에 위치한 카드 감지
   const getCurrentCenterCard = useCallback(() => {
     if (visibleCards === 1) return currentIndex;
-    if (visibleCards === 3) return currentIndex + 1;
-    if (visibleCards === 5) return currentIndex + 2;
-    return currentIndex;
+    // 3개 표시 시 중앙은 currentIndex + 1
+    return currentIndex + 1;
   }, [currentIndex, visibleCards]);
 
   const centerIndex = getCurrentCenterCard();
@@ -89,17 +87,13 @@ export default function CharacterCarousel({ characters, likedCards, onLike }: Ch
   const moveToCard = useCallback((index: number) => {
     if (isTransitioning) return;
 
-    setCurrentIndex(index);
+    // 경계 범위 내로 제한
+    const clampedIndex = Math.max(0, Math.min(index, characters.length - 1));
+    setCurrentIndex(clampedIndex);
     setIsTransitioning(true);
 
     setTimeout(() => {
       setIsTransitioning(false);
-      // 경계 확인 및 위치 재조정
-      if (index <= 0) {
-        setCurrentIndex(characters.length); // 첫 번째 세트로 점프
-      } else if (index >= characters.length * 2) {
-        setCurrentIndex(characters.length); // 두 번째 세트로 점프
-      }
     }, 300);
   }, [isTransitioning, characters.length]);
 
@@ -196,13 +190,10 @@ export default function CharacterCarousel({ characters, likedCards, onLike }: Ch
     }
   }, [handleWheel]);
 
-  // 인디케이터 도트 클릭
-  const handleDotClick = (index: number) => {
-    moveToCard(index);
-  };
+  // 인디케이터 도트 클릭 핸들러는 아래 JSX에서 직접 처리
 
-  const canScrollLeft = true; // 무한 순환으로 항상 스크롤 가능
-  const canScrollRight = true; // 무한 순환으로 항상 스크롤 가능
+  const canScrollLeft = currentIndex > 0;
+  const canScrollRight = currentIndex < characters.length - 1;
 
   // 더보기 모달 핸들러
   const handleExpandCard = (cardId: string) => {
@@ -300,6 +291,8 @@ export default function CharacterCarousel({ characters, likedCards, onLike }: Ch
                 visibleCards={visibleCards}
                 onExpand={handleExpandCard}
                 isTransitioning={isTransitioning}
+                showRanking={showRanking}
+                rankingNumber={showRanking ? index + 1 : undefined}
               />
             );
           })}
@@ -316,10 +309,7 @@ export default function CharacterCarousel({ characters, likedCards, onLike }: Ch
               <button
                 key={index}
                 onClick={() => {
-                  // 클릭한 카드가 중앙에 오도록 currentIndex 계산 (두 번째 세트 기준)
-                  const targetIndex = characters.length + index;
-                  const newCurrentIndex = Math.max(0, targetIndex - 2);
-                  moveToCard(newCurrentIndex);
+                  moveToCard(index);
                 }}
                 className={`w-2 h-2 rounded-full transition-all duration-300 ${
                   isActive
@@ -365,6 +355,8 @@ interface CharacterCardProps {
   visibleCards: number;
   onExpand: (cardId: string) => void;
   isTransitioning: boolean;
+  showRanking?: boolean;
+  rankingNumber?: number;
 }
 
 function CharacterCardComponent({
@@ -377,10 +369,12 @@ function CharacterCardComponent({
   cardSpacing,
   visibleCards,
   onExpand,
-  isTransitioning
+  isTransitioning,
+  showRanking = false,
+  rankingNumber
 }: CharacterCardProps) {
-  // 중앙 카드 확대 효과 및 거리별 스케일링
-  const scale = isCenter ? MAX_CENTER_SCALE : Math.max(MIN_SIDE_SCALE, 1 - distanceFromCenter * 0.08);
+  // 랭킹 모드일 때는 스케일링 없음, 일반 모드일 때만 중앙 카드 확대
+  const scale = showRanking ? 1 : (isCenter ? MAX_CENTER_SCALE : Math.max(MIN_SIDE_SCALE, 1 - distanceFromCenter * 0.08));
   const opacity = visibleCards === 5 ? (distanceFromCenter === 0 ? 1 : Math.max(0.45, 1 - distanceFromCenter * 0.12)) : 1;
   const zIndex = isCenter ? 30 : Math.max(10, 20 - distanceFromCenter);
 
@@ -399,6 +393,15 @@ function CharacterCardComponent({
         padding: '0 10px', // 카드 간 최소 여백
       }}
     >
+      {/* 랭킹 번호 (카드 바깥쪽 상단) */}
+      {showRanking && rankingNumber && (
+        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 z-30">
+          <span className="text-4xl font-extrabold italic text-white drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.8)]">
+            {rankingNumber}
+          </span>
+        </div>
+      )}
+
       <Link to={character.link}>
         <div
           className={`
