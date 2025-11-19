@@ -5,7 +5,7 @@
   "version": "3.0",
   "mountable": true,
   "is_active": true,
-  "world_id": "modern_au",
+  "world_id": "counseling",
   "image_url": "/images/scenarios/counseling.jpg",
   "thumbnail_url": "/images/scenarios/counseling_thumb.jpg",
   "tags": ["#상담소", "#힐링AU", "#감정공감", "#일상"],
@@ -308,7 +308,7 @@
     {
       "tag": "CONCERN_CHECK",
       "type": "router",
-      "default_next": "GENERAL_COUNSELING",
+      "default_next": "STRESS_COUNSELING",
       "intent_mapping": {
         "concern_love": "LOVE_COUNSELING",
         "concern_career": "CAREER_COUNSELING",
