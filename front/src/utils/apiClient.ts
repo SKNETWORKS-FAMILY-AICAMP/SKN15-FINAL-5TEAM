@@ -43,6 +43,9 @@ const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     console.warn('리프레시 토큰이 없습니다');
+    // 리프레시 토큰이 없으면 로그아웃 처리
+    clearTokens();
+    window.location.href = '/';
     return null;
   }
 
@@ -58,10 +61,19 @@ const refreshAccessToken = async (): Promise<string | null> => {
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('토큰 갱신 실패:', error);
-    // 토큰 갱신 실패 시 clearTokens는 호출하지 않음
-    // 401 응답 인터셉터에서 처리하도록 함
+
+    // 400 또는 401 에러면 리프레시 토큰이 만료되었거나 무효함
+    // 자동 로그아웃 처리
+    if (error?.response?.status === 400 || error?.response?.status === 401) {
+      console.warn('리프레시 토큰이 만료되었습니다. 자동 로그아웃합니다.');
+      clearTokens();
+      // 현재 페이지 URL을 저장해두고 로그인 후 복귀할 수 있도록
+      sessionStorage.setItem('redirect_after_login', window.location.pathname);
+      window.location.href = '/';
+    }
+
     return null;
   }
 };

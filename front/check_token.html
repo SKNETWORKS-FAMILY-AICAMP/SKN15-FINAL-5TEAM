@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+const token = localStorage.getItem('access_token');
+console.log('Access Token exists:', !!token);
+console.log('Token:', token ? token.substring(0, 20) + '...' : 'null');
+
+// Check if token is expired (JWT)
+if (token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const exp = payload.exp * 1000;
+    const now = Date.now();
+    console.log('Token expires:', new Date(exp));
+    console.log('Current time:', new Date(now));
+    console.log('Is expired:', now > exp);
+  } catch (e) {
+    console.error('Failed to parse token:', e);
+  }
+}
+
+document.body.innerHTML = '<h1>Check browser console (F12)</h1>';
+</script>
+</body>
+</html>

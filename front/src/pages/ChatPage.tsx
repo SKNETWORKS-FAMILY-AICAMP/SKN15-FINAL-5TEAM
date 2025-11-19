@@ -12,7 +12,7 @@ import { getHistory } from '@/utils/storageUtils';
 
 export default function ChatPage() {
   const { characterId: routeCharacterId, sessionId: routeSessionId } = useParams<{ characterId?: string; sessionId?: string }>();
-  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId, updateBubbles } = useApp();
+  const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, updateBubbles } = useApp();
   const navigate = useNavigate();
 
   // Character and session state
@@ -119,13 +119,14 @@ export default function ChatPage() {
         setSessionCheckDone(false);
         setShowTutorial(false);
       } else {
-        const tutorialKey = currentUserId ? `tutorialCompleted:${currentUserId}` : 'tutorialCompleted:guest';
-        if (!localStorage.getItem(tutorialKey)) {
+        // 로그인된 경우, sessionCheckDone이 true가 되면 튜토리얼 표시
+        // (새 세션 시작 또는 히스토리 로드 완료 후)
+        if (sessionCheckDone && !hasStartedChat) {
           setShowTutorial(true);
         }
       }
     }
-  }, [isAuthLoading, isLoggedIn, openLoginModal, currentUserId]);
+  }, [isAuthLoading, isLoggedIn, openLoginModal, sessionCheckDone, hasStartedChat]);
 
   // Check for last session after login (only after auth loading completes)
   useEffect(() => {
@@ -170,9 +171,9 @@ export default function ChatPage() {
   };
 
   const handleCompleteTutorial = () => {
-    const tutorialKey = currentUserId ? `tutorialCompleted:${currentUserId}` : 'tutorialCompleted:guest';
-    localStorage.setItem(tutorialKey, 'true');
     setShowTutorial(false);
+    // 튜토리얼 완료 후 hasStartedChat을 true로 설정하여 채팅 시작으로 간주
+    setHasStartedChat(true);
   };
 
   // Warn user before leaving page (browser close/refresh)
