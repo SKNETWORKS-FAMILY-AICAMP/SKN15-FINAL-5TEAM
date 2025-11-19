@@ -51,42 +51,17 @@ class RouterStageHandler:
         stage_turn = state.get("stage_turn", 0)
         user_input = state.get("user_input", "")
 
-        # stage_turn == 0인 경우, Message History에서 마지막 user 입력 가져오기
-        # (스테이지가 방금 전환되었으므로 이전 턴의 입력으로 라우팅 결정)
+        # stage_turn == 0인 경우, 이전 턴의 입력을 사용 (스테이지 전환 직후)
+        # StateService가 스테이지 전환 시 user_input을 cached_user_input에 저장함
         if stage_turn == 0:
-            session_id = state.get("session_id")
-            if session_id:
-                try:
-                    from app.features.chat.repositories import DialogueRepository
-                    from app.core.db.session import get_db
-
-                    # DB 세션을 context manager로 관리 (자동 close)
-                    db = next(get_db())
-                    try:
-                        dialogue_repo = DialogueRepository(db)
-
-                        # 최적화: 마지막 user 메시지만 직접 조회 (전체 히스토리 로드 불필요)
-                        from sqlalchemy import desc
-                        from app.features.chat.models import Dialogue
-
-                        last_user_dialogue = db.query(Dialogue).filter(
-                            Dialogue.session_id == session_id,
-                            Dialogue.speaker == "user"
-                        ).order_by(desc(Dialogue.created_at)).first()
-
-                        if last_user_dialogue:
-                            last_user_input = last_user_dialogue.content
-                            if last_user_input and last_user_input != user_input:
-                                logger.info("handle", "Using last user message from history for routing",
-                                           current_input=user_input[:30] if user_input else "empty",
-                                           previous_input=last_user_input[:30])
-                                user_input = last_user_input
-                    finally:
-                        # DB 세션 명시적 종료
-                        db.close()
-
-                except Exception as e:
-                    logger.warning("handle", f"Failed to load message history: {e}")
+            cached_input = state.get("cached_user_input", "")
+            if cached_input:
+                user_input = cached_input
+                logger.info("handle", "Router stage starting with cached input",
+                           cached_input=cached_input[:50])
+            else:
+                logger.warning("handle", "Router stage starting but no cached_user_input",
+                              current_input=user_input[:50] if user_input else "empty")
 
         intent_mapping = stage.get("intent_mapping", {})
 

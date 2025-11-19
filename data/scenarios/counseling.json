@@ -301,8 +301,8 @@
       "beats_i18n": "beats_welcome",
       "speaker_pool": ["tanjiro", "nezuko", "narr"],
       "atmosphere": 3,
-      "min_turns": 2,
-      "max_turns": 3,
+      "min_turns": 1,
+      "max_turns": 2,
       "next": "CONCERN_CHECK"
     },
     {
