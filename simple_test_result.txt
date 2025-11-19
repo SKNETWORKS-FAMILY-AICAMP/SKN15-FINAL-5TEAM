@@ -1,4 +1,0 @@
-Stage: ROUTE_CHOICE
-
-All dialogues:
-kasugai_crow: 까악— 까악— ⚠️ 또 한 번 반복되면 대화가 제한됩니다. 까악—
