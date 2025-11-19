@@ -4,7 +4,7 @@ import CharacterSelectionModal from './CharacterSelectionModal';
 import BubbleCounter from './BubbleCounter';
 import AffinityPanel from './AffinityPanel';
 import MemoryUpdateLog from './MemoryUpdateLog';
-import { sendChatMessage, ChatResponse, MemoryEvent } from '@/services/api';
+import { sendChatMessage, ChatResponse, MemoryEvent, apiClient } from '@/services/api';
 import { addConversation } from '@/utils/storageUtils';
 import { useBackgroundImage } from '@/hooks/useBackgroundImage';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
@@ -65,7 +65,7 @@ export default function ChatInterface({
   onSessionStart
 }: ChatInterfaceProps) {
   // App context (for bubble consumption and user info)
-  const { consumeBubbles, currentUser, openMyAccount } = useApp();
+  const { consumeBubbles, currentUser, openMyAccount, language } = useApp();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -174,13 +174,13 @@ export default function ChatInterface({
 
   // 세션 히스토리 로드 (이전 대화 이어하기)
   useEffect(() => {
-    if (initialSessionId && messages.length === 0) {
-      console.log('[ChatInterface] Loading session history:', initialSessionId);
+    if (initialSessionId) {
+      console.log('[ChatInterface] Loading session history:', initialSessionId, 'language:', language);
 
       const loadHistory = async () => {
         try {
           const { apiClient } = await import('@/services/api');
-          const dialogues = await apiClient.getSessionDialogues(initialSessionId, 100);
+          const dialogues = await apiClient.getSessionDialogues(initialSessionId, 100, language);  // ✅ 다국어 지원
 
           if (dialogues && dialogues.length > 0) {
             console.log(`[ChatInterface] Loaded ${dialogues.length} messages from history`);
@@ -220,7 +220,7 @@ export default function ChatInterface({
 
       loadHistory();
     }
-  }, [initialSessionId, currentUser]);
+  }, [initialSessionId, currentUser, language]);  // ✅ language 변경 시에도 다시 로드
 
   // 배경 이미지 변경 추적 (디버깅)
   useEffect(() => {
@@ -864,11 +864,17 @@ export default function ChatInterface({
       setLoadingMessage(getRandomLoadingMessage());
 
       // 자동 요청 시에는 "__AUTO_CONTINUE__"를 user_input으로 전송
-      const response: ChatResponse = await sendChatMessage(
-        backendScenarioId,
-        '__AUTO_CONTINUE__',
-        currentSessionId,
-        currentUser || 'Player'  // 로그인한 사용자 이름 사용
+      const response: ChatResponse = await apiClient.sendMessage(
+        {
+          session_id: currentSessionId,
+          scenario_id: backendScenarioId,
+          user_input: '__AUTO_CONTINUE__',
+          user_name: currentUser || 'Player',  // 로그인한 사용자 이름 사용
+          user_language: language  // ✅ 다국어 지원
+        },
+        (dialogue, index) => {
+          // SSE 스트리밍 콜백
+        }
       );
 
       setLoadingMessage(null);
@@ -965,11 +971,16 @@ export default function ChatInterface({
 
         // 새 세션 시작: 첫 메시지 전송 (prologue가 있으면 백엔드에서 자동 반환)
         console.log('🎬 Starting new session with prologue...');
-        const response: ChatResponse = await sendChatMessage(
-          backendScenarioId,
-          '시작',  // Initial trigger message (prologue가 있으면 백엔드에서 무시됨)
-          undefined,
-          currentUser || 'Player'  // 로그인한 사용자 이름 사용
+        const response: ChatResponse = await apiClient.sendMessage(
+          {
+            scenario_id: backendScenarioId,
+            user_input: '시작',  // Initial trigger message (prologue가 있으면 백엔드에서 무시됨)
+            user_name: currentUser || 'Player',  // 로그인한 사용자 이름 사용
+            user_language: language  // ✅ 다국어 지원
+          },
+          (dialogue, index) => {
+            // SSE 스트리밍 콜백
+          }
         );
 
         // 세션 ID 저장
@@ -1384,11 +1395,17 @@ export default function ChatInterface({
     }
 
     try {
-      const response: ChatResponse = await sendChatMessage(
-        backendScenarioId,
-        text,
-        sessionId,
-        currentUser || 'Player'  // 로그인한 사용자 이름 사용
+      const response: ChatResponse = await apiClient.sendMessage(
+        {
+          session_id: sessionId,
+          scenario_id: backendScenarioId,
+          user_input: text,
+          user_name: currentUser || 'Player',  // 로그인한 사용자 이름 사용
+          user_language: language  // ✅ 다국어 지원
+        },
+        (dialogue, index) => {
+          // SSE 스트리밍 콜백 (기존 코드와 동일하게 처리)
+        }
       );
 
       console.log(`📥 User message response: ${response.dialogues.length} dialogues, has_more: ${response.has_more}, stage: ${response.current_stage}`);

@@ -30,6 +30,7 @@ export interface ChatRequest {
   scenario_id: string
   user_input: string
   user_name?: string
+  user_language?: string  // 'ko' | 'en' | 'ja'
 }
 
 export interface MemoryEvent {
@@ -629,12 +630,12 @@ class ApiClient {
   }
 
   /**
-   * Get session dialogue history (with JWT authentication)
+   * Get session dialogue history (with JWT authentication & translation support)
    */
-  async getSessionDialogues(sessionId: string, limit: number = 100): Promise<ChatMessage[]> {
+  async getSessionDialogues(sessionId: string, limit: number = 100, userLanguage: string = 'ko'): Promise<ChatMessage[]> {
     try {
       const response = await authenticatedApiClient.get(`/api/sessions/${sessionId}/dialogues`, {
-        params: { limit }
+        params: { limit, user_language: userLanguage }  // ✅ 다국어 지원
       })
       return response.data.dialogues.map((d: any) => ({
         speaker: d.speaker,

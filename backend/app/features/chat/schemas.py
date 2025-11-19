@@ -20,11 +20,13 @@ class ChatRequest(BaseModel):
     - scenario_id: 필수
     - user_input: 필수
     - user_name: 선택
+    - user_language: 선택 (기본: ko)
     """
     session_id: Optional[str] = None
     scenario_id: str = Field(..., description="Scenario ID (e.g., 'train', 'ending')")
     user_input: str = Field(..., min_length=1, max_length=1000, description="User message")
     user_name: Optional[str] = Field(None, description="User display name")
+    user_language: Optional[str] = Field("ko", description="User interface language (ko/en/ja)")
 
 
 # ============================================================

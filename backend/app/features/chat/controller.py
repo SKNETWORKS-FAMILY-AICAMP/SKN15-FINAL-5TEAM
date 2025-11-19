@@ -204,7 +204,8 @@ async def create_chat(
                 current_image=current_image,
                 output={"ending": ending_info} if ending_info else {},
                 memory_events=dialogue_result.memory_events,
-                stage_turn=dialogue_result.updated_state.get("stage_turn", 0)
+                stage_turn=dialogue_result.updated_state.get("stage_turn", 0),
+                user_language=request.user_language or "ko"  # ✅ 다국어 지원
             ),
             media_type="text/event-stream",
             headers={
@@ -243,23 +244,40 @@ async def create_chat_stream(
 async def get_chat_history(
     session_id: str,
     limit: int = 10,
+    user_language: str = "ko",  # ✅ 다국어 지원
     usecase: ChatUseCase = Depends(get_chat_usecase)
 ) -> list[ChatMessage]:
     """
-    세션의 대화 히스토리 조회
+    세션의 대화 히스토리 조회 (다국어 지원)
 
     Args:
         session_id: 세션 ID
         limit: 조회 개수 (기본 10)
+        user_language: 사용자 언어 (ko/en/ja)
         usecase: ChatUseCase
 
     Returns:
-        ChatMessage 리스트
+        ChatMessage 리스트 (번역된 텍스트)
     """
-    logger.info("get_chat_history", "Request received", session_id=session_id, limit=limit)
+    logger.info("get_chat_history", "Request received", session_id=session_id, limit=limit, language=user_language)
 
     try:
         messages = await usecase.get_recent_dialogues(session_id, limit)
+
+        # 번역 처리
+        if user_language != "ko":
+            from app.features.chat.services import TranslationService
+            translator = TranslationService()
+
+            for message in messages:
+                if message.text:
+                    translated_text = await translator.translate_dialogue(
+                        text=message.text,
+                        to_lang=user_language,
+                        speaker=message.speaker,
+                        emotion=message.emotion or "neutral"
+                    )
+                    message.text = translated_text
 
         logger.info("get_chat_history", f"Response sent: {len(messages)} messages", session_id=session_id)
         return messages

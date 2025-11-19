@@ -5,6 +5,7 @@ import { apiClient } from '@/services/api';
 export type Theme = 'light' | 'dark';
 export type FontSize = 'sm' | 'md' | 'lg';
 export type ChatWindowSize = 'compact' | 'cozy' | 'spacious';
+export type Language = 'ko' | 'en' | 'ja';
 
 interface AppContextType {
   isSidebarOpen: boolean;
@@ -23,9 +24,11 @@ interface AppContextType {
   theme: Theme;
   fontSize: FontSize;
   chatWindowSize: ChatWindowSize;
+  language: Language;
   setTheme: (theme: Theme) => void;
   setFontSize: (size: FontSize) => void;
   setChatWindowSize: (size: ChatWindowSize) => void;
+  setLanguage: (language: Language) => void;
   updateBubbles: (count: number) => void;
   consumeBubbles: (amount: number, description?: string) => Promise<boolean>;
   refreshCurrentUser: (name: string | null) => void;
@@ -95,6 +98,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   });
   const [fontSize, setFontSize] = useState<FontSize>('md');
   const [chatWindowSize, setChatWindowSize] = useState<ChatWindowSize>('cozy');
+  const [language, setLanguage] = useState<Language>(() => {
+    if (typeof window !== 'undefined') {
+      const storedLanguage = localStorage.getItem('language') as Language;
+      if (storedLanguage && ['ko', 'en', 'ja'].includes(storedLanguage)) {
+        return storedLanguage;
+      }
+    }
+    return 'ko';
+  });
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -105,6 +117,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('language', language);
+  }, [language]);
 
   // 초기 로딩 시 토큰 유효성 검증 및 로그인 상태 확인
   useEffect(() => {
@@ -272,9 +288,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         theme,
         fontSize,
         chatWindowSize,
+        language,
         setTheme,
         setFontSize,
         setChatWindowSize,
+        setLanguage,
         openSidebar,
         closeSidebar,
         toggleSidebar,

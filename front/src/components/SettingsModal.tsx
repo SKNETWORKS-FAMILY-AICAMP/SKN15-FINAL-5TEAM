@@ -1,4 +1,4 @@
-import { useApp, Theme, FontSize, ChatWindowSize } from '@/contexts/AppContext';
+import { useApp, Theme, FontSize, ChatWindowSize, Language } from '@/contexts/AppContext';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -6,7 +6,7 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { theme, setTheme, fontSize, setFontSize, chatWindowSize, setChatWindowSize } = useApp();
+  const { theme, setTheme, fontSize, setFontSize, chatWindowSize, setChatWindowSize, language, setLanguage } = useApp();
 
   if (!isOpen) return null;
 
@@ -98,6 +98,34 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
               채팅 영역의 가로폭을 조절해 원하는 레이아웃으로 즐길 수 있어요.
+            </p>
+          </div>
+
+          {/* 언어 설정 */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">언어 / Language</h3>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setLanguage('ko')}
+                className={getButtonClass(language === 'ko')}
+              >
+                한국어
+              </button>
+              <button
+                onClick={() => setLanguage('en')}
+                className={getButtonClass(language === 'en')}
+              >
+                English
+              </button>
+              <button
+                onClick={() => setLanguage('ja')}
+                className={getButtonClass(language === 'ja')}
+              >
+                日本語
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              대화 내용이 선택한 언어로 번역되어 표시됩니다.
             </p>
           </div>
         </div>

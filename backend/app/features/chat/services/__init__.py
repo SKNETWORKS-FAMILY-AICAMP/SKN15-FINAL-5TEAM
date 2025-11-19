@@ -14,6 +14,7 @@ from .context_service import ContextService
 from .progression_service import ProgressionService, get_progression_service
 from .image_mapping_service import ImageMappingService
 from .message_history_service import MessageHistoryService, get_message_history_service
+from .translation_service import TranslationService
 
 # Extractors
 from .extractors import (
@@ -48,6 +49,7 @@ __all__ = [
     "ImageMappingService",
     "MessageHistoryService",
     "get_message_history_service",
+    "TranslationService",
     # Extractors
     "EntityExtractor",
     "Entity",

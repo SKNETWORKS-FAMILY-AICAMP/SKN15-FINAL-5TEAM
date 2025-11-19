@@ -154,16 +154,17 @@ async def get_session_detail(
 async def get_session_dialogues(
     session_id: str,
     limit: int = Query(100, ge=1, le=500, description="최대 대화 개수"),
+    user_language: str = Query("ko", description="사용자 언어 (ko/en/ja)"),  # ✅ 다국어 지원
     user_id: str = Depends(get_current_user_id),
     usecase: SessionUseCase = Depends(get_session_usecase)
 ):
     """
-    세션의 대화 히스토리 조회
+    세션의 대화 히스토리 조회 (다국어 지원)
 
     Controller → UseCase → Repository
     """
     logger.info("get_session_dialogues", "Getting session dialogues",
-               session_id=session_id, user_id=user_id, limit=limit)
+               session_id=session_id, user_id=user_id, limit=limit, language=user_language)
 
     try:
         dialogues = await usecase.get_session_dialogues(
@@ -171,6 +172,21 @@ async def get_session_dialogues(
             user_id=user_id,
             limit=limit
         )
+
+        # 번역 처리
+        if user_language != "ko":
+            from app.features.chat.services import TranslationService
+            translator = TranslationService()
+
+            for dialogue in dialogues:
+                if dialogue.get("content"):
+                    translated_text = await translator.translate_dialogue(
+                        text=dialogue["content"],
+                        to_lang=user_language,
+                        speaker=dialogue.get("speaker", "narr"),
+                        emotion=dialogue.get("emotion", "neutral")
+                    )
+                    dialogue["content"] = translated_text
 
         return {
             "session_id": session_id,
