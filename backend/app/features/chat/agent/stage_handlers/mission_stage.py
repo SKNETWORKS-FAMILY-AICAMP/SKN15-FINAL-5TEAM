@@ -60,9 +60,11 @@ class MissionStageHandler:
         user_input = state.get("user_input", "")
         mission_state = state.setdefault("mission", {})
 
-        logger.debug("handle", "Handling mission stage",
-                    stage_tag=stage_tag,
-                    mission_active=mission_state.get("active"))
+        # scenario를 state에 저장 (MissionService가 접근할 수 있도록)
+        if "scenario" not in state and scenario:
+            state["scenario"] = scenario
+
+        logger.info("handle", f"🎯 Handling RECRUIT stage | User input: '{user_input}' | Mission active: {mission_state.get('active')} | Scenario keys in state: {list(state.keys())}")
 
         # 타겟 결정
         target = self.mission_service.determine_mission_target(

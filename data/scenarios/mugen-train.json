@@ -215,6 +215,7 @@
     {
       "tag": "ROUTE_CHOICE",
       "type": "free_intent",
+      "max_turns": 0,
       "default_next": "RECRUIT",
       "speaker_pool": [
         "tanjiro",

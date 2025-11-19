@@ -124,14 +124,29 @@ class FreeIntentStageHandler:
                    beats_count=len(beats),
                    next_stage=next_stage)
 
-        # max_turns가 0이면 즉시 완료 (대화 생성 없이 바로 라우팅)
+        # stage_complete 로직:
+        # 1. max_turns가 0이고 stage_turn == 0이면 즉시 완료 (대화 없이 라우팅만)
+        # 2. 그 외의 경우, stage_turn >= 1이고 next_stage가 있으면 완료
+        #    (첫 턴에 대화를 생성하고, 다음 턴에 전환)
         stage_turn = state.get("stage_turn", 0)
         max_turns = stage.get("max_turns")
-        immediate_routing = (max_turns == 0 and stage_turn == 0)
+
+        # max_turns가 0이면 즉시 라우팅 (대화 생성 없음)
+        if max_turns == 0:
+            stage_complete = True
+            logger.info("handle", "Immediate routing (max_turns=0)")
+        # next_stage가 결정되었고, stage_turn >= 1이면 완료
+        elif next_stage and stage_turn >= 1:
+            stage_complete = True
+            logger.info("handle", f"Stage complete after dialogue generation (stage_turn={stage_turn})")
+        # next_stage가 없으면 계속 진행
+        else:
+            stage_complete = False
+            logger.info("handle", f"Stage continuing (stage_turn={stage_turn}, next_stage={next_stage})")
 
         return StageResult(
             children_ctx=children_ctx,
-            stage_complete=immediate_routing or (True if next_stage else False),
+            stage_complete=stage_complete,
             next_stage=next_stage
         )
 
@@ -157,9 +172,26 @@ class FreeIntentStageHandler:
         if not user_input or not intent_mapping:
             return None
 
-        # 키워드 기반 사전 분류 (critical cases)
-        # 부분 매칭을 위해 키워드를 더 짧게 수정
+        # 키워드 기반 사전 분류 (scenario-specific + counseling)
+        # metadata에서 intent_examples 가져오기 (더 정확한 키워드 매칭을 위해)
+        metadata = scenario.get("metadata", {})
+        router_config = metadata.get("router", {})
+        intent_examples_config = router_config.get("intent_examples", {})
 
+        # intent_examples를 키워드로 활용
+        for intent_name, examples in intent_examples_config.items():
+            if intent_name in intent_mapping:
+                # 예시들을 키워드로 활용 (부분 매칭)
+                for example in examples:
+                    # 예시 문장에서 핵심 키워드 추출 (3글자 이상)
+                    keywords = [word for word in example.split() if len(word) >= 3]
+                    if any(keyword in user_input for keyword in keywords):
+                        logger.info("_classify_intent",
+                                   f"Pre-classified as {intent_name} (keyword from examples: matched)",
+                                   matched_example=example[:30])
+                        return intent_mapping[intent_name]
+
+        # Counseling 시나리오 전용 키워드 체크
         # 연애 관련 키워드 체크
         love_keywords = ["좋아하", "고백", "짝사랑", "썸", "데이트", "연애", "사랑", "호감"]
         if any(keyword in user_input for keyword in love_keywords):

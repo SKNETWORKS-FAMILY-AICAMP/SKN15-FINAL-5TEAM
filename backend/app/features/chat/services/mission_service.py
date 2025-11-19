@@ -173,24 +173,35 @@ class MissionService:
             타겟 캐릭터 ID 또는 None
         """
         text_lower = text.lower()
+        logger.info("_detect_mission_target", f"🔍 Detecting target from input: '{text}'")
+        logger.info("_detect_mission_target", f"🗝️  State keys available: {list(state.keys())}")
 
         # scenario_data에서 targets 가져오기 (metadata.mission.targets)
         scenario = state.get("scenario_data") or state.get("scenario") or {}
+        logger.info("_detect_mission_target", f"📦 Scenario found: {bool(scenario)}, Scenario keys: {list(scenario.keys())}")
+
         metadata = scenario.get("metadata", {})
+        logger.info("_detect_mission_target", f"📋 Metadata found: {bool(metadata)}, Metadata keys: {list(metadata.keys())}")
+
         mission = metadata.get("mission", {})
         targets = mission.get("targets", {})
+        logger.info("_detect_mission_target", f"🎯 Mission found: {bool(mission)}, Targets available: {list(targets.keys())}")
 
         # targets.{target_id}.keywords 사용
         for target_id, target_config in targets.items():
             if not isinstance(target_config, dict):
+                logger.warning("_detect_mission_target", f"Target {target_id} config is not dict: {type(target_config)}")
                 continue
 
             keywords = target_config.get("keywords", [])
+            logger.info("_detect_mission_target", f"Checking {target_id} with {len(keywords)} keywords: {keywords[:3]}...")
+
             for keyword in keywords:
                 if keyword.lower() in text_lower:
-                    logger.info("_detect_mission_target", f"Keyword matched: '{keyword}' -> {target_id}")
+                    logger.info("_detect_mission_target", f"✅ Keyword matched: '{keyword}' -> {target_id}")
                     return target_id
 
+        logger.warning("_detect_mission_target", f"❌ No target found for input: '{text}'")
         return None
 
     def select_next_target(

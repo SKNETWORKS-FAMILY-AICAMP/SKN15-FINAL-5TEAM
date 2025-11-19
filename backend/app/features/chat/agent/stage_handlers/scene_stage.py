@@ -147,6 +147,14 @@ class SceneStageHandler:
             logger.info("handle", "Stage completing (max_turns reached)",
                        current_turn=stage_turn + 1, max_turns=max_turns, next_stage=next_stage)
 
+        # 4. min_turns를 만족했고 max_turns가 없거나 아직 도달하지 않은 경우 완료
+        # 예: min_turns=2, max_turns=None → stage_turn >= 1이면 완료
+        elif stage_turn + 1 >= min_turns:
+            stage_complete = True
+            next_stage = stage.get("next")
+            logger.info("handle", "Stage completing (min_turns satisfied)",
+                       current_turn=stage_turn + 1, min_turns=min_turns, max_turns=max_turns, next_stage=next_stage)
+
         return StageResult(
             children_ctx=children_ctx,
             stage_complete=stage_complete,
