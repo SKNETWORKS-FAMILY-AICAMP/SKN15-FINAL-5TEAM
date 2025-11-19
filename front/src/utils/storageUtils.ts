@@ -52,3 +52,9 @@ export const addConversation = (conversation: Omit<Conversation, 'timestamp'>): 
 
   saveHistory(history);
 };
+
+export const removeConversation = (sessionId: string): void => {
+  const history = getHistory();
+  const filteredHistory = history.filter(c => c.sessionId !== sessionId);
+  saveHistory(filteredHistory);
+};

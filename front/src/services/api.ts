@@ -516,7 +516,7 @@ class ApiClient {
    */
   async deleteSession(sessionId: string): Promise<void> {
     try {
-      await authenticatedApiClient.delete(`/api/session/${sessionId}`)
+      await authenticatedApiClient.delete(`/api/chat/${sessionId}`)
     } catch (error) {
       console.error('Error deleting session:', error)
       throw error

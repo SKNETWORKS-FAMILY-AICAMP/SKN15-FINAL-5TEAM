@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getHistory, Conversation } from '@/utils/storageUtils';
+import { getHistory, removeConversation, Conversation } from '@/utils/storageUtils';
+import { apiClient } from '@/services/api';
 
 interface LeftSidebarProps {
   isOpen: boolean;
@@ -9,10 +10,40 @@ interface LeftSidebarProps {
 
 export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
   const [history, setHistory] = useState<Conversation[]>([]);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const openMemoryLog = () => {
     window.dispatchEvent(new CustomEvent('open-memory-log'));
     onClose();
+  };
+
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent Link navigation
+    e.stopPropagation();
+
+    if (!confirm('이 대화를 삭제하시겠습니까?\n삭제된 대화는 복구할 수 없습니다.')) {
+      return;
+    }
+
+    setDeletingSessionId(sessionId);
+
+    try {
+      // Delete from backend
+      await apiClient.deleteSession(sessionId);
+
+      // Remove from localStorage
+      removeConversation(sessionId);
+
+      // Refresh history list
+      setHistory(getHistory());
+
+      console.log('[LeftSidebar] Session deleted successfully:', sessionId);
+    } catch (error) {
+      console.error('[LeftSidebar] Failed to delete session:', error);
+      alert('세션 삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setDeletingSessionId(null);
+    }
   };
 
   useEffect(() => {
@@ -77,18 +108,40 @@ export default function LeftSidebar({ isOpen, onClose }: LeftSidebarProps) {
             ) : (
               <ul className="space-y-2">
                 {history.map((conv) => (
-                  <li key={conv.sessionId}>
-                    <Link
-                      to={`/history/${conv.sessionId}`}
-                      onClick={onClose}
-                      className="block p-3 rounded-xl border border-gray-100 hover:border-purple-300 hover:bg-purple-50 dark:border-gray-700 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{conv.title}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{conv.lastMessage}</p>
-                      <p className="text-[10px] text-right text-gray-400 dark:text-gray-500 mt-2">
-                        {new Date(conv.timestamp).toLocaleString()}
-                      </p>
-                    </Link>
+                  <li key={conv.sessionId} className="relative group">
+                    <div className="flex items-start gap-2">
+                      <Link
+                        to={`/history/${conv.sessionId}`}
+                        onClick={onClose}
+                        className="flex-1 block p-3 rounded-xl border border-gray-100 hover:border-purple-300 hover:bg-purple-50 dark:border-gray-700 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{conv.title}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{conv.lastMessage}</p>
+                          <p className="text-[10px] text-right text-gray-400 dark:text-gray-500 mt-2">
+                            {new Date(conv.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                      </Link>
+                      <button
+                        onClick={(e) => handleDeleteSession(conv.sessionId, e)}
+                        disabled={deletingSessionId === conv.sessionId}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50 self-start mt-3"
+                        aria-label="세션 삭제"
+                        title="대화 삭제"
+                      >
+                        {deletingSessionId === conv.sessionId ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

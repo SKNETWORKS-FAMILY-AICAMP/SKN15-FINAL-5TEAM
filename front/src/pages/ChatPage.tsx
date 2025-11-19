@@ -8,11 +8,16 @@ import TutorialOverlay from '@/components/TutorialOverlay';
 import { useApp } from '@/contexts/AppContext';
 import { apiClient, LastSessionInfo, ScenarioCard } from '@/services/api';
 import { normalizeScenarioId } from '@/utils/scenario';
+import { getHistory } from '@/utils/storageUtils';
 
 export default function ChatPage() {
-  const { characterId } = useParams<{ characterId: string }>();
+  const { characterId: routeCharacterId, sessionId: routeSessionId } = useParams<{ characterId?: string; sessionId?: string }>();
   const { toggleSidebar, openSettings, isLoggedIn, isAuthLoading, openLoginModal, currentUserId, updateBubbles } = useApp();
   const navigate = useNavigate();
+
+  // Character and session state
+  const [characterId, setCharacterId] = useState<string | undefined>(undefined);
+  const [initialSessionId, setInitialSessionId] = useState<string | undefined>(undefined);
 
   // Scenario loading state
   const [scenario, setScenario] = useState<ScenarioCard | null>(null);
@@ -35,11 +40,37 @@ export default function ChatPage() {
   // Track current session for finalization
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
+  // Handle route parameters: characterId or sessionId
+  useEffect(() => {
+    if (routeSessionId) {
+      // Loading from history: /history/:sessionId
+      console.log('[ChatPage] Loading from history:', routeSessionId);
+      const history = getHistory();
+      const conversation = history.find(c => c.sessionId === routeSessionId);
+
+      if (conversation) {
+        console.log('[ChatPage] Found conversation:', conversation);
+        setCharacterId(conversation.characterId);
+        setInitialSessionId(conversation.sessionId);
+        setSessionCheckDone(true); // Skip session resume modal for history loads
+      } else {
+        console.error('[ChatPage] Conversation not found in history');
+        setScenarioError('세션을 찾을 수 없습니다.');
+      }
+    } else if (routeCharacterId) {
+      // New chat: /chat/:characterId
+      console.log('[ChatPage] Loading new chat:', routeCharacterId);
+      setCharacterId(routeCharacterId);
+      setInitialSessionId(undefined);
+    } else {
+      setScenarioError('시나리오 ID가 필요합니다.');
+    }
+  }, [routeSessionId, routeCharacterId]);
+
   // Load scenario data from API
   useEffect(() => {
     const loadScenario = async () => {
       if (!characterId) {
-        setScenarioError('시나리오 ID가 필요합니다.');
         setScenarioLoading(false);
         return;
       }
@@ -319,7 +350,7 @@ export default function ChatPage() {
         {/* ChatInterface handles full layout (left background + right chat) */}
         <ChatInterface
           characterId={characterId || 'ending'}
-          initialSessionId={resumeSessionId}
+          initialSessionId={initialSessionId || resumeSessionId}
           onInvitedCharactersChange={setInvitedCharacters}
           onMessageSent={() => setHasStartedChat(true)}
           onSessionStart={setCurrentSessionId}
