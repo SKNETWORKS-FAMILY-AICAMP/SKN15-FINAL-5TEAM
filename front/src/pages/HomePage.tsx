@@ -397,20 +397,20 @@ export default function HomePage() {
                     {/* 2등 */}
                     {displayedCharacters[1] && (
                       <Link key={displayedCharacters[1].id} to={displayedCharacters[1].link}>
-                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl">
+                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl mt-8">
                           {/* 랭킹 배지 */}
                           <div className="absolute top-3 left-3 z-20">
-                            <div className="relative flex items-center justify-center w-14 h-14">
+                            <div className="relative flex items-center justify-center w-12 h-12">
                               <div className="absolute inset-0 rounded-full blur-md bg-gray-400" />
-                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-xl border-2 bg-gradient-to-br from-gray-200 to-gray-500 text-gray-900 border-gray-100">
+                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-lg border-2 bg-gradient-to-br from-gray-200 to-gray-500 text-gray-900 border-gray-100">
                                 2
                               </div>
-                              <div className="absolute -top-1 -right-1 text-xl">🥈</div>
+                              <div className="absolute -top-1 -right-1 text-lg">🥈</div>
                             </div>
                           </div>
 
                           {/* 이미지 */}
-                          <div className="relative h-56 overflow-hidden bg-black/40">
+                          <div className="relative h-48 overflow-hidden bg-black/40">
                             <img
                               src={displayedCharacters[1].image}
                               alt={displayedCharacters[1].title}
@@ -471,17 +471,17 @@ export default function HomePage() {
                         <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl">
                           {/* 랭킹 배지 */}
                           <div className="absolute top-3 left-3 z-20">
-                            <div className="relative flex items-center justify-center w-14 h-14 animate-pulse">
+                            <div className="relative flex items-center justify-center w-12 h-12 animate-pulse">
                               <div className="absolute inset-0 rounded-full blur-md bg-yellow-400" />
-                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-xl border-2 bg-gradient-to-br from-yellow-300 to-yellow-600 text-gray-900 border-yellow-200">
+                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-lg border-2 bg-gradient-to-br from-yellow-300 to-yellow-600 text-gray-900 border-yellow-200">
                                 1
                               </div>
-                              <div className="absolute -top-1 -right-1 text-2xl">👑</div>
+                              <div className="absolute -top-1 -right-1 text-lg">👑</div>
                             </div>
                           </div>
 
                           {/* 이미지 */}
-                          <div className="relative h-56 overflow-hidden bg-black/40">
+                          <div className="relative h-48 overflow-hidden bg-black/40">
                             <img
                               src={displayedCharacters[0].image}
                               alt={displayedCharacters[0].title}
@@ -491,7 +491,7 @@ export default function HomePage() {
 
                           {/* 정보 */}
                           <div className="p-5">
-                            <h3 className="font-black mb-2 truncate text-2xl text-yellow-400">
+                            <h3 className="font-black mb-2 truncate text-xl text-yellow-400">
                               {displayedCharacters[0].title}
                             </h3>
                             <p className="text-sm text-theme-secondary mb-4 line-clamp-2">
@@ -539,20 +539,20 @@ export default function HomePage() {
                     {/* 3등 */}
                     {displayedCharacters[2] && (
                       <Link key={displayedCharacters[2].id} to={displayedCharacters[2].link}>
-                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl">
+                        <div className="group relative bg-theme-surface-strong border border-theme-card rounded-2xl shadow-theme transition-all duration-300 overflow-hidden hover:-translate-y-2 hover:shadow-2xl mt-8">
                           {/* 랭킹 배지 */}
                           <div className="absolute top-3 left-3 z-20">
-                            <div className="relative flex items-center justify-center w-14 h-14">
+                            <div className="relative flex items-center justify-center w-12 h-12">
                               <div className="absolute inset-0 rounded-full blur-md bg-orange-400" />
-                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-xl border-2 bg-gradient-to-br from-orange-300 to-orange-600 text-gray-900 border-orange-200">
+                              <div className="relative rounded-full w-full h-full flex items-center justify-center font-black text-lg border-2 bg-gradient-to-br from-orange-300 to-orange-600 text-gray-900 border-orange-200">
                                 3
                               </div>
-                              <div className="absolute -top-1 -right-1 text-xl">🥉</div>
+                              <div className="absolute -top-1 -right-1 text-lg">🥉</div>
                             </div>
                           </div>
 
                           {/* 이미지 */}
-                          <div className="relative h-56 overflow-hidden bg-black/40">
+                          <div className="relative h-48 overflow-hidden bg-black/40">
                             <img
                               src={displayedCharacters[2].image}
                               alt={displayedCharacters[2].title}
@@ -624,9 +624,9 @@ export default function HomePage() {
                               </div>
 
                               {/* 이미지 */}
-                              <div className="flex-shrink-0 relative w-20 h-20">
+                              <div className="flex-shrink-0 relative w-20 h-20 flex items-center justify-center">
                                 <div className="absolute inset-0 rounded-lg bg-purple-500 blur-md opacity-30" />
-                                <div className="relative rounded-lg overflow-hidden border border-white/10">
+                                <div className="relative rounded-lg overflow-hidden border border-white/10 w-full h-full">
                                   <img
                                     src={character.image}
                                     alt={character.title}
