@@ -172,9 +172,26 @@ class FreeIntentStageHandler:
         if not user_input or not intent_mapping:
             return None
 
-        # 키워드 기반 사전 분류 (critical cases)
-        # 부분 매칭을 위해 키워드를 더 짧게 수정
+        # 키워드 기반 사전 분류 (scenario-specific + counseling)
+        # metadata에서 intent_examples 가져오기 (더 정확한 키워드 매칭을 위해)
+        metadata = scenario.get("metadata", {})
+        router_config = metadata.get("router", {})
+        intent_examples_config = router_config.get("intent_examples", {})
 
+        # intent_examples를 키워드로 활용
+        for intent_name, examples in intent_examples_config.items():
+            if intent_name in intent_mapping:
+                # 예시들을 키워드로 활용 (부분 매칭)
+                for example in examples:
+                    # 예시 문장에서 핵심 키워드 추출 (3글자 이상)
+                    keywords = [word for word in example.split() if len(word) >= 3]
+                    if any(keyword in user_input for keyword in keywords):
+                        logger.info("_classify_intent",
+                                   f"Pre-classified as {intent_name} (keyword from examples: matched)",
+                                   matched_example=example[:30])
+                        return intent_mapping[intent_name]
+
+        # Counseling 시나리오 전용 키워드 체크
         # 연애 관련 키워드 체크
         love_keywords = ["좋아하", "고백", "짝사랑", "썸", "데이트", "연애", "사랑", "호감"]
         if any(keyword in user_input for keyword in love_keywords):
