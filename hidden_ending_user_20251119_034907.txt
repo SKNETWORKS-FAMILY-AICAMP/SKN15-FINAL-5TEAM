@@ -1,0 +1,30 @@
+[Turn 1] 시작
+[Turn 2] 계속
+[Turn 3] 계속
+[Turn 4] 계속
+[Turn 5] 계속
+[Turn 6] 계속
+[Turn 7] 동료들을 모으자
+[Turn 8] 계속
+[Turn 9] 이노스케야, 같이 가자! 겁쟁이는 아니지?
+[Turn 10] 계속
+[Turn 11] 계속
+[Turn 12] 젠이츠야, 네즈코가 위험해! 같이 가야 해!
+[Turn 13] 계속
+[Turn 14] 계속
+[Turn 15] 계속
+[Turn 16] 계속
+[Turn 17] 계속
+[Turn 18] 계속
+[Turn 19] 계속
+[Turn 20] 계속
+[Turn 21] 계속
+[Turn 22] 계속
+[Turn 23] 계속
+[Turn 24] 계속
+[Turn 25] 계속
+[Turn 26] 계속
+[Turn 27] 계속
+[Turn 28] 계속
+[Turn 29] 계속
+[Turn 30] 계속

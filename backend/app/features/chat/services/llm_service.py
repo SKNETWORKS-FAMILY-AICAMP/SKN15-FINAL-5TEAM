@@ -26,7 +26,6 @@ class LLMService:
     def __init__(self):
         """LLMService 초기화"""
         self.llm = LLMClient()
-        logger.info("__init__", "LLMService initialized")
 
     async def generate_simple_dialogue(
         self,

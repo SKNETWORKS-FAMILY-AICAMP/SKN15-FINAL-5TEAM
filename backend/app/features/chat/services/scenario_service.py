@@ -43,8 +43,6 @@ class ScenarioService:
         self._character_cache: Dict[str, Dict[str, Any]] = {}
         self._world_cache: Dict[str, Dict[str, Any]] = {}
 
-        logger.info("__init__", f"ScenarioService initialized with data_dir={data_dir}")
-
     def load_scenario(self, scenario_id: str) -> Optional[Dict[str, Any]]:
         """
         시나리오 로드

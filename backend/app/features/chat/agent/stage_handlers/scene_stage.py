@@ -125,6 +125,9 @@ class SceneStageHandler:
         next_stage = None
         min_turns = stage.get("min_turns", 0)
 
+        # ✅ 엔딩 스테이지 체크 (END_로 시작)
+        is_ending_stage = stage_tag.startswith("END_")
+
         # 1. Auto-advance 옵션이 있으면 자동 완료
         if stage.get("auto_advance"):
             stage_complete = True
@@ -144,8 +147,16 @@ class SceneStageHandler:
         elif max_turns and stage_turn + 1 >= max_turns:
             stage_complete = True
             next_stage = stage.get("next")
-            logger.info("handle", "Stage completing (max_turns reached)",
-                       current_turn=stage_turn + 1, max_turns=max_turns, next_stage=next_stage)
+
+            # ✅ 엔딩 스테이지는 next가 없어도 완료 처리
+            if is_ending_stage:
+                logger.info("handle", "🏁 Ending stage completing (max_turns reached)",
+                           stage_tag=stage_tag,
+                           current_turn=stage_turn + 1,
+                           max_turns=max_turns)
+            else:
+                logger.info("handle", "Stage completing (max_turns reached)",
+                           current_turn=stage_turn + 1, max_turns=max_turns, next_stage=next_stage)
 
         return StageResult(
             children_ctx=children_ctx,

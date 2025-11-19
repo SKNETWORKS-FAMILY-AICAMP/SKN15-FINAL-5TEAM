@@ -22,11 +22,12 @@ INITIAL_CREDITS = 200
 
 class AuthResult:
     """인증 결과 DTO"""
-    def __init__(self, access_token: str, refresh_token: str, user_id: str, username: str, role: str):
+    def __init__(self, access_token: str, refresh_token: str, user_id: str, username: str, display_name: str, role: str):
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.user_id = user_id
         self.username = username
+        self.display_name = display_name
         self.role = role
 
 
@@ -119,6 +120,7 @@ class AuthUseCase:
             refresh_token=refresh_token,
             user_id=user.user_id,
             username=user.username,
+            display_name=user.display_name or user.username,
             role=user.role
         )
 

@@ -419,10 +419,17 @@ class ChatUseCase:
             # Routing
             "next_stage": None,
             "routing_reason": None,
+            "stage_complete": False,
 
             # Mission
             "mission_progress": None,
             "mission_completed": False,
+            # ✅ 미션 상태 (세션에서 로드)
+            "mission": session_state.get("mission", {}),
+            "temp_data": session_state.get("temp_data", {}),
+            "recruit_attempts": session_state.get("recruit_attempts", {}),
+            "allies_recruited": session_state.get("allies_recruited", []),
+            "recruit_order": session_state.get("recruit_order", []),
 
             # AI response
             "ai_response": None,
@@ -516,6 +523,12 @@ class ChatUseCase:
             "game": graph_state.get("game", {}),
             "scene": graph_state.get("scene", {}),
             "off_topic_count": graph_state.get("off_topic_count", 0),  # Fallback count 저장
+            # ✅ 미션 관련 상태 추가 (세션 간 유지 필요)
+            "mission": graph_state.get("mission", {}),
+            "temp_data": graph_state.get("temp_data", {}),
+            "recruit_attempts": graph_state.get("recruit_attempts", {}),
+            "allies_recruited": graph_state.get("allies_recruited", []),
+            "recruit_order": graph_state.get("recruit_order", []),
         })
 
         logger.info("_convert_from_graph_state", "🔍 Updated state created",
@@ -529,7 +542,8 @@ class ChatUseCase:
             stage_complete=graph_state.get("output", {}).get("stage_complete", False),
             updated_state=updated_state,
             affinity_delta=graph_state.get("output", {}).get("affinity_delta"),
-            affinity_scores=updated_state.get("affinity_scores", {})  # 현재 친밀도 포함
+            affinity_scores=updated_state.get("affinity_scores", {}),  # 현재 친밀도 포함
+            session_ended=graph_state.get("output", {}).get("session_ended", False)  # ✅ 세션 종료 플래그
         )
 
         return result
@@ -1628,6 +1642,18 @@ class ChatUseCase:
                 )
 
                 logger.info("create_dialogue", "🔍 Session saved to DB")
+
+                # ✅ 엔딩 스테이지 도달 시 final_ending 저장
+                if dialogue_result.session_ended:
+                    current_stage = dialogue_result.updated_state.get("current_stage")
+                    if current_stage and current_stage.startswith("END_"):
+                        await self.session_repository.update_session_state(
+                            session_id=session_id,
+                            final_ending=current_stage,
+                            is_active=False  # 세션 종료
+                        )
+                        logger.info("create_dialogue", f"🏁 Final ending saved: {current_stage}", session_id=session_id)
+
             except Exception as session_save_err:
                 logger.warning("create_dialogue", f"Session save failed (memories already saved): {session_save_err}",
                              session_id=session_id)

@@ -1,0 +1,20 @@
+[Turn 1] 시작
+[Turn 2] 계속
+[Turn 3] 계속
+[Turn 4] 계속
+[Turn 5] 계속
+[Turn 6] 계속
+[Turn 7] 렌고쿠를 도와야해
+[Turn 8] 계속
+[Turn 9] 계속
+[Turn 10] 계속
+[Turn 11] 계속
+[Turn 12] 계속
+[Turn 13] 계속
+[Turn 14] 계속
+[Turn 15] 계속
+[Turn 16] 계속
+[Turn 17] 계속
+[Turn 18] 계속
+[Turn 19] 계속
+[Turn 20] 계속

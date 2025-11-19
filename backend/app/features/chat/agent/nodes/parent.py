@@ -78,6 +78,12 @@ class ParentAgent:
             "stage_turn": state.get("stage_turn", 0),
             "affinity_scores": state.get("affinity_scores", {}),
             "conversation_summary": state.get("conversation_summary", ""),
+            # 미션 관련 상태 (세션 간 유지 필요)
+            "temp_data": state.get("temp_data", {}),
+            "mission": state.get("mission", {}),
+            "recruit_attempts": state.get("recruit_attempts", {}),
+            "allies_recruited": state.get("allies_recruited", []),
+            "recruit_order": state.get("recruit_order", []),
         }
 
         prepared_state = self.state_service.prepare_state(session_state, scenario_id, user_input)
@@ -132,6 +138,10 @@ class ParentAgent:
             # children_ctx를 state에 저장
             state["children_ctx"] = children_ctx
 
+            # ✅ stage_type을 state에도 저장 (controller에서 router 판별용)
+            stage_type = children_ctx.get("stage_type", "scene")
+            state["stage_type"] = stage_type
+
             # stage_result 정보도 저장 (dialogue 노드에서 사용)
             state["stage_complete"] = stage_result.stage_complete
             state["next_stage"] = stage_result.next_stage
@@ -140,6 +150,38 @@ class ParentAgent:
                        stage_complete=stage_result.stage_complete,
                        next_stage=stage_result.next_stage,
                        current_stage=current_stage_tag)
+
+            # ✅ CRITICAL FIX: Router 스테이지가 완료되고 next_stage가 설정된 경우,
+            # 즉시 다음 스테이지로 전환하여 대화를 생성
+            if (stage_type == "router" and
+                stage_result.stage_complete and
+                stage_result.next_stage and
+                stage_result.next_stage != current_stage_tag):
+
+                logger.info("execute", f"🔄 Router stage complete - immediately advancing to {stage_result.next_stage}")
+
+                # 다음 스테이지로 state 업데이트
+                state["current_stage"] = stage_result.next_stage
+
+                # 다음 스테이지 정의 가져오기
+                next_stage_def = self._get_stage_definition(scenario, stage_result.next_stage)
+
+                if next_stage_def:
+                    # 다음 스테이지의 핸들러 실행
+                    next_stage_result = await self._execute_stage_handler(state, next_stage_def, scenario)
+                    next_children_ctx = next_stage_result.children_ctx
+
+                    logger.info("execute", f"✅ Advanced to {stage_result.next_stage}",
+                               stage_type=next_children_ctx.get("stage_type"),
+                               beats_count=len(next_children_ctx.get("beats", [])))
+
+                    # next_stage의 children_ctx로 덮어쓰기
+                    state["children_ctx"] = next_children_ctx
+                    state["stage_type"] = next_children_ctx.get("stage_type", "scene")
+                    state["stage_complete"] = next_stage_result.stage_complete
+                    state["next_stage"] = next_stage_result.next_stage
+                else:
+                    logger.error("execute", f"Next stage not found: {stage_result.next_stage}")
 
         except Exception as e:
             logger.error("execute", f"StageHandler failed: {e}", exc_info=True)

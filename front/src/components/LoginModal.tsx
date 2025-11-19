@@ -79,7 +79,7 @@ export default function LoginModal() {
         const userData: UserData = {
           user_id: data.user_id,
           username: data.username,
-          display_name: data.username, // display_name이 없으면 username 사용
+          display_name: data.display_name || data.username, // display_name이 없으면 username 사용
           email: `${data.username}@kimechat.com`,
         };
         setUserData(userData);

@@ -27,6 +27,11 @@ def setup_logging(log_level: str = "INFO"):
         ]
     )
 
+    # SQLAlchemy 엔진 로그 완전 비활성화 (SQL 쿼리 로그 제거)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
+    logging.getLogger("sqlalchemy.pool").setLevel(logging.ERROR)
+    logging.getLogger("sqlalchemy.engine.Engine").setLevel(logging.ERROR)
+
 
 # ============================================================
 # 레이어별 로거

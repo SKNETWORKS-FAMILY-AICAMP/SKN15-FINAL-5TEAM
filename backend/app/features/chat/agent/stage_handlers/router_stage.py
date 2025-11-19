@@ -117,11 +117,12 @@ class RouterStageHandler:
                    next_stage=next_stage)
 
         # Children context 구성
+        # ✅ Router는 대화 생성 없이 즉시 라우팅하므로 beats와 speaker_pool을 비워둠
         children_ctx = {
             "stage_tag": stage_tag,
             "stage_type": "router",
-            "beats": stage.get("beats", []),
-            "speaker_pool": stage.get("speaker_pool", []),
+            "beats": [],  # 항상 빈 리스트 (대화 생성 방지)
+            "speaker_pool": [],  # 항상 빈 리스트 (대화 생성 방지)
             "scenario_id": scenario.get("scenario_id", "unknown"),
         }
 

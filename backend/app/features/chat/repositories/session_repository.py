@@ -29,12 +29,10 @@ class SessionRepository:
         Returns:
             세션 상태 dict (없으면 None)
         """
-        logger.debug("get_session", "Fetching session", session_id=session_id)
-
         stmt = text("""
             SELECT session_id, user_id, scenario_id, user_name, current_stage, turn_count,
                    stage_turn, is_active, conversation_summary, total_dialogue_count,
-                   summary_dialogue_count, created_at, updated_at
+                   summary_dialogue_count, state_json, created_at, updated_at
             FROM conversation.sessions
             WHERE session_id = :session_id AND is_active = TRUE
         """)
@@ -43,17 +41,31 @@ class SessionRepository:
         row = result.fetchone()
 
         if not row:
-            logger.debug("get_session", "Session not found", session_id=session_id)
             return None
 
-        # Build state dict from individual columns
-        state = {
-            "current_stage": row.current_stage,
-            "turn_count": row.turn_count or 0,
-            "stage_turn": row.stage_turn or 0,
-            "conversation_summary": row.conversation_summary,
-            "last_summary_message_count": row.summary_dialogue_count or 0,  # 컬럼명 재활용
-        }
+        # ✅ state_json이 있으면 사용, 없으면 개별 컬럼에서 구성
+        if hasattr(row, 'state_json') and row.state_json:
+            import json
+            state = json.loads(row.state_json) if isinstance(row.state_json, str) else row.state_json
+            mission_data = state.get("mission", {})
+            logger.info("get_session", "✅ Loaded state from state_json",
+                       session_id=session_id,
+                       has_mission=bool(mission_data),
+                       mission_active=mission_data.get("active"),
+                       mission_target=mission_data.get("target"),
+                       mission_turn=mission_data.get("turn"),
+                       mission_scene_playing=mission_data.get("scene_playing"),
+                       recruit_attempts=state.get("recruit_attempts"))
+        else:
+            # Fallback: Build state dict from individual columns
+            logger.warning("get_session", "⚠️ state_json not found, using fallback", session_id=session_id)
+            state = {
+                "current_stage": row.current_stage,
+                "turn_count": row.turn_count or 0,
+                "stage_turn": row.stage_turn or 0,
+                "conversation_summary": row.conversation_summary,
+                "last_summary_message_count": row.summary_dialogue_count or 0,  # 컬럼명 재활용
+            }
 
         session_data = {
             "session_id": str(row.session_id),
@@ -66,7 +78,6 @@ class SessionRepository:
             "last_interaction_at": row.updated_at,  # Use updated_at as last_interaction_at
         }
 
-        logger.debug("get_session", "Session found", session_id=session_id)
         return session_data
 
     async def save_session(
@@ -85,8 +96,6 @@ class SessionRepository:
             scenario_id: 시나리오 ID
             state: 세션 상태 dict
         """
-        logger.info("save_session", "Saving session", session_id=session_id)
-
         # Extract state fields
         current_stage = state.get("current_stage")
         turn_count = state.get("turn_count", 0)
@@ -95,13 +104,26 @@ class SessionRepository:
         last_summary_message_count = state.get("last_summary_message_count", 0)  # 요약한 메시지 개수
         user_name = state.get("user_name")
 
+        # ✅ 전체 state를 JSON으로 저장 (mission, temp_data 등 포함)
+        import json
+        state_json = json.dumps(state, default=str)
+
+        # ✅ 로깅: mission 상태 확인
+        logger.info("save_session", "💾 Saving mission state to state_json",
+                   session_id=session_id,
+                   has_mission=bool(state.get("mission")),
+                   mission_active=state.get("mission", {}).get("active"),
+                   mission_target=state.get("mission", {}).get("target"),
+                   mission_turn=state.get("mission", {}).get("turn"),
+                   recruit_attempts=state.get("recruit_attempts"))
+
         stmt = text("""
             INSERT INTO conversation.sessions (session_id, user_id, scenario_id, user_name, current_stage, turn_count,
                                  stage_turn, is_active, conversation_summary, summary_dialogue_count,
-                                 summary_updated_at, created_at, updated_at)
+                                 summary_updated_at, state_json, created_at, updated_at)
             VALUES (:session_id, :user_id, :scenario_id, :user_name, :current_stage, :turn_count,
                     :stage_turn, TRUE, :conversation_summary, :last_summary_message_count,
-                    NOW(), NOW(), NOW())
+                    NOW(), CAST(:state_json AS jsonb), NOW(), NOW())
             ON CONFLICT (session_id)
             DO UPDATE SET
                 current_stage = :current_stage,
@@ -109,6 +131,7 @@ class SessionRepository:
                 stage_turn = :stage_turn,
                 conversation_summary = :conversation_summary,
                 summary_dialogue_count = :last_summary_message_count,
+                state_json = CAST(:state_json AS jsonb),
                 summary_updated_at = CASE
                     WHEN :conversation_summary IS NOT NULL AND :conversation_summary != ''
                     THEN NOW()
@@ -126,11 +149,11 @@ class SessionRepository:
             "turn_count": turn_count,
             "stage_turn": stage_turn,
             "conversation_summary": conversation_summary,
-            "last_summary_message_count": last_summary_message_count
+            "last_summary_message_count": last_summary_message_count,
+            "state_json": state_json
         })
 
         await self.db.flush()
-        logger.info("save_session", "Session saved", session_id=session_id)
 
     async def delete_session(self, session_id: str) -> bool:
         """
@@ -142,8 +165,6 @@ class SessionRepository:
         Returns:
             삭제 성공 여부
         """
-        logger.warning("delete_session", "Deleting session", session_id=session_id)
-
         stmt = text("""
             UPDATE conversation.sessions
             SET is_active = FALSE, updated_at = NOW()
@@ -154,5 +175,4 @@ class SessionRepository:
         await self.db.flush()
 
         deleted = result.rowcount > 0
-        logger.warning("delete_session", f"Session deleted: {deleted}", session_id=session_id)
         return deleted

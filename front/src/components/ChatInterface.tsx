@@ -91,7 +91,15 @@ export default function ChatInterface({
   const [isEnded, setIsEnded] = useState(false); // Phase 4: 시나리오 종료 여부
   const [currentStage, setCurrentStage] = useState<string | undefined>(undefined); // 현재 스테이지 (INTRO 판별용)
   const [showEndingReward, setShowEndingReward] = useState(false); // 엔딩 보상 모달 표시 여부
-  const [endingSummary, setEndingSummary] = useState<string>(''); // 대화 요약
+  const [endingSummary, setEndingSummary] = useState<{
+    summary: string;
+    ending?: {
+      title: string;
+      message: string;
+      type: string;
+      ending_id?: string;
+    };
+  } | string>(''); // 대화 요약 (문자열 또는 객체)
   const [memoryEvents, setMemoryEvents] = useState<Array<MemoryEvent & { id: string; timestamp: number }>>([]); // 메모리 이벤트 히스토리
 
   // Skip 기능을 위한 ref
@@ -1464,21 +1472,35 @@ export default function ChatInterface({
       }
 
       // Check if chat has ended - Phase 4 개선 + 엔딩 리워드
+      // 순차적으로 메시지 표시 (타이핑 효과 포함)
+      await addMessagesSequentially(allMessages);
+
+      // ✅ 메시지 표시 완료 후 엔딩 처리
       if (response.is_ended) {
-        pushSystemMessage('🎬 시나리오가 종료되었습니다.');
+        // ✅ 백엔드에서 제공한 엔딩 정보 사용
+        const endingInfo = response.output?.ending;
+        const endingMessage = endingInfo?.title || '🎬 시나리오가 종료되었습니다.';
+
+        pushSystemMessage(endingMessage);
         setIsEnded(true); // Phase 4: 엔딩 상태 설정
         setBackgroundByIndex(21); // Phase 4: 엔딩 이미지 표시 (무한열차 마지막 이미지)
 
-        // 엔딩 리워드: 대화 요약 생성 및 모달 표시
+        // 엔딩 리워드: 대화 요약 생성 및 모달 표시 (마지막 대사 감상 시간 5초 후)
         setTimeout(() => {
           const summary = generateConversationSummary();
-          setEndingSummary(summary);
+          // ✅ 엔딩 정보를 summary에 추가 (summary는 문자열이므로 객체로 감싸기)
+          const enrichedSummary = {
+            summary: summary,  // 문자열을 summary 필드에 저장
+            ending: endingInfo || {
+              title: '✨ 스토리 완료',
+              message: '축하합니다! 스토리가 완료되었습니다.',
+              type: 'normal'
+            }
+          };
+          setEndingSummary(enrichedSummary);
           setShowEndingReward(true);
-        }, 2000); // 2초 후 리워드 모달 표시
+        }, 5000); // 5초 후 리워드 모달 표시 (마지막 대사 감상 시간)
       }
-
-      // 순차적으로 메시지 표시 (타이핑 효과 포함)
-      await addMessagesSequentially(allMessages);
 
       // has_more가 true이면 자동 요청 시작
       if (response.has_more) {
@@ -1891,7 +1913,7 @@ export default function ChatInterface({
                     <p className={`text-center text-sm leading-relaxed font-medium ${
                       isWarning ? 'text-red-700' : 'text-gray-700 italic'
                     }`}>
-                      {isWarning && <span className="font-bold">⚠️ 꺾쇄까마귀: </span>}
+                      {isWarning && <span className="font-bold"></span>}
                       {replacePlaceholders(message.text, currentUser || undefined)}
                     </p>
                     <div className={`text-xs text-center mt-1 ${
@@ -2200,17 +2222,29 @@ export default function ChatInterface({
       {showEndingReward && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[10000]">
           <div className="bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 rounded-3xl p-8 mx-4 max-w-2xl w-full shadow-2xl border-4 border-yellow-400">
-            {/* 헤더 */}
+            {/* 헤더 - 엔딩 타입별 동적 표시 */}
             <div className="text-center mb-6">
-              <h2 className="text-3xl font-bold text-yellow-400 mb-2">🎉 시나리오 클리어! 🎉</h2>
-              <p className="text-purple-200 text-sm">숨겨진 엔딩 보상을 획득했습니다</p>
+              <h2 className="text-3xl font-bold text-yellow-400 mb-2">
+                {typeof endingSummary === 'object' && endingSummary?.ending?.title
+                  ? endingSummary.ending.title
+                  : '🎉 시나리오 클리어! 🎉'}
+              </h2>
+              <p className="text-purple-200 text-sm">
+                {typeof endingSummary === 'object' && endingSummary?.ending?.message
+                  ? endingSummary.ending.message
+                  : '스토리가 완료되었습니다'}
+              </p>
             </div>
 
             {/* 대화 요약 */}
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-6 border-2 border-purple-400">
               <h3 className="text-xl font-bold text-yellow-300 mb-4">📜 여정의 기록</h3>
               <p className="text-white whitespace-pre-line leading-relaxed">
-                {endingSummary}
+                {typeof endingSummary === 'object' && endingSummary?.summary
+                  ? endingSummary.summary
+                  : typeof endingSummary === 'string'
+                  ? endingSummary
+                  : '여정 정보를 불러올 수 없습니다.'}
               </p>
             </div>
 

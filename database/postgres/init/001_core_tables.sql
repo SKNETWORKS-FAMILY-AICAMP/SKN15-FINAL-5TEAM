@@ -1168,7 +1168,8 @@ CREATE TABLE conversation.sessions (
     user_id uuid,
     conversation_summary text DEFAULT ''::text,
     summary_updated_at timestamp without time zone,
-    summary_turn_count integer DEFAULT 0
+    summary_turn_count integer DEFAULT 0,
+    state_json jsonb
 );
 
 

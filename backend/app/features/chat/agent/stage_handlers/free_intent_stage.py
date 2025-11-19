@@ -59,34 +59,21 @@ class FreeIntentStageHandler:
         stage_turn = state.get("stage_turn", 0)
         user_input = state.get("user_input", "")
 
-        # stage_turn == 0인 경우, 이전 턴의 user_input을 사용
-        # (스테이지가 방금 시작되었으므로 현재 입력은 다음 스테이지를 위한 것)
-        if stage_turn == 0:
-            session_id = state.get("session_id")
-            if session_id:
-                try:
-                    messages = await self.message_history_service.load_full_message_history(session_id)
-                    # 마지막 user_input 찾기
-                    user_inputs = [msg for msg in messages if msg.get("type") == "user"]
-                    if user_inputs:
-                        last_user_input = user_inputs[-1].get("text", "")
-                        if last_user_input and last_user_input != user_input:
-                            logger.info("handle", f"Using previous user_input for intent classification (stage_turn=0)",
-                                       current_input=user_input[:30],
-                                       previous_input=last_user_input[:30])
-                            user_input = last_user_input
-                except Exception as e:
-                    logger.warning("handle", f"Failed to load message history: {e}")
+        # ✅ 수정: stage_turn > 0일 때만 사용자 입력이 유효함
+        # stage_turn == 0: 첫 진입, 아직 선택지 제시만 하고 사용자 입력 없음
+        # stage_turn >= 1: 사용자가 선택지에 대해 응답한 상태
+        logger.debug("handle", f"Stage turn: {stage_turn}, user_input: {user_input[:50] if user_input else 'None'}")
 
         logger.debug("handle", "Handling free intent stage",
                     stage_tag=stage_tag,
                     user_input_preview=user_input[:30])
 
-        # 1. LLM 기반 Intent 분류 (intent_mapping이 있는 경우)
+        # 1. Intent 분류 및 라우팅 로직
         next_stage = None
         intent_mapping = stage.get("intent_mapping", {})
 
-        if intent_mapping:
+        # ✅ stage_turn > 0일 때만 intent 분류 수행 (사용자가 선택한 경우)
+        if stage_turn > 0 and intent_mapping and user_input:
             next_stage = await self._classify_intent(
                 user_input=user_input,
                 intent_mapping=intent_mapping,
@@ -95,10 +82,16 @@ class FreeIntentStageHandler:
             )
             logger.info("handle", f"Intent classified: {next_stage or 'None'}")
 
-        # 2. next_stage가 결정되지 않았으면 default_next 사용
-        if not next_stage:
+        # 2. next_stage 결정 로직
+        if stage_turn == 0:
+            # 첫 진입: 선택지 제시만 하고 대기
+            logger.info("handle", "First entry - presenting choices, no routing yet")
+            next_stage = None
+        elif not next_stage:
+            # stage_turn > 0이지만 intent가 명확하지 않음
+            # default_next 사용 (보통 가장 안전한 경로)
             next_stage = stage.get("default_next")
-            logger.info("handle", f"Using default_next: {next_stage}")
+            logger.warning("handle", f"No clear intent detected, using default_next: {next_stage}")
 
         # 3. 기본 context 구성
         base_ctx = {
@@ -116,24 +109,46 @@ class FreeIntentStageHandler:
             stage=stage
         )
 
-        # 5. LLM 기반 동적 beats 생성
-        beats = await self.context_service.generate_beats(state, children_ctx)
-        children_ctx["beats"] = beats
+        # beats 없음 → LLM 자율 생성 모드 (stage_context 기반)
+        children_ctx["beats"] = []
 
-        logger.info("handle", "Free intent stage processed",
-                   beats_count=len(beats),
-                   next_stage=next_stage)
+        # 5. Stage 결과 반환
+        if stage_turn == 0:
+            # 첫 진입: 선택지 제시만
+            logger.info("handle", "Free intent stage - presenting choices",
+                       beats_count=0,
+                       stage_turn=stage_turn)
 
-        # max_turns가 0이면 즉시 완료 (대화 생성 없이 바로 라우팅)
-        stage_turn = state.get("stage_turn", 0)
-        max_turns = stage.get("max_turns")
-        immediate_routing = (max_turns == 0 and stage_turn == 0)
+            return StageResult(
+                children_ctx=children_ctx,
+                stage_complete=False,  # 계속 진행 (사용자 입력 대기)
+                next_stage=None
+            )
+        elif next_stage:
+            # Intent 분류 성공: 라우팅
+            logger.info("handle", "Free intent stage - intent classified, routing",
+                       stage_turn=stage_turn,
+                       next_stage=next_stage,
+                       beats_count=0)
 
-        return StageResult(
-            children_ctx=children_ctx,
-            stage_complete=immediate_routing or (True if next_stage else False),
-            next_stage=next_stage
-        )
+            return StageResult(
+                children_ctx=children_ctx,
+                stage_complete=True,  # 스테이지 완료
+                next_stage=next_stage
+            )
+        else:
+            # Intent 분류 실패: default_next 사용 (이미 위에서 설정됨)
+            # next_stage는 default_next 값이 들어있음
+            logger.info("handle", "Free intent stage - using default routing",
+                       stage_turn=stage_turn,
+                       next_stage=next_stage,
+                       beats_count=0)
+
+            return StageResult(
+                children_ctx=children_ctx,
+                stage_complete=True,  # 스테이지 완료
+                next_stage=next_stage
+            )
 
     async def _classify_intent(
         self,
@@ -247,7 +262,7 @@ class FreeIntentStageHandler:
                        reasoning=reasoning[:100])
 
             # Confidence threshold 체크
-            CONFIDENCE_THRESHOLD = 0.5  # 0.7에서 낮춤
+            CONFIDENCE_THRESHOLD = 0.75  # 명확한 선택만 허용
             if confidence < CONFIDENCE_THRESHOLD:
                 logger.warning("_classify_intent",
                              f"Low confidence ({confidence:.2f} < {CONFIDENCE_THRESHOLD}), using default_next",

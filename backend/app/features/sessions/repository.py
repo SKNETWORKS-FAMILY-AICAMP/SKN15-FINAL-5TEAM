@@ -194,7 +194,8 @@ class SessionRepository:
         turn_count: Optional[int] = None,
         stage_turn: Optional[int] = None,
         conversation_summary: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        final_ending: Optional[str] = None
     ) -> bool:
         """
         세션 상태 업데이트
@@ -206,6 +207,7 @@ class SessionRepository:
             stage_turn: 스테이지 턴 수
             conversation_summary: 대화 요약
             is_active: 활성 상태
+            final_ending: 최종 엔딩 (END_HIDDEN, END_BASIC 등)
 
         Returns:
             업데이트 성공 여부
@@ -233,6 +235,10 @@ class SessionRepository:
 
         if is_active is not None:
             session.is_active = is_active
+
+        if final_ending is not None:
+            session.final_ending = final_ending
+            logger.info("update_session_state", f"Final ending set: {final_ending}", session_id=session_id)
 
         session.updated_at = datetime.utcnow()
         await self.db.flush()

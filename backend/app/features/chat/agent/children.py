@@ -50,8 +50,6 @@ class ChildrenAgent:
         self.dialogue_service = dialogue_service or DialogueService()
         self.scenario_service = scenario_service or ScenarioService()
 
-        logger.info("__init__", "ChildrenAgent initialized")
-
     async def run(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         대화 생성 메인 엔트리 포인트
@@ -70,9 +68,6 @@ class ChildrenAgent:
             state["agent_responses"] = []
             state["has_more_dialogues"] = False
             return state
-
-        logger.debug("run", "Generating dialogues",
-                    beats_count=len(ctx.get("beats", [])))
 
         # 대화 생성
         dialogues = await self._generate_dialogues(ctx, state)
@@ -114,7 +109,6 @@ class ChildrenAgent:
             return ""
 
         world_context = self.scenario_service.get_world_context(world_id)
-        logger.info("_get_world_context", f"Loaded world_context for {world_id}: {len(world_context)} chars")
 
         return world_context
 
@@ -125,11 +119,42 @@ class ChildrenAgent:
     ) -> List[Dict[str, Any]]:
         """
         Beats 기반 대화 생성 (prompts.yaml 사용)
+
+        Beats에 text가 있으면 그대로 사용, 없으면 LLM 생성
         """
         beats = ctx.get("beats", [])
         speaker_pool = ctx.get("speaker_pool", [])
         scenario_id = ctx.get("scenario_id", "unknown")
         stage_context = ctx.get("stage_context", "")  # ✅ stage context 추가
+
+        # ✅ Router stage: beats와 speaker_pool이 모두 비어있으면 대화 생성 건너뜀
+        if not beats and not speaker_pool and not stage_context:
+            logger.info("_generate_dialogues", "Skipping dialogue generation (Router stage or empty context)")
+            return []
+
+        # ✅ 먼저 beats에 text가 있는 것들을 분리
+        predefined_dialogues = []
+        beats_to_generate = []
+
+        for beat in beats:
+            if isinstance(beat, dict) and beat.get("text"):
+                # text가 있으면 미리 정의된 대화 → 그대로 사용
+                predefined_dialogues.append({
+                    "speaker": beat.get("speaker", "narr"),
+                    "text": beat.get("text", ""),
+                    "fx": beat.get("fx")
+                })
+                logger.info("_generate_dialogues",
+                           f"Using predefined dialogue: {beat.get('speaker')} - {beat.get('text')[:50]}")
+            else:
+                # text가 없으면 LLM 생성 필요
+                beats_to_generate.append(beat)
+
+        # ✅ predefined_dialogues만 있고 LLM 생성할 게 없으면 바로 반환
+        if predefined_dialogues and not beats_to_generate and not stage_context:
+            logger.info("_generate_dialogues",
+                       f"All dialogues predefined - returning {len(predefined_dialogues)} items")
+            return predefined_dialogues
 
         # 컨텍스트 정보 준비
         recent_dialogues = ctx.get("recent_dialogues", [])
@@ -139,21 +164,11 @@ class ChildrenAgent:
         current_turn = state.get("turn_count", 0)
         user_name = state.get("user_name", "츠구코")
 
-        logger.info("_generate_dialogues", f"Post-processing will replace '{user_name}' with '{{user}}'")
-        logger.info("_generate_dialogues", f"🔍 DEBUG: recent_dialogues count = {len(recent_dialogues)}")
-        logger.info("_generate_dialogues", f"🔍 DEBUG: long_term_memories count = {len(long_term_memories)}")
-        if recent_dialogues:
-            logger.info("_generate_dialogues", f"🔍 DEBUG: First dialogue = {recent_dialogues[0]}")
-            logger.info("_generate_dialogues", f"🔍 DEBUG: Last dialogue = {recent_dialogues[-1]}")
-
         # Beat goal 정리 ({{user}} → user_name 치환)
-        if not beats:
-            # Beats 없음 → stage context 사용 (LLM 자율 생성 모드)
-            logger.info("_generate_dialogues", "No beats - using stage context for autonomous generation")
-            beats_description = stage_context.replace("{{user}}", user_name) if stage_context else "현재 상황에 맞게 자연스러운 대화를 생성하세요."
-        else:
-            # Beats 있음 → beats goal 사용
-            beat_descriptions = []
+        beat_descriptions = []
+
+        if beats:
+            # Beats 있음 → beats goal 수집
             for beat in beats:
                 if isinstance(beat, dict):
                     desc = beat.get("goal") or beat.get("description") or beat.get("text") or str(beat)
@@ -164,19 +179,27 @@ class ChildrenAgent:
                     # ✅ {{user}} 치환 (프롬프트용)
                     desc = beat.replace("{{user}}", user_name)
                     beat_descriptions.append(desc)
-            beats_description = "\n".join(beat_descriptions) if beat_descriptions else "일반 대화"
+
+        # ✅ stage_context가 있으면 추가 (beats 유무와 관계없이)
+        if stage_context:
+            stage_ctx_clean = stage_context.replace("{{user}}", user_name)
+            beat_descriptions.append(stage_ctx_clean)
+            logger.info("_generate_dialogues", "Added stage_context to beats_description",
+                       stage_context_length=len(stage_ctx_clean))
+
+        # 최종 beats_description 생성
+        if beat_descriptions:
+            beats_description = "\n".join(beat_descriptions)
+        else:
+            beats_description = "현재 상황에 맞게 자연스러운 대화를 생성하세요."
+            logger.info("_generate_dialogues", "No beats or stage_context - using default")
 
         # ✅ World context 로드
         world_context = self._get_world_context(state)
 
-        logger.info("_generate_dialogues", f"Generating dialogues for {len(beats)} beats",
-                    speaker_pool=speaker_pool, turn=current_turn,
-                    world_context_length=len(world_context))
-
         try:
             # stage_turn 가져오기 (Stage 전환 직후인지 확인)
             stage_turn = state.get("stage_turn", 0)
-            logger.info("_generate_dialogues", f"Stage turn: {stage_turn} (0 = new stage)")
 
             # 대화 생성 프롬프트 (단일 모드)
             prompt = prompt_service.get_dialogue_generation_prompt(
@@ -190,30 +213,14 @@ class ChildrenAgent:
                 stage_turn=stage_turn  # ✅ stage_turn 전달
             )
 
-            # 🔍 DEBUG: 프롬프트에 중괄호 패턴이 있는지 확인
-            if "{" in prompt and "}" in prompt:
-                logger.warning("_generate_dialogues",
-                              f"⚠️ Prompt contains braces! Checking for patterns...")
-                import re
-                brace_patterns = re.findall(r'\{[^}]+\}', prompt)
-                if brace_patterns:
-                    logger.warning("_generate_dialogues",
-                                  f"⚠️ Found brace patterns in prompt: {brace_patterns[:5]}")
-
-            # 🔍 DEBUG: 프롬프트 일부 출력
-            logger.info("_generate_dialogues",
-                       f"🔍 Prompt preview (first 500 chars): {prompt}")
-            logger.info("_generate_dialogues",
-                       f"🔍 Prompt preview (last 500 chars): {prompt}")
+            # ✅ 프롬프트 로그 출력 (디버깅용 - 전체 출력)
+            logger.info("_generate_dialogues", f"📝 FULL Prompt for LLM:\n{prompt}")
 
             dialogues_messages = await self.llm_service.generate_with_prompt(
                 prompt=prompt,
                 temperature=0.8,
                 max_tokens=800
             )
-
-            logger.info("_generate_dialogues",
-                        f"LLM returned {len(dialogues_messages) if dialogues_messages else 0} messages")
 
         except Exception as e:
             logger.error("_generate_dialogues", f"LLM call failed: {e}", exc_info=True)
@@ -222,6 +229,47 @@ class ChildrenAgent:
         if not dialogues_messages:
             logger.warning("_generate_dialogues", "LLM returned empty list")
             return []
+
+        # ✅ Speaker pool validation (LLM이 제약을 지켰는지 검증)
+        invalid_speakers = []
+        for msg in dialogues_messages:
+            if hasattr(msg, 'speaker'):
+                speaker = msg.speaker
+            elif isinstance(msg, dict):
+                speaker = msg.get("speaker", "narr")
+            else:
+                continue
+
+            # speaker_pool에 없는 캐릭터 감지
+            if speaker not in speaker_pool:
+                invalid_speakers.append(speaker)
+
+        if invalid_speakers:
+            logger.error("_generate_dialogues",
+                        f"🚨 LLM violated speaker_pool constraint! Invalid speakers: {set(invalid_speakers)}",
+                        allowed_pool=speaker_pool,
+                        violation_count=len(invalid_speakers))
+            logger.error("_generate_dialogues", "Filtering out invalid speakers from response")
+            # 잘못된 speaker를 가진 대화는 제외
+            filtered_messages = []
+            for msg in dialogues_messages:
+                if hasattr(msg, 'speaker'):
+                    speaker = msg.speaker
+                elif isinstance(msg, dict):
+                    speaker = msg.get("speaker", "narr")
+                else:
+                    continue
+
+                if speaker in speaker_pool:
+                    filtered_messages.append(msg)
+                else:
+                    logger.warning("_generate_dialogues", f"Filtered out dialogue from invalid speaker: {speaker}")
+
+            dialogues_messages = filtered_messages
+
+            if not dialogues_messages:
+                logger.error("_generate_dialogues", "All dialogues filtered out due to speaker_pool violations")
+                return []
 
         # Post-processing 동일
         dialogue_dicts = []
@@ -258,15 +306,10 @@ class ChildrenAgent:
                         extracted_text = match.group(1)
                         if extracted_text != original_text_before_clean:
                             dialogue_dict["text"] = extracted_text
-                            logger.info("_generate_dialogues",
-                                        f"🧹 Extracted dialogue from quotes | {original_text_before_clean} → {extracted_text}")
 
                 # ✅ 역치환: 사용자 이름 → {{user}} 플레이스홀더로 변환 (DB 저장용)
                 if user_name in dialogue_dict["text"]:
-                    original_text = dialogue_dict["text"]
                     dialogue_dict["text"] = dialogue_dict["text"].replace(user_name, "{{user}}")
-                    logger.info("_generate_dialogues",
-                                f"✏️ Replaced '{user_name}' → '{{{{user}}}}' | {original_text} → {dialogue_dict['text']}")
 
                 if dialogue_dict["speaker"] == user_name:
                     logger.warning("_generate_dialogues",
@@ -279,10 +322,13 @@ class ChildrenAgent:
                 logger.error("_generate_dialogues", f"Error converting message {i}: {e}", exc_info=True)
                 continue
 
-        logger.info("_generate_dialogues",
-                    f"Generated {len(dialogue_dicts)} dialogues from {len(beats)} beats")
+        # ✅ predefined_dialogues와 병합 (predefined가 먼저)
+        final_dialogues = predefined_dialogues + dialogue_dicts
 
-        return dialogue_dicts
+        logger.info("_generate_dialogues",
+                   f"Generated dialogues: {len(predefined_dialogues)} predefined + {len(dialogue_dicts)} LLM = {len(final_dialogues)} total")
+
+        return final_dialogues
 
 
 

@@ -137,6 +137,61 @@ async def create_chat(
 
         current_image = dialogue_result.current_image
 
+        # ✅ 엔딩 정보 구성
+        ending_info = {}
+        if dialogue_result.session_ended:
+            current_stage = dialogue_result.updated_state.get("current_stage", "")
+
+            # 엔딩 타입별 메시지
+            ending_messages = {
+                "END_HIDDEN": {
+                    "title": "🎉 히든 엔딩 달성!",
+                    "message": "축하합니다! 모든 동료를 모아 최고의 결말에 도달했습니다.",
+                    "type": "hidden"
+                },
+                "END_BASIC": {
+                    "title": "✨ 스토리 완료",
+                    "message": "축하합니다! 스토리가 완료되었습니다.",
+                    "type": "basic"
+                },
+                "END_BAD": {
+                    "title": "💔 배드 엔딩",
+                    "message": "스토리가 완료되었습니다.",
+                    "type": "bad"
+                }
+            }
+
+            ending_info = ending_messages.get(current_stage, {
+                "title": "✨ 스토리 완료",
+                "message": "축하합니다! 스토리가 완료되었습니다.",
+                "type": "normal"
+            })
+            ending_info["ending_id"] = current_stage
+
+        # ✅ Router 스테이지에서 대화가 없으면 자동으로 다음 스테이지 호출
+        current_stage = dialogue_result.updated_state.get("current_stage", "unknown")
+        next_stage = dialogue_result.next_stage
+        has_more = False
+
+        # ✅ Router 스테이지 감지:
+        # - 현재 스테이지가 router이거나
+        # - 다음 스테이지로 전환 중이고 다음이 router인 경우
+        is_current_router = current_stage.endswith("_ROUTER") or current_stage == "ROUTER"
+        is_next_router = next_stage and (next_stage.endswith("_ROUTER") or next_stage == "ROUTER")
+
+        # Stage 전환 중 (stage_complete=True이고 next_stage가 있음)
+        is_transitioning = dialogue_result.stage_complete and next_stage and next_stage != current_stage
+
+        logger.info("create_chat",
+                   f"Checking auto-advance | current={current_stage} | next={next_stage} | "
+                   f"is_current_router={is_current_router} | is_next_router={is_next_router} | "
+                   f"transitioning={is_transitioning} | dialogues={len(rendered_chat_messages)}")
+
+        # Router 스테이지로 전환 중이거나, Router 스테이지에서 대화가 없는 경우
+        if (is_transitioning and is_next_router) or (is_current_router and len(rendered_chat_messages) == 0):
+            has_more = True
+            logger.info("create_chat", "✅ Router stage detected - setting has_more=True for auto-advance")
+
         return StreamingResponse(
             sse_generator(
                 session_id=session_id,
@@ -144,10 +199,10 @@ async def create_chat(
                 turn_count=dialogue_result.updated_state.get("turn_count", 1),
                 current_stage=dialogue_result.next_stage or dialogue_result.updated_state.get("current_stage", "intro"),
                 affinity_scores=dialogue_result.affinity_scores or {},
-                is_ended=False,
-                has_more=False,
+                is_ended=dialogue_result.session_ended,  # ✅ 엔딩 스테이지 도달 시 세션 종료
+                has_more=has_more,
                 current_image=current_image,
-                output={},
+                output={"ending": ending_info} if ending_info else {},
                 memory_events=dialogue_result.memory_events,
                 stage_turn=dialogue_result.updated_state.get("stage_turn", 0)
             ),

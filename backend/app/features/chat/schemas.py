@@ -95,6 +95,7 @@ class DialogueResult(BaseModel):
     affinity_scores: Optional[Dict[str, float]] = None  # 현재 친밀도 (DB 로드 + 델타 적용)
     current_image: Optional[str] = Field(None, description="선택된 배경 이미지 식별자")
     memory_events: List[MemoryEvent] = Field(default_factory=list, description="Memory events during this turn")
+    session_ended: bool = Field(False, description="엔딩 스테이지 도달로 세션 종료 여부")
 
 
 class StageResult(BaseModel):

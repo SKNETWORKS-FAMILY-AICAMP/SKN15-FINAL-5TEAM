@@ -21,7 +21,7 @@ class StateService:
 
     def __init__(self):
         """StateService 초기화"""
-        logger.info("__init__", "StateService initialized")
+        pass
 
     def prepare_state(
         self,
@@ -40,27 +40,25 @@ class StateService:
         Returns:
             준비된 상태 dict
         """
-        # 기본 상태 구조 보장
+        # ✅ 기존 상태를 먼저 병합한 후 필수 필드만 덮어쓰기 (mission 등 유지)
         state = {
+            **session_state,  # 기존 상태 먼저 병합 (mission, recruit_attempts 등 유지)
             "scenario_id": scenario_id,
             "user_input": user_input,
-            "current_stage": session_state.get("current_stage", session_state.get("current_stage", "TRAIN_PRELUDE")),
+            "current_stage": session_state.get("current_stage", "TRAIN_PRELUDE"),
             "stage_turn": session_state.get("stage_turn", 0),
             "turn_count": session_state.get("turn_count", 0),
-            "game": session_state.get("game", {}),
-            "scene": session_state.get("scene", {}),
-            "temp_data": session_state.get("temp_data", {}),
-            "conversation_history": session_state.get("conversation_history", []),
-            **session_state  # 기존 상태 병합
         }
 
-        logger.info(
-            "prepare_state",
-            "State prepared",
-            scenario_id=scenario_id,
-            current_stage=state["current_stage"],
-            turn_count=state["turn_count"]
-        )
+        # ✅ 없을 때만 빈 dict/list로 초기화 (기존 값 유지)
+        state.setdefault("game", {})
+        state.setdefault("scene", {})
+        state.setdefault("temp_data", {})
+        state.setdefault("mission", {})
+        state.setdefault("recruit_attempts", {})
+        state.setdefault("allies_recruited", [])
+        state.setdefault("recruit_order", [])
+        state.setdefault("conversation_history", [])
 
         return state
 
@@ -112,14 +110,6 @@ class StateService:
             scene_state["stage_completed"] = True
             updated["scene"] = scene_state
 
-        logger.info(
-            "update_state",
-            "State updated",
-            turn_count=updated["turn_count"],
-            stage_turn=updated["stage_turn"],
-            current_stage=updated["current_stage"]
-        )
-
         return updated
 
     def reset_stage(self, state: Dict[str, Any], new_stage: str) -> Dict[str, Any]:
@@ -148,12 +138,6 @@ class StateService:
         temp_data = updated.get("temp_data", {})
         temp_data.pop("completed_stage", None)
         updated["temp_data"] = temp_data
-
-        logger.info(
-            "reset_stage",
-            "Stage reset",
-            new_stage=new_stage
-        )
 
         return updated
 

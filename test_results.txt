@@ -1,0 +1,349 @@
+엔딩 테스트 시작...
+시작 시간: 2025-11-19 03:40:16
+================================================================================
+테스트 1: 일반 엔딩 (렌고쿠 도움)
+================================================================================
+
+[Turn 1] 시작...
+
+>>> User (일반엔딩테스트): 시작
+  kasugai_crow: 까악— 까악— 무한열차에서 귀살대원 40명 이상이 실종되었다! 염주 렌고쿠 쿄쥬로가 이미 현장으로 향했다! 까악— 까악—
+  kasugai_crow: 너는 렌고쿠의 츠구코(継子, 계자)로서 스승을 따라 무한열차에 탑승하라! 불의 호흡을 수련 중인 네가 스승의 뒤를 이어야 한다! 까악— 까악—
+  kasugai_crow: 임무: 렌고쿠와 함께 무한열차에서 실종 사건의 원인을 조사하고, 혈귀가 있다면 목을 베어라! 까악— 까악—
+→ Session: b4e583f9-267a-4b4f-8bf9-3a3695fe8b7b
+→ Stage: UpperMoons3_appeared
+
+[Turn 2] 계속 진행...
+
+>>> User (일반엔딩테스트): 계속
+  narr: 렌고쿠가 아카자를 바라보며 검을 잡고 경계 태세를 갖춘다.
+  rengoku: 나는 절대 너의 유혹에 넘어가지 않겠다! 오니는 결코 용서할 수 없다!
+  narr: 아카자가 비웃으며 렌고쿠를 노려본다. 그의 몸에서 강렬한 살기가 뿜어져 나온다.
+  akaza: 흥미로운 인간이군. 이렇게 강한 힘을 지니고 있으면서도 왜 나를 거부하는지 이해할 수 없어. 더 강해지길 원하지 않는가?
+→ Stage: ROUTE_CHOICE
+
+[Turn 3] 계속 진행...
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 4] 계속 진행...
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 5] 계속 진행...
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 6] 계속 진행...
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 7] 렌고쿠 도움 선택...
+
+>>> User (일반엔딩테스트): 렌고쿠를 도와야해
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 8]
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 9]
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 10]
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 11]
+
+>>> User (일반엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 12]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⚠️ 또 한 번 반복되면 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 13]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 14]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 15]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 16]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 17]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 18]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 19]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 20]
+
+>>> User (일반엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+✓ Saved: normal_ending_npc_20251119_034338.txt
+✓ Saved: normal_ending_user_20251119_034338.txt
+✓ Saved: normal_ending_full_20251119_034338.json
+
+
+================================================================================
+잠시 대기 (5초)...
+================================================================================
+
+
+================================================================================
+테스트 2: 히든 엔딩 (동료 모으기)
+================================================================================
+
+[Turn 1] 시작...
+
+>>> User (히든엔딩테스트): 시작
+  kasugai_crow: 까악— 까악— 무한열차에서 귀살대원 40명 이상이 실종되었다! 염주 렌고쿠 쿄쥬로가 이미 현장으로 향했다! 까악— 까악—
+  kasugai_crow: 너는 렌고쿠의 츠구코(継子, 계자)로서 스승을 따라 무한열차에 탑승하라! 불의 호흡을 수련 중인 네가 스승의 뒤를 이어야 한다! 까악— 까악—
+  kasugai_crow: 임무: 렌고쿠와 함께 무한열차에서 실종 사건의 원인을 조사하고, 혈귀가 있다면 목을 베어라! 까악— 까악—
+→ Session: 235b5c58-aec8-47ee-9f5f-1f52527b5785
+→ Stage: UpperMoons3_appeared
+
+[Turn 2] 계속 진행...
+
+>>> User (히든엔딩테스트): 계속
+  narr: 열차의 흔들림이 점점 심해지며 승객들이 두려움에 떨고 있다. 렌고쿠는 침착하게 주변을 살피며 츠구코에게 다가간다.
+  rengoku: 츠구코, 모두를 안전한 곳으로 대피시키고 나서 나와 함께 싸워야 한다. 저 오니는 강력한 존재다.
+  narr: 아카자가 나타나자마자 압도적인 살기가 주변을 감싼다. 그의 검은 피가 솟구치는 듯한 강렬한 존재감으로 렌고쿠를 자극한다.
+  akaza: 흥미롭군. 너만의 힘으로 나를 이길 수 있을까? 혈귀가 되는 건 어떤가? 영원한 힘을 주지.
+  rengoku: 그런 제안은 필요 없다. 나는 내 길을 간다. 그리고 오니는 반드시 소멸해야 한다!
+  narr: 렌고쿠가 검을 쥐고 아카자와의 대결을 준비한다. 두 사람의 긴장감이 극에 달하며, 전투가 시작되려 한다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 3] 계속 진행...
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 4] 계속 진행...
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 5] 계속 진행...
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 6] 계속 진행...
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 7] 동료 모으기 선택...
+
+>>> User (히든엔딩테스트): 동료들을 모으자
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 8] Input: 계속
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⚠️ 또 한 번 반복되면 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE
+
+[Turn 9] Input: 이노스케야, 같이 가자! 겁쟁이는 아니지?
+
+>>> User (히든엔딩테스트): 이노스케야, 같이 가자! 겁쟁이는 아니지?
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 10] Input: 계속
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 11] Input: 계속
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 12] Input: 젠이츠야, 네즈코가 위험해! 같이 가야 해!
+
+>>> User (히든엔딩테스트): 젠이츠야, 네즈코가 위험해! 같이 가야 해!
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 13] Input: 계속
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 14] Input: 계속
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 15] Input: 계속
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE
+
+[Turn 16]
+
+>>> User (히든엔딩테스트): 계속
+  시스템: 죄송합니다. 응답 생성에 실패했습니다.
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 17]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⚠️ 또 한 번 반복되면 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 18]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 19]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 20]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 21]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 22]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 23]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 24]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 25]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 26]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 27]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 28]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 29]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+
+[Turn 30]
+
+>>> User (히든엔딩테스트): 계속
+  kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+→ Stage: ROUTE_CHOICE | Ended: False
+✓ Saved: hidden_ending_npc_20251119_034907.txt
+✓ Saved: hidden_ending_user_20251119_034907.txt
+✓ Saved: hidden_ending_full_20251119_034907.json
+
+
+================================================================================
+=== 테스트 완료 ===
+종료 시간: 2025-11-19 03:49:07
+================================================================================
+
+파일이 저장되었습니다:
+  - normal_ending_npc_*.txt
+  - normal_ending_user_*.txt
+  - normal_ending_full_*.json
+  - hidden_ending_npc_*.txt
+  - hidden_ending_user_*.txt
+  - hidden_ending_full_*.json

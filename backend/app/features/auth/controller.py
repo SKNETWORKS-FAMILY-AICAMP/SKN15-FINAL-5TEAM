@@ -63,6 +63,7 @@ async def login(
             refresh_token=result.refresh_token,
             user_id=result.user_id,
             username=result.username,
+            display_name=result.display_name,
             role=result.role
         )
 

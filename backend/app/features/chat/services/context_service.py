@@ -128,9 +128,11 @@ class ContextService:
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
 
             # ✅ stage context 추가 (beats 없을 때 LLM 자율 생성용)
-            stage_context = stage.get("context", "")
-            if stage_context:
-                children_ctx["stage_context"] = stage_context
+            # 단, base_ctx에서 이미 설정된 stage_context가 있으면 덮어쓰지 않음 (MissionStageHandler 우선)
+            if "stage_context" not in children_ctx:
+                stage_context = stage.get("context", "")
+                if stage_context:
+                    children_ctx["stage_context"] = stage_context
 
             objective = stage.get("objective")
             if objective:

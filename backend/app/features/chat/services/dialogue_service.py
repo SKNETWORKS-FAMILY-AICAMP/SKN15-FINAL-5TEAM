@@ -110,10 +110,6 @@ class DialogueService:
         self.enable_llm = enable_llm
         self.chat_repository = chat_repository
 
-        logger.info("__init__", "DialogueService initialized",
-                   enable_llm=enable_llm,
-                   has_repository=chat_repository is not None)
-
     # ========== 1. Validation ==========
 
     async def validate_dialogue(

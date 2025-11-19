@@ -51,10 +51,17 @@ RECRUITMENT_SYSTEM_PROMPT = """당신은 캐릭터 설득 평가 전문가입니
 
 RECRUITMENT_USER_TEMPLATE = """타겟 캐릭터: {target}
 
+캐릭터별 설득 성공 조건:
+- inosuke (이노스케): 도발하거나 강함을 증명하는 말을 하면 설득 성공
+  예시: "겁먹었어?", "싸움 피하는 거야?", "상현도 못 이겨?", "산의 왕이라며?", "나랑 겨뤄봐", "강한 척만 하는 거 아니야?"
+
+- zenitsu (젠이츠): 네즈코가 위험하다고 말하거나 네즈코를 언급하면 설득 성공
+  예시: "네즈코가 위험해", "네즈코를 지켜줘", "네즈코 혼자 두면 안 돼", "네즈코한테 무슨 일 생기면"
+
 사용자의 설득:
 "{user_text}"
 
-위 설득이 {target}를 설득하기에 충분한가요?"""
+위 설득이 {target}를 설득하기에 충분한가요? 캐릭터별 조건을 우선적으로 고려하세요."""
 
 
 class MissionService:
@@ -111,9 +118,6 @@ class MissionService:
         self.llm_client = llm_client or LLMClient()
         self.enable_llm = enable_llm
         self.scenario_service = scenario_service
-
-        logger.info("__init__", "MissionService initialized",
-                   enable_llm=enable_llm)
 
     # ========== 1. Mission Logic ==========
 
@@ -188,7 +192,6 @@ class MissionService:
             keywords = target_config.get("keywords", [])
             for keyword in keywords:
                 if keyword.lower() in text_lower:
-                    logger.info("_detect_mission_target", f"Keyword matched: '{keyword}' -> {target_id}")
                     return target_id
 
         return None
@@ -253,9 +256,6 @@ class MissionService:
         if character not in order:
             order.append(character)
 
-        logger.info("increment_attempt", f"Attempt incremented: {character}",
-                   count=attempts[character])
-
     async def evaluate_recruit_attempt(
         self,
         state: Dict[str, Any],
@@ -295,9 +295,7 @@ class MissionService:
             result_clean = result.strip().upper()
             success = "YES" in result_clean
 
-            logger.info("evaluate_recruit_attempt", f"Evaluation: {result_clean}",
-                       target=target,
-                       success=success)
+            logger.info("evaluate_recruit_attempt", f"Evaluation: {target} = {result_clean} (success={success})")
 
             return success
 
@@ -340,7 +338,7 @@ class MissionService:
             sys_text = f"{char_display} 🎉 설득 성공! 🎉 ({attempt_ratio})"
             fx = "ui_confirm|success_chime"
         else:
-            remaining_note = f" 남은 시도 {remaining}회" if remaining > 0 else ""
+            remaining_note = f" (남은 시도: {remaining}회)" if remaining > 0 else ""
             sys_text = f"⏰ {char_display} 설득 실패... ({attempt_ratio}){remaining_note}"
             fx = "ui_alert|heartbeat_slow"
 
@@ -361,12 +359,8 @@ class MissionService:
                 "goal": "시스템 알림: ⚠️ 모든 시도를 소진했습니다. 다른 방법을 찾아야 합니다.",
             }
             dialogues.append(exhaustion)
-            logger.warning("build_feedback_beats", "Mission attempts exhausted",
-                          character=character)
 
-        logger.info("build_feedback_beats", f"Feedback generated: {success}",
-                   character=character,
-                   beats_count=len(dialogues))
+        logger.info("build_feedback_beats", f"Feedback: {character} | success={success} | beats={len(dialogues)}")
 
         return dialogues
 
@@ -394,9 +388,9 @@ class MissionService:
             return None
 
         if mission_result == "success":
-            text = f"탄지로: {completed_ally}를 데려오는 데 성공했어! 이제 {next_target}를 찾으러 가자."
+            text = f"{completed_ally}를 데려오는 데 성공했어! 이제 {next_target}를 찾으러 가자."
         else:
-            text = f"탄지로: {completed_ally}를 설득하지 못했어... 그래도 포기할 순 없어. 이번엔 {next_target}를 찾아보자."
+            text = f"{completed_ally}를 설득하지 못했어... 그래도 포기할 순 없어. 이번엔 {next_target}를 찾아보자."
 
         return {
             "speaker": "tanjiro",

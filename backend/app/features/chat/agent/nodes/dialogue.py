@@ -53,10 +53,17 @@ class DialogueAgent:
             # agent_responses 가져오기
             agent_responses = state.get("agent_responses", [])
 
+            # ✅ Router stage는 대화 생성 없이 즉시 라우팅하므로 빈 agent_responses 허용
+            stage_type = state.get("stage_type", "scene")
             if not agent_responses:
-                logger.warning("generate_dialogue", "No agent_responses found")
-                state["output"] = self._create_fallback_output(state)
-                return state
+                if stage_type == "router":
+                    # Router는 대화 없이 라우팅만 수행 - 빈 대화 리스트로 진행
+                    logger.info("generate_dialogue", "Router stage - no dialogues needed")
+                    agent_responses = []
+                else:
+                    logger.warning("generate_dialogue", "No agent_responses found - returning fallback")
+                    state["output"] = self._create_fallback_output(state)
+                    return state
 
             logger.info("generate_dialogue", f"Processing {len(agent_responses)} dialogues")
 
@@ -117,13 +124,20 @@ class DialogueAgent:
                        stage_turn=state.get("stage_turn"))
 
             # 12. output 생성 (DialogueResult 형식)
+            # ✅ 엔딩 스테이지 감지 (stage_complete=True이고 next_stage=None이면 세션 종료)
+            is_ending = stage_complete and not next_stage and current_stage.startswith("END_")
+
             state["output"] = {
                 "dialogues": [self._dialogue_to_dict(msg) for msg in dialogues],
                 "next_stage": next_stage or current_stage,
                 "stage_complete": stage_complete,
                 "affinity_delta": affinity_delta,
                 "affinity_scores": updated_state.get("affinity_scores", {}),
+                "session_ended": is_ending,  # ✅ 세션 종료 플래그
             }
+
+            if is_ending:
+                logger.info("generate_dialogue", f"🏁 Session ending detected: {current_stage}")
 
             # messages 추가 (LangGraph 히스토리용)
             if "messages" not in state:
@@ -268,3 +282,81 @@ class DialogueAgent:
             "affinity_delta": {},
             "affinity_scores": state.get("affinity_scores", {}),
         }
+
+    async def _handle_free_intent_transition(
+        self,
+        state: GraphState,
+        next_stage: str,
+        dialogues: List[ChatMessage]
+    ) -> None:
+        """
+        Free Intent 스테이지 전환 시 자동으로 선택지 대사 생성
+
+        Args:
+            state: 현재 상태
+            next_stage: 전환될 스테이지
+            dialogues: 현재 생성된 대사 목록 (여기에 추가됨)
+        """
+        from app.features.chat.services import ScenarioService
+        from .parent import ParentAgent
+
+        try:
+            # 다음 스테이지 정보 가져오기
+            scenario_service = ScenarioService()
+            scenario_id = state.get("scenario_id")
+            scenario = scenario_service.load_scenario(scenario_id)
+
+            # 다음 스테이지 설정 찾기
+            next_stage_config = None
+            for stage in scenario.get("stages", []):
+                if stage.get("tag") == next_stage:
+                    next_stage_config = stage
+                    break
+
+            if not next_stage_config:
+                logger.warning("_handle_free_intent_transition",
+                             f"Next stage config not found: {next_stage}")
+                return
+
+            # Free Intent 스테이지가 아니면 리턴
+            if next_stage_config.get("type") != "free_intent":
+                logger.info("_handle_free_intent_transition",
+                          f"Next stage is not free_intent: {next_stage_config.get('type')}")
+                return
+
+            logger.info("_handle_free_intent_transition",
+                       f"Generating transition dialogues for free_intent stage: {next_stage}")
+
+            # ParentAgent를 사용하여 선택지 대사 생성
+            parent_agent = ParentAgent()
+
+            # state의 stage_turn이 이미 0으로 업데이트됨
+            # ParentNode를 호출하여 선택지 생성
+            updated_state = await parent_agent.execute(state)
+
+            # 생성된 대사를 현재 dialogues에 추가
+            additional_responses = updated_state.get("agent_responses", [])
+            if additional_responses:
+                logger.info("_handle_free_intent_transition",
+                          f"Added {len(additional_responses)} transition dialogues")
+
+                # ChatMessage로 변환하여 추가
+                for resp in additional_responses:
+                    dialogue = ChatMessage(
+                        speaker=resp.get("speaker", "narr"),
+                        text=resp.get("text", ""),
+                        emotion=resp.get("emotion", "neutral")
+                    )
+                    dialogues.append(dialogue)
+
+                # stage_turn 증가 (선택지를 보여줬으므로)
+                state["stage_turn"] = state.get("stage_turn", 0) + 1
+                logger.info("_handle_free_intent_transition",
+                          f"Incremented stage_turn to {state['stage_turn']}")
+
+        except Exception as e:
+            logger.error("_handle_free_intent_transition",
+                        f"Failed to generate transition dialogues: {e}",
+                        exc_info=True)
+
+    

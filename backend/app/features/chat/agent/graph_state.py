@@ -50,10 +50,17 @@ class GraphState(TypedDict):
     # 라우팅 정보
     next_stage: Optional[str]
     routing_reason: Optional[str]
+    stage_complete: bool
 
     # 미션 관련
     mission_progress: Optional[Dict[str, Any]]
     mission_completed: bool
+    # ✅ 미션 상태 (세션 간 유지 필요)
+    mission: Optional[Dict[str, Any]]  # {active, target, turn, scene_playing}
+    temp_data: Optional[Dict[str, Any]]  # {locked_mission_target}
+    recruit_attempts: Optional[Dict[str, int]]  # {inosuke: 1, zenitsu: 2}
+    allies_recruited: Optional[List[str]]  # ["inosuke"]
+    recruit_order: Optional[List[str]]  # ["inosuke", "zenitsu"]
 
     # AI 응답
     ai_response: Optional[str]

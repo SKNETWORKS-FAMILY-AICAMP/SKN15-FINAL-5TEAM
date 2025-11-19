@@ -132,9 +132,6 @@ class AffinityService:
         self.llm_client = llm_client or LLMClient()
         self.enable_llm = enable_llm
 
-        logger.info("__init__", "AffinityService initialized",
-                   enable_llm=enable_llm)
-
     async def update_affinity(
         self,
         state: Dict[str, Any],
@@ -159,7 +156,6 @@ class AffinityService:
             participating_characters = self._extract_participating_characters(dialogues)
 
         if not participating_characters:
-            logger.debug("update_affinity", "No participating characters, skipping")
             return state.get("affinity_scores", {})
 
         # 현재 친밀도 점수
@@ -304,13 +300,6 @@ class AffinityService:
                             logger.warning("_classify_interaction_with_llm",
                                          f"Invalid affinity change for {char}: {change}")
 
-            # 판정 이유 로깅
-            reasoning = response.get("reasoning", "")
-            if reasoning:
-                logger.info("_classify_interaction_with_llm", f"💭 LLM reasoning: {reasoning[:100]}...")
-
-            logger.debug("_classify_interaction_with_llm", "Affinity changes calculated",
-                        changes=affinity_changes)
             return affinity_changes
 
         except Exception as exc:
@@ -348,35 +337,15 @@ class AffinityService:
                 max_allowed = MAX_AFFINITY_PER_CUTSCENE - accumulated
                 if max_allowed <= 0:
                     limited_change = 0
-                    logger.warning("_enforce_cutscene_limit",
-                                 f"{character} reached max gain for {current_stage}",
-                                 accumulated=accumulated,
-                                 max=MAX_AFFINITY_PER_CUTSCENE)
                 else:
                     limited_change = min(change, max_allowed)
-                    if limited_change < change:
-                        logger.warning("_enforce_cutscene_limit",
-                                     f"{character} affinity gain limited",
-                                     original=change,
-                                     limited=limited_change,
-                                     accumulated=accumulated)
             # 하락 제한 (최대 -20)
             elif change < 0:
                 min_allowed = -MAX_AFFINITY_PER_CUTSCENE - accumulated
                 if min_allowed >= 0:
                     limited_change = 0
-                    logger.warning("_enforce_cutscene_limit",
-                                 f"{character} reached max loss for {current_stage}",
-                                 accumulated=accumulated,
-                                 max=MAX_AFFINITY_PER_CUTSCENE)
                 else:
                     limited_change = max(change, min_allowed)
-                    if limited_change > change:
-                        logger.warning("_enforce_cutscene_limit",
-                                     f"{character} affinity loss limited",
-                                     original=change,
-                                     limited=limited_change,
-                                     accumulated=accumulated)
             else:
                 limited_change = 0
 

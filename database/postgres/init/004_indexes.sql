@@ -38,6 +38,10 @@ ON conversation.sessions(scenario_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_last_interaction
 ON conversation.sessions(last_interaction_at DESC);
 
+-- state_json GIN 인덱스 (JSONB 검색 최적화)
+CREATE INDEX IF NOT EXISTS idx_sessions_state_json
+ON conversation.sessions USING GIN (state_json);
+
 -- ============================================================
 -- conversation.user_inputs 테이블 인덱스
 -- ============================================================

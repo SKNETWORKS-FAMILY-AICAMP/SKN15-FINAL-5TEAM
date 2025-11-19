@@ -1,0 +1,572 @@
+{
+  "scenario_id": "mugen-train",
+  "title": "🔥 무한열차",
+  "description": "염주 렌고쿠의 제자가 되어 무한열차에서 펼쳐지는 생사를 건 시련을 경험합니다. 엔무 격파 후 아카자 전투에서의 선택이 스승과 당신의 운명을 결정합니다.",
+  "version": "6.1",
+  "mountable": true,
+  "is_active": true,
+  "world_id": "mugen_train",
+  "prologue_messages": [
+    {
+      "speaker": "kasugai_crow",
+      "text": "까악— 까악— 무한열차에서 귀살대원 40명 이상이 실종되었다! 염주 렌고쿠 쿄쥬로가 이미 현장으로 향했다! 까악— 까악—",
+      "emotion": "urgent"
+    },
+    {
+      "speaker": "kasugai_crow",
+      "text": "너는 렌고쿠의 츠구코(継子, 계자)로서 스승을 따라 무한열차에 탑승하라! 불의 호흡을 수련 중인 네가 스승의 뒤를 이어야 한다! 까악— 까악—",
+      "emotion": "command"
+    },
+    {
+      "speaker": "kasugai_crow",
+      "text": "임무: 렌고쿠와 함께 무한열차에서 실종 사건의 원인을 조사하고, 혈귀가 있다면 목을 베어라! 까악— 까악—",
+      "emotion": "serious"
+    }
+  ],
+  "character_refs": {
+    "rengoku": "backend/data/characters/rengoku.json",
+    "tanjiro": "backend/data/characters/tanjiro.json",
+    "akaza": "backend/data/characters/akaza.json",
+    "zenitsu": "backend/data/characters/zenitsu.json",
+    "inosuke": "backend/data/characters/inosuke.json",
+    "nezuko": "backend/data/characters/nezuko.json",
+    "enmu": "backend/data/characters/enmu.json"
+  },
+  "stages": [
+    {
+      "tag": "TRAIN_PRELUDE",
+      "type": "scene",
+      "context": "무한열차가 움직이기 시작한다. 렌고쿠는 자리에 앉아 도시락을 꺼내 한입 베어 물며 '우마이!'를 연발한다. {user}는 스승 옆자리에 앉아 조용히 열차 밖 풍경을 바라보다가, 렌고쿠의 밝은 표정을 본다.",
+      "beats": [
+        {
+          "goal": "무한열차가 움직이기 시작한다. {user}와 렌고쿠가 나란히 앉는다. 렌고쿠는 도시락을 먹으며 '우마이!'를 연발하고, {user}는 미소를 짓는다."
+        }
+      ],
+      "speaker_pool": [
+        "rengoku",
+        "narr"
+      ],
+      "atmosphere": 2,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "HEROES_ARRIVE"
+    },
+    {
+      "tag": "HEROES_ARRIVE",
+      "type": "scene",
+      "context": "객차 문이 갑자기 열리고 낯선 검사 세 명이 들어온다. 렌고쿠와 {user}가 고개를 돌려 그들을 바라본다. 아직 {user}는 그들이 누구인지 모른다.",
+      "beats": [
+        {
+          "goal": "객차 문이 열리며 낯선 검사 세 명이 들어온다. 렌고쿠가 그들을 보고 반응한다."
+        }
+      ],
+      "speaker_pool": [
+        "rengoku",
+        "narr"
+      ],
+      "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 1,
+      "next": "MISSION_BRIEFING"
+    },
+    {
+      "tag": "MISSION_BRIEFING",
+      "type": "scene",
+      "context": "탄지로 일행(탄지로, 젠이츠, 이노스케)이 렌고쿠 님을 찾아 인사한다. 서로 자기소개를 나누며 분위기가 무르익는다. 렌고쿠는 무한열차 실종 사건(40명 이상 실종)에 대해 설명한다. 탄지로가 히노카미 카구라에 대해 묻자, 렌고쿠는 불의 호흡과 관련이 있을 것 같다고 추측한다. 렌고쿠는 {user}를 가리키며 '이 아이는 나의 츠구코(계자)이자, 불의 뜻을 이어받을 {user}다'라고 자랑스럽게 소개한다. 탄지로 일행이 {user}에게 인사하고 관심을 보인다. 이노스케는 {user}에게 도전적으로 나오고, 젠이츠는 겁을 먹는다.",
+      "speaker_pool": [
+        "rengoku",
+        "tanjiro",
+        "zenitsu",
+        "inosuke",
+        "narr"
+      ],
+      "atmosphere": 3,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "ENMU_APPEAR"
+    },
+    {
+      "tag": "ENMU_APPEAR",
+      "type": "scene",
+      "context": "차장이 검표를 하러 들어온다. 승객들에게 표를 확인한다. 차장이 떠나자 객차 안이 이상하게 조용해진다. 불이 서서히 꺼지며 승객들이 하나둘 잠들기 시작한다. {user}의 눈꺼풀이 무거워지며 꿈속으로 빠져든다. (⚠️ 아직 엔무의 정체나 능력을 알리지 말 것. 단지 '이상한 분위기'만 묘사)",
+      "speaker_pool": [
+        "narr",
+        "zenitsu",
+        "inosuke",
+        "enmu"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "USER_DREAM_MEMORY"
+    },
+    {
+      "tag": "USER_DREAM_MEMORY",
+      "type": "scene",
+      "context": "[장면 전환] {user}가 잠에 빠져든다. 꿈속에서 과거를 본다. {user}의 고향 마을. 붉은 불길이 집들을 집어삼키고 있다. 마을 사람들('살려주세요!', '엄마!', '혈귀다!')의 비명이 사방에서 들려온다. 혈귀의 그림자가 골목을 누빈다. 그때, 과거의 렌고쿠가 나타나 혈귀를 단칼에 베어버린다. 렌고쿠: '이제 괜찮다!' 렌고쿠의 따뜻한 미소와 불꽃 같은 눈빛. {user}는 그 순간 살아야 할 이유를 찾았다. 렌고쿠와 {user}가 처음 만난 순간이다. 렌고쿠가 {user}를 츠구코로 거둬들인다. (⚠️ 지금의 장면은 '꿈속 과거 시점'입니다.)",
+      "speaker_pool": [
+        "narr",
+        "rengoku"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 3,
+      "next": "DREAM_TEST"
+    },
+    {
+      "tag": "DREAM_TEST",
+      "type": "scene",
+      "context": "[장면 전환] 꿈이 바뀐다. 수련장. 렌고쿠가 {user}를 마주보고 서 있다. 렌고쿠: '내 마지막 가르침이다. 잘 듣거라. 검사는 무엇을 위해 강해져야 한다고 생각하나?' {user}의 대답을 기다린다.",
+      "speaker_pool": [
+        "rengoku",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 3,
+      "next": "DREAM_QUESTION"
+    },
+    {
+      "tag": "DREAM_QUESTION",
+      "type": "scene",
+      "context": "꿈속 수련장. 렌고쿠가 {user}를 진지하게 바라보며 마지막 질문을 한다: '검사는 무엇을 위해 강해져야 한다고 생각하나?' {user}의 대답을 기다린다. 렌고쿠는 {user}의 답변을 듣고 반응한다.",
+      "speaker_pool": [
+        "rengoku",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "DREAM_ESCAPE_SUCCESS"
+    },
+    {
+      "tag": "DREAM_ESCAPE_SUCCESS",
+      "type": "scene",
+      "context": "렌고쿠가 {user}의 답변을 듣고 깊게 고개를 끄덕인다. '네 마음을 확인했다.' 렌고쿠의 모습이 서서히 흐려지기 시작한다. '이제 깨어날 시간이다. 현실로 돌아가거라!' 꿈이 깨지며 {user}가 현실로 돌아온다.",
+      "speaker_pool": [
+        "rengoku",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 1,
+      "next": "AWAKEN"
+    },
+    {
+      "tag": "AWAKEN",
+      "type": "scene",
+      "context": "[장면 전환] {user}가 깨어난다. 객차 안은 여전히 어둡다. 승객들이 모두 잠들어 있다. 탄지로가 {user}를 발견하고 '깨어났구나!'라며 안도한다. 렌고쿠: '잘 견뎠다. 이제 이 열차에 숨어있는 오니를 막아야 한다.' 탄지로가 상황을 설명한다: 오니 때문에 우리가 꿈에 빠져들었고, 현재는 오니가 열차와 융합했고, 오니의 목을 찾아야 한다.",
+      "speaker_pool": [
+        "narr",
+        "tanjiro",
+        "rengoku"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 3,
+      "next": "ENMU_REAL_BATTLE"
+    },
+    {
+      "tag": "ENMU_REAL_BATTLE",
+      "type": "scene",
+      "context": "엔무가 열차 전체와 융합해 공격해온다. 사방에서 촉수가 튀어나온다. 엔무는 분노하며 공격하고, 탄지로는 {user}에게 엔무의 목 위치를 묻는다. {user}, 탄지로, 이노스케는 {user}가 말한 곳으로 향한다. 격렬한 전투가 벌어진다. 젠이츠는 아직 잠들어있고, 렌고쿠는 승객들을 지키고있다.",
+      "speaker_pool": [
+        "tanjiro",
+        "inosuke",
+        "rengoku",
+        "enmu",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 3,
+      "next": "ENMU_DEFEAT"
+    },
+    {
+      "tag": "ENMU_DEFEAT",
+      "type": "scene",
+      "context": "엔무의 목을 찾았다. 탄지로는 {user}에게 지금이 기회라고 호흡을 쓰라고 외친다. 엔무의 목을 벤다. 엔무는 마지막으로 한마디를 남긴다. 엔무가 쓰러지며 열차가 요동친다. 승객들이 깨어나기 시작한다.",
+      "speaker_pool": [
+        "tanjiro",
+        "inosuke",
+        "enmu",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "next": "UpperMoons3_appeared"
+    },
+    {
+      "tag": "UpperMoons3_appeared",
+      "type": "scene",
+      "next": "ROUTE_CHOICE",
+      "speaker_pool": [
+        "rengoku",
+        "tanjiro",
+        "akaza",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 2,
+      "max_turns": 3,
+      "context": "[장면 전환] 엔무를 쓰러뜨렸다. 하지만 기쁨도 잠시, 열차가 탈선한다. 승객들을 모두 대피시킨다. 그때, 강렬한 살기가 느껴진다. 갑자기 상현 삼의 오니(아카자)가 나타난다. 렌고쿠는 모두를 뒤로 물리고 아카자와 대치한다. 아카자는 렌고쿠의 강함에 흥미를 느껴 혈귀가 되라고 제안한다. 렌고쿠는 단호히 거절한다. 격렬한 전투가 시작된다."
+    },
+    {
+      "tag": "ROUTE_CHOICE",
+      "type": "free_intent",
+      "default_next": "RECRUIT",
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "akaza",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "intent_mapping": {
+        "choose_allies_path": "RECRUIT",
+        "choose_reckless_path": "INTERVENE"
+      },
+      "context": "렌고쿠와 아카자의 전투가 계속되고 있다. 탄지로가 {user}에게 다급하게 묻는다. '렌고쿠씨가 위험해! 우리가 렌고쿠님을 도와야할까? 아니면 동료들(젠이츠, 이노스케)을 먼저 찾아올까?' {user}의 선택을 기다린다."
+    },
+    {
+      "tag": "INTERVENE",
+      "type": "scene",
+      "next": "RECKLESS_SACRIFICE",
+      "speaker_pool": [
+        "tanjiro",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "context": "{user}가 전투에 끼어들기로 결정한다. 탄지로: '좋아, 함께 싸우자!' {user}와 탄지로가 렌고쿠를 돕기 위해 달려든다. 아카자: '방해하지 마라!' 렌고쿠: '위험하다! 물러서라!'"
+    },
+    {
+      "tag": "RECRUIT",
+      "type": "mission",
+      "next": "RETURN_TO_FRONT",
+      "context": "탄지로와 {user}가 동료들을 찾기로 결정했다. 탄지로가 코를 킁킁거리며 냄새를 맡는다. 탄지로: '냄새가 두 군데서 나! 열차 앞쪽 기관실 쪽에서 짐승의 냄새가... 이노스케일 거야! 그리고 뒤쪽 칸에서는 번개 냄새가 나. 젠이츠가 틀림없어!' 탄지로가 {user}에게 묻는다: '누구를 먼저 찾을까? 앞쪽 기관실의 이노스케? 아니면 뒤쪽 칸의 젠이츠?' (⚠️ 탄지로가 꼭 {user}에게 선택을 물어봐야 함)",
+      "speaker_pool": [
+        "tanjiro",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "objective": "이노스케와 젠이츠를 설득해 렌고쿠를 지원하도록 하라"
+    },
+    {
+      "tag": "RECKLESS_SACRIFICE",
+      "type": "scene",
+      "next": "END_BAD",
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "akaza",
+        "narr"
+      ],
+      "atmosphere": 0,
+      "min_turns": 1,
+      "max_turns": 2,
+      "context": "{user}가 무모하게 돌진한다. 아카자의 공격이 {user}를 향한다. 렌고쿠가 {user}를 감싸 막아낸다. 렌고쿠가 치명상을 입는다. 탄지로: '렌고쿠 님!!!!' 렌고쿠: '{user}... 무사하구나. 잘했다...' 렌고쿠가 쓰러진다. (⚠️ Bad Ending으로 이어짐)"
+    },
+    {
+      "tag": "RETURN_TO_FRONT",
+      "type": "scene",
+      "next": "END_ROUTER",
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "akaza",
+        "narr"
+      ],
+      "dynamic_speaker_stages": {
+        "allies_recruited": true
+      },
+      "min_turns": 1,
+      "max_turns": 2,
+      "context": "{user}와 동료들이 렌고쿠와 아카자가 싸우고있는 전장으로 돌아온다. 탄지로: '좋아, 우리가 할 수 있는 걸 찾자!' 렌고쿠가 계속 아카자와 싸운다."
+    },
+    {
+      "tag": "END_ROUTER",
+      "type": "router",
+      "default_next": "END_BASIC",
+      "next_by_outcome": {
+        "HIDDEN": "END_HIDDEN",
+        "BASIC": "END_BASIC"
+      },
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "akaza",
+        "narr"
+      ]
+    },
+    {
+      "tag": "END_HIDDEN",
+      "type": "scene",
+      "context": "이노스케와 젠이츠가 도착했다. 다섯 명이 아카자를 에워싼다. 렌고쿠가 염의 호흡 오의를 펼친다. 탄지로가 히노카미 카구라를 사용한다. 젠이츠가 번개의 호흡 벽력일섬을 날린다. 이노스케가 짐승의 호흡으로 아카자를 압박한다. 넷의 연계 공격에 아카자가 밀린다. 동이 트기 시작한다. 아카자가 황급히 후퇴한다. 다섯 명 모두 무사하다. 렌고쿠가 모두를 격려한다. 특히 {user}의 현명한 선택을 칭찬한다. 모두가 생존한 기적 같은 순간.",
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "zenitsu",
+        "inosuke",
+        "narr"
+      ],
+      "min_turns": 1,
+      "max_turns": 2
+    },
+    {
+      "tag": "END_BASIC",
+      "type": "scene",
+      "context": "렌고쿠와 아카자의 격렬한 사투가 계속된다. 탄지로가 히노카미 카구라로 아카자를 견제한다. 렌고쿠가 염의 호흡 오의로 아카자의 급소를 붙잡는다. 동이 트기 시작한다. 아카자가 팔을 뜯어내며 필사적으로 도망친다. 렌고쿠의 왼팔이 찢겨나간다. 렌고쿠가 무릎을 꿇는다. 치명적인 상처지만, 렌고쿠는 미소 짓는다. 자신의 의무를 다했다는 안도감. 탄지로와 {user}가 곁에 있다. 렌고쿠가 마지막 말을 남긴다. 천천히 눈을 감는다. 슬픔과 존경이 뒤섞인 이별의 순간.",
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "akaza",
+        "narr"
+      ],
+      "min_turns": 1,
+      "max_turns": 3
+    },
+    {
+      "tag": "END_BAD",
+      "type": "scene",
+      "context": "앞서 {user}가 무모하게 돌진했던 순간. 아카자의 공격이 {user}를 향했다. 렌고쿠가 {user}를 감싸안고 대신 공격을 받았다. 렌고쿠의 가슴이 관통당했다. 치명상이다. 동이 트고 아카자가 도망친다. 하지만 렌고쿠의 상처는 너무 깊다. {user}와 탄지로가 렌고쿠를 부축한다. 렌고쿠는 {user}를 위로하려 한다. 자책하지 말라고. 기둥의 의무라고. 렌고쿠의 손에서 힘이 빠진다. {user}의 눈앞에서 렌고쿠가 쓰러진다. 깊은 죄책감과 상실감.",
+      "speaker_pool": [
+        "tanjiro",
+        "rengoku",
+        "akaza",
+        "narr"
+      ],
+      "min_turns": 1,
+      "max_turns": 3
+    }
+  ],
+  "metadata": {
+    "default_stage": "TRAIN_PRELUDE",
+    "auto_advance_tags": [
+      "AWAKEN",
+      "UpperMoons3_appeared",
+      "RETURN_TO_FRONT"
+    ],
+    "dynamic_speaker_stages": [
+      "RETURN_TO_FRONT",
+      "END_HIDDEN",
+      "END_BASIC"
+    ],
+    "return_stage": {
+      "stage_tag": "RETURN_TO_FRONT",
+      "prefetch_queue_key": "mission_success_queue",
+      "prefetch_token": "__return_to_front_preface__"
+    },
+    "mission": {
+      "stage_tag": "RECRUIT",
+      "complete_next_stage": "RETURN_TO_FRONT",
+      "success_dialogues": {
+        "allies": "좋아, {allies}를 모았어! 이제 렌고쿠 님을 도우러 가자!",
+        "partial": "{allies}는 합류했지만, {fails}는 설득하지 못했어... 그래도 서두르자!",
+        "none": "아무도 합류하지 못했어... 그래도 우리라도 어서 돌아가자!"
+      },
+      "success_speaker": "tanjiro",
+      "success_fx": "urgent_heartbeat|flame_flash",
+      "ally_name_map": {
+        "inosuke": "이노스케",
+        "zenitsu": "젠이츠",
+        "tanjiro": "탄지로"
+      },
+      "targets": {
+        "inosuke": {
+          "keywords": [
+            "이노스케",
+            "멧돼지",
+            "inosuke",
+            "ino",
+            "멧돼",
+            "ino suke",
+            "앞쪽",
+            "앞쪽 칸",
+            "기관실",
+            "기관실 쪽"
+          ],
+          "scene_beats": [
+            {
+              "goal": "탄지로가 이노스케를 찾으러 가자고 결의한다.",
+              "speaker_hint": ["tanjiro"]
+            },
+            {
+              "goal": "앞쪽 기관실 근처로 달려간다. 이노스케가 벽을 주먹으로 치며 '나는 산의 왕이다!'라고 외친다.",
+              "speaker_hint": ["inosuke"],
+              "fx": "wall_bang|beast_growl"
+            },
+            {
+              "goal": "탄지로: '이노스케! 렌고쿠 님이 상현 삼과 싸우고 있어! 도와야 해!'",
+              "speaker_hint": ["tanjiro"],
+              "fx": "urgent_shout"
+            },
+            {
+              "goal": "탄지로가 {{user}}에게 이노스케를 직접 설득해 달라고 간청한다.",
+              "speaker_hint": ["tanjiro"]
+            }
+          ]
+        },
+        "zenitsu": {
+          "keywords": [
+            "젠이츠",
+            "zenitsu",
+            "zen",
+            "zen itsu",
+            "번개",
+            "뒤쪽",
+            "뒤쪽 칸"
+          ],
+          "scene_beats": [
+            {
+              "goal": "탄지로가 젠이츠를 찾으러 가자고 결의한다.",
+              "speaker_hint": ["tanjiro"]
+            },
+            {
+              "goal": "뒤쪽 객차로 달려간다. 젠이츠가 쓰러져 있고, 꿈속에서 '네즈코짱...'이라며 중얼거린다.",
+              "speaker_hint": ["narr", "zenitsu"],
+              "fx": "dream_murmur|snore_soft"
+            },
+            {
+              "goal": "탄지로: '젠이츠! 일어나! 렌고쿠 님이 위험해!'",
+              "speaker_hint": ["tanjiro"],
+              "fx": "shake_wake"
+            },
+            {
+              "goal": "탄지로가 젠이츠를 흔들어 깨우려 애쓴다.",
+              "speaker_hint": ["tanjiro"]
+            }
+          ]
+        }
+      },
+      "success_queue_key": "mission_success_queue",
+      "heuristic_keywords": {
+        "zenitsu": [
+          "네즈코",
+          "사랑",
+          "지켜",
+          "위험"
+        ],
+        "inosuke": [
+          "겁쟁",
+          "약하",
+          "싸우",
+          "도전",
+          "멧돼"
+        ]
+      }
+    },
+    "ending": {
+      "router_tag": "END_ROUTER",
+      "hidden_condition": {
+        "required_order": [
+          "inosuke",
+          "zenitsu"
+        ],
+        "max_attempts": 3
+      }
+    },
+    "tone": {
+      "scenario_key": "mugen_train"
+    },
+    "fallback": {
+      "exclude_speakers": [
+        "akaza",
+        "narr",
+        "inosuke",
+        "zenitsu",
+        "rengoku"
+      ],
+      "fallback_speakers": [
+        "tanjiro"
+      ]
+    },
+    "router": {
+      "intent_stage": "ROUTE_CHOICE",
+      "allies_intent": "choose_allies_path",
+      "reckless_intent": "choose_reckless_path",
+      "intent_examples": {
+        "answer_protect_weak": [
+          "약한 사람들을 지키기 위해",
+          "무고한 사람들을 보호하기 위해",
+          "동료를 지키기 위해",
+          "사람들을 구하기 위해",
+          "약자를 보호하기 위해서",
+          "다른 사람들을 지키기 위해서",
+          "보호하기 위해"
+        ],
+        "choose_reckless_path": [
+          "렌고쿠와 함께 싸운다",
+          "렌고쿠씨와 함께 싸울래요",
+          "렌고쿠와 지금 당장 싸울게요",
+          "제가 혼자 막아낼게요",
+          "렌고쿠 옆에서 싸울게요",
+          "제가 바로 싸울게요",
+          "같이 싸우겠습니다",
+          "함께 싸울래요",
+          "힘을 합쳐서 싸우자",
+          "렌고쿠님을 도와요",
+          "렌고쿠님을 도울게요",
+          "지금 바로 싸울게요",
+          "렌고쿠와 같이 싸운다",
+          "렌고쿠님과 함께 싸울게요",
+          "도와드릴게요",
+          "함께 싸워요"
+        ],
+        "choose_allies_path": [
+          "동료를 데려온다",
+          "동료들을 데려올게요",
+          "동료들을 데려오겠습니다",
+          "동료들을 불러올게요",
+          "젠이츠와 이노스케를 데려온다",
+          "동료 모두 데려올게요",
+          "지원군을 부를게요",
+          "동료를 모을게요",
+          "동료들을 부를게요",
+          "지원군을 모으러 가요",
+          "동료를 모으러 간다",
+          "친구들을 데려올게요",
+          "젠이츠랑 이노스케 불러올게요",
+          "동료들한테 도움 요청할게요",
+          "동료들을 찾으러 가요",
+          "동료들을 찾자",
+          "동료 찾으러 가자",
+          "동료를 찾아올게요",
+          "동료들 먼저 찾자"
+        ]
+      },
+      "embedding_threshold": 0.6,
+      "fallback_threshold": 0.28
+    },
+    "intents": {
+      "DREAM_QUESTION": {
+        "description": "렌고쿠의 질문에 대한 답변 의도 파악",
+        "options": {
+          "answer_protect_weak": "약한 사람들을 지키기 위해",
+          "answer_other": "그 외의 답변"
+        }
+      },
+      "INTERVENE": {
+        "description": "전투 중 개입 방식 결정",
+        "options": {
+          "intervene_attack": "적에게 공격적으로 개입",
+          "intervene_ignore": "개입하지 않고 상황 지켜보기",
+          "intervene_noise": "소란을 일으켜 틈을 만들기"
+        }
+      },
+      "ROUTE_CHOICE": {
+        "description": "전략 분기 선택",
+        "options": {
+          "choose_allies_path": "지원군을 모으는 선택",
+          "choose_reckless_path": "곧바로 전투에 참여하는 선택"
+        }
+      }
+    },
+    "images": {
+      "mapping_pattern": "backend/data/image_mappings/{scenario_id}_cutscenes.json",
+      "llm_metadata": "backend/data/image_mappings/mugen_train_images.json"
+    }
+  }
+}

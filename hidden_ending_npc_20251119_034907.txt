@@ -1,0 +1,97 @@
+
+[Turn 1] Stage: UpperMoons3_appeared
+kasugai_crow: 까악— 까악— 무한열차에서 귀살대원 40명 이상이 실종되었다! 염주 렌고쿠 쿄쥬로가 이미 현장으로 향했다! 까악— 까악—
+kasugai_crow: 너는 렌고쿠의 츠구코(継子, 계자)로서 스승을 따라 무한열차에 탑승하라! 불의 호흡을 수련 중인 네가 스승의 뒤를 이어야 한다! 까악— 까악—
+kasugai_crow: 임무: 렌고쿠와 함께 무한열차에서 실종 사건의 원인을 조사하고, 혈귀가 있다면 목을 베어라! 까악— 까악—
+
+[Turn 2] Stage: ROUTE_CHOICE
+narr: 열차의 흔들림이 점점 심해지며 승객들이 두려움에 떨고 있다. 렌고쿠는 침착하게 주변을 살피며 츠구코에게 다가간다.
+rengoku: 츠구코, 모두를 안전한 곳으로 대피시키고 나서 나와 함께 싸워야 한다. 저 오니는 강력한 존재다.
+narr: 아카자가 나타나자마자 압도적인 살기가 주변을 감싼다. 그의 검은 피가 솟구치는 듯한 강렬한 존재감으로 렌고쿠를 자극한다.
+akaza: 흥미롭군. 너만의 힘으로 나를 이길 수 있을까? 혈귀가 되는 건 어떤가? 영원한 힘을 주지.
+rengoku: 그런 제안은 필요 없다. 나는 내 길을 간다. 그리고 오니는 반드시 소멸해야 한다!
+narr: 렌고쿠가 검을 쥐고 아카자와의 대결을 준비한다. 두 사람의 긴장감이 극에 달하며, 전투가 시작되려 한다.
+
+[Turn 3] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 4] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 5] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 6] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 7] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 8] Stage: ROUTE_CHOICE
+kasugai_crow: 까악— 까악— ⚠️ 또 한 번 반복되면 대화가 제한됩니다. 까악—
+
+[Turn 9] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 10] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 11] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 12] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 13] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 14] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 15] Stage: ROUTE_CHOICE
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 16] Stage: ROUTE_CHOICE | Ended: False
+시스템: 죄송합니다. 응답 생성에 실패했습니다.
+
+[Turn 17] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⚠️ 또 한 번 반복되면 대화가 제한됩니다. 까악—
+
+[Turn 18] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 19] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 20] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 21] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 22] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 23] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 24] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 25] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 26] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 27] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 28] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 29] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
+
+[Turn 30] Stage: ROUTE_CHOICE | Ended: False
+kasugai_crow: 까악— 까악— ⛔️ 반복된 잡담으로 인해 10분 동안 대화가 제한됩니다. 까악—
