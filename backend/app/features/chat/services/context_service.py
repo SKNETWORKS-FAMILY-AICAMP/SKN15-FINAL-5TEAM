@@ -160,12 +160,16 @@ class ContextService:
         # v2: STM (항상)
         children_ctx["stm_summary"] = state.get("stm_summary", "")
 
-        # v2: Long-term memories (자유대화만) 또는 Scenario Buffer (시나리오만)
+        # v2: Long-term memories 또는 Scenario Buffer
         scenario_id = scenario.get("scenario_id", "unknown")
-        if scenario_id == "free-talk":
+        use_ltm = scenario_id == "free-talk" or scenario.get("use_long_term_memory", False)
+
+        if use_ltm:
+            # LTM 사용: free-talk 또는 use_long_term_memory=true인 시나리오
             children_ctx["long_term_memories"] = state.get("long_term_memories", [])
             children_ctx["scenario_buffer"] = None
         else:
+            # Scenario Buffer 사용: 스토리 기반 시나리오
             children_ctx["long_term_memories"] = []
             children_ctx["scenario_buffer"] = state.get("scenario_buffer", "")
 

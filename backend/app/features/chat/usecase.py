@@ -960,7 +960,9 @@ class ChatUseCase:
         self,
         dialogue_result: DialogueResult,
         session_id: str,
-        user_id: str
+        user_id: str,
+        scenario_id: str = "free-talk",
+        scenario_config: Optional[Dict[str, Any]] = None
     ) -> None:
         """대화 요약 생성 및 장기기억 추출"""
         logger.info("_process_summary_and_memories",
@@ -1021,7 +1023,8 @@ class ChatUseCase:
                         content=summary_result["summary"],
                         memory_type="episodic",
                         embedding=embedding,
-                        scenario_id=None,
+                        scenario_id=scenario_id,
+                        scenario_config=scenario_config,
                         importance_score=0.8
                     )
                     logger.info("_process_summary_and_memories", "Summary saved to memories",
@@ -1052,7 +1055,8 @@ class ChatUseCase:
                                     content=memory.memory_value,
                                     memory_type=memory.memory_type,
                                     embedding=memory_embedding,
-                                    scenario_id=None,
+                                    scenario_id=scenario_id,
+                                    scenario_config=scenario_config,
                                     importance_score=memory.importance
                                 )
 
@@ -1175,7 +1179,8 @@ class ChatUseCase:
                                                 content=memory.memory_value,
                                                 memory_type=memory.memory_type,
                                                 embedding=memory_embedding,
-                                                scenario_id="free-talk",
+                                                scenario_id=scenario_id,
+                                                scenario_config=scenario_config,
                                                 importance_score=memory.importance,
                                                 tags=memory.tags,
                                                 confidence=memory.confidence,
@@ -1620,10 +1625,17 @@ class ChatUseCase:
             # ============================================================
             # 7. 대화 요약 생성 및 Memory 저장
             # ============================================================
+            # scenario 데이터 가져오기 (LangGraph/Legacy 모두 사용)
+            scenario_data = session_state.get("scenario_data")
+            if not scenario_data:
+                scenario_data = self.scenario_service.load_scenario(scenario_id)
+
             await self._process_summary_and_memories(
                 dialogue_result=dialogue_result,
                 session_id=session_id,
-                user_id=user_id
+                user_id=user_id,
+                scenario_id=scenario_id,
+                scenario_config=scenario_data
             )
 
             # ============================================================
@@ -2148,13 +2160,17 @@ class ChatUseCase:
                                     # 임베딩 생성
                                     memory_embedding = self.embeddings_service.embed(memory.memory_value)
 
+                                    # scenario config 로드
+                                    scenario_config = self.scenario_service.load_scenario(scenario_id)
+
                                     # 메모리 저장
                                     await self.memory_repository.create_memory(
                                         user_id=user_id,
                                         content=memory.memory_value,
                                         memory_type=memory.memory_type,
                                         embedding=memory_embedding,
-                                        scenario_id=None,
+                                        scenario_id=scenario_id,
+                                        scenario_config=scenario_config,
                                         importance_score=memory.importance
                                     )
                                     memories_created += 1

@@ -112,14 +112,14 @@ SCENARIOS = [
         'initial_views': 1150
     },
     {
-        'scenario_id': 'idol',
+        'scenario_id': 'idol_band',
         'title': '아이돌/밴드 AU',
         'description': '귀멸 캐릭터들이 아이돌 그룹으로 활동, 매니저 or 팬클럽으로서 그들의 성장과 무대를 지켜봄',
         'image_url': '/images/아이돌밴드.png',
         'thumbnail_url': '/images/아이돌밴드.png',
         'tags': ['아이돌AU', '밴드AU', '팬심폭발'],
         'card_size': 'normal',
-        'route_path': '/chat/idol',
+        'route_path': '/chat/idol_band',
         'display_order': 6,
         'initial_likes': 203,
         'initial_comments': 89,

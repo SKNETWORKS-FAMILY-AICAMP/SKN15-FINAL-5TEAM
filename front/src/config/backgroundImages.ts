@@ -482,7 +482,22 @@ export const mugenTrainBackgrounds: ScenarioBackgrounds = {
   ]
 };
 
-export const allScenarioBackgrounds: ScenarioBackgrounds[] = [mugenTrainBackgrounds];
+export const idolBandBackgrounds: ScenarioBackgrounds = {
+  scenarioId: 'idol-band',
+  scenarioName: '아이돌/밴드 AU',
+  defaultBackground: '아이돌밴드.png',
+  backgrounds: [
+    {
+      id: "아이돌밴드.png",
+      index: 0,
+      fileName: "아이돌밴드.png",
+      name: "아이돌 밴드 기본 배경",
+      description: "카게부신 밴드 연습실"
+    }
+  ]
+};
+
+export const allScenarioBackgrounds: ScenarioBackgrounds[] = [mugenTrainBackgrounds, idolBandBackgrounds];
 
 export function getScenarioBackgrounds(scenarioId: string): ScenarioBackgrounds | undefined {
   const normalized = normalizeScenarioId(scenarioId);

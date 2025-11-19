@@ -85,7 +85,8 @@ class PromptService:
         stage_turn: int = 0,  # ✅ Stage 턴 추가
         user_profile: Optional[str] = None,  # v2: User Profile
         stm_summary: Optional[str] = None,  # v2: STM
-        scenario_buffer: Optional[str] = None  # v2: Scenario Buffer
+        scenario_buffer: Optional[str] = None,  # v2: Scenario Buffer
+        time_context: Optional[str] = None  # ✅ Time context 추가
     ) -> str:
         """
         children.dialogue_generation 프롬프트 생성
@@ -178,6 +179,7 @@ class PromptService:
             "공간 연속성": spatial_continuity or "(제공되지 않음)",
             "캐릭터 상태": character_states or "(제공되지 않음)",
             "전환 힌트": transition_hint or "(제공되지 않음)",
+            "time_context": time_context or "",  # ✅ Time context 추가
         }
 
         # 템플릿 변수 치환

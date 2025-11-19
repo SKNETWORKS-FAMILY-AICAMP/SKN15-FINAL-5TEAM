@@ -216,14 +216,14 @@
       }
     ]
   },
-  "idol": {
-    "id": "idol",
-    "title": "아이돌/밴드 AU",
+  "idol-band": {
+    "id": "idol-band",
+    "title": "🎸 아이돌/밴드 AU",
     "emoji": "🎸",
-    "description": "아이돌 또는 밴드로 활동하는 캐릭터들",
-    "detailDescription": "AU 세계관. 귀살대원들이 아이돌 그룹 또는 밴드로 데뷔! 화려한 무대 위에서 펼쳐지는 그들의 이야기",
+    "description": "신인 밴드 '카게부신'의 매니저가 되어 멤버들과 함께 데뷔를 준비하세요",
+    "detailDescription": "현대 AU 세계관. 탄지로, 젠이츠, 이노스케가 J-Rock 밴드 '카게부신'(影武神, Shadow Warriors)로 데뷔를 앞두고 있습니다!\n\n당신은 Demon Slayer Entertainment 소속사에서 새롭게 배치된 신입 매니저입니다. 데뷔 앨범 'First Breath' 준비, 첫 쇼케이스까지 3개월... 멤버들의 일정 관리, 감정 케어, 리허설 준비, 방송·공연 지원 등 현장 업무를 담당합니다.\n\n탄지로(보컬, 리더), 젠이츠(리드 기타, 작곡가), 이노스케(드럼)는 음악적 재능은 뛰어나지만 성격이 크게 달라 팀워크 조율이 매우 중요합니다.\n\n시간의 흐름에 따라 변화하는 일상, 우연히 마주치는 팬들, 갑작스러운 방송 섭외, SNS 바이럴... 예측할 수 없는 매일이 펼쳐집니다. 당신의 선택과 케어가 밴드의 미래를 만들어갑니다.",
     "image": "/images/아이돌밴드.png",
-    "implemented": false,
+    "implemented": true,
     "type": "character",
     "tags": [
       "#아이돌AU",
@@ -243,7 +243,7 @@
       {
         "name": "탄지로",
         "image": "/images/프로필_탄지로.png",
-        "greeting": "여러분의 응원이 제게 큰 힘이 됩니다!",
+        "greeting": "안녕하세요! 카게부신의 보컬 탄지로입니다. 오늘부터 저희 매니저님이시죠? 잘 부탁드립니다!",
         "status": "대화 가능",
         "color": "bg-orange-100"
       }

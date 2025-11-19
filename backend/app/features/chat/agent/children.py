@@ -197,6 +197,15 @@ class ChildrenAgent:
         # ✅ World context 로드
         world_context = self._get_world_context(state)
 
+        # ✅ Time context 생성 (use_real_time 플래그 확인)
+        time_context = None
+        scenario_data = state.get("scenario_data", {})
+        if scenario_data.get("use_real_time", False):
+            from app.shared.utils.time_utils import get_current_time_context
+            time_context = get_current_time_context()
+            logger.info("_generate_dialogues", f"Time context injected: {time_context}",
+                       scenario_id=scenario_id)
+
         try:
             # stage_turn 가져오기 (Stage 전환 직후인지 확인)
             stage_turn = state.get("stage_turn", 0)
@@ -210,7 +219,8 @@ class ChildrenAgent:
                 conversation_summary=conversation_summary,  # ✅ 대화 요약 추가
                 world_context=world_context,
                 user_name=user_name,  # ✅ user_name 전달
-                stage_turn=stage_turn  # ✅ stage_turn 전달
+                stage_turn=stage_turn,  # ✅ stage_turn 전달
+                time_context=time_context  # ✅ time_context 전달
             )
 
             # ✅ 프롬프트 로그 출력 (디버깅용 - 전체 출력)

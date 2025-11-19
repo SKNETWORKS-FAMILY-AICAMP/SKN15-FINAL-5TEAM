@@ -37,6 +37,7 @@ class MemoryRepository:
         memory_type: str,
         embedding: Optional[List[float]] = None,
         scenario_id: Optional[str] = None,
+        scenario_config: Optional[Dict[str, Any]] = None,
         importance_score: Optional[float] = None,
         tags: Optional[List[str]] = None,
         confidence: Optional[float] = None,
@@ -51,7 +52,8 @@ class MemoryRepository:
             content: 기억 내용 (memory_value로 저장됨)
             memory_type: 기억 유형 (fact, event, relationship, preference)
             embedding: 임베딩 벡터 (1536차원)
-            scenario_id: 시나리오 ID (v2: free-talk 전용)
+            scenario_id: 시나리오 ID (실제 플레이 중인 scenario_id 사용)
+            scenario_config: 시나리오 설정 (use_long_term_memory 플래그 확인용)
             importance_score: 중요도 점수 (0.0 ~ 1.0, importance로 저장)
             tags: 태그 리스트 (검색 및 분류용)
             confidence: 신뢰도 (0.0 ~ 1.0)
@@ -62,12 +64,15 @@ class MemoryRepository:
             생성된 UserMemory
 
         Raises:
-            ValueError: 시나리오 모드에서 LTM 생성 시도 시
+            ValueError: LTM 사용이 허용되지 않은 시나리오에서 생성 시도 시
         """
-        # v2: ModeGuard - free-talk 전용 체크
+        # v2: ModeGuard - LTM 사용 가능 여부 체크
         from ..middleware.mode_guard import ModeGuard
-        if scenario_id != "free-talk":
-            ModeGuard.ensure_no_ltm_in_scenario(scenario_id or "unknown", "create")
+        ModeGuard.ensure_no_ltm_in_scenario(
+            scenario_id or "free-talk",
+            "create",
+            scenario_config
+        )
 
         # memory_key 생성 (memory_type, 타임스탬프, UUID 기반 - 고유성 보장)
         import uuid
@@ -81,7 +86,7 @@ class MemoryRepository:
             memory_value=content,  # content -> memory_value
             memory_type=memory_type,
             embedding=embedding,
-            scenario_id=scenario_id or "free-talk",  # v2: scenario_id 컬럼 사용
+            scenario_id=scenario_id or "free-talk",  # 실제 scenario_id 사용
             source_session_id=source_session_id,  # 세션 ID 저장
             importance=importance_score or 0.5,  # importance_score -> importance
             tags=tags or [],  # tags 추가
