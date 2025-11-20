@@ -13,15 +13,15 @@ class GuardrailAgent:
     """Guardrail Agent - 입출력 안전성 검증"""
 
     def __init__(self):
-        # 금지 키워드 (폭력, 혐오, 차별)
+        # 금지 키워드 (폭력, 혐오, 차별, 성적인 표현)
         self.forbidden_keywords = [
-            "폭력", "혐오", "차별"
+            "자살", "섹스", "자지", "보지"
         ]
 
         # 메타 발언 키워드 (게임 시스템 관련)
         self.meta_keywords = [
             "게임", "캐릭터", "NPC", "스토리", "시나리오", "대본",
-            "버그", "오류", "다시", "리셋", "재시작", "세이브", "로드"
+            "버그", "오류", "다시", "리셋", "재시작", "세이브", "로드", "친밀도"
         ]
 
     def check_input(self, state: GraphState) -> GraphState:
