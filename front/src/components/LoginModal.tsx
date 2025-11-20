@@ -21,32 +21,6 @@ export default function LoginModal() {
 
   if (!isLoginModalOpen) return null;
 
-  const handleSocialLogin = async (provider: string) => {
-    console.log(`${provider} 로그인 시도`);
-
-    try {
-      let authUrl: string;
-
-      if (provider === 'Google') {
-        const response = await fetch(`${API_BASE_URL}/api/auth/google`);
-        const data = await response.json();
-        authUrl = data.auth_url;
-      } else if (provider === 'Kakao') {
-        const response = await fetch(`${API_BASE_URL}/api/auth/kakao`);
-        const data = await response.json();
-        authUrl = data.auth_url;
-      } else {
-        console.error('지원하지 않는 소셜 로그인 제공자:', provider);
-        return;
-      }
-
-      window.location.href = authUrl;
-    } catch (err) {
-      console.error(`${provider} 로그인 오류:`, err);
-      setError(`${provider} 로그인에 실패했습니다. 나중에 다시 시도해주세요.`);
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -277,38 +251,11 @@ export default function LoginModal() {
               {/* Login Section */}
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold text-center mb-6" style={{ color: 'rgb(121,116,126)' }}>
-                  로그인 방법을 선택하세요
+                  로그인
                 </h2>
 
-                {/* Social login buttons */}
-                <div className="space-y-3">
-                  {/* Kakao */}
-                  <button
-                    onClick={() => handleSocialLogin('Kakao')}
-                    className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-6 h-6 bg-yellow-400 rounded"></div>
-                      <span>카카오</span>
-                    </div>
-                    <span className="text-gray-400 text-sm">0</span>
-                  </button>
-
-                  {/* Google */}
-                  <button
-                    onClick={() => handleSocialLogin('Google')}
-                    className="w-full flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-6 h-6 bg-gradient-to-r from-red-500 to-yellow-500 rounded"></div>
-                      <span>구글</span>
-                    </div>
-                    <span className="text-gray-400 text-sm">0</span>
-                  </button>
-                </div>
-
                 {/* Email login form */}
-                <form onSubmit={handleLogin} className="mt-6 space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1" style={{ color: 'rgb(121,116,126)' }}>
                       귀살대 이름
