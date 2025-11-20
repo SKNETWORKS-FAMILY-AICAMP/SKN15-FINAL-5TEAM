@@ -827,7 +827,7 @@ export default function ChatInterface({
 
         // 마지막 메시지가 아니면 3000ms 대기 (대화 사이 여유)
         if (i < newMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 3 seconds
+          await new Promise(resolve => setTimeout(resolve, 100)); // 3 seconds
         }
       }
 
