@@ -142,19 +142,44 @@ class FreeIntentStageHandler:
                 logger.warning("handle", f"beats_i18n key '{beats_i18n_key}' not found in scenario i18n")
         # else: beats가 이미 stage에서 로드되었거나 없음 (build_children_context에서 처리됨)
 
-        # ✅ beats 내부의 speaker_hint에서 active_counselor 치환
-        if active_counselor_name and children_ctx.get("beats"):
-            for beat in children_ctx["beats"]:
-                if isinstance(beat, dict) and "speaker_hint" in beat:
-                    speaker_hint = beat["speaker_hint"]
-                    if isinstance(speaker_hint, list):
-                        beat["speaker_hint"] = [
-                            active_counselor_name if s == "active_counselor" else s
-                            for s in speaker_hint
-                        ]
-                    elif speaker_hint == "active_counselor":
-                        beat["speaker_hint"] = [active_counselor_name]
-            logger.info("handle", f"Replaced active_counselor in beats speaker_hint with {active_counselor_name}")
+        # ✅ beats 내부의 speaker_hint와 goal에서 active_counselor 치환
+        beats = children_ctx.get("beats", [])
+        logger.info("handle", f"🔍 BEFORE replacement - beats count: {len(beats)}, active_counselor: {active_counselor_name}")
+        if beats:
+            logger.info("handle", f"🔍 First beat BEFORE: {beats[0]}")
+
+        if active_counselor_name and beats:
+            for i, beat in enumerate(beats):
+                if isinstance(beat, dict):
+                    original_goal = beat.get("goal", "")
+                    original_hint = beat.get("speaker_hint", [])
+
+                    # speaker_hint 치환
+                    if "speaker_hint" in beat:
+                        speaker_hint = beat["speaker_hint"]
+                        if isinstance(speaker_hint, list):
+                            beat["speaker_hint"] = [
+                                active_counselor_name if s == "active_counselor" else s
+                                for s in speaker_hint
+                            ]
+                        elif speaker_hint == "active_counselor":
+                            beat["speaker_hint"] = [active_counselor_name]
+                        # ✅ speaker_hint에 "상담원"이 있으면 치환
+                        if isinstance(beat["speaker_hint"], list):
+                            beat["speaker_hint"] = [
+                                active_counselor_name if s == "상담원" else s
+                                for s in beat["speaker_hint"]
+                            ]
+
+                    # goal 텍스트에서 "상담원" → 실제 캐릭터명 치환
+                    if "goal" in beat and isinstance(beat["goal"], str):
+                        beat["goal"] = beat["goal"].replace("상담원", active_counselor_name)
+
+                    logger.info("handle", f"🔍 Beat {i} - goal: '{original_goal[:50]}' → '{beat.get('goal', '')[:50]}', hint: {original_hint} → {beat.get('speaker_hint', [])}")
+
+            logger.info("handle", f"✅ Replaced active_counselor and '상담원' in {len(beats)} beats with {active_counselor_name}")
+            if beats:
+                logger.info("handle", f"🔍 First beat AFTER: {beats[0]}")
 
         # 5. Stage 결과 반환
         if stage_turn == 0:

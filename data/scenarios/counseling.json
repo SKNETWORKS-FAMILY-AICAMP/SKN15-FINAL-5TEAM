@@ -228,7 +228,7 @@
       "beats_activity_cooking": [
         {
           "goal": "상담원: '함께 요리를 해볼까요? 무언가를 만드는 건 마음을 치유하는 데 도움이 돼요.'",
-          "speaker_hint": ["active_counselor"],
+          "speaker_hint": ["상담원"],
           "fx": "cooking_invitation"
         },
         {
@@ -238,7 +238,7 @@
         },
         {
           "goal": "완성된 요리를 함께 먹으며 웃는다. 따뜻한 분위기가 이어진다.",
-          "speaker_hint": ["active_counselor", "user_turn"],
+          "speaker_hint": ["상담원", "user_turn"],
           "fx": "shared_meal"
         }
       ],
@@ -397,8 +397,8 @@
       "beats_i18n": "beats_stress_counseling",
       "speaker_pool": ["shinobu", "tanjiro", "narr"],
       "atmosphere": 1,
-      "min_turns": 3,
-      "max_turns": 5,
+      "min_turns": 2,
+      "max_turns": 3,
       "next": "ACTIVITY_CHOICE"
     },
     {
@@ -408,12 +408,12 @@
       "beats": [
         {
           "goal": "상담원이 {user}를 향해 따뜻하게 미소 지으며 묻는다. '많이 나아지셨나요?'",
-          "speaker_hint": ["active_counselor"],
+          "speaker_hint": ["상담원"],
           "fx": "warm_smile"
         },
         {
           "goal": "상담원: '이제 좀 더 마음을 편하게 해드리고 싶은데... 산책, 명상, 또는 함께 요리하기 중에 하나를 해보실래요? 아니면 그냥 편하게 이야기만 하셔도 괜찮아요.'",
-          "speaker_hint": ["active_counselor"],
+          "speaker_hint": ["상담원"],
           "fx": "gentle_suggestion"
         }
       ],

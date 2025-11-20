@@ -378,6 +378,15 @@ class FallbackManager:
             temp = 0.5 if blocking else 0.7
             tokens = 150 if blocking else 200
 
+            # 📝 프롬프트 전문 로그 출력
+            logger.info("_generate_dialogue", "=" * 80)
+            logger.info("_generate_dialogue", "🔍 FALLBACK PROMPT FULL LOG")
+            logger.info("_generate_dialogue", "=" * 80)
+            logger.info("_generate_dialogue", f"📌 System Prompt:\n{sys}")
+            logger.info("_generate_dialogue", "-" * 80)
+            logger.info("_generate_dialogue", f"📌 User Prompt:\n{usr}")
+            logger.info("_generate_dialogue", "=" * 80)
+
             # ✅ LLM 호출
             response_text = await self._llm_service.llm.call(
                 system_prompt=sys,
