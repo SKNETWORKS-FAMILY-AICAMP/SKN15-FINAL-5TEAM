@@ -179,6 +179,18 @@
           "fx": "stress_release"
         }
       ],
+      "beats_activity_choice": [
+        {
+          "goal": "상담원이 {user}를 향해 따뜻하게 미소 짓는다. '많이 나아지셨나요?'",
+          "speaker_hint": ["active_counselor"],
+          "fx": "warm_smile"
+        },
+        {
+          "goal": "상담원: '이제 좀 더 마음을 편하게 해드리고 싶은데... 산책, 명상, 또는 함께 요리하기 중에 하나를 해보실래요? 아니면 그냥 편하게 이야기만 하셔도 괜찮아요.'",
+          "speaker_hint": ["active_counselor"],
+          "fx": "gentle_suggestion"
+        }
+      ],
       "beats_activity_walk": [
         {
           "goal": "상담원: '밖으로 나가서 잠깐 산책할까요? 신선한 공기가 도움이 될 거예요.'",
@@ -307,7 +319,13 @@
     },
     {
       "tag": "CONCERN_CHECK",
-      "type": "router",
+      "type": "free_intent",
+      "context": "{user}가 자신의 고민을 이야기하기 시작한다. 탄지로가 진지하게 경청한다.",
+      "beats_i18n": "beats_concern_type_check",
+      "speaker_pool": ["tanjiro", "narr"],
+      "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 2,
       "default_next": "STRESS_COUNSELING",
       "intent_mapping": {
         "concern_love": "LOVE_COUNSELING",
@@ -375,10 +393,13 @@
     {
       "tag": "ACTIVITY_CHOICE",
       "type": "free_intent",
-      "default_next": "GROUP_GATHERING",
       "context": "상담원이 {user}에게 힐링 활동을 제안한다.",
-      "speaker_pool": ["active_counselor"],
+      "beats_i18n": "beats_activity_choice",
+      "speaker_pool": ["active_counselor", "narr"],
       "atmosphere": 2,
+      "min_turns": 1,
+      "max_turns": 2,
+      "default_next": "GROUP_GATHERING",
       "intent_mapping": {
         "activity_walk": "ACTIVITY_WALK",
         "activity_meditation": "ACTIVITY_MEDITATION",

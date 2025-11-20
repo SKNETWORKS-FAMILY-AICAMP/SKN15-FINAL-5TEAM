@@ -3,6 +3,7 @@ SSE (Server-Sent Events) Helper
 채팅 응답을 SSE 형식으로 스트리밍
 """
 import json
+import asyncio
 from typing import Any, AsyncGenerator, Optional
 
 
@@ -76,6 +77,9 @@ async def sse_generator(
             }
         }
         yield f"data: {json.dumps(dialogue_data)}\n\n"
+
+        # 대화 출력 속도 조절을 위한 딜레이 (0.5초)
+        # await asyncio.sleep()
 
     # 3. done 전송 (최종 상태)
     done_data = {

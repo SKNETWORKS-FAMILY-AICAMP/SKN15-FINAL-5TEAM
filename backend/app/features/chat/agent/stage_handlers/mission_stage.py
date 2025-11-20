@@ -61,6 +61,16 @@ class MissionStageHandler:
         # ✅ state에 scenario 추가 (mission_service가 keywords 접근 가능하도록)
         state["scenario_data"] = scenario
 
+        # ✅ active_counselor 동적 치환 (stage 정의 전처리)
+        if "speaker_pool" in stage and "active_counselor" in stage["speaker_pool"]:
+            active_counselor = state.get("active_counselor")
+            if active_counselor:
+                stage["speaker_pool"] = [
+                    active_counselor if s == "active_counselor" else s
+                    for s in stage["speaker_pool"]
+                ]
+                logger.info("handle", f"Replaced active_counselor with {active_counselor} in stage speaker_pool")
+
         # 타겟 결정
         target = self.mission_service.determine_mission_target(
             state, user_input, mission_state

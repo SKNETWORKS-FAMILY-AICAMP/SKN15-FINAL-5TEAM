@@ -120,13 +120,14 @@ export default function ChatPage() {
         setShowTutorial(false);
       } else {
         // 로그인된 경우, sessionCheckDone이 true가 되면 튜토리얼 표시
-        // (새 세션 시작 또는 히스토리 로드 완료 후)
-        if (sessionCheckDone && !hasStartedChat) {
+        // 단, 이어하기(resumeSessionId) 또는 히스토리 로드(initialSessionId)가 아닐 때만
+        const isResumingSession = resumeSessionId !== undefined || initialSessionId !== undefined;
+        if (sessionCheckDone && !hasStartedChat && !isResumingSession) {
           setShowTutorial(true);
         }
       }
     }
-  }, [isAuthLoading, isLoggedIn, openLoginModal, sessionCheckDone, hasStartedChat]);
+  }, [isAuthLoading, isLoggedIn, openLoginModal, sessionCheckDone, hasStartedChat, resumeSessionId, initialSessionId]);
 
   // Check for last session after login (only after auth loading completes)
   useEffect(() => {

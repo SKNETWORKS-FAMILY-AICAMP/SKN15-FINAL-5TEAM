@@ -59,6 +59,13 @@ class FreeIntentStageHandler:
         stage_turn = state.get("stage_turn", 0)
         user_input = state.get("user_input", "")
 
+        # ✅ active_counselor 동적 치환
+        if "active_counselor" in speaker_pool:
+            active_counselor = state.get("active_counselor")
+            if active_counselor:
+                speaker_pool = [active_counselor if s == "active_counselor" else s for s in speaker_pool]
+                logger.info("handle", f"Replaced active_counselor with {active_counselor} in speaker_pool")
+
         # ✅ 수정: stage_turn > 0일 때만 사용자 입력이 유효함
         # stage_turn == 0: 첫 진입, 아직 선택지 제시만 하고 사용자 입력 없음
         # stage_turn >= 1: 사용자가 선택지에 대해 응답한 상태
@@ -81,6 +88,19 @@ class FreeIntentStageHandler:
                 scenario=scenario
             )
             logger.info("handle", f"Intent classified: {next_stage or 'None'}")
+
+            # ✅ active_counselor 설정 (CONCERN_CHECK에서 상담 스테이지로 라우팅 시)
+            if stage_tag == "CONCERN_CHECK" and next_stage:
+                counselor_mapping = {
+                    "LOVE_COUNSELING": "zenitsu",
+                    "CAREER_COUNSELING": "rengoku",
+                    "RELATIONSHIP_COUNSELING": "giyu",
+                    "CONFIDENCE_COUNSELING": "inosuke",
+                    "STRESS_COUNSELING": "shinobu"
+                }
+                if next_stage in counselor_mapping:
+                    state["active_counselor"] = counselor_mapping[next_stage]
+                    logger.info("handle", f"Set active_counselor to {state['active_counselor']} for {next_stage}")
 
         # 2. next_stage 결정 로직
         if stage_turn == 0:

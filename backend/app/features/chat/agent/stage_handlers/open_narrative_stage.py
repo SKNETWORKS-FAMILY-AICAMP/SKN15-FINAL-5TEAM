@@ -49,8 +49,15 @@ class OpenNarrativeStageHandler:
             StageResult
         """
         stage_tag = stage.get("tag", "open_narrative")
-        speaker_pool = stage.get("speaker_pool", [])
+        speaker_pool = list(stage.get("speaker_pool", []))
         context_desc = stage.get("context", "오픈 내러티브 진행 중")
+
+        # ✅ active_counselor 동적 치환
+        if "active_counselor" in speaker_pool:
+            active_counselor = state.get("active_counselor")
+            if active_counselor:
+                speaker_pool = [active_counselor if s == "active_counselor" else s for s in speaker_pool]
+                logger.info("handle", f"Replaced active_counselor with {active_counselor} in speaker_pool")
 
         logger.debug("handle", "Handling open narrative stage",
                     stage_tag=stage_tag)

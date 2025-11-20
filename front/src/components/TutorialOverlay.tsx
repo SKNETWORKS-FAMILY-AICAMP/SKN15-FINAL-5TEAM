@@ -132,7 +132,7 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
   const currentStep = steps[step];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000]">
+    <div className="fixed inset-0 bg-black/40 z-[10000]">
       <div
         ref={cardRef}
         style={cardPosition}

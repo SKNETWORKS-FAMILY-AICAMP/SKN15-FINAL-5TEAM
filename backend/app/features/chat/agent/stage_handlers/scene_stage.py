@@ -52,6 +52,13 @@ class SceneStageHandler:
         speaker_pool = list(stage.get("speaker_pool", []))  # Copy to avoid mutation
         stage_turn = state.get("stage_turn", 0)
 
+        # ✅ active_counselor 동적 치환
+        if "active_counselor" in speaker_pool:
+            active_counselor = state.get("active_counselor")
+            if active_counselor:
+                speaker_pool = [active_counselor if s == "active_counselor" else s for s in speaker_pool]
+                logger.info("handle", f"Replaced active_counselor with {active_counselor} in speaker_pool")
+
         # Dynamic speaker stages 처리
         dynamic_config = stage.get("dynamic_speaker_stages", {})
         if dynamic_config.get("allies_recruited"):

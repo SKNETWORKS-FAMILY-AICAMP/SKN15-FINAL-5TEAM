@@ -35,7 +35,7 @@ interface ChatInterfaceProps {
   onSessionStart?: (sessionId: string) => void;  // 세션 시작 시 콜백 (세션 종료를 위해)
 }
 
-const TYPING_INTERVAL_MS = 10; // 타이핑 애니메이션 속도 (값이 클수록 느려짐) - Phase 1 개선: 60 → 10 (6배 빠르게)
+const TYPING_INTERVAL_MS = 40; // 타이핑 애니메이션 속도 (값이 클수록 느려짐)
 
 // Placeholder 치환 함수: 백엔드에서 렌더링되지 않은 {admin}, {user} 등을 실제 값으로 변환
 const replacePlaceholders = (text: string, userName?: string): string => {
@@ -825,9 +825,9 @@ export default function ChatInterface({
         // 타이핑 효과로 메시지 표시
         await addMessageWithTypingEffect(newMessages[i]);
 
-        // 마지막 메시지가 아니면 50ms 대기 (빠른 흐름) - Phase 1 개선: 800ms → 50ms (16배 빠르게)
+        // 마지막 메시지가 아니면 3000ms 대기 (대화 사이 여유)
         if (i < newMessages.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 50)); // 0.05 seconds
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 3 seconds
         }
       }
 
