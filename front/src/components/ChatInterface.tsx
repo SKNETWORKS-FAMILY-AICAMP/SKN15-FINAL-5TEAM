@@ -35,7 +35,7 @@ interface ChatInterfaceProps {
   onSessionStart?: (sessionId: string) => void;  // 세션 시작 시 콜백 (세션 종료를 위해)
 }
 
-const TYPING_INTERVAL_MS = 40; // 타이핑 애니메이션 속도 (값이 클수록 느려짐)
+const TYPING_INTERVAL_MS = 30; // 타이핑 애니메이션 속도 (값이 클수록 느려짐)
 
 // Placeholder 치환 함수: 백엔드에서 렌더링되지 않은 {admin}, {user} 등을 실제 값으로 변환
 const replacePlaceholders = (text: string, userName?: string): string => {

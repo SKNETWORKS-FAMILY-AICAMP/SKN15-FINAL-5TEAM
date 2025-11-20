@@ -52,12 +52,25 @@ class SceneStageHandler:
         speaker_pool = list(stage.get("speaker_pool", []))  # Copy to avoid mutation
         stage_turn = state.get("stage_turn", 0)
 
-        # ✅ active_counselor 동적 치환
-        if "active_counselor" in speaker_pool:
-            active_counselor = state.get("active_counselor")
-            if active_counselor:
-                speaker_pool = [active_counselor if s == "active_counselor" else s for s in speaker_pool]
-                logger.info("handle", f"Replaced active_counselor with {active_counselor} in speaker_pool")
+        # ✅ active_counselor 동적 치환 (speaker_pool)
+        active_counselor_name = state.get("active_counselor")
+        if "active_counselor" in speaker_pool and active_counselor_name:
+            speaker_pool = [active_counselor_name if s == "active_counselor" else s for s in speaker_pool]
+            logger.info("handle", f"Replaced active_counselor with {active_counselor_name} in speaker_pool")
+
+        # ✅ beats 내부의 speaker_hint에서도 active_counselor 치환
+        if active_counselor_name and beats:
+            for beat in beats:
+                if isinstance(beat, dict) and "speaker_hint" in beat:
+                    speaker_hint = beat["speaker_hint"]
+                    if isinstance(speaker_hint, list):
+                        beat["speaker_hint"] = [
+                            active_counselor_name if s == "active_counselor" else s
+                            for s in speaker_hint
+                        ]
+                    elif speaker_hint == "active_counselor":
+                        beat["speaker_hint"] = [active_counselor_name]
+            logger.info("handle", f"Replaced active_counselor in beats speaker_hint with {active_counselor_name}")
 
         # Dynamic speaker stages 처리
         dynamic_config = stage.get("dynamic_speaker_stages", {})

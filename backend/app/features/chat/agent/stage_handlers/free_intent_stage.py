@@ -59,12 +59,12 @@ class FreeIntentStageHandler:
         stage_turn = state.get("stage_turn", 0)
         user_input = state.get("user_input", "")
 
-        # ✅ active_counselor 동적 치환
-        if "active_counselor" in speaker_pool:
-            active_counselor = state.get("active_counselor")
-            if active_counselor:
-                speaker_pool = [active_counselor if s == "active_counselor" else s for s in speaker_pool]
-                logger.info("handle", f"Replaced active_counselor with {active_counselor} in speaker_pool")
+        # ✅ active_counselor 동적 치환 (speaker_pool)
+        active_counselor_name = state.get("active_counselor")
+        logger.info("handle", f"[DEBUG] Before replacement: speaker_pool={speaker_pool}, active_counselor={active_counselor_name}")
+        if "active_counselor" in speaker_pool and active_counselor_name:
+            speaker_pool = [active_counselor_name if s == "active_counselor" else s for s in speaker_pool]
+            logger.info("handle", f"✅ Replaced active_counselor with {active_counselor_name} in speaker_pool: {speaker_pool}")
 
         # ✅ 수정: stage_turn > 0일 때만 사용자 입력이 유효함
         # stage_turn == 0: 첫 진입, 아직 선택지 제시만 하고 사용자 입력 없음
@@ -100,7 +100,8 @@ class FreeIntentStageHandler:
                 }
                 if next_stage in counselor_mapping:
                     state["active_counselor"] = counselor_mapping[next_stage]
-                    logger.info("handle", f"Set active_counselor to {state['active_counselor']} for {next_stage}")
+                    active_counselor_name = state["active_counselor"]
+                    logger.info("handle", f"Set active_counselor to {active_counselor_name} for {next_stage}")
 
         # 2. next_stage 결정 로직
         if stage_turn == 0:
@@ -113,11 +114,11 @@ class FreeIntentStageHandler:
             next_stage = stage.get("default_next")
             logger.warning("handle", f"No clear intent detected, using default_next: {next_stage}")
 
-        # 3. 기본 context 구성
+        # 3. 기본 context 구성 (✅ 치환된 speaker_pool 사용)
         base_ctx = {
             "stage_tag": stage_tag,
             "stage_type": "free_intent",
-            "speaker_pool": speaker_pool,
+            "speaker_pool": speaker_pool,  # ✅ 이미 active_counselor가 치환됨
             "scenario_id": scenario.get("scenario_id", "unknown"),
         }
 
@@ -129,8 +130,31 @@ class FreeIntentStageHandler:
             stage=stage
         )
 
-        # beats 없음 → LLM 자율 생성 모드 (stage_context 기반)
-        children_ctx["beats"] = []
+        # ✅ beats_i18n 지원 추가 (선택적) - i18n이 있으면 덮어쓰기
+        beats_i18n_key = stage.get("beats_i18n")
+        if beats_i18n_key:
+            # beats_i18n이 있으면 scenario의 i18n에서 beats 로드
+            beats = scenario.get("i18n", {}).get(beats_i18n_key, [])
+            if beats:
+                children_ctx["beats"] = beats
+                logger.info("handle", f"Loaded beats from i18n: {beats_i18n_key} ({len(beats)} beats)")
+            else:
+                logger.warning("handle", f"beats_i18n key '{beats_i18n_key}' not found in scenario i18n")
+        # else: beats가 이미 stage에서 로드되었거나 없음 (build_children_context에서 처리됨)
+
+        # ✅ beats 내부의 speaker_hint에서 active_counselor 치환
+        if active_counselor_name and children_ctx.get("beats"):
+            for beat in children_ctx["beats"]:
+                if isinstance(beat, dict) and "speaker_hint" in beat:
+                    speaker_hint = beat["speaker_hint"]
+                    if isinstance(speaker_hint, list):
+                        beat["speaker_hint"] = [
+                            active_counselor_name if s == "active_counselor" else s
+                            for s in speaker_hint
+                        ]
+                    elif speaker_hint == "active_counselor":
+                        beat["speaker_hint"] = [active_counselor_name]
+            logger.info("handle", f"Replaced active_counselor in beats speaker_hint with {active_counselor_name}")
 
         # 5. Stage 결과 반환
         if stage_turn == 0:
@@ -151,10 +175,17 @@ class FreeIntentStageHandler:
                        next_stage=next_stage,
                        beats_count=0)
 
+            # ✅ active_counselor를 state_updates로 전달 (DB 저장을 위해)
+            state_updates = {}
+            if active_counselor_name:
+                state_updates["active_counselor"] = active_counselor_name
+                logger.info("handle", f"Passing active_counselor={active_counselor_name} via state_updates")
+
             return StageResult(
                 children_ctx=children_ctx,
                 stage_complete=True,  # 스테이지 완료
-                next_stage=next_stage
+                next_stage=next_stage,
+                state_updates=state_updates if state_updates else None
             )
         else:
             # Intent 분류 실패: default_next 사용 (이미 위에서 설정됨)

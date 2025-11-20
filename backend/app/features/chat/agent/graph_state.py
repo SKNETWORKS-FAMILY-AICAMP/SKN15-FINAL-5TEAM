@@ -83,6 +83,7 @@ class GraphState(TypedDict):
     # 가드레일 검증
     is_safe: bool
     guardrail_warnings: List[str]
+    violation_type: Optional[str]  # forbidden, meta_talk, etc.
 
     # Fallback 관리
     is_off_topic: bool  # Router의 off-topic 판정 결과

@@ -120,6 +120,28 @@ class ChatWorkflow:
         agent = GuardrailAgent()
         result = agent.check_input(state)
 
+        # ✅ 가드레일 차단 시 output 생성 (노드에서 처리해야 state에 반영됨)
+        if not result.get("is_safe", True):
+            violation_type = result.get("violation_type", "unknown")
+            block_messages = {
+                "forbidden": "까악— 까악— ⚠️ 금지된 주제입니다. 까악—",
+                "meta_talk": "까악— 까악— ⚠️ 부적절한 발언입니다. 세계관에 맞는 대화를 해주세요. 까악—",
+            }
+            block_message = block_messages.get(violation_type, "까악— 까악— ⚠️ 입력이 차단되었습니다. 까악—")
+
+            result["output"] = {
+                "dialogues": [{
+                    "speaker": "kasugai_crow",
+                    "text": block_message,
+                    "emotion": "neutral"
+                }],
+                "next_stage": result.get("current_stage", "intro"),
+                "stage_complete": False,
+                "affinity_delta": {},
+                "affinity_scores": result.get("affinity_scores", {}),
+            }
+            logger.info("_input_guardrail_node", f"✅ Guardrail block message generated for {violation_type}")
+
         return result
 
     async def _router_node(self, state: GraphState) -> GraphState:
@@ -174,33 +196,9 @@ class ChatWorkflow:
             "route" - Router로 진행
             "end" - 종료 (가드레일 차단)
         """
-        # 가드레일 실패 시 차단 메시지 생성 후 종료
+        # 가드레일 실패 시 종료 (output은 이미 _input_guardrail_node에서 생성됨)
         if not state.get("is_safe", True):
             logger.warning("_should_route", f"Guardrail blocked input: {state.get('violation_type')}")
-
-            # 차단 메시지 생성
-            violation_type = state.get("violation_type", "unknown")
-            block_messages = {
-                "forbidden": "까악— 까악— ⚠️ 금지된 주제입니다. 까악—",
-                "meta_talk": "까악— 까악— ⚠️ 게임 밖 이야기는 할 수 없습니다. 까악—",
-            }
-
-            block_message = block_messages.get(violation_type, "까악— 까악— ⚠️ 입력이 차단되었습니다. 까악—")
-
-            # 차단 메시지를 output에 추가
-            state["output"] = {
-                "dialogues": [{
-                    "speaker": "kasugai_crow",
-                    "text": block_message,
-                    "emotion": "neutral"
-                }],
-                "next_stage": state.get("current_stage", "intro"),
-                "stage_complete": False,
-                "affinity_delta": {},
-                "affinity_scores": state.get("affinity_scores", {}),
-            }
-
-            logger.info("_should_route", f"Guardrail block message generated for {violation_type}")
             return "end"
 
         # 모든 입력은 Router를 거쳐 주제 분류 수행
@@ -267,6 +265,8 @@ class ChatWorkflow:
             input_state["is_safe"] = True
         if "guardrail_warnings" not in input_state:
             input_state["guardrail_warnings"] = []
+        if "violation_type" not in input_state:
+            input_state["violation_type"] = None
         if "mission_completed" not in input_state:
             input_state["mission_completed"] = False
         if "is_off_topic" not in input_state:
@@ -310,6 +310,8 @@ class ChatWorkflow:
             input_state["is_safe"] = True
         if "guardrail_warnings" not in input_state:
             input_state["guardrail_warnings"] = []
+        if "violation_type" not in input_state:
+            input_state["violation_type"] = None
         if "mission_completed" not in input_state:
             input_state["mission_completed"] = False
         if "is_off_topic" not in input_state:

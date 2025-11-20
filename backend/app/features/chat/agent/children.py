@@ -168,12 +168,22 @@ class ChildrenAgent:
         beat_descriptions = []
 
         if beats:
-            # Beats 있음 → beats goal 수집
+            # Beats 있음 → beats goal + speaker_hint 수집
             for beat in beats:
                 if isinstance(beat, dict):
                     desc = beat.get("goal") or beat.get("description") or beat.get("text") or str(beat)
                     # ✅ {{user}} 치환 (프롬프트용)
                     desc = desc.replace("{{user}}", user_name)
+
+                    # ✅ speaker_hint 추가
+                    speaker_hint = beat.get("speaker_hint")
+                    if speaker_hint:
+                        if isinstance(speaker_hint, list):
+                            hint_str = ", ".join(speaker_hint)
+                        else:
+                            hint_str = str(speaker_hint)
+                        desc = f"{desc} [speaker_hint: {hint_str}]"
+
                     beat_descriptions.append(desc)
                 elif isinstance(beat, str):
                     # ✅ {{user}} 치환 (프롬프트용)

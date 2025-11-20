@@ -84,6 +84,8 @@ class ParentAgent:
             "recruit_attempts": state.get("recruit_attempts", {}),
             "allies_recruited": state.get("allies_recruited", []),
             "recruit_order": state.get("recruit_order", []),
+            # ✅ counseling 시나리오용
+            "active_counselor": state.get("active_counselor"),
         }
 
         prepared_state = self.state_service.prepare_state(session_state, scenario_id, user_input)
@@ -146,6 +148,12 @@ class ParentAgent:
             state["stage_complete"] = stage_result.stage_complete
             state["next_stage"] = stage_result.next_stage
 
+            # ✅ state_updates 병합 (active_counselor 등)
+            if stage_result.state_updates:
+                for key, value in stage_result.state_updates.items():
+                    state[key] = value
+                logger.info("execute", f"Merged state_updates: {list(stage_result.state_updates.keys())}")
+
             logger.info("execute", "Stage transition info set",
                        stage_complete=stage_result.stage_complete,
                        next_stage=stage_result.next_stage,
@@ -180,6 +188,12 @@ class ParentAgent:
                     state["stage_type"] = next_children_ctx.get("stage_type", "scene")
                     state["stage_complete"] = next_stage_result.stage_complete
                     state["next_stage"] = next_stage_result.next_stage
+
+                    # ✅ next_stage의 state_updates도 병합
+                    if next_stage_result.state_updates:
+                        for key, value in next_stage_result.state_updates.items():
+                            state[key] = value
+                        logger.info("execute", f"Merged next_stage state_updates: {list(next_stage_result.state_updates.keys())}")
                 else:
                     logger.error("execute", f"Next stage not found: {stage_result.next_stage}")
 

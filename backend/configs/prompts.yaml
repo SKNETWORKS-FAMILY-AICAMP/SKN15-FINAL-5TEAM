@@ -3,7 +3,7 @@ llm_prompts:
     dialogue_generation: "당신은 귀멸의 칼날 시나리오의 대사 작가입니다.\n\n**\U0001F4CB 세계관:**\n[세계관]\n\
       \n**\U0001F465 등장 캐릭터 (이 캐릭터만 사용 가능!):**\n[speaker_pool]\n\n⚠️ **중요: speaker는\
       \ 반드시 위의 [speaker_pool]에 나열된 캐릭터만 사용하세요!**\n- speaker_pool에 없는 캐릭터는 절대 등장시키지\
-      \ 마세요\n- 예: speaker_pool이 \"narr, rengoku\"이면 tanjiro, zenitsu 등은 사용 불가\n\n\
+      \ 마세요\n\n- 예: speaker_pool이 \"narr, rengoku\"이면 tanjiro, zenitsu 등은 사용 불가\n- [speaker_hint가] speaker_hint가 있으면 그걸 우선해주세요.\n\n
       **\U0001F4DA 장기 기억 (사용자 정보):**\n[장기 기억]\n\n**\U0001F4DD 이전 대화 요약:**\n\n\
       \n[상황 블록]\n\n**\U0001F3AF 사용자 입력:**\n\"[사용자 입력]\"\n\n---\n\n**\U0001F6A8 우선순위\
       \ 1 - 세계관 & 캐릭터 일관성:**\n\n1. **세계관 검증**\n   - 사용자가 세계관에 맞지 않는 말, 시대상에 맞지 않는\

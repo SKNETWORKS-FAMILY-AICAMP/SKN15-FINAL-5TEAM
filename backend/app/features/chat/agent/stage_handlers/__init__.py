@@ -17,11 +17,13 @@ class StageResult:
         stage_complete: 스테이지 완료 여부
         next_stage: 다음 스테이지 태그 (완료 시)
         fallback_payload: Fallback 데이터 (선택)
+        state_updates: state에 병합할 업데이트 (선택)
     """
     children_ctx: Dict[str, Any]
     stage_complete: bool = False
     next_stage: Optional[str] = None
     fallback_payload: Optional[Dict[str, Any]] = None
+    state_updates: Optional[Dict[str, Any]] = None
 
 
 from .mission_stage import MissionStageHandler

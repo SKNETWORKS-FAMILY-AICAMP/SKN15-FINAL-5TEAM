@@ -157,6 +157,9 @@ class PromptService:
         elif scenario_buffer:
             memory_block = buffer_block
 
+        # ✅ speaker_pool에서 active_counselor 치환 (최근 대화 기반)
+        processed_speaker_pool = self._resolve_active_counselor(speaker_pool, recent_dialogues)
+
         # 변수 치환을 위한 컨텍스트 준비 (v2 순서)
         context = {
             "세계관": world_context or "(제공되지 않음)",
@@ -165,7 +168,7 @@ class PromptService:
             "세션 맥락": stm_block,  # v2
             "메모리 블록": memory_block,  # v2: LTM 또는 Scenario Buffer
             "상황 블록": situation_block,
-            "speaker_pool": ", ".join(speaker_pool),
+            "speaker_pool": ", ".join(processed_speaker_pool),
             "사용자 입력": user_input or "(없음)",
             "대화 요약": conversation_summary or "(없음)",  # deprecated
             "장기 기억": formatted_memories,  # deprecated (메모리 블록으로 통합)
@@ -225,6 +228,48 @@ class PromptService:
                 lines.append(f"{speaker}: {d.text}")
 
         return "\n".join(lines) if lines else "(없음)"
+
+    def _resolve_active_counselor(self, speaker_pool: list, recent_dialogues: list) -> list:
+        """
+        speaker_pool에 active_counselor가 있으면 최근 대화에서 실제 상담원을 찾아 치환
+
+        Args:
+            speaker_pool: 원본 speaker_pool
+            recent_dialogues: 최근 대화 목록
+
+        Returns:
+            치환된 speaker_pool
+        """
+        if "active_counselor" not in speaker_pool:
+            return speaker_pool
+
+        # 최근 대화에서 상담원 캐릭터 찾기 (탄지로 제외)
+        counselor_candidates = {"shinobu", "rengoku", "zenitsu", "inosuke", "giyu"}
+        found_counselor = None
+
+        # 최근 10개 대화에서 상담원 찾기
+        for d in recent_dialogues[-10:]:
+            if isinstance(d, dict):
+                speaker = d.get("speaker", "")
+            elif hasattr(d, "speaker"):
+                speaker = d.speaker
+            else:
+                continue
+
+            if speaker in counselor_candidates:
+                found_counselor = speaker
+                break
+
+        # 상담원을 찾으면 치환, 못 찾으면 그대로 유지 (LLM이 판단하도록)
+        if found_counselor:
+            result = [found_counselor if s == "active_counselor" else s for s in speaker_pool]
+            logger.info("_resolve_active_counselor",
+                       f"✅ Resolved active_counselor → {found_counselor} (from recent dialogues)")
+            return result
+        else:
+            logger.warning("_resolve_active_counselor",
+                          "⚠️ Could not resolve active_counselor from recent dialogues, keeping as-is")
+            return speaker_pool
 
     def _format_long_term_memories(self, memories: Optional[list]) -> str:
         """장기 기억을 텍스트로 포맷팅"""
