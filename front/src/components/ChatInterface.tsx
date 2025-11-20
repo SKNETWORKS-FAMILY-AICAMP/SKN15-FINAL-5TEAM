@@ -1886,7 +1886,7 @@ export default function ChatInterface({
       {/* 오른쪽: 채팅 영역 (50%) */}
       <div className="w-full md:w-1/2 h-[60vh] md:h-full flex flex-col bg-white">
         {/* 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-3 md:pb-4 space-y-4">
         {/* Backend error banner */}
         {backendError && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -1906,6 +1906,9 @@ export default function ChatInterface({
         {messages.map((message, index) => {
           const isLatestMessage = message.id === latestMessageId;
           const isFirstMessage = index === 0;
+          const baseSpacing = isFirstMessage ? 'mb-10' : 'mb-36';
+          const latestSpacing = isLatestMessage ? 'mb-18 mt-16' : '';
+          const latestWrapperPadding = isLatestMessage ? 'py-6' : 'py-0';
 
           // 시스템 메시지 렌더링 (경고 메시지는 꺾쇄까마귀 + 붉은색)
           if (message.isSystemMessage) {
@@ -1913,7 +1916,7 @@ export default function ChatInterface({
             const isWarning = /경고|오류|금지|제한|불가|실패|차단|거부/.test(message.text);
 
             return (
-              <div key={message.id} className={`flex justify-center ${isFirstMessage ? 'mb-8' : 'mb-32'} animate-slide-in-fade`}>
+              <div key={message.id} className={`flex justify-center ${baseSpacing} ${latestSpacing} ${latestWrapperPadding} animate-slide-in-fade`}>
                 <div
                   style={{
                     transform: isLatestMessage ? 'scale(1.35)' : 'scale(1)',
@@ -1954,7 +1957,7 @@ export default function ChatInterface({
           return (
             <div
               key={message.id}
-              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${isFirstMessage ? 'mb-8' : 'mb-32'} ${!message.isUser ? 'animate-slide-in-fade' : ''}`}
+              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'} ${baseSpacing} ${latestSpacing} ${latestWrapperPadding} ${!message.isUser ? 'animate-slide-in-fade' : ''}`}
             >
               <div
                 style={{
