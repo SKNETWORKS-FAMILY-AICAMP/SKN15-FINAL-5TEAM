@@ -5,6 +5,7 @@ import SettingsModal from '@/components/SettingsModal';
 import AdvancedSettingsModal from '@/components/AdvancedSettingsModal';
 import PaymentModal from '@/components/PaymentModal';
 import MyAccountModal from '@/components/MyAccountModal';
+import LoginModal from '@/components/LoginModal';
 
 export default function GlobalComponents() {
   const {
@@ -46,6 +47,9 @@ export default function GlobalComponents() {
 
       {/* 마이 어카운트 모달 */}
       <MyAccountModal />
+
+      {/* 로그인 모달 */}
+      <LoginModal />
     </>
   );
 }
