@@ -206,6 +206,11 @@ class ChildrenAgent:
             logger.info("_generate_dialogues", f"Time context injected: {time_context}",
                        scenario_id=scenario_id)
 
+            # ✅ World context에서 {{time_context}} 플레이스홀더 치환
+            if world_context and "{{time_context}}" in world_context:
+                world_context = world_context.replace("{{time_context}}", time_context)
+                logger.info("_generate_dialogues", "Replaced {{time_context}} in world_context")
+
         try:
             # stage_turn 가져오기 (Stage 전환 직후인지 확인)
             stage_turn = state.get("stage_turn", 0)

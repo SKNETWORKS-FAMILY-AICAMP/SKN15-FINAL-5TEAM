@@ -27,8 +27,8 @@
     },
     {
       "speaker": "tanjiro",
-      "text": "저 지금 근무 시작했어요. 심심할 때 연락 주세요! 제가 야간 알바라 밤에는 답장 빨리 할 수 있어요!",
-      "emotion": "warm"
+      "text": "지금 뭘하고 계시나요?",
+      "emotion": "neutral"
     }
   ],
   "character_refs": {
