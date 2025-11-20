@@ -407,7 +407,7 @@
       "context": "상담원이 {user}에게 힐링 활동을 제안한다.\n\n[활동 선택지]\n- 산책하기 (activity_walk)\n- 명상하기 (activity_meditation)\n- 함께 요리하기 (activity_cooking)\n- 활동 안 하고 이야기만 하기 (activity_skip)",
       "beats": [
         {
-          "goal": "상담원이 {user}를 향해 따뜻하게 미소 지으며 묻는다. '많이 나아지셨나요?'",
+          "goal": "상담원이 {user}를 향해 따뜻하게 미소 지으며 '많이 나아지셨나요?'라고 묻는다.",
           "speaker_hint": ["상담원"],
           "fx": "warm_smile"
         },

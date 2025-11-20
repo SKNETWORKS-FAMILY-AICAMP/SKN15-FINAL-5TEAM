@@ -127,6 +127,10 @@ class ChildrenAgent:
         scenario_id = ctx.get("scenario_id", "unknown")
         stage_context = ctx.get("stage_context", "")  # ✅ stage context 추가
 
+        # ✅ Debug: speaker_pool 값 확인
+        logger.info("_generate_dialogues",
+                   f"🔍 CHILDREN RECEIVED speaker_pool: {speaker_pool}, stage_tag: {ctx.get('stage_tag')}")
+
         # ✅ Router stage: beats와 speaker_pool이 모두 비어있으면 대화 생성 건너뜀
         if not beats and not speaker_pool and not stage_context:
             logger.info("_generate_dialogues", "Skipping dialogue generation (Router stage or empty context)")

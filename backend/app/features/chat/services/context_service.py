@@ -124,8 +124,20 @@ class ContextService:
         if stage:
             if not children_ctx.get("beats"):
                 children_ctx["beats"] = stage.get("beats", [])
+
+            # ✅ Debug: speaker_pool 덮어쓰기 확인
+            existing_speaker_pool = children_ctx.get("speaker_pool")
+            stage_speaker_pool = stage.get("speaker_pool", [])
+            logger.info("build_children_context",
+                       f"🔍 SPEAKER_POOL CHECK - existing: {existing_speaker_pool}, stage: {stage_speaker_pool}")
+
             if not children_ctx.get("speaker_pool"):
                 children_ctx["speaker_pool"] = stage.get("speaker_pool", [])
+                logger.info("build_children_context",
+                           f"⚠️ OVERWROTE speaker_pool from stage: {children_ctx['speaker_pool']}")
+            else:
+                logger.info("build_children_context",
+                           f"✅ KEPT existing speaker_pool: {children_ctx['speaker_pool']}")
 
             # ✅ stage context 추가 (beats 없을 때 LLM 자율 생성용)
             # 단, base_ctx에서 이미 설정된 stage_context가 있으면 덮어쓰지 않음 (MissionStageHandler 우선)
