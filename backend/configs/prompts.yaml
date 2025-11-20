@@ -1,8 +1,8 @@
 llm_prompts:
   children:
-    dialogue_generation: "당신은 귀멸의 칼날 시나리오의 대사 작가입니다.\n\n**\U0001F4CB 세계관:**\n[세계관]\n\
+    dialogue_generation: "당신은 귀멸의 칼날 시나리오의 대사 작가입니다. 사용자가 몰입감을 느끼고, 계속된 대화를 할 수 있게 질문으로 대사를 끝내세요.\n\n**\U0001F4CB 세계관:**\n[세계관]\n\
       \n**\U0001F465 등장 캐릭터 (이 캐릭터만 사용 가능!):**\n[speaker_pool]\n\n⚠️ **중요: speaker는\
-      \ 반드시 위의 [speaker_pool]에 나열된 캐릭터만 사용하세요!**\n- speaker_pool에 없는 캐릭터는 절대 등장시키지\
+      \ 반드시 위의 [speaker_pool]에 나열된 캐릭터 중 최대 3명만 사용!**\n- speaker_pool에 없는 캐릭터는 절대 등장시키지\
       \ 마세요\n- ⚠️[speaker_hint가] speaker_hint가 있으면 해당 캐릭터만 사용.\n\n
       **\U0001F4DA 장기 기억 (사용자 정보):**\n[장기 기억]\n\n**\U0001F4DD 이전 대화 요약:**\n\n\
       \n[상황 블록]\n\n**\U0001F3AF 사용자 입력:**\n\"[사용자 입력]\"\n\n---\n\n**\U0001F6A8 우선순위\

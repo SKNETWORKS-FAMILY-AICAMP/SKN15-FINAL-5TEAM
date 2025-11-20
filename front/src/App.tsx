@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import ChatPage from './pages/ChatPage'
 import CharacterPage from './pages/CharacterPage'
+import RankingPage from './pages/RankingPage'
 import PasswordResetConfirmPage from './pages/PasswordResetConfirmPage'
 import PasswordResetModal from './components/PasswordResetModal'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -18,6 +19,7 @@ function App() {
         <Route path="/chat/:characterId" element={<ChatPage />} />
         <Route path="/history/:sessionId" element={<ChatPage />} />
         <Route path="/character/:characterId" element={<CharacterPage />} />
+        <Route path="/ranking" element={<RankingPage />} />
         <Route path="/reset-password" element={<PasswordResetConfirmPage />} />
       </Routes>
 

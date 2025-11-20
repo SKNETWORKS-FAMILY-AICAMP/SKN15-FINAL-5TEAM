@@ -1,4 +1,4 @@
-import { CSSProperties, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useLayoutEffect, useRef, useState, useEffect } from 'react';
 
 interface TutorialOverlayProps {
   onComplete: () => void;
@@ -30,7 +30,7 @@ const steps: Step[] = [
     title: '내 계정',
     description: 'My account 버튼을 눌러 계정 정보와 크레딧을 확인할 수 있습니다.',
     targetSelector: '[data-tour-target="my-account-button"]',
-    placement: 'left'
+    placement: 'bottom'
   },
   {
     title: '친밀도',
@@ -53,33 +53,18 @@ const steps: Step[] = [
 ];
 
 export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
-  const [step, setStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
   const [cardPosition, setCardPosition] = useState<CSSProperties>({});
-  const [arrowPosition, setArrowPosition] = useState<CSSProperties>({});
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const [cardPositions, setCardPositions] = useState<Record<number, CSSProperties>>({});
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const handleNext = () => {
-    if (step < steps.length - 1) {
-      setStep(step + 1);
-    } else {
-      onComplete();
-    }
-  };
+  const calculatePosition = useCallback(() => {
+    if (!cardRef.current) return;
 
-  const handlePrevious = () => {
-    if (step > 0) {
-      setStep(step - 1);
-    }
-  };
-
-  const updatePosition = useCallback(() => {
-    const current = steps[step];
-    const cardEl = cardRef.current;
+    const current = steps[currentStep];
     const targetEl = document.querySelector(current.targetSelector) as HTMLElement | null;
-
-    if (!cardEl) return;
-
-    const cardRect = cardEl.getBoundingClientRect();
+    const cardRect = cardRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const padding = 12;
@@ -88,7 +73,6 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
     // 기본값: 화면 중앙
     let top = (viewportHeight - cardRect.height) / 2;
     let left = (viewportWidth - cardRect.width) / 2;
-    let arrow: CSSProperties = { top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(45deg)' };
 
     if (targetEl) {
       const rect = targetEl.getBoundingClientRect();
@@ -96,22 +80,18 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
         case 'bottom':
           top = rect.bottom + offset;
           left = rect.left + rect.width / 2 - cardRect.width / 2;
-          arrow = { top: -8, left: '50%', transform: 'translateX(-50%) rotate(45deg)' };
           break;
         case 'top':
           top = rect.top - cardRect.height - offset;
           left = rect.left + rect.width / 2 - cardRect.width / 2;
-          arrow = { bottom: -8, left: '50%', transform: 'translateX(-50%) rotate(45deg)' };
           break;
         case 'left':
           top = rect.top + rect.height / 2 - cardRect.height / 2;
           left = rect.left - cardRect.width - offset;
-          arrow = { right: -8, top: '50%', transform: 'translateY(-50%) rotate(45deg)' };
           break;
         case 'right':
           top = rect.top + rect.height / 2 - cardRect.height / 2;
           left = rect.right + offset;
-          arrow = { left: -8, top: '50%', transform: 'translateY(-50%) rotate(45deg)' };
           break;
       }
     }
@@ -120,50 +100,93 @@ export default function TutorialOverlay({ onComplete }: TutorialOverlayProps) {
     const clampedLeft = Math.min(Math.max(left, padding), viewportWidth - cardRect.width - padding);
 
     setCardPosition({ top: `${clampedTop}px`, left: `${clampedLeft}px` });
-    setArrowPosition(arrow);
-  }, [step]);
+  }, [currentStep]);
 
   useLayoutEffect(() => {
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    return () => window.removeEventListener('resize', updatePosition);
-  }, [updatePosition]);
+    calculatePosition();
+    window.addEventListener('resize', calculatePosition);
+    return () => window.removeEventListener('resize', calculatePosition);
+  }, [calculatePosition]);
 
-  const currentStep = steps[step];
+  const handleNext = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      onComplete();
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const current = steps[currentStep];
+
+  const getArrowStyle = (placement: Placement): CSSProperties => {
+    switch (placement) {
+      case 'bottom':
+        return { top: -8, left: '50%', transform: 'translateX(-50%) rotate(45deg)' };
+      case 'top':
+        return { bottom: -8, left: '50%', transform: 'translateX(-50%) rotate(45deg)' };
+      case 'left':
+        return { right: -8, top: '50%', transform: 'translateY(-50%) rotate(45deg)' };
+      case 'right':
+        return { left: -8, top: '50%', transform: 'translateY(-50%) rotate(45deg)' };
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-[10000]">
+    <div className="fixed inset-0 bg-black bg-opacity-40 z-[10000]">
+      {/* 튜토리얼 카드 */}
       <div
         ref={cardRef}
         style={cardPosition}
-        className="absolute p-6 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-xs w-full transition-all duration-300"
+        className="absolute p-6 bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-xs w-full"
       >
+        {/* 화살표 */}
         <div
           className="absolute w-4 h-4 bg-white dark:bg-gray-800 transform rotate-45"
-          style={arrowPosition}
+          style={getArrowStyle(current.placement)}
         ></div>
-        <h3 className="text-lg font-bold text-purple-600 dark:text-purple-400 mb-2">{currentStep.title}</h3>
-        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">{currentStep.description}</p>
+
+        {/* 진행 표시 */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {currentStep + 1} / {steps.length}
+          </span>
+          <button
+            onClick={onComplete}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* 제목 및 설명 */}
+        <h3 className="text-lg font-bold text-purple-600 dark:text-purple-400 mb-2">
+          {current.title}
+        </h3>
+        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+          {current.description}
+        </p>
+
+        {/* 네비게이션 버튼 */}
         <div className="flex justify-between items-center">
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {step + 1} / {steps.length}
-          </div>
-          <div className="flex gap-2">
-            {step > 0 && (
-              <button
-                onClick={handlePrevious}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-semibold"
-              >
-                ← 이전
-              </button>
-            )}
-            <button
-              onClick={handleNext}
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-semibold"
-            >
-              {step < steps.length - 1 ? '다음 →' : '시작하기'}
-            </button>
-          </div>
+          <button
+            onClick={handlePrevious}
+            disabled={currentStep === 0}
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed hover:text-purple-600"
+          >
+            이전
+          </button>
+          <button
+            onClick={handleNext}
+            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+          >
+            {currentStep === steps.length - 1 ? '완료' : '다음'}
+          </button>
         </div>
       </div>
     </div>
